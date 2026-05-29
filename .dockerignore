@@ -1,0 +1,8 @@
+node_modules
+.next
+dist
+.git
+kontexta.db
+data
+*.log
+.env

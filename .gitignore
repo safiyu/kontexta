@@ -1,0 +1,44 @@
+# Dependencies
+node_modules/
+dist/
+.next/
+.turbo/
+.superpowers/
+
+# Build caches
+**/.turbo/
+*.tsbuildinfo
+
+# Project specific
+CLAUDE.md
+ANTIGRAVITY.md
+data/
+kontexta-data/
+kontexta.db
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+test_output.txt
+scratch/
+apps/web/src/lib/mcp-tools.json
+apps/web/.next/standalone/
+kontexta.json
+
+# OS specific
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE specific
+.vscode/
+.idea/
+*.swp
+*.swo
+.project
+.settings/
+.classpath
