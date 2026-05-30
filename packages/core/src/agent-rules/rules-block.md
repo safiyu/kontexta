@@ -35,6 +35,8 @@ This project is registered with kontexta. Honor these rules to keep the index, h
 
 **`whats_new` early. `commit_backup` late.** Run `whats_new` at session start if you've been away — it returns files added/changed since a cutoff. End the session with `commit_backup` if you mutated KB files and the project has a remote.
 
+**Use `.mmd` for diagrams, not fenced code in `.md`.** When creating an architecture / flow / sequence diagram, call `create_file` with `format: "mmd"` and put the raw mermaid source as the body (no ```` ```mermaid ```` fence). The web UI renders `.mmd` files as live diagrams with SVG/PNG export; mermaid embedded in markdown is just text. Default folder: `mermaid/` (or `<project>/mermaid/` for project-scoped diagrams).
+
 ### Tool reference
 
 The matrix below is grouped by intent. For each tool: when to reach for it, the most common wrong context, and the better sibling tool when wrong.
@@ -66,7 +68,7 @@ The matrix below is grouped by intent. For each tool: when to reach for it, the 
 
 | Tool | When | Not when | Use instead |
 |---|---|---|---|
-| `create_file` | One new file | Bulk-creating ≥2 files | `create_files` |
+| `create_file` | One new file (md or mmd via `format`) | Bulk-creating ≥2 files | `create_files` |
 | `create_files` | 2+ new files in one call | Single file | `create_file` |
 | `update_file` | Replacing the whole body | Editing one section | `update_file_section` |
 | `update_file_section` | Surgical edit at a known heading | Replacing the whole file | `update_file` |

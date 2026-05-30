@@ -839,13 +839,20 @@ ERROR CONDITIONS: Returns isError=true if path is missing or unresolvable. Scan 
           const versions = outdated
             .map((s) => `${s.path} (found ${s.version ?? "none"})`)
             .join(", ");
-          recommendationReason = `Outdated or missing rules in: ${versions}. Latest is v${RULE_BLOCK_VERSION}. Run onboard_agent to update.`;
+          recommendationReason =
+            `Your project's agent instructions file is out of date — it still references kontexta workflow rules from an older release. ` +
+            `Files needing an update: ${versions}. Latest rules version is v${RULE_BLOCK_VERSION}. ` +
+            `Run onboard_agent to refresh the kontexta rules block in-place (your existing project content is preserved).`;
         } else {
-          recommendationReason = `Detected ${detected.join(", ")}. kontexta workflow rules are up-to-date (v${RULE_BLOCK_VERSION}).`;
+          recommendationReason =
+            `Found ${detected.join(", ")} with kontexta workflow rules already at the latest version (v${RULE_BLOCK_VERSION}). No action needed — your AI agent will load these rules automatically every session.`;
         }
       } else {
         recommendationReason =
-          "No agent context file found. kontexta can scaffold one tailored to your agent (CLAUDE.md / AGENTS.md / GEMINI.md / ANTIGRAVITY.md / .cursor/rules / .continue/rules) with a starter context + kontexta workflow rules.";
+          `No AI agent instructions file (e.g. CLAUDE.md, AGENTS.md, GEMINI.md, ANTIGRAVITY.md, .cursor/rules, .continue/rules) was found in this project. ` +
+          `These files are how coding agents (Claude Code, Codex, Cursor, Gemini, etc.) load project-specific context at the start of every session. ` +
+          `Without one, your agent won't know this project is registered with kontexta and will skip the search/read/journal workflow — wasting tokens re-reading files it could have looked up. ` +
+          `Run onboard_agent with target_agent set to your coding tool to scaffold the right file (CLAUDE.md for Claude Code, AGENTS.md for Codex, etc.) pre-populated with kontexta workflow rules.`;
       }
 
       const needsOnboarding = outdated.length > 0 || detected.length === 0;
@@ -858,7 +865,10 @@ ERROR CONDITIONS: Returns isError=true if path is missing or unresolvable. Scan 
               target_files: detected,
               next_tool: "onboard_agent" as const,
               next_args: { project_id: project.id },
-              prompt: outdated.length > 0 ? "Would you like to update the context rules now?" : null,
+              prompt:
+                outdated.length > 0
+                  ? `Update the kontexta rules block in ${detected.join(", ")} to v${RULE_BLOCK_VERSION} now? (Your existing project-specific content above/below the rules block will be left untouched.)`
+                  : null,
             }
           : {
               kind: "onboard_agent" as const,
@@ -870,7 +880,8 @@ ERROR CONDITIONS: Returns isError=true if path is missing or unresolvable. Scan 
                 project_id: project.id,
                 target_agent: "<pass your agent: claude-code | codex | gemini | antigravity | cursor | continue>",
               },
-              prompt: "Would you like to scaffold a new agent context file now?",
+              prompt:
+                "Scaffold an AI agent instructions file now? Tell me which agent you use (claude-code, codex, gemini, antigravity, cursor, or continue) and I'll create the right file (e.g. CLAUDE.md) with the kontexta workflow rules pre-installed, so your agent picks them up on its next session.",
             };
 
       const content: any[] = [

@@ -3,6 +3,7 @@ import path from "node:path";
 import { readFileSync, existsSync } from "node:fs";
 import { createRequire } from "node:module";
 import { renderTemplate, CLIENTS, INSTALLS, type Client, type Install } from "@/lib/install-templates";
+import { DATA_DIR } from "@/lib/db-init";
 
 let cachedSourceEntrypoint: string | null = null;
 function resolveSourceEntrypoint(): string {
@@ -17,7 +18,11 @@ function resolveSourceEntrypoint(): string {
     return cachedSourceEntrypoint;
   }
   try {
-    cachedSourceEntrypoint = createRequire(import.meta.url).resolve("kontexta-mcp");
+    // Dynamic string prevents webpack from statically analyzing this require
+    // and bundling the entire kontexta-mcp package (including its top-level
+    // createDatabase side effect) into this route.
+    const pkgName = ["kontexta", "mcp"].join("-");
+    cachedSourceEntrypoint = createRequire(import.meta.url).resolve(pkgName);
     return cachedSourceEntrypoint;
   } catch {
     return "/path/to/kontexta-mcp/dist/index.js";
@@ -58,7 +63,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "invalid install" }, { status: 400 });
   }
   const vars = {
-    dataDir: process.env.KONTEXTA_DATA_DIR ?? "/path/to/your/data",
+    dataDir: DATA_DIR,
     version: loadVersion(),
     sourceEntrypoint: resolveSourceEntrypoint(),
   };

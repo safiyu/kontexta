@@ -71,7 +71,23 @@ export function MermaidViewer({ source, className, filename }: MermaidViewerProp
 
   const handleExportSvg = () => {
     if (!svg) return;
-    const blob = new Blob([svg], { type: "image/svg+xml" });
+    const svgEl = containerRef.current?.querySelector("svg") as SVGSVGElement | null;
+    if (!svgEl) {
+      setError("SVG export failed: rendered SVG not found");
+      return;
+    }
+    // Serialise via XMLSerializer so HTML inside <foreignObject> (e.g. <br>)
+    // is emitted as valid XML (<br/>). Mermaid's raw render() output is not
+    // guaranteed to be well-formed XML and breaks XML viewers / browsers
+    // when opened directly.
+    const clone = svgEl.cloneNode(true) as SVGSVGElement;
+    clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+    clone.setAttribute("xmlns:xlink", "http://www.w3.org/1999/xlink");
+    const serialised = new XMLSerializer().serializeToString(clone);
+    const withDecl = serialised.startsWith("<?xml")
+      ? serialised
+      : `<?xml version="1.0" encoding="UTF-8"?>\n${serialised}`;
+    const blob = new Blob([withDecl], { type: "image/svg+xml;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -84,52 +100,85 @@ export function MermaidViewer({ source, className, filename }: MermaidViewerProp
 
   const handleExportPng = () => {
     if (!svg) return;
-    // Determine the dimensions from the rendered svg element when possible.
+    const svgEl = containerRef.current?.querySelector("svg") as SVGSVGElement | null;
+    if (!svgEl) {
+      setError("PNG export failed: rendered SVG not found");
+      return;
+    }
+
+    // Determine intrinsic dimensions
     let width = 800;
     let height = 600;
-    const svgEl = containerRef.current?.querySelector("svg") as SVGSVGElement | null;
-    if (svgEl) {
-      const viewBox = svgEl.viewBox?.baseVal;
-      if (viewBox && viewBox.width > 0 && viewBox.height > 0) {
-        width = viewBox.width;
-        height = viewBox.height;
-      } else {
-        try {
-          const bbox = svgEl.getBBox();
-          if (bbox.width > 0 && bbox.height > 0) {
-            width = bbox.width;
-            height = bbox.height;
-          }
-        } catch {
-          // getBBox can throw on detached nodes — fall back to defaults.
+    const viewBox = svgEl.viewBox?.baseVal;
+    if (viewBox && viewBox.width > 0 && viewBox.height > 0) {
+      width = viewBox.width;
+      height = viewBox.height;
+    } else {
+      try {
+        const bbox = svgEl.getBBox();
+        if (bbox.width > 0 && bbox.height > 0) {
+          width = bbox.width;
+          height = bbox.height;
         }
+      } catch {
+        // getBBox can throw on detached nodes — fall back to defaults.
       }
     }
+
+    // Clone and set explicit width/height + xmlns so the <img> can rasterise it.
+    const clone = svgEl.cloneNode(true) as SVGSVGElement;
+    clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+    clone.setAttribute("xmlns:xlink", "http://www.w3.org/1999/xlink");
+    clone.setAttribute("width", String(width));
+    clone.setAttribute("height", String(height));
+
+    const serialised = new XMLSerializer().serializeToString(clone);
+    // Use a UTF-8-safe base64 encoding to avoid btoa() throwing on non-Latin1 chars.
+    const utf8 = new TextEncoder().encode(serialised);
+    let binary = "";
+    for (let i = 0; i < utf8.length; i++) binary += String.fromCharCode(utf8[i]);
+    const dataUrl = `data:image/svg+xml;base64,${btoa(binary)}`;
+
     const scale = 2;
     const canvas = document.createElement("canvas");
     canvas.width = Math.max(1, Math.round(width * scale));
     canvas.height = Math.max(1, Math.round(height * scale));
     const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+    if (!ctx) {
+      setError("PNG export failed: 2D canvas context unavailable");
+      return;
+    }
 
-    const blob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
     const img = new Image();
     img.onload = () => {
+      // White background so dark-mode SVGs aren't transparent on light viewers.
+      ctx.fillStyle = resolvedTheme === "light" ? "#ffffff" : "#1f2937";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      URL.revokeObjectURL(url);
-      const dataUrl = canvas.toDataURL("image/png");
-      const a = document.createElement("a");
-      a.href = dataUrl;
-      a.download = `${stem}.png`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
+      try {
+        canvas.toBlob((blob) => {
+          if (!blob) {
+            setError("PNG export failed: canvas returned empty blob");
+            return;
+          }
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = `${stem}.png`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        }, "image/png");
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        setError(`PNG export failed: ${msg}`);
+      }
     };
     img.onerror = () => {
-      URL.revokeObjectURL(url);
+      setError("PNG export failed: SVG could not be loaded as an image (it may reference external resources or unsupported features)");
     };
-    img.src = url;
+    img.src = dataUrl;
   };
 
   const showExport = !!svg && !error;
