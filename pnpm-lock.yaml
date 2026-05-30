@@ -200,6 +200,9 @@ importers:
       '@types/jsdom':
         specifier: ^28.0.1
         version: 28.0.1
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.19.17
       '@types/turndown':
         specifier: ^5.0.6
         version: 5.0.6
