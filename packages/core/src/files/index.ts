@@ -211,7 +211,7 @@ export async function createFile(opts: CreateFileOptions): Promise<FileRecordWit
     })();
   } catch (dbError) {
     if (preExistingContent !== null) {
-      try { writeFileSync(filePath, preExistingContent); } catch (e) {
+      try { writeFileSync(filePath, preExistingContent as any); } catch (e) {
         console.error("createFile: failed to restore pre-existing content after DB error:", e);
       }
     } else {
@@ -322,7 +322,7 @@ export async function updateFile(id: number, content: string, dataDir: string): 
     })();
   } catch (dbError) {
     if (preExistingContent !== null) {
-      try { writeFileSync(fileRecord.path, preExistingContent); } catch (e) {
+      try { writeFileSync(fileRecord.path, preExistingContent as any); } catch (e) {
         console.error("updateFile: failed to restore pre-existing content after DB error:", e);
       }
     }

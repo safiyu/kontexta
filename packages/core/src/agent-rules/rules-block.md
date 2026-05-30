@@ -93,6 +93,7 @@ The matrix below is grouped by intent. For each tool: when to reach for it, the 
 | `tag_search_results` | Bulk-tag every hit from a search | Tagging a single file | `add_tags` |
 | `journal_note` | Log a decision, workaround, or abandonment | Editing regular content | `update_file` |
 | `journal_intent` | Record a user-initiated topic pivot | Auto-captured tool calls | `journal_note` |
+| `journal_append` | Append timestamped text to today's daily KB journal file | Structured notes | `journal_note` |
 | `distill_journal` | Summarize accumulated journal events | Individual events | `journal_note` |
 | `clip_url` | Capture a web URL into the KB | Saving a local file | `create_file` |
 | `list_folders` | Enumerate folders in the project | Finding files | `list_files` |

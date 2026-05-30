@@ -46,6 +46,7 @@ export const TOOL_CATEGORIES: Record<string, ToolCategory> = {
   onboard_agent: "Folders & Projects",
   journal_note: "Write",
   journal_intent: "Write",
+  journal_append: "Write",
   distill_journal: "Write",
   journal_status: "Discovery",
   housekeep_journal: "Write",

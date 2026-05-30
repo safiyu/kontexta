@@ -26,7 +26,7 @@ export function createFileWatcher(
   // adopted as KB and could then be unlinked from disk on UI delete).
   const knowledgeDirs = watchPaths.map((wp) => path.join(wp, "knowledge"));
 
-  const watcher = chokidar.watch(watchPaths, {
+  const watcher: any = chokidar.watch(watchPaths, {
     // Skip the same set discoverFiles skips, plus build-output / cache /
     // virtualenv directories that commonly contain throw-away .md/.mmd files,
     // plus the backup tree owned by syncBackup. The previous regex
@@ -55,7 +55,7 @@ export function createFileWatcher(
     });
   };
 
-  watcher.on("change", (filePath) => {
+  watcher.on("change", (filePath: string) => {
     if (!isIndexedFile(filePath)) return;
     runLocked(filePath, () => {
       // If the row was deleted (e.g. via Time-Travel restore of a previously
@@ -66,7 +66,7 @@ export function createFileWatcher(
     });
   });
 
-  watcher.on("add", (filePath) => {
+  watcher.on("add", (filePath: string) => {
     if (!isIndexedFile(filePath)) return;
     runLocked(filePath, () => {
       handleWatcherAdd(filePath, knowledgeDirs);
@@ -74,7 +74,7 @@ export function createFileWatcher(
     });
   });
 
-  watcher.on("unlink", (filePath) => {
+  watcher.on("unlink", (filePath: string) => {
     if (!isIndexedFile(filePath)) return;
     runLocked(filePath, () => {
       handleWatcherUnlink(filePath);

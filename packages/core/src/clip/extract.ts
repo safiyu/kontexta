@@ -126,7 +126,7 @@ async function readBodyWithCap(res: Response): Promise<string> {
     }
     chunks.push(value);
   }
-  return Buffer.concat(chunks.map((c) => Buffer.from(c.buffer, c.byteOffset, c.byteLength))).toString("utf-8");
+  return Buffer.concat(chunks as any).toString("utf-8");
 }
 
 const turndown = new TurndownService({

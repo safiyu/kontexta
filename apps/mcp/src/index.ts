@@ -236,6 +236,62 @@ const _origServerTool = server.tool.bind(server);
   return (_origServerTool as any)(name, ...rest);
 };
 
+// Legacy journal_append tool — excluded from wrapHandler (line 229) so it
+// does NOT get the journal-backlog envelope injected. Kept for backward-compat.
+server.tool(
+  "journal_append",
+  "Append a timestamped text entry to today's daily journal file in the Knowledge Base. Creates the file if it doesn't already exist. Both calls on the same calendar day return the same file_id. Returns { file_id }.",
+  {
+    text: z.string().describe("Text to append to today's journal entry"),
+    project_id: z.number().optional().describe("Optional project ID context"),
+  },
+  async ({ text }: { text: string; project_id?: number }) => {
+    try {
+      const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+      const journalFolder = "journal";
+      const title = `journal-${today}`;
+      const db = getDatabase();
+
+      // Try to find an existing journal file for today.
+      const knowledgeDir = join(dataDir, "knowledge");
+      const expectedPath = join(knowledgeDir, journalFolder, `${title}.md`);
+      const existingRow = db
+        .prepare("SELECT id, path FROM files WHERE path = ? AND project_id IS NULL")
+        .get(expectedPath) as { id: number; path: string } | undefined;
+
+      if (existingRow) {
+        // Append to existing file.
+        const existing = readFile(existingRow.id);
+        const timestamp = new Date().toISOString().replace("T", " ").slice(0, 19);
+        const newContent = `${existing.content}\n---\n**${timestamp}** ${text}\n`;
+        await updateFile(existingRow.id, newContent, dataDir);
+        return {
+          content: [{ type: "text", text: JSON.stringify({ file_id: existingRow.id }, null, 2) }],
+        };
+      } else {
+        // Create a new daily journal file.
+        const timestamp = new Date().toISOString().replace("T", " ").slice(0, 19);
+        const content = `# Journal — ${today}\n\n---\n**${timestamp}** ${text}\n`;
+        const result = await createFile({
+          title,
+          content,
+          destination: "knowledge",
+          folder: journalFolder,
+          dataDir,
+        });
+        return {
+          content: [{ type: "text", text: JSON.stringify({ file_id: result.id }, null, 2) }],
+        };
+      }
+    } catch (e: any) {
+      return {
+        isError: true,
+        content: [{ type: "text", text: JSON.stringify({ error: e?.message ?? String(e) }, null, 2) }],
+      };
+    }
+  }
+);
+
 server.tool(
   "create_file",
   "Create a new markdown or mermaid file in the knowledge base or project. This operation writes a new file to disk and adds it to the local SQLite FTS5 index. Destination can be 'knowledge' (global KB), 'project' (reference file inside a project repo), or 'kontexta' (internal Kontexta schema file). If destination is 'project' or 'kontexta', project_id is strictly required. No external auth required. Rate limits do not apply (local operation). Returns the created file metadata including its new ID, path, and estimated tokens. If the destination directory does not exist, it will be created automatically. Use this tool to instantiate new contextual documents or notes. To modify an existing file, use 'update_file' instead. Parameters: 'destination' dictates required fields; if 'project' or 'kontexta', 'project_id' must be a valid integer. 'tags' and 'folder' are optional. Pass format='mmd' to create a Mermaid diagram file (.mmd); defaults to 'md'.",

@@ -119,18 +119,27 @@ export function wrapHandler<TArgs extends Record<string, unknown>, TResult exten
         const orig = (result as any).content?.[0]?.text;
         if (typeof orig === "string") {
           let parsed: any;
-          try { parsed = JSON.parse(orig); } catch { parsed = { result: orig }; }
-          const envelope = {
-            ...parsed,
-            journal: {
-              backlog_events: status.backlog_events,
-              backlog_oldest_age_hours: status.backlog_oldest_age_hours,
-              high_water: status.high_water,
-              suggested_action: "distill_journal",
-              mode: "lenient",
-            },
-          };
-          (result as any) = { ...result, content: [{ type: "text", text: JSON.stringify(envelope, null, 2) }] };
+          let isPlainObject = false;
+          try {
+            parsed = JSON.parse(orig);
+            // Only inject journal envelope into plain objects — NOT arrays (spreading an
+            // array into an object via {...arr} corrupts it into {"0":…,"1":…}) and NOT
+            // raw text that failed to parse (which would mangle e.g. Hands confirm msgs).
+            isPlainObject = parsed !== null && typeof parsed === "object" && !Array.isArray(parsed);
+          } catch { /* not JSON — leave the response untouched */ }
+          if (isPlainObject) {
+            const envelope = {
+              ...parsed,
+              journal: {
+                backlog_events: status.backlog_events,
+                backlog_oldest_age_hours: status.backlog_oldest_age_hours,
+                high_water: status.high_water,
+                suggested_action: "distill_journal",
+                mode: "lenient",
+              },
+            };
+            (result as any) = { ...result, content: [{ type: "text", text: JSON.stringify(envelope, null, 2) }] };
+          }
         }
       }
       const BACKLOG_THRESHOLD_EVENTS = 500;

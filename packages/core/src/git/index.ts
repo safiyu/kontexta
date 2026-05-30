@@ -201,7 +201,7 @@ export async function restoreVersion(
     // recorded in DB no longer matches but the watcher will reconcile
     // on the next change event).
     const tmpPath = `${filePath}.kontexta-restore-${process.pid}-${Date.now()}`;
-    writeFileSync(tmpPath, contentBuffer);
+    writeFileSync(tmpPath, contentBuffer as any);
     try {
       renameSync(tmpPath, filePath); // atomic on same filesystem
     } catch (e) {
@@ -222,7 +222,7 @@ export async function restoreVersion(
       );
     }
     if (file) {
-      const hash = createHash("sha256").update(contentBuffer).digest("hex");
+      const hash = createHash("sha256").update(contentBuffer as any).digest("hex");
       const updateStmt = db.prepare("UPDATE files SET content_hash = ?, updated_at = datetime('now') WHERE id = ?");
       const deleteFtsStmt = db.prepare("DELETE FROM fts_index WHERE rowid = ?");
       const insertFtsStmt = db.prepare("INSERT INTO fts_index (rowid, title, content) VALUES (?, ?, ?)");
@@ -629,7 +629,7 @@ async function _syncBackupLocked(
         try { localBuf = readFileSync(localAbsolutePath); } catch {}
         const backupBuf = readFileSync(backupPath);
 
-        if (localBuf?.equals(backupBuf)) {
+        if (localBuf?.equals(backupBuf as any)) {
           // already in sync
         } else {
           if (localBuf) {
@@ -638,7 +638,7 @@ async function _syncBackupLocked(
                 "with merged remote content (use git history if you need to recover)"
             );
           }
-          writeFileSync(localAbsolutePath, backupBuf);
+          writeFileSync(localAbsolutePath, backupBuf as any);
         }
 
         if (!existingDbPaths.has(localAbsolutePath)) {
