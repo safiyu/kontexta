@@ -1,0 +1,77 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`HAND_TOOL_TEMPLATES > matches snapshot 1`] = `
+[
+  {
+    "def": {
+      "command": [
+        "git",
+        "ls-files",
+      ],
+      "description": "List files in the repo (no params, completely safe)",
+    },
+    "name": "list-files",
+    "oneLiner": "Lists every git-tracked file. Read-only, no params.",
+  },
+  {
+    "def": {
+      "command": [
+        "npx",
+        "vitest",
+        "--reporter=verbose",
+        "{{filter}}",
+      ],
+      "description": "Run vitest with optional filter (regex-validated)",
+      "params": {
+        "filter": {
+          "default": "",
+          "pattern": "^[a-zA-Z0-9 _/-]*$",
+          "required": false,
+          "type": "string",
+        },
+      },
+      "timeout": 120000,
+    },
+    "name": "run-tests",
+    "oneLiner": "Run vitest with an optional regex-validated filter.",
+  },
+  {
+    "def": {
+      "command": [
+        "gcloud",
+        "run",
+        "deploy",
+        "my-service",
+        "--region",
+        "us-central1",
+      ],
+      "confirm": true,
+      "danger": "moderate",
+      "description": "Deploy to staging Cloud Run (requires human approval)",
+      "timeout": 180000,
+    },
+    "name": "deploy-staging",
+    "oneLiner": "Deploy to staging Cloud Run. Requires human approval.",
+  },
+  {
+    "def": {
+      "argSeparator": true,
+      "command": [
+        "rm",
+        "{{name}}",
+      ],
+      "description": "Delete a temp file under /tmp/scratch (argSeparator guards path)",
+      "params": {
+        "name": {
+          "pattern": "^[a-zA-Z0-9._-]+$",
+          "required": true,
+          "type": "string",
+        },
+      },
+      "workingDir": "tmp/scratch",
+    },
+    "name": "remove-temp",
+    "oneLiner": "Delete a file under tmp/scratch. Strict pattern + argSeparator.",
+  },
+]
+`;

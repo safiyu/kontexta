@@ -1,0 +1,32 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`install-templates > Claude Code + Docker matches snapshot 1`] = `
+{
+  "body": "claude mcp add mnexis -s user \\
+  -e MNEXIS_DATA_DIR=/home/user/mnexis-data \\
+  -- docker run --rm -i -v /home/user/mnexis-data:/app/data safiyu/mnexis:1.0.0 mcp",
+  "kind": "shell",
+  "notes": [],
+}
+`;
+
+exports[`install-templates > Claude Desktop + npm matches snapshot 1`] = `
+{
+  "body": "{
+  "mcpServers": {
+    "mnexis": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "mnexis-mcp"
+      ],
+      "env": {
+        "MNEXIS_DATA_DIR": "/home/user/mnexis-data"
+      }
+    }
+  }
+}",
+  "kind": "json",
+  "notes": [],
+}
+`;
