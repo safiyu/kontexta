@@ -14,12 +14,12 @@ describe("SaveBar", () => {
 
   it("shows singular 'unsaved change' when count is 1", () => {
     render(<SaveBar count={1} errorCount={0} onDiscard={() => {}} onSave={() => {}} />);
-    expect(screen.getByText("1 unsaved change")).toBeTruthy();
+    expect(screen.getByText("1 change")).toBeTruthy();
   });
 
   it("shows plural 'unsaved changes' for count > 1", () => {
     render(<SaveBar count={3} errorCount={0} onDiscard={() => {}} onSave={() => {}} />);
-    expect(screen.getByText("3 unsaved changes")).toBeTruthy();
+    expect(screen.getByText("3 changes")).toBeTruthy();
   });
 
   it("Save click calls onSave when no errors", () => {

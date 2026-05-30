@@ -7,8 +7,8 @@ describe("HAND_TOOL_TEMPLATES", () => {
     expect(HAND_TOOL_TEMPLATES).toMatchSnapshot();
   });
 
-  it("exports exactly four entries", () => {
-    expect(HAND_TOOL_TEMPLATES.length).toBe(4);
+  it("exports exactly eight entries", () => {
+    expect(HAND_TOOL_TEMPLATES.length).toBe(8);
   });
 
   it("every template entry has name, oneLiner, def shape", () => {

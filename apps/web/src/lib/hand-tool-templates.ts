@@ -87,7 +87,7 @@ export const HAND_TOOL_TEMPLATES: HandToolTemplate[] = [
     oneLiner: "Showcase: params, env, workingDir, confirm, danger, and argSeparator.",
     def: {
       description: "A comprehensive example showing off every kontexta.json capability. Use this to understand how to build complex, secure tools.",
-      command: ["./scripts/deploy.sh", "--target", "{{targetEnv}}", "--dry-run={{isDryRun}}", "--retries={{retries}}"],
+      command: ["bash", "./scripts/deploy.sh", "--target", "{{targetEnv}}", "--dry-run={{isDryRun}}", "--retries={{retries}}"],
       workingDir: "backend",
       timeout: 300000,
       danger: "high",
