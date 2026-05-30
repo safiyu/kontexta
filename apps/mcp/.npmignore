@@ -1,0 +1,20 @@
+# tsup intermediate
+*.tsbuildinfo
+
+# Source — the publish ships only dist/
+src/
+test-tools.mjs
+tsup.config.ts
+tsconfig.json
+
+# Dev artifacts
+node_modules/
+.turbo/
+coverage/
+*.log
+
+# Environment + editor + OS junk (defense-in-depth; files[] is the primary gate)
+.env*
+.DS_Store
+.vscode/
+.idea/
