@@ -1,3 +1,4 @@
+import { checkAuth } from "@/lib/auth";
 import { NextRequest, NextResponse } from "next/server";
 import archiver from "archiver";
 import { Readable } from "node:stream";
@@ -30,6 +31,8 @@ function getProjectSlug(projectId: number): string {
 }
 
 export async function GET(req: NextRequest) {
+  if (!checkAuth(req)) return new NextResponse("Unauthorized", { status: 401 });
+
   ensureDbInitialized();
   const url = new URL(req.url);
   const fileIdsRaw = url.searchParams.get("file_ids");

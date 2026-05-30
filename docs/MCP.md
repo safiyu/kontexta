@@ -9,7 +9,7 @@ Kontexta's MCP server is a **stdio** transport (`StdioServerTransport`). The hos
 **Path & environment:**
 
 - **Server entry:** `apps/mcp/dist/index.js` (built by `pnpm build`). The package also exposes a `kontexta-mcp` bin if you `pnpm link` it globally.
-- **`KONTEXTA_DATA_DIR`** — **always set this explicitly.** It must be the same directory the web UI uses, otherwise the MCP server reads from a different SQLite database. The default fallback is `<cwd>/data`, where "cwd" is wherever your AI client launched the process from — that is rarely what you want.
+- **`KONTEXTA_DATA_DIR`** — override the vault location. Defaults to `~/.local/share/kontexta` (Linux), `~/Library/Application Support/kontexta` (macOS), or `%APPDATA%\kontexta` (Windows). Set this explicitly only if you want a non-standard vault path or need the MCP server and web UI to share a vault that is not the default location.
 - **`KONTEXTA_DB_PATH`** (optional) — defaults to `$KONTEXTA_DATA_DIR/kontexta.db`.
 
 The web UI and the MCP server can run against the same database simultaneously. SQLite WAL mode handles the concurrent reads, and the MCP server uses the same migration system, so first launch order doesn't matter.
@@ -56,6 +56,23 @@ Note the order: `-s` and `-e` are flags to `claude mcp add` and must appear **be
 
 ---
 
+## Aider
+
+Aider does **not** natively support MCP. Integration is file-based: Kontexta writes workflow rules into `.aider/kontexta.md`, which you then link in your Aider configuration.
+
+1. Run `register_project` in any other agent (e.g. Claude Code or Cursor).
+2. Run `onboard_agent` with `target_agent: aider`. This creates `.aider/kontexta.md`.
+3. Add the following to your `.aider.conf.yml`:
+
+```yaml
+read:
+  - .aider/kontexta.md
+```
+
+This ensures Aider loads Kontexta's workflow rules as read-only context in every session.
+
+---
+
 ## Manual configuration
 
 For Claude Desktop, Cursor, Continue, Gemini, Antigravity, and other clients that read a JSON config file:
@@ -81,6 +98,7 @@ Use absolute paths — most clients launch the process from their own working di
 - **Antigravity & Gemini**: `~/.gemini/antigravity/mcp_servers.json`
 - **Claude Desktop**: `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows)
 - **Codex**: `.codex/mcp_servers.json`
+- **Continue.dev**: `~/.continue/config.json` — add to the `mcpServers` array.
 - **Cursor**: `Settings → Features → MCP`
 
 ---
@@ -194,7 +212,7 @@ The MCP server exposes 49 tools designed for agents that care about context-wind
 | :--- | :--- | :--- |
 | `list_folders`, `create_folder`, `delete_folder` | Folder CRUD. `delete_folder` refuses project folders (the watcher would re-ingest); KB only. | "Create a `journal` folder under the KB." |
 | `register_project`, `list_projects` | Add an external repo as a project; Kontexta indexes its `.md` files. Warns when total tokens exceed `KONTEXTA_PROJECT_TOKEN_WARN`. The response also carries a `recommendation` field — update or create — telling the agent whether it should follow up with `onboard_agent`. | "Register `~/code/foo` as a project." |
-| `onboard_agent` | Writes or updates a fenced, version-stamped kontexta workflow rules block into a project's agent context file(s) — `CLAUDE.md` / `AGENTS.md` / `GEMINI.md` / `.cursor/rules/*.mdc` / `.continue/rules/*.md`. Idempotent (skips on same version, splices on bump). Update mode targets detected files; create mode scaffolds the canonical filename for the chosen `target_agent`. Run after `register_project` when its recommendation suggests it, or any time to refresh the block. | "Onboard this project for Claude Code." |
+| `onboard_agent` | Writes or updates a fenced, version-stamped kontexta workflow rules block into a project's agent context file(s) — `CLAUDE.md` / `AGENTS.md` / `GEMINI.md` / `.cursor/rules/*.mdc` / `.continue/rules/*.md` / `.aider/kontexta.md`. Idempotent (skips on same version, splices on bump). Update mode targets detected files; create mode scaffolds the canonical filename for the chosen `target_agent`. Run after `register_project` when its recommendation suggests it, or any time to refresh the block. | "Onboard this project for Claude Code." |
 | `project_map` | Single-call indented outline of folders + file titles + tags + ids — typically 5× denser than `list_files`. | "Give me a map of the `acme` project." |
 | `stats` | Counts: files, untagged, favorites, top tags, by-project breakdown. Optional total token cost. | "How many untagged files are in the KB?" |
 

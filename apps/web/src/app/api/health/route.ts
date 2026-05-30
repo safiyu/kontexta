@@ -1,10 +1,13 @@
-import { NextResponse } from "next/server";
+import { checkAuth } from "@/lib/auth";
+import { NextRequest, NextResponse } from "next/server";
 import { ensureDbInitialized } from "@/lib/db-init";
 import { getDatabase } from "kxta-core";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  if (!checkAuth(req)) return new NextResponse("Unauthorized", { status: 401 });
+
   try {
     ensureDbInitialized();
     // Cheap connectivity probe: a SELECT 1 confirms the SQLite handle works.

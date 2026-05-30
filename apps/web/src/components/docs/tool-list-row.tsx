@@ -1,6 +1,6 @@
 "use client";
 
-import type { ToolDef } from "./tool-form-modal";
+import type { ToolDef } from "./tool-form";
 
 interface Props {
   name: string;

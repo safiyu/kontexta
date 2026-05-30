@@ -1,9 +1,12 @@
+import { checkAuth } from "@/lib/auth";
 import { NextRequest, NextResponse } from "next/server";
 import { createFolder, getDatabase, listProjectFolders } from "kxta-core";
 import { DATA_DIR, ensureDbInitialized } from "@/lib/db-init";
 import { join } from "node:path";
 
 export async function POST(req: NextRequest) {
+  if (!checkAuth(req)) return new NextResponse("Unauthorized", { status: 401 });
+
   ensureDbInitialized();
   let body: unknown;
   try {
@@ -56,6 +59,8 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET(req: NextRequest) {
+  if (!checkAuth(req)) return new NextResponse("Unauthorized", { status: 401 });
+
   ensureDbInitialized();
   const { searchParams } = new URL(req.url);
   const projectId = searchParams.get("projectId");
@@ -83,6 +88,8 @@ export async function GET(req: NextRequest) {
 
 
 export async function DELETE(req: NextRequest) {
+  if (!checkAuth(req)) return new NextResponse("Unauthorized", { status: 401 });
+
   ensureDbInitialized();
   const { searchParams } = new URL(req.url);
   const projectId = searchParams.get("projectId");

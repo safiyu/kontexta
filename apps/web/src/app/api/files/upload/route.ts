@@ -1,3 +1,4 @@
+import { checkAuth } from "@/lib/auth";
 import { NextRequest, NextResponse } from "next/server";
 import { createFile, listFiles, slugify } from "kxta-core";
 import { ensureDbInitialized, DATA_DIR } from "@/lib/db-init";
@@ -29,6 +30,8 @@ function nextAvailableName(existingBasenames: Set<string>, desired: string): str
 }
 
 export async function POST(req: NextRequest) {
+  if (!checkAuth(req)) return new NextResponse("Unauthorized", { status: 401 });
+
   ensureDbInitialized();
 
   // Reject obviously oversized uploads BEFORE Next's formData parser

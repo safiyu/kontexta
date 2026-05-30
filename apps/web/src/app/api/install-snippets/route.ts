@@ -18,14 +18,13 @@ function resolveSourceEntrypoint(): string {
     return cachedSourceEntrypoint;
   }
   try {
-    // Dynamic string prevents webpack from statically analyzing this require
-    // and bundling the entire kontexta-mcp package (including its top-level
-    // createDatabase side effect) into this route.
     const pkgName = ["kontexta", "mcp"].join("-");
     cachedSourceEntrypoint = createRequire(import.meta.url).resolve(pkgName);
     return cachedSourceEntrypoint;
   } catch {
-    return "/path/to/kontexta-mcp/dist/index.js";
+    // Fallback to relative path in monorepo structure
+    // This resolves to apps/mcp/dist/index.js from the workspace root
+    return path.resolve(process.cwd(), "..", "mcp", "dist", "index.js");
   }
 }
 
@@ -57,6 +56,7 @@ export async function GET(req: NextRequest) {
   const client = sp.get("client") as Client | null;
   const install = sp.get("install") as Install | null;
   if (!client || !CLIENTS.includes(client)) {
+    console.log("Invalid client requested:", client, "Available:", CLIENTS);
     return NextResponse.json({ error: "invalid client" }, { status: 400 });
   }
   if (!install || !INSTALLS.includes(install)) {

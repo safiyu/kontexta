@@ -20,12 +20,12 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
   }, [content]);
 
   return (
-    <div className="flex flex-col h-full bg-[#FAFAFA] dark:bg-[#0A0A0A]">
+    <div className="flex flex-col h-full bg-[var(--bg-primary)]">
       <textarea
         ref={textareaRef}
         value={content}
         onChange={(e) => onChange(e.target.value)}
-        className="flex-1 w-full p-6 bg-transparent border-none outline-none resize-none font-mono text-sm text-[#0F172A] dark:text-[#F1F5F9] leading-relaxed"
+        className="flex-1 w-full p-8 bg-transparent border-none outline-none resize-none font-mono text-[14px] text-[var(--text-primary)] leading-relaxed scrollbar-thin"
         placeholder="Start typing your markdown..."
         spellCheck={false}
       />

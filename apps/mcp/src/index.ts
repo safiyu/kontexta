@@ -48,13 +48,10 @@ import {
   RULE_BLOCK_VERSION,
   gracefulShutdown,
   type AgentId,
-  migrateEnvVars,
-  migrateDataFiles,
 } from "kxta-core";
 import RE2 from "re2";
-
-migrateEnvVars();
 import { isAbsolute, join, resolve, sep, dirname } from "node:path";
+import os from "node:os";
 import { statSync, lstatSync, openSync, readSync, closeSync, readFileSync, readdirSync, existsSync, realpathSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
@@ -62,13 +59,13 @@ import { HandsRegistry } from "./hands/registry.js";
 import { buildSchemaDoc } from "./hands/schema-doc.js";
 import { formatExecResult } from "./hands/formatter.js";
 import { killAllActiveChildren } from "./hands/executor.js";
-import { initCapture, shutdownCapture, wrapHandler, startGitPoller, setDataDir } from "./journal-capture.js";
+import { initCapture, shutdownCapture, wrapHandler, startGitPoller } from "./journal-capture.js";
 import { registerJournalTools } from "./journal-tools.js";
 import { registerCommitUpgradesTool } from "./journal-commit-upgrades-tool.js";
 import { registerHousekeepTool } from "./journal-housekeep-tool.js";
+import { getDataDir } from "kxta-core";
 
-const dataDir = process.env.KONTEXTA_DATA_DIR || join(process.cwd(), "data");
-const dbPath = process.env.KONTEXTA_DB_PATH || join(dataDir, "kontexta.db");
+const dataDir = getDataDir();
 
 const PROJECT_TOKEN_WARN_THRESHOLD = Number(
   process.env.KONTEXTA_PROJECT_TOKEN_WARN ?? 100_000
@@ -158,9 +155,6 @@ function attachTags<T extends { id: number }>(records: T[]): (T & { tags: string
   return records.map((r) => ({ ...r, tags: tagMap.get(r.id) ?? [] }));
 }
 
-migrateDataFiles(dataDir);
-createDatabase(dbPath);
-
 // Robust runtime version loading: walks up directories to find package.json
 let pkgVersion = "0.0.0";
 let pkgVersionFound = false;
@@ -198,7 +192,7 @@ const projectSlug = process.env.KONTEXTA_DEFAULT_PROJECT_SLUG ?? "default";
 const agent = process.env.KONTEXTA_AGENT ?? "unknown";
 const sid = `${process.pid}-${Date.now().toString(36)}`;
 initCapture({ projectSlug, baseDir: baseJournalDir, agent, sid });
-setDataDir(dataDir);
+
 startGitPoller(process.env.KONTEXTA_PROJECT_PATH ?? process.cwd(), 30);
 process.on("exit", shutdownCapture);
 // Signal-handler ordering: kill detached Hands children FIRST so their
@@ -236,7 +230,7 @@ const _origServerTool = server.tool.bind(server);
   return (_origServerTool as any)(name, ...rest);
 };
 
-// Legacy journal_append tool — excluded from wrapHandler (line 229) so it
+// Legacy journal_append tool — excluded from wrapHandler (line 223) so it
 // does NOT get the journal-backlog envelope injected. Kept for backward-compat.
 server.tool(
   "journal_append",
@@ -895,7 +889,7 @@ AUTH / RATE LIMITS: None. Operates entirely on the local file system.
 
 PARAMETERS:
 - name: Human-readable project name.
-- path: Absolute path to the project root. Required. If the user does not specify, use the current working directory. Fails with a descriptive error if the path does not exist or is inaccessible.
+- path: Absolute path to the project root. Required. DO NOT guess or assume the path based on the active editor workspace unless the user explicitly asks to register the "current" or "open" project. If the user provides a project name but no path, ask them for the absolute path before calling this tool. Fails with a descriptive error if the path does not exist or is inaccessible.
 - description: Optional free-text description stored with the project metadata.
 
 RETURNS: A JSON object containing:
@@ -909,7 +903,7 @@ RETURNS: A JSON object containing:
 ERROR CONDITIONS: Returns isError=true if path is missing or unresolvable. Scan failures are non-fatal and reported in warnings rather than as errors.`,
   {
     name: z.string().describe("Project name"),
-    path: z.string().optional().describe("Absolute path to the project root. If not provided by the user, use the current working directory."),
+    path: z.string().describe("Absolute path to the project root. Required. DO NOT guess from the active workspace unless asked. Ask the user if unsure."),
     description: z.string().optional().describe("Optional project description"),
   },
   async ({ name, path, description }) => {
@@ -933,15 +927,15 @@ ERROR CONDITIONS: Returns isError=true if path is missing or unresolvable. Scan 
       const total_est_tokens = annotated.reduce((s, f) => s + (f.est_tokens ?? 0), 0);
       const sizeWarning = tokenWarning(total_est_tokens);
       const warnings = [scanWarning, sizeWarning].filter((w): w is string => !!w);
-      const handsResult = handsRegistry.registerProject(project.name, path);
+      const handsResult = handsRegistry.registerProject(project.name, project.path!);
       const handsSummary = {
         found: handsResult.found,
         tools_registered: handsResult.registered,
         tools_disabled: handsResult.disabled,
         warnings: handsResult.warnings,
       };
-      const detected = detectAgentContextFiles(path);
-      const ruleStatuses = checkAgentRulesStatus(path, detected);
+      const detected = detectAgentContextFiles(project.path!);
+      const ruleStatuses = checkAgentRulesStatus(project.path!, detected);
       const outdated = ruleStatuses.filter((s) => !s.upToDate);
 
       let recommendationReason = "";
@@ -960,10 +954,10 @@ ERROR CONDITIONS: Returns isError=true if path is missing or unresolvable. Scan 
         }
       } else {
         recommendationReason =
-          `No AI agent instructions file (e.g. CLAUDE.md, AGENTS.md, GEMINI.md, ANTIGRAVITY.md, .cursor/rules, .continue/rules) was found in this project. ` +
-          `These files are how coding agents (Claude Code, Codex, Cursor, Gemini, etc.) load project-specific context at the start of every session. ` +
+          `No AI agent instructions file (e.g. CLAUDE.md, AGENTS.md, GEMINI.md, ANTIGRAVITY.md, .cursor/rules, .continue/rules, .aider/kontexta.md) was found in this project. ` +
+          `These files are how coding agents (Claude Code, Codex, Cursor, Gemini, Aider, etc.) load project-specific context at the start of every session. ` +
           `Without one, your agent won't know this project is registered with kontexta and will skip the search/read/journal workflow — wasting tokens re-reading files it could have looked up. ` +
-          `Run onboard_agent with target_agent set to your coding tool to scaffold the right file (CLAUDE.md for Claude Code, AGENTS.md for Codex, etc.) pre-populated with kontexta workflow rules.`;
+          `Run onboard_agent with target_agent set to your coding tool to scaffold the right file (CLAUDE.md for Claude Code, .aider/kontexta.md for Aider, etc.) pre-populated with kontexta workflow rules.`;
       }
 
       const needsOnboarding = outdated.length > 0 || detected.length === 0;
@@ -989,10 +983,10 @@ ERROR CONDITIONS: Returns isError=true if path is missing or unresolvable. Scan 
               next_tool: "onboard_agent" as const,
               next_args: {
                 project_id: project.id,
-                target_agent: "<pass your agent: claude-code | codex | gemini | antigravity | cursor | continue>",
+                target_agent: "<pass your agent: claude-code | codex | gemini | antigravity | cursor | continue | aider>",
               },
               prompt:
-                "Scaffold an AI agent instructions file now? Tell me which agent you use (claude-code, codex, gemini, antigravity, cursor, or continue) and I'll create the right file (e.g. CLAUDE.md) with the kontexta workflow rules pre-installed, so your agent picks them up on its next session.",
+                "Scaffold an AI agent instructions file now? Tell me which agent you use (claude-code, codex, gemini, antigravity, cursor, continue, or aider) and I'll create the right file (e.g. CLAUDE.md) with the kontexta workflow rules pre-installed, so your agent picks them up on its next session.",
             };
 
       const content: any[] = [
@@ -1042,14 +1036,14 @@ PARAMETERS:
 - project_id: number, required.
 - confirm: boolean, required. Must be true to proceed.
 - files: string[], optional. Paths relative to project root. For update mode, defaults to recommendation.target_files. Ignored when files is empty AND target_agent is provided (create mode).
-- target_agent: enum claude-code | codex | gemini | cursor | continue | generic. Required when files is empty AND no context file currently exists. Picks the canonical filename and the starter scaffold.
+- target_agent: enum claude-code | codex | gemini | cursor | continue | aider | generic. Required when files is empty AND no context file currently exists. Picks the canonical filename and the starter scaffold.
 
 RETURNS: { written: [{ path, action: created|updated|skipped, version }], skipped: [{ path, reason }] }`,
   {
     project_id: z.number().describe("Project ID returned from register_project"),
     confirm: z.boolean().describe("MANDATORY: Set to true only after obtaining explicit user consent to modify context files."),
     files: z.array(z.string()).optional().describe("Project-relative paths to update; defaults to detected context files"),
-    target_agent: z.enum(["claude-code", "codex", "gemini", "antigravity", "cursor", "continue", "generic"]).optional()
+    target_agent: z.enum(["claude-code", "codex", "gemini", "antigravity", "cursor", "continue", "aider", "generic"]).optional()
       .describe("Required when files is empty AND no context file exists. Picks the canonical filename + scaffold."),
   },
   async ({ project_id, confirm, files, target_agent }) => {

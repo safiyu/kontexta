@@ -50,7 +50,7 @@ export async function distillJournal(opts: DistillJournalOpts): Promise<DistillR
     const cutoff = new Date(opts.now.getTime() - opts.inFlightWindowSeconds * 1000).toISOString();
 
     // 1. READ
-    const events = readRawEvents(rawDir(opts), since, cutoff, opts.maxEvents);
+    const events = readRawEvents(opts, since, cutoff, opts.maxEvents);
     if (events.length === 0) {
       return { events_processed: 0, tasks_touched: [], tasks_created: [], high_water_advanced_to: since, warnings: [] };
     }
@@ -123,23 +123,39 @@ export async function distillJournal(opts: DistillJournalOpts): Promise<DistillR
   }
 }
 
-function readRawEvents(dir: string, sinceTs: string, untilTs: string, max: number): RawEvent[] {
-  if (!existsSync(dir)) return [];
-  const files = readdirSync(dir).filter((f) => f.endsWith(".jsonl")).sort();
+function readRawEvents(opts: DistillJournalOpts, sinceTs: string, untilTs: string, max: number): RawEvent[] {
+  const dirs = [rawDir(opts)];
+  const defaultDir = join(opts.dataDir, ...REL_BASE, "default", "raw");
+  if (defaultDir !== dirs[0] && existsSync(defaultDir)) {
+    dirs.push(defaultDir);
+  }
+
   const out: RawEvent[] = [];
-  for (const f of files) {
-    const lines = readFileSync(join(dir, f), "utf8").split("\n").filter(Boolean);
-    for (const line of lines) {
-      try {
-        const ev = JSON.parse(line) as RawEvent;
-        if (ev.ts > sinceTs && ev.ts < untilTs) out.push(ev);
-        if (out.length >= max) return out;
-      } catch {
-        // skip malformed line
+  for (const dir of dirs) {
+    if (!existsSync(dir)) continue;
+    const files = readdirSync(dir).filter((f) => f.endsWith(".jsonl")).sort();
+    for (const f of files) {
+      const lines = readFileSync(join(dir, f), "utf8").split("\n").filter(Boolean);
+      for (const line of lines) {
+        try {
+          const ev = JSON.parse(line) as RawEvent;
+          if (ev.ts > sinceTs && ev.ts < untilTs) {
+            // If it's from the default dir, we MUST check project affinity
+            if (dir === defaultDir) {
+              const matchesProject = (ev.args?.project_id === opts.projectId) || 
+                                   (ev.touched?.some(p => p.startsWith(opts.projectSlug))); // simplistic
+              if (!matchesProject) continue;
+            }
+            out.push(ev);
+          }
+          if (out.length >= max) return out;
+        } catch {
+          // skip malformed line
+        }
       }
     }
   }
-  return out;
+  return out.sort((a, b) => a.ts.localeCompare(b.ts));
 }
 
 function loadOpenTasks(opts: DistillJournalOpts): JournalFrontmatter[] {

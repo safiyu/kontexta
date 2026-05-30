@@ -1,4 +1,5 @@
-import { NextResponse } from "next/server";
+import { checkAuth } from "@/lib/auth";
+import { NextRequest, NextResponse } from "next/server";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
@@ -56,7 +57,9 @@ function loadAboutInfo() {
   return cached;
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  if (!checkAuth(req)) return new NextResponse("Unauthorized", { status: 401 });
+
   const { version, changelog } = loadAboutInfo();
   return NextResponse.json({
     name: "Kontexta",

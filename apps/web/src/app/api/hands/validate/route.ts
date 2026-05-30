@@ -1,7 +1,10 @@
+import { checkAuth } from "@/lib/auth";
 import { NextRequest, NextResponse } from "next/server";
 import { validateConfig } from "kontexta-mcp/hands/loader";
 
 export async function POST(req: NextRequest) {
+  if (!checkAuth(req)) return new NextResponse("Unauthorized", { status: 401 });
+
   let body: unknown;
   try {
     body = await req.json();

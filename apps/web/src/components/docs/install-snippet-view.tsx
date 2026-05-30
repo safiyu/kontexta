@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 
-export function InstallSnippetView({ body }: { body: string }) {
+export function InstallSnippetView({ body, configPath, notes }: { body: string; configPath?: string; notes?: string[] }) {
   const [copied, setCopied] = useState(false);
   const onCopy = async () => {
     await navigator.clipboard.writeText(body);
@@ -9,11 +9,26 @@ export function InstallSnippetView({ body }: { body: string }) {
     setTimeout(() => setCopied(false), 1500);
   };
   return (
-    <div className="relative">
-      <pre className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded p-3 text-xs overflow-x-auto whitespace-pre">{body}</pre>
-      <button onClick={onCopy} className="absolute top-2 right-2 px-2 py-1 text-xs bg-[var(--bg-primary)] border border-[var(--border)] rounded">
-        {copied ? "Copied" : "Copy"}
-      </button>
+    <div className="flex flex-col gap-3">
+      {configPath && (
+        <div className="p-3 bg-[var(--bg-secondary)] border border-[var(--accent-opacity)] rounded text-xs">
+          <div className="text-[var(--text-secondary)] mb-1 uppercase tracking-wider font-bold">Configuration Path</div>
+          <div className="font-mono break-all">{configPath}</div>
+        </div>
+      )}
+      <div className="relative">
+        <pre className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded p-3 text-xs overflow-x-auto whitespace-pre">{body}</pre>
+        <button onClick={onCopy} className="absolute top-2 right-2 px-2 py-1 text-xs bg-[var(--bg-primary)] border border-[var(--border)] rounded hover:border-[var(--accent)] transition-colors">
+          {copied ? "Copied" : "Copy"}
+        </button>
+      </div>
+      {notes && notes.length > 0 && (
+        <div className="text-xs text-[var(--text-secondary)] px-1">
+          <ul className="list-disc list-inside space-y-1">
+            {notes.map((n, i) => <li key={i}>{n}</li>)}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }

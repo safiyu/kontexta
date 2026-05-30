@@ -1,6 +1,7 @@
 import { WebSocketServer, WebSocket } from "ws";
 import { createFileWatcher, type WatcherEvent } from "kxta-core";
 import type { SyncEvent } from "./sync-events";
+import { checkAuth } from "@/lib/auth";
 
 // globalThis-cached so Next.js module duplication doesn't split the
 // open-sockets Set across instances (broadcast would silently no-op).
@@ -23,22 +24,15 @@ export function startWebSocketServer(port: number, watchPaths: string[]) {
   const host = process.env.KONTEXTA_WS_HOST || "127.0.0.1";
   const loopback = isLoopbackHost(host);
 
-  // Non-loopback WS leaks absolute paths + project metadata. Require
-  // origin allowlist and/or shared-secret token in that case.
+  // Non-loopback WS leaks absolute paths + project metadata. 
+  // We now use the unified auth system (master password + bypass IPs).
+  // The old KONTEXTA_WS_ORIGINS and KONTEXTA_WS_TOKEN are kept for legacy programmatic access,
+  // but browsers will be authenticated via the kontexta_session cookie.
   const allowedOrigins = (process.env.KONTEXTA_WS_ORIGINS || "")
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
   const requiredToken = (process.env.KONTEXTA_WS_TOKEN || "").trim();
-
-  if (!loopback && allowedOrigins.length === 0 && !requiredToken) {
-    console.warn(
-      `[Kontexta] WS bound to ${host} (non-loopback) WITHOUT auth. ` +
-        "All connections will be rejected. Set KONTEXTA_WS_ORIGINS " +
-        "(comma-separated allowed Origin headers) and/or KONTEXTA_WS_TOKEN " +
-        "(shared secret query param) to enable network access."
-    );
-  }
 
   wss = new WebSocketServer({ port, host });
   globalThis.__kontextaWss = wss;
@@ -56,30 +50,36 @@ export function startWebSocketServer(port: number, watchPaths: string[]) {
   });
 
   wss.on("connection", (ws, req) => {
-    if (!loopback) {
-      if (allowedOrigins.length === 0 && !requiredToken) {
-        ws.close(1008, "WS auth not configured");
-        return;
-      }
-      if (allowedOrigins.length > 0) {
-        const origin = req.headers.origin;
-        if (!origin || !allowedOrigins.includes(origin)) {
-          ws.close(1008, "Origin not allowed");
-          return;
-        }
-      }
-      if (requiredToken) {
-        let supplied: string | null = null;
-        try {
-          const u = new URL(req.url || "/", "http://_");
-          supplied = u.searchParams.get("token");
-        } catch {}
-        if (supplied !== requiredToken) {
-          ws.close(1008, "Invalid token");
-          return;
-        }
-      }
+    // WS Auth Logic
+    const reqForAuth = {
+      headers: new Headers(req.headers as Record<string, string>),
+    };
+    
+    // We add the remote address to headers for checkAuth to process IP bypasses
+    const clientIp = req.socket.remoteAddress;
+    if (clientIp) {
+      reqForAuth.headers.set("x-real-ip", clientIp);
     }
+    
+    // If programmatic access matches legacy tokens/origins, allow it.
+    let programmaticAuth = false;
+    if (allowedOrigins.length > 0 && req.headers.origin && allowedOrigins.includes(req.headers.origin)) {
+      programmaticAuth = true;
+    }
+    if (requiredToken) {
+      try {
+        const u = new URL(req.url || "/", "http://_");
+        if (u.searchParams.get("token") === requiredToken) {
+          programmaticAuth = true;
+        }
+      } catch {}
+    }
+
+    if (!programmaticAuth && !checkAuth(reqForAuth as any)) {
+      ws.close(1008, "Unauthorized");
+      return;
+    }
+
     clients.add(ws);
     ws.on("close", () => clients.delete(ws));
   });

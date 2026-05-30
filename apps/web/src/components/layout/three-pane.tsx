@@ -75,23 +75,28 @@ export function ThreePane({ left, leftRail, middle, right }: ThreePaneProps) {
         leftRail
       ) : (
         <>
-          <div style={{ width: leftWidth }} className="shrink-0 overflow-auto bg-[var(--bg-primary)] border-r border-[var(--border)]">
+          <div style={{ width: leftWidth }} className="shrink-0 overflow-auto bg-[var(--bg-primary)] border-r border-[var(--border)] scrollbar-thin">
             {left}
           </div>
           <div
             onPointerDown={onPointerDown("left")}
-            className="w-1 cursor-col-resize bg-transparent hover:bg-[var(--accent)]/40 transition-colors"
+            className="w-1 cursor-col-resize bg-transparent hover:bg-[var(--accent)]/40 transition-colors z-10"
           />
         </>
       )}
-      <div style={{ width: middleWidth }} className="shrink-0 overflow-auto bg-[var(--bg-primary)] border-r border-[var(--border)]">
+      <div style={{ width: middleWidth }} className="shrink-0 overflow-auto bg-[var(--bg-primary)] border-r border-[var(--border)] scrollbar-thin">
         {middle}
       </div>
       <div
         onPointerDown={onPointerDown("middle")}
-        className="w-1 cursor-col-resize bg-transparent hover:bg-[var(--accent)]/40 transition-colors"
+        className="w-1 cursor-col-resize bg-transparent hover:bg-[var(--accent)]/40 transition-colors z-10"
       />
-      <div className="flex-1 min-w-0 overflow-auto bg-[#FFFDF7] dark:bg-[var(--bg-primary)]">{right}</div>
+      <div className="flex-1 min-w-0 bg-[var(--bg-secondary)] dark:bg-[var(--bg-primary)] p-3 lg:p-4 transition-all overflow-hidden flex flex-col">
+        <div className="flex-1 min-w-0 overflow-auto floating-surface rounded-2xl shadow-2xl relative">
+          <div className="absolute inset-0 pointer-events-none border border-amber-accent/10 rounded-2xl z-20" />
+          {right}
+        </div>
+      </div>
     </div>
   );
 }

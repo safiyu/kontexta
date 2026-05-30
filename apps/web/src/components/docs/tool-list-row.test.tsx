@@ -2,7 +2,7 @@
 import { render, screen, cleanup } from "@testing-library/react";
 import { describe, it, expect, afterEach } from "vitest";
 import { ToolListRow } from "./tool-list-row";
-import type { ToolDef } from "./tool-form-modal";
+import type { ToolDef } from "./tool-form";
 
 afterEach(() => cleanup());
 

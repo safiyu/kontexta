@@ -5,6 +5,7 @@ import { FileListFilter } from "./file-list-filter";
 import { FileItem } from "./file-item";
 import { UploadFilesDialog } from "./upload-files-dialog";
 import { ClipUrlDialog } from "./clip-url-dialog";
+import { OnboardModal } from "./onboard-modal";
 
 interface Project {
   id: number;
@@ -74,6 +75,7 @@ export function FileList({
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [clipDialogOpen, setClipDialogOpen] = useState(false);
+  const [onboardOpen, setOnboardOpen] = useState(false);
   const [newMenuOpen, setNewMenuOpen] = useState(false);
   const [projectMenuOpen, setProjectMenuOpen] = useState(false);
   const newMenuRef = useRef<HTMLDivElement>(null);
@@ -262,6 +264,13 @@ export function FileList({
                 >
                   <span>🔍</span> Scan for New Files
                 </button>
+                <button
+                  type="button"
+                  onClick={() => { setProjectMenuOpen(false); setOnboardOpen(true); }}
+                  className="dropdown-item"
+                >
+                  <span>✨</span> Onboard Agent
+                </button>
                 {!selectedFolder && onUnregisterProject && (
                   <button
                     type="button"
@@ -430,6 +439,15 @@ export function FileList({
         onClose={() => setClipDialogOpen(false)}
         onClipped={() => { onRefresh(); }}
       />
+      {selectedProject && (
+        <OnboardModal
+          isOpen={onboardOpen}
+          onClose={() => setOnboardOpen(false)}
+          projectId={selectedProject.id}
+          projectName={selectedProject.name}
+          onOnboarded={() => { onRefresh(); }}
+        />
+      )}
     </div>
   );
 }

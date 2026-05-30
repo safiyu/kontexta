@@ -73,7 +73,7 @@ export const POST_TOOL_USE_HOOK_SNIPPET = JSON.stringify({
   },
 }, null, 2);
 
-export type AgentId = "claude-code" | "codex" | "gemini" | "antigravity" | "cursor" | "continue" | "generic";
+export type AgentId = "claude-code" | "codex" | "gemini" | "antigravity" | "cursor" | "continue" | "aider" | "generic";
 
 interface ProjectMeta {
   name: string;
@@ -100,6 +100,10 @@ export const SCAFFOLDS: Record<AgentId, ScaffoldDef> = {
   continue:      {
     path: ".continue/rules/kontexta.md",
     header: (p) => `# kontexta rules — ${p.name}\n\n`,
+  },
+  aider:         {
+    path: ".aider/kontexta.md",
+    header: (p) => `<!--\n  kontexta rules for Aider — ${p.name}\n  To enable, add this to your .aider.conf.yml:\n  read:\n    - .aider/kontexta.md\n-->\n\n`,
   },
   generic:       { path: "CLAUDE.md", header: claudeStyleHeader },
 };
@@ -145,10 +149,11 @@ function loadRulesBlockBody(): string {
 
 export const RULES_BLOCK_BODY = loadRulesBlockBody();
 
-const ROOT_FILES = ["CLAUDE.md", "AGENTS.md", "GEMINI.md", "ANTIGRAVITY.md"] as const;
+const ROOT_FILES = ["CLAUDE.md", "AGENTS.md", "GEMINI.md", "ANTIGRAVITY.md", ".aider.conf.yml"] as const;
 const SUBDIR_GLOBS = [
   { dir: ".cursor/rules", ext: ".mdc" },
   { dir: ".continue/rules", ext: ".md" },
+  { dir: ".aider", ext: ".md" },
 ] as const;
 
 function isRegularNonSymlink(absPath: string): boolean {

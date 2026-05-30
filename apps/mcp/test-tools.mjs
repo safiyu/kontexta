@@ -32,7 +32,7 @@ const SEED_PATH_2 = join(DATA_DIR, "knowledge", `${SEED_TITLE_2}.md`);
 console.log(`[test] dataDir = ${DATA_DIR}`);
 
 const child = spawn("node", [SERVER], {
-  env: { ...process.env, MNEXIS_DATA_DIR: DATA_DIR },
+  env: { ...process.env, KONTEXTA_DATA_DIR: DATA_DIR },
   stdio: ["pipe", "pipe", "inherit"],
 });
 

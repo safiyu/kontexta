@@ -1,11 +1,10 @@
 // apps/mcp/src/journal-tools.ts
 import { z } from "zod";
-import { distillJournal, readHighWater, getDatabase } from "kxta-core";
+import { distillJournal, readHighWater, getDatabase, getDataDir } from "kxta-core";
 import type { RawEvent } from "kxta-core";
 import {
   appendVoluntaryEvent,
   getCurrentProjectSlug,
-  getDataDir,
   getCurrentAgent,
   getCurrentSid,
 } from "./journal-capture.js";

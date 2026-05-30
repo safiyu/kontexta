@@ -1,3 +1,4 @@
+import { checkAuth } from "@/lib/auth";
 import { NextRequest, NextResponse } from "next/server";
 import { syncBackup } from "kxta-core";
 import { DATA_DIR, ensureDbInitialized } from "@/lib/db-init";
@@ -7,6 +8,8 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  if (!checkAuth(req)) return new NextResponse("Unauthorized", { status: 401 });
+
   ensureDbInitialized();
   const { id } = await params;
   const projectIdNum = parseInt(id, 10);

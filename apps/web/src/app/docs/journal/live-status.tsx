@@ -14,9 +14,10 @@ export function LiveStatus({ projectId }: { projectId: number }) {
 
   useEffect(() => {
     let cancelled = false;
+    const ac = new AbortController();
     const refresh = async () => {
       try {
-        const res = await fetch(`/api/projects/${projectId}/journal-status`);
+        const res = await fetch(`/api/projects/${projectId}/journal-status`, { signal: ac.signal });
         if (!res.ok) {
           if (!cancelled) setError(`status request failed: ${res.status}`);
           return;
@@ -27,12 +28,17 @@ export function LiveStatus({ projectId }: { projectId: number }) {
           setError(null);
         }
       } catch (e: unknown) {
-        if (!cancelled) setError(e instanceof Error ? e.message : String(e));
+        if (cancelled || (e as any).name === "AbortError") return;
+        setError(e instanceof Error ? e.message : String(e));
       }
     };
     refresh();
     const t = setInterval(refresh, 30_000);
-    return () => { cancelled = true; clearInterval(t); };
+    return () => { 
+      cancelled = true; 
+      ac.abort();
+      clearInterval(t); 
+    };
   }, [projectId]);
 
   if (error) return <div className="text-sm text-red-500">Status error: {error}</div>;

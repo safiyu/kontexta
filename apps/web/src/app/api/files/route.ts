@@ -1,3 +1,4 @@
+import { checkAuth } from "@/lib/auth";
 import { NextRequest, NextResponse } from "next/server";
 import { statSync, openSync, readSync, closeSync } from "node:fs";
 import { listFiles, createFile, getTagsForFiles, getDatabase } from "kxta-core";
@@ -27,6 +28,8 @@ const DEFAULT_FILE_LIST_LIMIT = 5000;
 const MAX_FILE_LIST_LIMIT = 50000;
 
 export async function GET(req: NextRequest) {
+  if (!checkAuth(req)) return new NextResponse("Unauthorized", { status: 401 });
+
   ensureDbInitialized();
   const { searchParams } = req.nextUrl;
   const projectId = searchParams.get("project_id");
@@ -103,6 +106,8 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  if (!checkAuth(req)) return new NextResponse("Unauthorized", { status: 401 });
+
   ensureDbInitialized();
   let body: unknown;
   try {

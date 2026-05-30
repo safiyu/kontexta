@@ -1,3 +1,4 @@
+import { checkAuth } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { clipUrl, ClipError, type ClipErrorCode } from "kxta-core";
 import { ensureDbInitialized, DATA_DIR } from "@/lib/db-init";
@@ -29,6 +30,8 @@ function isStringRecord(v: unknown): v is Record<string, string> {
 }
 
 export async function POST(req: Request) {
+  if (!checkAuth(req)) return new NextResponse("Unauthorized", { status: 401 });
+
   ensureDbInitialized();
 
   let body: { url?: unknown; title?: unknown; headers?: unknown };

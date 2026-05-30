@@ -83,7 +83,7 @@ function FolderNodes({
         <TreeNode
           key={child.path}
           label={child.name}
-          icon={<FolderIcon className="w-3.5 h-3.5 text-[#FF7F50]" />}
+          icon={<FolderIcon className="w-3.5 h-3.5 text-[#FF7F50] group-hover:text-white transition-colors" />}
           active={selectedFolder === child.path}
           onClick={() => onSelectFolder(child.path)}
         >
@@ -99,7 +99,7 @@ function FolderNodes({
         <TreeNode
           key={file.id}
           label={file.title}
-          icon={<FileIcon className="w-3.5 h-3.5 text-amber-accent" />}
+          icon={<FileIcon className="w-3.5 h-3.5 text-amber-accent group-hover:text-white transition-colors" />}
           onClick={() => onSelectFile(file.id)}
         />
       ))}
@@ -141,7 +141,7 @@ export function FolderTree({
   }, [knowledgeFiles, knowledgeFolders, knowledgeBasePath]);
 
   return (
-    <div className="p-2 space-y-3 text-[#5C3D24] [&_*:not(svg):not(path):not(polyline)]:!text-[#5C3D24] dark:text-[#F5C97A] dark:[&_*:not(svg):not(path):not(polyline)]:!text-[#F5C97A]">
+    <div className="p-2 space-y-3 text-[var(--text-primary)]">
       <div>
         <div className="px-2 pt-2 pb-1 text-[12px] uppercase tracking-wider text-[var(--text-secondary)]">
           Projects
@@ -153,7 +153,7 @@ export function FolderTree({
               <TreeNode
                 key={project.id}
                 label={project.name}
-                icon={<FolderIcon className="w-3.5 h-3.5 text-[#FF7F50]" />}
+                icon={<FolderIcon className="w-3.5 h-3.5 text-[#FF7F50] group-hover:text-white transition-colors" />}
                 active={isSelected && selectedFolder === null}
                 initialExpanded={isSelected}
                 hasHands={project.has_hands}

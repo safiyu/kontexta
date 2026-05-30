@@ -7,6 +7,7 @@ import Database from "better-sqlite3";
 import { readFileSync, readdirSync, mkdirSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { getDbPath, ensureDataDir } from "../util/paths.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -39,6 +40,8 @@ declare global {
   var __kontextaDb: Database.Database | null | undefined;
   // eslint-disable-next-line no-var
   var __kontextaDbCloseRegistered: boolean | undefined;
+  // eslint-disable-next-line no-var
+  var __kontextaTmpSessionSecret: string | undefined;
 }
 
 let db: Database.Database | null = globalThis.__kontextaDb ?? null;
@@ -75,7 +78,7 @@ export function createDatabase(dbPath: string): Database.Database {
     // before we yank the connection out from under them.
     const SHUTDOWN_DRAIN_MS = Number(process.env.KONTEXTA_SHUTDOWN_DRAIN_MS ?? 1500);
     const gracefulExit = (signal: string) => {
-      console.log(`[Database] ${signal} received, draining for ${SHUTDOWN_DRAIN_MS}ms before close`);
+      console.error(`[Database] ${signal} received, draining for ${SHUTDOWN_DRAIN_MS}ms before close`);
       setTimeout(() => {
         close();
         process.exit(0);
@@ -95,7 +98,8 @@ export function createDatabase(dbPath: string): Database.Database {
  */
 export function getDatabase(): Database.Database {
   if (!db) {
-    throw new Error("Database not initialized. Call createDatabase() first.");
+    ensureDataDir();
+    return createDatabase(getDbPath());
   }
   return db;
 }
@@ -168,7 +172,7 @@ export function runMigrations(): void {
         );
       }
 
-      console.log(`[Database] Running migration: ${file}`);
+      console.error(`[Database] Running migration: ${file}`);
 
       // Execute the migration in a transaction
       db.transaction(() => {

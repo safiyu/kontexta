@@ -43,6 +43,31 @@ This project is registered with kontexta. Honor these rules to keep the index, h
 
 **Use `.mmd` for diagrams, not fenced code in `.md`.** When creating an architecture / flow / sequence diagram, call `create_file` with `format: "mmd"` and put the raw mermaid source as the body (no ```` ```mermaid ```` fence). The web UI renders `.mmd` files as live diagrams with SVG/PNG export; mermaid embedded in markdown is just text. Default folder: `mermaid/` (or `<project>/mermaid/` for project-scoped diagrams).
 
+
+### Knowledge Items (KI)
+
+KIs are curated, distilled KB files — the highest-signal context in the vault. 
+They save tokens and prevent redundant research when used correctly.
+
+**Check KIs before independent research.** At the start of any task, run 
+`search` or `bundle_search` over the KB for the task topic. If a matching KI 
+exists, read it before writing code, designing architecture, or forming a plan. 
+Skipping this step is the single most common source of duplicated work.
+
+**KIs are starting points, not ground truth.** KIs are snapshots. Always 
+cross-reference a KI's API patterns, file paths, and config values against the 
+*current* source on disk before acting on them. KIs can lag behind code.
+
+**Close the loop: update the KI after significant changes.** When you ship a 
+meaningful change (new API, config schema change, architecture shift), update 
+the relevant KI via `update_file` or `update_file_section`. If no KI exists 
+yet, create one with `create_file` under `knowledge/` with appropriate tags. 
+A KI that isn't maintained becomes noise — which is worse than no KI.
+
+**Use `whats_new` at session start after a gap.** If you haven't touched the 
+project in a while, run `whats_new(since: "7d")` to surface recently changed 
+files — including KIs updated by other agents or the user.
+
 ### Tool reference
 
 The matrix below is grouped by intent. For each tool: when to reach for it, the most common wrong context, and the better sibling tool when wrong.
