@@ -1,0 +1,78 @@
+{
+  "name": "kontexta-mcp",
+  "version": "2.0.2",
+  "description": "The local Brain and Hands for AI coding agents (MCP Server)",
+  "keywords": [
+    "mcp",
+    "mcp-server",
+    "model-context-protocol",
+    "kontexta",
+    "context-engine",
+    "knowledge-base",
+    "agentic",
+    "claude",
+    "cursor",
+    "rag"
+  ],
+  "homepage": "https://github.com/safiyu/kontexta#readme",
+  "bugs": {
+    "url": "https://github.com/safiyu/kontexta/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/safiyu/kontexta.git",
+    "directory": "apps/mcp"
+  },
+  "license": "Apache-2.0",
+  "author": "safiyu",
+  "private": false,
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "type": "module",
+  "main": "dist/index.js",
+  "exports": {
+    ".": "./dist/index.js",
+    "./hands/loader": "./dist/hands/loader.js",
+    "./hands/sanitizer": "./dist/hands/sanitizer.js",
+    "./hands/types": "./dist/hands/types.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "bin": {
+    "kontexta-mcp": "dist/index.js",
+    "kxta": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "build:npm": "tsup",
+    "dev": "tsc --watch",
+    "start": "node dist/index.js",
+    "smoke": "node test-tools.mjs",
+    "gen:manifest": "node scripts/generate-manifest.js",
+    "test": "node test-tools.mjs",
+    "prepublishOnly": "pnpm run build:npm"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "better-sqlite3": "^11.7.0",
+    "chokidar": "^4.0.0",
+    "kxta-core": "workspace:*",
+    "re2": "^1.21.4",
+    "simple-git": "^3.27.0",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsup": "^8.3.0",
+    "typescript": "^5.7.0"
+  },
+  "rulesVersion": "2.0.0"
+}

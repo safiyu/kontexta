@@ -1,0 +1,18 @@
+{
+  "version": "1",
+  "tools": {
+    "build": {
+      "description": "Run the project build.",
+      "command": ["pnpm", "build"],
+      "timeout": 600
+    },
+    "test": {
+      "description": "Run all tests.",
+      "command": ["pnpm", "test"]
+    }
+  },
+  "journal": {
+    "mode": "lenient",
+    "ticket_pattern": "[A-Z]+-\\d+"
+  }
+}

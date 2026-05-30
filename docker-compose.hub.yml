@@ -1,0 +1,38 @@
+# docker-compose.hub.yml
+# Uses the pre-built image from Docker Hub — no build step required.
+# Pull and run in one command:
+#
+#   curl -fsSL https://raw.githubusercontent.com/safiyu/kontexta/main/docker-compose.hub.yml | docker compose -f - up -d
+#
+# Or, if you have the file locally:
+#
+#   docker compose -f docker-compose.hub.yml up -d
+#
+# Data is persisted in ./kontexta-data on the host.
+
+services:
+  kontexta:
+    image: safiyu/kontexta:latest
+    container_name: kontexta
+    ports:
+      - "3000:3000"
+      - "3001:3001"
+    volumes:
+      - ./kontexta-data:/app/data
+      # - /path/to/your/projects:/path/to/your/projects # Mount your projects directory here
+    environment:
+      - NODE_ENV=production
+      - HOSTNAME=0.0.0.0
+      - PORT=3000
+      - WS_PORT=3001
+      - KONTEXTA_WS_HOST=0.0.0.0
+      - KONTEXTA_WS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+      - KONTEXTA_DATA_DIR=/app/data
+      - KONTEXTA_DB_PATH=/app/data/kontexta.db
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://127.0.0.1:3000/api/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))\""]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
