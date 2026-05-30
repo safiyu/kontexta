@@ -63,7 +63,7 @@ export class JournalScheduler {
         // Broadcast journal status update if work was done
         if (result.events_processed > 0 || result.tasks_touched.length > 0) {
           try {
-            const wsModule = await import("./websocket.js");
+            const wsModule = await import("./websocket");
             const broadcast = (wsModule as any).broadcast ?? (wsModule as any).broadcastSync;
             if (typeof broadcast === "function") {
               broadcast({

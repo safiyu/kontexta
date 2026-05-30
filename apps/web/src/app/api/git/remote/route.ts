@@ -1,8 +1,11 @@
-import { NextResponse } from "next/server";
+import { checkAuth } from "@/lib/auth";
+import { NextRequest, NextResponse } from "next/server";
 import { DATA_DIR, ensureDbInitialized } from "@/lib/db-init";
 import { getGlobalRemote, setGlobalRemote } from "kxta-core";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  if (!checkAuth(req)) return new NextResponse("Unauthorized", { status: 401 });
+
   ensureDbInitialized();
   try {
     const url = await getGlobalRemote(DATA_DIR);
@@ -12,11 +15,13 @@ export async function GET() {
   }
 }
 
-export async function POST(request: Request) {
+export async function POST(req: Request) {
+  if (!checkAuth(req)) return new NextResponse("Unauthorized", { status: 401 });
+
   ensureDbInitialized();
   let body: unknown;
   try {
-    body = await request.json();
+    body = await req.json();
   } catch {
     return NextResponse.json({ error: "Body must be JSON" }, { status: 400 });
   }

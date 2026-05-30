@@ -1,7 +1,7 @@
 // apps/mcp/src/journal-housekeep-tool.ts
 import { z } from "zod";
-import { housekeepJournal } from "kxta-core";
-import { getCurrentProjectSlug, getDataDir } from "./journal-capture.js";
+import { housekeepJournal, getDataDir } from "kxta-core";
+import { getCurrentProjectSlug } from "./journal-capture.js";
 
 export function registerHousekeepTool(server: any): void {
   server.tool(

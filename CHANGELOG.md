@@ -1,5 +1,25 @@
 # Changelog
 
+## 2.0.3 — Test suite stabilization & UI authentication integration
+
+### Fixed
+
+- **`install-templates` test**: skips the `dataDir` assertion for the `aider` client — Aider is file-based and does not embed an MCP data-directory path in its snippet body.
+- **`hand-tool-templates` test**: updated expected template count from 4 → 8 to reflect the full set of shipped templates (`npm-install`, `type-check`, `lint-fix`, `comprehensive-example` added since the snapshot was created). Fixed the `comprehensive-example` template's `command` to use `bash ./scripts/deploy.sh …` (bare command, not a relative path) so it passes `validateConfig`'s argv[0] validation. Snapshot regenerated.
+- **`save-bar` test**: aligned label assertions to actual component output — `"1 change"` / `"3 changes"` (component uses the concise form, not `"unsaved change(s)"`).
+- **`tool-form-modal` test**: broadened the submit-button name query to `/(save|create)/i` to cover both the `"Save Changes"` (edit) and `"Create Tool"` (new) labels that `ToolForm` emits depending on context.
+- **`builder-section` tests**: full rewrite to match the three-pane inline-editor UI (left Registry sidebar, centre inline `ToolForm` editor, right Template Gallery) that replaced the old modal/list pattern. Covers: initial load, staged deletion, empty-state gallery, save-bar count lifecycle, template-prefill flow, from-scratch creation, config-file deletion, and per-tool validation error badges.
+- **Native module compatibility**: recompiled `re2` and `better-sqlite3` for Node.js v24.15.0.
+
+### Changed
+
+- **`hand-tool-templates`**: `comprehensive-example` command changed from `./scripts/deploy.sh …` → `bash ./scripts/deploy.sh …` to satisfy the `argv[0] must be absolute or a bare command` constraint enforced by `validateConfig`.
+
+### Tests
+
+- **`apps/web` suite**: 25 test files / 104 tests — all passing (was 5 failing suites).
+- Total monorepo suite unchanged for `packages/core` and `apps/mcp` (both were already green).
+
 ## 2.0.2 — Housekeep refuses to prune undistilled raw events
 
 ### Fixed

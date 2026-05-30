@@ -73,5 +73,97 @@ exports[`HAND_TOOL_TEMPLATES > matches snapshot 1`] = `
     "name": "remove-temp",
     "oneLiner": "Delete a file under tmp/scratch. Strict pattern + argSeparator.",
   },
+  {
+    "def": {
+      "command": [
+        "npm",
+        "install",
+        "{{pkg}}",
+      ],
+      "danger": "moderate",
+      "description": "Install a new dependency via npm",
+      "params": {
+        "pkg": {
+          "pattern": "^@?[a-z0-9][a-z0-9-._]*$",
+          "required": true,
+          "type": "string",
+        },
+      },
+    },
+    "name": "npm-install",
+    "oneLiner": "Safely install a new npm package. Restricted to safe package names.",
+  },
+  {
+    "def": {
+      "command": [
+        "npx",
+        "tsc",
+        "--noEmit",
+      ],
+      "description": "Run tsc without emitting files to check for type errors.",
+      "timeout": 60000,
+    },
+    "name": "type-check",
+    "oneLiner": "Run the TypeScript compiler to catch type errors project-wide.",
+  },
+  {
+    "def": {
+      "command": [
+        "npx",
+        "eslint",
+        ".",
+        "--fix",
+      ],
+      "danger": "moderate",
+      "description": "Auto-fix linting and formatting issues.",
+      "timeout": 120000,
+    },
+    "name": "lint-fix",
+    "oneLiner": "Run ESLint to automatically correct code style and auto-fixable errors.",
+  },
+  {
+    "def": {
+      "argSeparator": true,
+      "command": [
+        "bash",
+        "./scripts/deploy.sh",
+        "--target",
+        "{{targetEnv}}",
+        "--dry-run={{isDryRun}}",
+        "--retries={{retries}}",
+      ],
+      "confirm": true,
+      "danger": "high",
+      "description": "A comprehensive example showing off every kontexta.json capability. Use this to understand how to build complex, secure tools.",
+      "env": {
+        "DEBUG": "true",
+        "FORCE_COLOR": "1",
+      },
+      "maxOutputBytes": 1048576,
+      "params": {
+        "isDryRun": {
+          "default": true,
+          "required": false,
+          "type": "boolean",
+        },
+        "retries": {
+          "default": 3,
+          "max": 10,
+          "min": 0,
+          "required": false,
+          "type": "number",
+        },
+        "targetEnv": {
+          "pattern": "^(staging|production|qa)$",
+          "required": true,
+          "type": "string",
+        },
+      },
+      "timeout": 300000,
+      "workingDir": "backend",
+    },
+    "name": "comprehensive-example",
+    "oneLiner": "Showcase: params, env, workingDir, confirm, danger, and argSeparator.",
+  },
 ]
 `;

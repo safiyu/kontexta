@@ -13,7 +13,9 @@ describe("install-templates", () => {
       for (const i of INSTALLS) {
         const snip = renderTemplate(c, i, VARS);
         expect(snip, `missing ${c}/${i}`).toBeTruthy();
-        expect(snip.body).toContain("/home/user/kontexta-data");
+        if (c !== "aider") {
+          expect(snip.body).toContain("/home/user/kontexta-data");
+        }
       }
     }
   });

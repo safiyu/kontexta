@@ -75,7 +75,7 @@ A project-defined command surface that replaces "unrestricted shell access" with
 ### 3. Eyes — The Feedback Engine
 Closes the loop by capturing Hands' output and journaling learnings back into the Brain.
 - **Live Observation**: Tools like `whats_new` and `diff_against_disk` let agents see what actually changed.
-- **Automatic journaling**: Every MCP tool call is captured to a per-project, append-only event log (Layer 1). The `distill_journal` tool — or the lenient-mode auto-fallback — collapses raw events into per-topic markdown summaries (Layer 2) indexed alongside the rest of the knowledge base. `journal_note` and `journal_intent` let agents enrich the log with decisions and topic pivots. Phase 2 also adds `housekeep_journal` (retention/archival), `distill_journal_commit_upgrades` (closes the subagent dispatch loop), strict mode (configurable per project — blocks read tools when backlog exists), and an opt-in WebUI scheduler that runs mechanical distillation on a 15-minute clock when the dashboard is installed.
+- **Automatic journaling**: Every MCP tool call is captured to a per-project, append-only event log (Layer 1). The `distill_journal` tool — or the lenient-mode auto-fallback — collapses raw events into per-topic markdown summaries (Layer 2) indexed alongside the rest of the knowledge base. `journal_note` and `journal_intent` let agents enrich the log with decisions and topic pivots. Phase 2 also adds `housekeep_journal` (retention/archival), `distill_journal_commit_upgrades` (closes the subagent dispatch loop), strict mode (configurable per project — blocks read tools when backlog exists), and an opt-in WebUI scheduler that runs mechanical distillation on a 15-minute clock when the dashboard is installed. **[Learn more about Journaling modes and configuration in docs/JOURNAL.md](docs/JOURNAL.md).**
 
 ---
 
@@ -129,7 +129,8 @@ The fastest way to try Kontexta is via `npx`. Add this to your MCP client config
       "command": "npx",
       "args": ["-y", "kontexta-mcp"],
       "env": {
-        "KONTEXTA_DATA_DIR": "/absolute/path/to/your/knowledge-vault"
+        // Optional: defaults to your OS-standard data directory
+        // "KONTEXTA_DATA_DIR": "/absolute/path/to/your/knowledge-vault"
       }
     }
   }
@@ -146,6 +147,20 @@ curl -fsSL https://raw.githubusercontent.com/safiyu/kontexta/main/docker-compose
 docker compose up -d
 ```
 The UI lands at `http://localhost:3000`.
+
+---
+
+## Security & Network Exposure
+
+Kontexta's dashboard is designed for **local-first use** — running on `localhost` or on a trusted machine you control. The threat model is:
+
+- **Default safe:** A master password protects the UI. Sessions are HMAC-signed cookies, passwords are scrypt-hashed.
+- **IP bypass is opt-in per IP.** During setup you can allowlist IPs (e.g. `127.0.0.1`) to skip the login prompt from trusted addresses.
+- **Reverse-proxy mode is opt-in.** If you put Kontexta behind nginx, Caddy, or Cloudflare Tunnel, enable **"Trust `X-Forwarded-For` headers"** during setup. Without this flag, those headers are ignored — so a LAN attacker cannot spoof an allowlisted IP.
+- **`kontexta.json` is your responsibility.** The Hands engine executes shell commands you declare in this file. The sandbox limits *where* and *how* those commands run (path traversal blocked, ReDoS-proof regex, locked CWD, stripped PATH), but the *what* is whatever you wrote. Review any `kontexta.json` you didn't author yourself — same caution you'd apply to a Makefile, GitHub Actions workflow, or shell snippet from the internet.
+
+> [!WARNING]
+> Do not expose the dashboard to the public internet without a trusted reverse proxy in front. The auth layer is sufficient for localhost and LAN use; it is not hardened against direct internet exposure (no rate limiting, no brute-force lockout, no MFA).
 
 ---
 

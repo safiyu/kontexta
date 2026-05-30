@@ -8,8 +8,11 @@ const CLIENTS = [
   { id: "claude-desktop", label: "Claude Desktop" },
   { id: "cursor", label: "Cursor" },
   { id: "codex", label: "Codex" },
-  { id: "gemini", label: "Gemini / Antigravity" },
+  { id: "gemini", label: "Gemini" },
+  { id: "antigravity", label: "Antigravity" },
   { id: "continue", label: "Continue" },
+  { id: "aider", label: "Aider" },
+  { id: "cline", label: "Cline" },
   { id: "generic", label: "Generic JSON" },
 ];
 const INSTALLS = [
@@ -21,15 +24,15 @@ const INSTALLS = [
 export function InstallSection() {
   const [client, setClient] = useState("claude-code");
   const [install, setInstall] = useState("docker");
-  const [body, setBody] = useState<string>("");
+  const [snippet, setSnippet] = useState<{ body: string; configPath?: string; notes?: string[] } | null>(null);
   const [detected, setDetected] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch(`/api/install-snippets?client=${client}&install=${install}`)
+    fetch(`/api/install-snippets?client=${client}&install=${install}&t=${Date.now()}`)
       .then((r) => r.json())
       .then((j) => {
-        setBody(j.body);
-        if (!detected) setDetected(j.detectedInstall);
+        setSnippet(j);
+        if (j.detectedInstall && !detected) setDetected(j.detectedInstall);
       })
       .catch(() => {});
   }, [client, install, detected]);
@@ -50,7 +53,13 @@ export function InstallSection() {
           </select>
         </label>
       </div>
-      <InstallSnippetView body={body} />
+      {snippet && (
+        <InstallSnippetView 
+          body={snippet.body} 
+          configPath={snippet.configPath} 
+          notes={snippet.notes} 
+        />
+      )}
     </div>
   );
 }

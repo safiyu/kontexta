@@ -24,6 +24,8 @@ scratch/
 apps/web/src/lib/mcp-tools.json
 apps/web/.next/standalone/
 kontexta.json
+.env.local
+.env
 
 # OS specific
 .DS_Store

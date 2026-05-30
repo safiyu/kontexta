@@ -1,0 +1,120 @@
+{
+  "project": "Kontexta",
+  "description": "Real-world coding tasks on the Kontexta monorepo, comparing token consumption with and without MCP-assisted context retrieval.",
+  "methodology": "Baseline ('without Kontexta') reflects the files a developer would realistically open in their IDE for each task — not the entire codebase. 'With Kontexta' reflects only the files the AI actually retrieved via MCP tool calls. Token counts use the cl100k_base tokenizer (GPT-4 / Claude-equivalent).",
+  "scenarios": [
+    {
+      "id": "auth-implementation",
+      "name": "Implement master-password authentication",
+      "description": "Add a secure login system with session cookies, IP bypass rules, and protected API routes.",
+      "without_kontexta": {
+        "rationale": "Developer opens the main app entry, all existing API routes, DB layer, and related hooks.",
+        "files": [
+          "apps/web/src/app/page.tsx",
+          "apps/web/src/app/home-client.tsx",
+          "apps/web/src/app/layout.tsx",
+          "apps/web/src/lib/db-init.ts",
+          "apps/web/src/lib/websocket.ts",
+          "apps/web/src/app/api/projects/route.ts",
+          "apps/web/src/app/api/files/route.ts",
+          "apps/web/src/app/api/search/route.ts",
+          "apps/web/src/app/api/tags/route.ts",
+          "apps/web/src/components/layout/top-bar.tsx",
+          "packages/core/src/db/index.ts",
+          "packages/core/src/metadata/index.ts",
+          "packages/core/src/index.ts"
+        ]
+      },
+      "with_kontexta": {
+        "rationale": "Kontexta search('auth login session') + read specific DB and layout files only.",
+        "files": [
+          "apps/web/src/lib/auth.ts",
+          "apps/web/src/lib/db-init.ts",
+          "apps/web/src/app/login/login-client.tsx",
+          "apps/web/src/app/api/auth/login/route.ts",
+          "apps/web/src/app/api/auth/logout/route.ts",
+          "apps/web/src/components/layout/top-bar.tsx",
+          "packages/core/src/metadata/settings.ts",
+          "packages/core/src/db/index.ts"
+        ]
+      }
+    },
+    {
+      "id": "add-api-endpoint",
+      "name": "Add a new REST API endpoint",
+      "description": "Create a new API route following the existing project conventions (auth, DB, validation).",
+      "without_kontexta": {
+        "rationale": "Developer opens several existing route examples to understand patterns before writing.",
+        "files": [
+          "apps/web/src/app/api/projects/route.ts",
+          "apps/web/src/app/api/files/route.ts",
+          "apps/web/src/app/api/files/[id]/route.ts",
+          "apps/web/src/app/api/tags/route.ts",
+          "apps/web/src/app/api/search/route.ts",
+          "apps/web/src/app/api/folders/route.ts",
+          "apps/web/src/app/api/refresh/route.ts",
+          "apps/web/src/lib/db-init.ts",
+          "packages/core/src/db/index.ts",
+          "packages/core/src/index.ts"
+        ]
+      },
+      "with_kontexta": {
+        "rationale": "Kontexta search('api route handler') returns 1–2 example routes + db-init.",
+        "files": [
+          "apps/web/src/app/api/files/route.ts",
+          "apps/web/src/lib/db-init.ts",
+          "packages/core/src/db/index.ts"
+        ]
+      }
+    },
+    {
+      "id": "debug-websocket",
+      "name": "Debug WebSocket reconnection logic",
+      "description": "Investigate why WebSocket disconnects and fix the reconnection / auth handling.",
+      "without_kontexta": {
+        "rationale": "Developer opens all hooks, the WS server, and the top-level component to trace the data flow.",
+        "files": [
+          "apps/web/src/lib/websocket.ts",
+          "apps/web/src/hooks/use-websocket.ts",
+          "apps/web/src/hooks/use-sync-status.ts",
+          "apps/web/src/app/home-client.tsx",
+          "apps/web/src/components/layout/top-bar.tsx",
+          "apps/web/src/lib/sync-events.ts"
+        ]
+      },
+      "with_kontexta": {
+        "rationale": "Kontexta search('websocket reconnect') returns only the WS server and hook.",
+        "files": [
+          "apps/web/src/lib/websocket.ts",
+          "apps/web/src/hooks/use-sync-status.ts",
+          "apps/web/src/lib/sync-events.ts"
+        ]
+      }
+    },
+    {
+      "id": "understand-db-schema",
+      "name": "Understand the database schema & migrations",
+      "description": "A new contributor wants to understand how the SQLite schema evolves across migrations.",
+      "without_kontexta": {
+        "rationale": "New developer opens the entire DB module and all related metadata modules.",
+        "files": [
+          "packages/core/src/db/index.ts",
+          "packages/core/src/metadata/index.ts",
+          "packages/core/src/metadata/settings.ts",
+          "packages/core/src/util/paths.ts",
+          "packages/core/src/util/safety.ts",
+          "packages/core/src/index.ts",
+          "apps/web/src/lib/db-init.ts"
+        ]
+      },
+      "with_kontexta": {
+        "rationale": "Kontexta search('migration schema database') returns db/index and settings only.",
+        "files": [
+          "packages/core/src/db/index.ts",
+          "packages/core/src/metadata/settings.ts",
+          "apps/web/src/lib/db-init.ts"
+        ]
+      }
+    }
+  ]
+}

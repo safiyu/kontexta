@@ -1,3 +1,4 @@
+import { checkAuth } from "@/lib/auth";
 import { NextRequest, NextResponse } from "next/server";
 import { readHighWater, openTasksForProject, getDatabase } from "kxta-core";
 import { ensureDbInitialized, DATA_DIR } from "@/lib/db-init";
@@ -9,9 +10,11 @@ function parseId(raw: string): number | null {
 }
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   ctx: { params: Promise<{ id: string }> },
 ) {
+  if (!checkAuth(req)) return new NextResponse("Unauthorized", { status: 401 });
+
   ensureDbInitialized();
   const { id } = await ctx.params;
   const n = parseId(id);

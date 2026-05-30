@@ -1,10 +1,13 @@
+import { checkAuth } from "@/lib/auth";
 import { NextRequest, NextResponse } from "next/server";
 import { listProjects, registerProject, discoverFiles } from "kxta-core";
 import { DATA_DIR, ensureDbInitialized } from "@/lib/db-init";
 import { existsSync, statSync } from "node:fs";
 import { isAbsolute } from "node:path";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  if (!checkAuth(req)) return new NextResponse("Unauthorized", { status: 401 });
+
   ensureDbInitialized();
   const projects = listProjects();
   const augmented = projects.map((p) => ({
@@ -15,6 +18,8 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  if (!checkAuth(req)) return new NextResponse("Unauthorized", { status: 401 });
+
   ensureDbInitialized();
   let body: any;
   try {

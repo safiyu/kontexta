@@ -68,13 +68,13 @@ export function FileItem({ id, title, updatedAt, active, onClick, estTokens, sel
     <div
       onClick={handleRowClick}
       className={`
-        group relative px-4 py-3 cursor-pointer border-l-[3px] transition-all duration-150
+        group relative px-4 py-3 cursor-pointer border-l-[3px] transition-all duration-200
         ${
           active && !selectMode
-            ? "bg-[var(--accent)] text-black border-[var(--accent)]"
+            ? "bg-amber-accent/10 text-white border-amber-accent shadow-[inset_0_0_12px_rgba(180,120,30,0.05)]"
             : selectMode && selected
-            ? "bg-[var(--accent)]/80 text-black border-[var(--accent)]"
-            : "border-transparent hover:bg-[var(--accent)] hover:text-black hover:border-[var(--accent)] hover:translate-x-0.5"
+            ? "bg-amber-accent/20 text-white border-amber-accent shadow-[inset_0_0_12px_rgba(180,120,30,0.1)]"
+            : "border-transparent hover:bg-amber-accent/5 hover:translate-x-0.5"
         }
       `}
     >
@@ -91,13 +91,17 @@ export function FileItem({ id, title, updatedAt, active, onClick, estTokens, sel
           <FileIcon className="w-4 h-4 mt-1 text-amber-accent shrink-0" />
         )}
         <div className="min-w-0 flex-1">
-          <div className="text-sm font-semibold truncate text-[#0F172A] dark:text-[#F8F9FA] flex items-center gap-1.5">
+          <div className={`text-sm font-semibold truncate transition-colors flex items-center gap-1.5 ${
+            active ? "text-white" : "text-[#0F172A] dark:text-[var(--text-primary)] group-hover:text-white"
+          }`}>
             {favorite && (
               <span className="text-amber-accent shrink-0" title="Favorite" aria-label="Favorite">★</span>
             )}
             <span className="truncate">{title}</span>
           </div>
-          <div className="text-[11px] text-[#475569] dark:text-[#94A3B8] mt-1 flex flex-wrap items-center gap-1.5">
+          <div className={`text-[11px] mt-1 flex flex-wrap items-center gap-1.5 transition-colors ${
+            active ? "text-white/70" : "text-[#475569] dark:text-[var(--text-secondary)] group-hover:text-white/60"
+          }`}>
             <span>{formatTimeAgo(updatedAt)}</span>
             {typeof estTokens === "number" && estTokens > 0 && (
               <span>· ~{formatTokens(estTokens)} tok</span>

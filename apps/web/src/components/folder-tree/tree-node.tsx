@@ -36,10 +36,10 @@ export function TreeNode({
     <div>
       <div
         onClick={handleClick}
-        className={`relative flex items-center gap-1.5 py-1.5 px-2 rounded text-sm cursor-pointer transition-colors ${
+        className={`relative flex items-center gap-1.5 py-1.5 px-2 rounded-lg text-sm cursor-pointer transition-all duration-200 group ${
           active
-            ? "bg-[var(--accent)] text-black"
-            : "text-[var(--text-secondary)] hover:bg-[var(--accent)] hover:text-black"
+            ? "bg-amber-accent/10 text-white shadow-[inset_0_0_12px_rgba(180,120,30,0.05)]"
+            : "text-[var(--text-secondary)] hover:bg-amber-accent/5 hover:text-white"
         }`}
       >
         {active && <span className="absolute -left-1 top-1 bottom-1 w-0.5 bg-[var(--accent)] rounded-full" />}
@@ -60,7 +60,15 @@ export function TreeNode({
         )}
       </div>
 
-      {hasChildren && expanded && <div className="ml-3 mt-0.5">{children}</div>}
+      <div 
+        className={`grid transition-all duration-300 ease-in-out ${
+          hasChildren && expanded ? "grid-rows-[1fr] opacity-100 mt-1" : "grid-rows-[0fr] opacity-0"
+        }`}
+      >
+        <div className="overflow-hidden ml-3">
+          {children}
+        </div>
+      </div>
     </div>
   );
 }

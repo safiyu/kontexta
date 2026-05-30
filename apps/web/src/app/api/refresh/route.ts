@@ -1,3 +1,4 @@
+import { checkAuth } from "@/lib/auth";
 import { NextRequest, NextResponse } from "next/server";
 import { refreshIndex } from "kxta-core";
 import { DATA_DIR, ensureDbInitialized } from "@/lib/db-init";
@@ -8,6 +9,8 @@ import { DATA_DIR, ensureDbInitialized } from "@/lib/db-init";
 const _refreshInFlight = new Set<number | null>();
 
 export async function POST(req: NextRequest) {
+  if (!checkAuth(req)) return new NextResponse("Unauthorized", { status: 401 });
+
   ensureDbInitialized();
 
   let projectId: number | null = null;

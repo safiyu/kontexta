@@ -1,4 +1,4 @@
-import { JournalWriter, defaultRedactConfig, redactArgs, checkGit, readHighWater, shouldBlock, backlogErrorPayload, type GitWatcherState } from "kxta-core";
+import { getDataDir, JournalWriter, defaultRedactConfig, redactArgs, checkGit, readHighWater, shouldBlock, backlogErrorPayload, type GitWatcherState } from "kxta-core";
 import type { RawEvent } from "kxta-core";
 import { readdirSync, readFileSync as fsReadFileSync, existsSync as fsExistsSync } from "node:fs";
 
@@ -122,11 +122,10 @@ export function wrapHandler<TArgs extends Record<string, unknown>, TResult exten
           let isPlainObject = false;
           try {
             parsed = JSON.parse(orig);
-            // Only inject journal envelope into plain objects — NOT arrays (spreading an
-            // array into an object via {...arr} corrupts it into {"0":…,"1":…}) and NOT
-            // raw text that failed to parse (which would mangle e.g. Hands confirm msgs).
+            // Only inject into plain objects — NOT arrays (spread would corrupt to {"0":…})
+            // and NOT raw text that failed to parse (e.g. Hands confirm token strings).
             isPlainObject = parsed !== null && typeof parsed === "object" && !Array.isArray(parsed);
-          } catch { /* not JSON — leave the response untouched */ }
+          } catch { /* not JSON — leave response untouched */ }
           if (isPlainObject) {
             const envelope = {
               ...parsed,
@@ -145,7 +144,7 @@ export function wrapHandler<TArgs extends Record<string, unknown>, TResult exten
       const BACKLOG_THRESHOLD_EVENTS = 500;
       const BACKLOG_THRESHOLD_HOURS = 7 * 24;
       if (status.backlog_events >= BACKLOG_THRESHOLD_EVENTS ||
-          (status.backlog_oldest_age_hours ?? 0) >= BACKLOG_THRESHOLD_HOURS) {
+        (status.backlog_oldest_age_hours ?? 0) >= BACKLOG_THRESHOLD_HOURS) {
         // Fire-and-forget mechanical distillation
         setImmediate(async () => {
           try {
@@ -210,9 +209,7 @@ export function getCurrentSid(): string {
   return ctx?.sid ?? "unknown";
 }
 
-let _dataDir = "";
-export function setDataDir(dir: string): void { _dataDir = dir; }
-export function getDataDir(): string { return _dataDir; }
+
 
 export function startGitPoller(projectPath: string, intervalSec: number = 30): void {
   if (gitTimer) clearInterval(gitTimer);

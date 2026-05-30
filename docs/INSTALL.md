@@ -31,7 +31,29 @@ curl -fsSL https://raw.githubusercontent.com/safiyu/kontexta/main/docker-compose
 docker compose -f docker-compose.hub.yml up -d
 ```
 
-To pin a specific release instead of `latest`, edit `docker-compose.hub.yml` and change `image: safiyu/kontexta:latest` to `image: safiyu/kontexta:7.0.0`, then re-run `docker compose -f docker-compose.hub.yml up -d`.
+### Configuring the Compose file
+
+Before running `docker compose up`, open `docker-compose.hub.yml` and check the following:
+
+1. **Mount your projects**: For Kontexta to index your code, you **must** mount your host projects directory. Find the `volumes` section and uncomment/edit the projects line:
+   ```yaml
+   volumes:
+     - ./kontexta-data:/app/data
+     - /home/user/Projects:/home/user/Projects # Match host path to container path
+   ```
+   > [!TIP]
+   > Mounting the host path to the **exact same path** inside the container ensures that the AI client on your host and the MCP server in the container agree on file paths.
+
+2. **Data Persistence**: By default, your vault (SQLite, backups, KB) is stored in `./kontexta-data` relative to the compose file. Change the left side of the `- ./kontexta-data:/app/data` mount if you want it elsewhere.
+
+3. **Port Mapping**: If ports `3000` (Web UI) or `3001` (WebSocket) are already in use on your host, change the left side of the `ports` mapping:
+   ```yaml
+   ports:
+     - "8080:3000" # Web UI on 8080
+     - "8081:3001" # WebSocket on 8081
+   ```
+
+4. **Version Pinning**: To pin a specific release instead of `latest`, change `image: safiyu/kontexta:latest` to a specific version (e.g., `safiyu/kontexta:7.0.0`).
 
 To update to the newest image:
 
@@ -47,8 +69,22 @@ docker compose -f docker-compose.hub.yml up -d
 The fastest way to run Kontexta in production is using the official Docker Hub image. This is the same image used by the [Glama Registry](https://glama.ai/mcp/servers/safiyu/kontexta).
 
 ```bash
-docker run -it -v /path/to/data:/app/data safiyu/kontexta:latest
+docker run -d \
+  -p 3000:3000 -p 3001:3001 \
+  -v /absolute/path/to/data:/app/data \
+  -v /home/user/Projects:/home/user/Projects \
+  --name kontexta \
+  safiyu/kontexta:latest
 ```
+
+**Flag breakdown:**
+- `-d`: Run in detached mode (background).
+- `-p 3000:3000`: Publish the Web UI.
+- `-p 3001:3001`: Publish the WebSocket file-watcher channel.
+- `-v ...:/app/data`: Persist your vault (SQLite, backups, knowledge base).
+- `-v /host/path:/container/path`: Mount your projects so the agent can see them.
+- `--name kontexta`: Give the container a predictable name (useful for `docker exec` MCP tool calls).
+
 
 ---
 
@@ -98,6 +134,7 @@ When you register a project with kontexta (via the MCP `register_project` tool),
 | Gemini | `GEMINI.md` |
 | Cursor | `.cursor/rules/*.mdc` |
 | Continue | `.continue/rules/*.md` |
+| Aider | `.aider.conf.yml`, `.aider/*.md` |
 
 Multiple matches are all surfaced — a repo with both `CLAUDE.md` and `AGENTS.md` (Claude Code + Codex side-by-side) gets the rules block injected into both. Symlinks are skipped defensively.
 
@@ -106,7 +143,7 @@ Multiple matches are all surfaced — a repo with both `CLAUDE.md` and `AGENTS.m
 `register_project` returns a `recommendation` field in its response:
 
 - **Update mode** — one or more context files were detected. The agent surfaces the recommendation, asks the user, and on Yes calls `onboard_agent` with `{ project_id, files: [...] }`.
-- **Create mode** — no context file exists. The agent asks which client you want to scaffold for (`claude-code` | `codex` | `gemini` | `cursor` | `continue` | `generic`) and calls `onboard_agent` with `{ project_id, target_agent }`. The right canonical filename is created with a starter scaffold plus the rules block.
+- **Create mode** — no context file exists. The agent asks which client you want to scaffold for (`claude-code` | `codex` | `gemini` | `cursor` | `continue` | `aider` | `generic`) and calls `onboard_agent` with `{ project_id, target_agent }`. The right canonical filename is created with a starter scaffold plus the rules block.
 
 No file is ever written without explicit user consent — the recommendation is plain JSON; the agent must surface it and act on the user's reply.
 
@@ -185,7 +222,6 @@ kontexta/
 │   └── mcp/        # MCP stdio server for AI agents
 ├── packages/
 │   └── core/       # SQLite/FTS5, git engine, file watcher (kxta-core)
-├── data/           # default runtime data (SQLite + global git vault + backups)
 ├── docker-compose.yml      # build from source
 ├── docker-compose.hub.yml  # pull from Docker Hub (no build)
 ├── Dockerfile
@@ -217,10 +253,32 @@ This starts:
 - Next.js dev server on `http://localhost:3000` (with Turbopack hot reload)
 - WebSocket file-watcher on `127.0.0.1:3001` (auto-started by `instrumentation.ts`)
 
-The default data directory is `<repo>/data`. SQLite + WAL files, the global git vault, and per-project backup snapshots all land there. Override with `KONTEXTA_DATA_DIR=/path/to/wherever pnpm dev`.
+Data is stored in your OS-standard user data directory by default (e.g., `~/.local/share/kontexta` on Linux). See the [Configuration](#configuration) section for exact paths.
+
+To persistently configure the data location, you have two options depending on your scope:
+
+**Global (all tools — `npx`, `pnpm dev`, standalone):** export from your shell profile so every process picks it up:
+
+```bash
+# ~/.bashrc or ~/.zshrc
+export KONTEXTA_DATA_DIR="$HOME/my-kontexta-vault"
+```
+
+Reload your shell (`source ~/.bashrc`) and every Kontexta process — including `npx kontexta-mcp` — will use this vault.
+
+**Repo-local (this checkout only):** create a `.env.local` at the repo root (gitignored):
+
+```bash
+# .env.local — picked up automatically by Next.js; pnpm dev only
+KONTEXTA_DATA_DIR=/path/to/your/data
+```
+
+> [!TIP]
+> Use the shell profile export if you run the MCP server via `npx` or from multiple directories. Use `.env.local` when you want a scratch vault isolated to this repo (e.g., `KONTEXTA_DATA_DIR=./data`) without affecting your global setup.
+
 
 > [!IMPORTANT]
-> If you're modifying `packages/core` while developing, run `pnpm -C packages/core dev` in a second terminal — it's `tsc --watch` and rebuilds `dist/` on every save. Next dev loads core from `packages/core/dist/`, not from source, so changes won't appear without that watch process.
+> **Contributors only:** If you're modifying `packages/core` while developing, run `pnpm -C packages/core dev` in a second terminal — it's `tsc --watch` and rebuilds `dist/` on every save. Next dev loads core from `packages/core/dist/`, not from source, so changes won't appear without that watch process.
 
 ### Verify the install
 
@@ -272,7 +330,7 @@ If `packages/core/src/db/migrations/` gained new `.sql` files, they run automati
 
 - **`better-sqlite3` fails to build during `pnpm install`** — install the C/C++ toolchain (see Prerequisites), then `rm -rf node_modules && pnpm install`.
 - **`Cannot find module 'kxta-core'`** when starting the web app — you skipped the build step. Run `pnpm -C packages/core build` (or `pnpm build` from the root) once.
-- **`database is locked`** in dev — usually a leftover dev process holding the WAL handle. Stop all `pnpm dev` processes; if it persists, remove `data/kontexta.db-shm` and `data/kontexta.db-wal` and restart. The DB is cached on `globalThis` to survive HMR; first launches after a hard kill are the danger zone.
+- **`database is locked`** in dev — usually a leftover dev process holding the WAL handle. Stop all `pnpm dev` processes; if it persists, remove `kontexta.db-shm` and `kontexta.db-wal` from the data directory and restart.
 - **WebSocket not connecting** — check that port 3001 is free (`lsof -i :3001` / `netstat -ano | findstr 3001`). The server binds to `127.0.0.1` by default. If your browser is on a different host, set `KONTEXTA_WS_HOST=0.0.0.0` AND configure `KONTEXTA_WS_ORIGINS` (origin allowlist) and/or `KONTEXTA_WS_TOKEN`+`NEXT_PUBLIC_WS_TOKEN` (shared secret) — non-loopback connections are rejected by default to avoid leaking file paths on the LAN. See [Configuration](#configuration).
 - **Sync fails with "Configured global remote URL is not a valid git remote"** — only `https://`, `http://`, `ssh://`, `git://`, and scp-form (`user@host:path`) URLs are accepted. `file://` and credential helpers are rejected by design.
 - **MCP server returns "Database not initialized"** — ensure `KONTEXTA_DATA_DIR` points to the same directory the web UI uses; the MCP server opens its own SQLite handle and reads from `$KONTEXTA_DATA_DIR/kontexta.db`.
@@ -282,11 +340,21 @@ If `packages/core/src/db/migrations/` gained new `.sql` files, they run automati
 
 ## Configuration
 
+### Data Storage Summary
+
+In all setups, the `KONTEXTA_DATA_DIR` environment variable is the authoritative override. If not set, the following defaults apply:
+
+| Setup | Default Path | Persistence / Config |
+| :--- | :--- | :--- |
+| **Docker** | `/app/data` | Persisted via volume (defaults to `./kontexta-data` on the host). |
+| **Local / npm** | OS Data Home | `~/.local/share/kontexta` (Linux), `~/Library/Application Support/kontexta` (macOS), or `%APPDATA%\kontexta` (Windows). |
+| **Manual Dev** | OS Data Home | Same as Local/npm. You can also use a repo-local `.env.local` to set a custom path for a specific checkout. |
+
 You can customize Kontexta behavior using the following environment variables:
 
 | Variable | Description | Default |
 | :--- | :--- | :--- |
-| `KONTEXTA_DATA_DIR` | Primary storage for Knowledge Base and Backups | `<repo>/data` (web), `/app/data` (Docker) |
+| `KONTEXTA_DATA_DIR` | Knowledge vault location | OS default (e.g., `~/.local/share/kontexta`) |
 | `KONTEXTA_DB_PATH` | Path to the SQLite database | `$KONTEXTA_DATA_DIR/kontexta.db` |
 | `PORT` | Web UI Port | `3000` |
 | `WS_PORT` | WebSocket Port (server-side bind) | `3001` |

@@ -1,12 +1,15 @@
+import { checkAuth } from "@/lib/auth";
 import { NextRequest, NextResponse } from "next/server";
 import { readFile } from "kxta-core";
 import { ensureDbInitialized } from "@/lib/db-init";
 import { basename } from "node:path";
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  if (!checkAuth(req)) return new NextResponse("Unauthorized", { status: 401 });
+
   ensureDbInitialized();
   const { id } = await params;
   const n = Number(id);

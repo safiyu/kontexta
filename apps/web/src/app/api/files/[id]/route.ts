@@ -1,3 +1,4 @@
+import { checkAuth } from "@/lib/auth";
 import { NextRequest, NextResponse } from "next/server";
 import { readFile, updateFile, deleteFile, getDatabase, addTags, removeTags, setFavorite, getTagsForFiles } from "kxta-core";
 import { ensureDbInitialized, DATA_DIR } from "@/lib/db-init";
@@ -11,6 +12,8 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  if (!checkAuth(req)) return new NextResponse("Unauthorized", { status: 401 });
+
   ensureDbInitialized();
   const { id } = await params;
   const n = parseId(id);
@@ -31,6 +34,8 @@ export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  if (!checkAuth(req)) return new NextResponse("Unauthorized", { status: 401 });
+
   ensureDbInitialized();
   const { id } = await params;
   const n = parseId(id);
@@ -89,6 +94,8 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  if (!checkAuth(req)) return new NextResponse("Unauthorized", { status: 401 });
+
   ensureDbInitialized();
   const { id } = await params;
   const n = parseId(id);
@@ -146,6 +153,8 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  if (!checkAuth(req)) return new NextResponse("Unauthorized", { status: 401 });
+
   ensureDbInitialized();
   const { id } = await params;
   const n = parseId(id);

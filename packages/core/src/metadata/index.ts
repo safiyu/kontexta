@@ -4,7 +4,7 @@
  */
 
 import { readdirSync, lstatSync, readFileSync, rmSync, existsSync } from "node:fs";
-import { join, basename } from "node:path";
+import { join, basename, resolve } from "node:path";
 import { createHash } from "node:crypto";
 import { getDatabase } from "../db/index.js";
 import { withLock } from "../util/safety.js";
@@ -199,7 +199,8 @@ export function registerProject(
     VALUES (?, ?, ?, ?, ?)
   `);
 
-  const result = insertStmt.run(name, slug, path, description || null, remoteUrl || null);
+  const absolutePath = resolve(path);
+  const result = insertStmt.run(name, slug, absolutePath, description || null, remoteUrl || null);
 
   if (result.changes > 0) {
     const projectId = Number(result.lastInsertRowid);
@@ -216,7 +217,7 @@ export function registerProject(
     // Should be unreachable: INSERT was ignored but neither name nor slug matches.
     throw new Error(`registerProject: insert ignored but no matching project found for name='${name}'`);
   }
-  if (existing.path !== path) {
+  if (existing.path !== absolutePath) {
     const conflicts: string[] = [];
     if (byName) conflicts.push(`name conflicts with '${byName.name}' at '${byName.path}'`);
     if (bySlug && bySlug.id !== byName?.id) conflicts.push(`slug '${slug}' conflicts with '${bySlug.name}' at '${bySlug.path}'`);

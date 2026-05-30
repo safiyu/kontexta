@@ -8,9 +8,10 @@ interface Props {
   errorCount: number;
   onDiscard: () => void;
   onSave: () => void | Promise<void>;
+  inline?: boolean;
 }
 
-export function SaveBar({ count, errorCount, onDiscard, onSave }: Props) {
+export function SaveBar({ count, errorCount, onDiscard, onSave, inline }: Props) {
   const [status, setStatus] = useState<"idle" | "saving" | "saved">("idle");
   const [confirmingDiscard, setConfirmingDiscard] = useState(false);
   const savedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -19,21 +20,23 @@ export function SaveBar({ count, errorCount, onDiscard, onSave }: Props) {
     return () => { if (savedTimer.current) clearTimeout(savedTimer.current); };
   }, []);
 
-  // Bar visible if there are unsaved changes OR we're showing the post-save confirmation.
-  const hidden = count === 0 && status !== "saved";
+  const hasChanges = count > 0 || status === "saved";
+  const hidden = !inline && count === 0 && status !== "saved";
   const saveDisabled = errorCount > 0 || status !== "idle" || count === 0;
+  
   const saveLabel = status === "saving"
-    ? "Saving…"
+    ? "Saving..."
     : status === "saved"
       ? "Saved ✓"
-      : saveDisabled
+      : errorCount > 0
         ? `Fix ${errorCount} error(s)`
-        : "Save";
+        : "Save Changes";
+
   const countLabel = status === "saved"
     ? "All changes saved"
     : count === 1
-      ? "1 unsaved change"
-      : `${count} unsaved changes`;
+      ? "1 change"
+      : `${count} changes`;
 
   const handleSave = async () => {
     if (saveDisabled) return;
@@ -54,6 +57,79 @@ export function SaveBar({ count, errorCount, onDiscard, onSave }: Props) {
     onDiscard();
   };
   const handleCancelDiscard = () => setConfirmingDiscard(false);
+
+  if (inline) {
+    return (
+      <div className="flex items-center gap-4">
+        {hasChanges && (
+          <div className="flex items-center gap-3 animate-fade-in">
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[var(--accent)]/10 border border-[var(--accent)]/20">
+              <span className={`w-1.5 h-1.5 rounded-full ${status === "saved" ? "bg-green-500" : "bg-[var(--accent)] animate-pulse"}`} />
+              <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-primary)]">
+                {countLabel}
+              </span>
+            </div>
+            
+            <button
+              onClick={handleDiscardClick}
+              disabled={status !== "idle" || count === 0}
+              className="text-[10px] font-bold uppercase tracking-widest text-[var(--text-secondary)] hover:text-red-500 transition-colors disabled:opacity-30"
+            >
+              Discard
+            </button>
+          </div>
+        )}
+
+        <button
+          onClick={handleSave}
+          disabled={saveDisabled}
+          className={`px-4 py-1.5 text-[11px] font-bold uppercase tracking-widest rounded-lg transition-all ${
+            saveDisabled 
+              ? "bg-[var(--bg-primary)] border border-[var(--border)] text-[var(--text-secondary)] cursor-not-allowed" 
+              : "bg-[var(--accent)] text-black shadow-lg shadow-[var(--accent)]/20 hover:scale-105 active:scale-95"
+          }`}
+        >
+          {saveLabel}
+        </button>
+
+        {confirmingDiscard && typeof document !== "undefined" && createPortal(
+          <div
+            role="dialog"
+            aria-label="Confirm discard"
+            className="fixed inset-0 z-[100] bg-black/60 flex items-center justify-center p-4 animate-fade-in"
+            onClick={(e) => e.target === e.currentTarget && handleCancelDiscard()}
+          >
+            <div className="w-full max-w-md bg-[var(--bg-primary)] border border-[var(--border)] rounded-2xl p-6 shadow-2xl space-y-6">
+              <div>
+                <h2 className="text-xl font-bold mb-2">Discard unsaved changes?</h2>
+                <p className="text-sm text-[var(--text-secondary)] leading-relaxed">
+                  {count === 1
+                    ? "Your 1 unsaved change will be lost."
+                    : `Your ${count} unsaved changes will be lost.`}
+                  {" "}This action cannot be undone.
+                </p>
+              </div>
+              <div className="flex justify-end gap-3 pt-4 border-t border-[var(--border)]">
+                <button
+                  onClick={handleCancelDiscard}
+                  className="px-4 py-2 text-sm font-bold border border-[var(--border)] rounded-lg hover:bg-[var(--bg-secondary)] transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleConfirmDiscard}
+                  className="px-4 py-2 text-sm font-bold bg-red-500 text-white rounded-lg hover:bg-red-600 shadow-lg shadow-red-500/20 transition-all"
+                >
+                  Discard Changes
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )}
+      </div>
+    );
+  }
 
   return (
     <div
@@ -90,24 +166,24 @@ export function SaveBar({ count, errorCount, onDiscard, onSave }: Props) {
           className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center"
           onClick={(e) => e.target === e.currentTarget && handleCancelDiscard()}
         >
-          <div className="w-[420px] bg-[var(--bg-primary)] border border-[var(--border)] rounded-lg p-5 shadow-2xl space-y-4">
-            <h2 className="text-lg font-semibold">Discard unsaved changes?</h2>
+          <div className="w-full max-w-md bg-[var(--bg-primary)] border border-[var(--border)] rounded-2xl p-6 shadow-2xl space-y-6">
+            <h2 className="text-xl font-bold">Discard unsaved changes?</h2>
             <p className="text-sm text-[var(--text-secondary)]">
               {count === 1
                 ? "Your 1 unsaved change will be lost."
                 : `Your ${count} unsaved changes will be lost.`}
               {" "}This cannot be undone.
             </p>
-            <div className="flex justify-end gap-2 pt-2 border-t border-[var(--border)]">
+            <div className="flex justify-end gap-3 pt-4 border-t border-[var(--border)]">
               <button
                 onClick={handleCancelDiscard}
-                className="px-3 py-1 text-sm border border-[var(--border)] rounded transition hover:bg-[var(--accent)] hover:text-black focus:bg-[var(--accent)] focus:text-black"
+                className="px-4 py-2 text-sm font-bold border border-[var(--border)] rounded-lg hover:bg-[var(--bg-secondary)] transition-all"
               >
                 Cancel
               </button>
               <button
                 onClick={handleConfirmDiscard}
-                className="px-3 py-1 text-sm border border-red-500 rounded text-red-500 transition hover:bg-red-500 hover:text-white focus:bg-red-500 focus:text-white"
+                className="px-4 py-2 text-sm font-bold bg-red-500 text-white rounded-lg hover:bg-red-600 shadow-lg shadow-red-500/20 transition-all"
               >
                 Discard
               </button>

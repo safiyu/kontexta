@@ -1,11 +1,14 @@
-import { NextResponse } from "next/server";
+import { checkAuth } from "@/lib/auth";
+import { NextRequest, NextResponse } from "next/server";
 import { DATA_DIR, ensureDbInitialized } from "@/lib/db-init";
 import { syncBackup, syncGlobalVault, listProjects } from "kxta-core";
 import { broadcastSync } from "@/lib/websocket";
 
 let _syncAllInFlight = false;
 
-export async function POST() {
+export async function POST(req: NextRequest) {
+  if (!checkAuth(req)) return new NextResponse("Unauthorized", { status: 401 });
+
   ensureDbInitialized();
   if (_syncAllInFlight) {
     return NextResponse.json(
