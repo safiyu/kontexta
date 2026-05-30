@@ -22,3 +22,21 @@ export {
   projectMap,
   type ProjectMapOptions, type ProjectMapResult, type ProjectMapStats,
 } from "./project-map/index.js";
+export {
+  RULE_BLOCK_VERSION,
+  RULES_BLOCK_BODY,
+  SCAFFOLDS,
+  detectAgentContextFiles,
+  parseMarker,
+  injectOrUpdate,
+  syncAgentRules,
+  checkAgentRulesStatus,
+  InjectError,
+  type AgentId,
+  type ParseResult,
+  type InjectResult,
+  type SyncOpts,
+  type SyncResult,
+  type SyncResultEntry,
+  type SyncSkippedEntry,
+} from "./agent-rules/index.js";
