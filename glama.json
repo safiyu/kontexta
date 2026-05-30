@@ -1,0 +1,48 @@
+{
+  "$schema": "https://glama.ai/mcp/schemas/server.json",
+  "name": "kontexta",
+  "version": "1.0.0",
+  "description": "The local Brain (context engine) and Hands (command engine) for AI coding agents. Brain: git-backed markdown vault with FTS5 search, surgical section edits, and token-aware tools. Hands: sandboxed project-defined commands declared in kontexta.json with optional human approval. All over MCP, all on your machine.",
+  "repository": "https://github.com/safiyu/kontexta",
+  "license": "Apache-2.0",
+  "maintainers": [
+    "safiyu"
+  ],
+  "runtime": "node",
+  "capabilities": {
+    "tools": true,
+    "resources": true,
+    "prompts": false
+  },
+  "installInstructions": {
+    "glama": "safiyu/kontexta:latest",
+    "docker": "docker run -it -v /path/to/data:/app/data safiyu/kontexta:latest",
+    "npm": "npx -y kontexta-mcp"
+  },
+  "env": {
+    "KONTEXTA_DATA_DIR": {
+      "description": "Absolute path to the directory where your Knowledge Base and SQLite database are stored.",
+      "required": true
+    },
+    "KONTEXTA_PROJECT_TOKEN_WARN": {
+      "description": "Token count threshold above which the server issues budget warnings.",
+      "default": "100000",
+      "required": false
+    },
+    "KONTEXTA_WS_HOST": {
+      "description": "The host the WebSocket server binds to.",
+      "default": "127.0.0.1",
+      "required": false
+    }
+  },
+  "keywords": [
+    "context-manager",
+    "mcp-server",
+    "llm-tools",
+    "agentic-workflows",
+    "knowledge-base",
+    "local-first",
+    "rag"
+  ],
+  "rulesVersion": "1.0.0"
+}
