@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.0.1 — Graceful DB shutdown drain
+
+### Fixed
+
+- **MCP signal handlers now drain in-flight work before exiting.** Previously `SIGINT`/`SIGTERM` killed Hands children, flushed the journal capture, then called `process.exit(0)` immediately — `closeDatabase()` was never invoked, and any long-running `withLock`-protected op (`updateFile`, `commitBackup`, `syncBackup`, `refreshIndex`, journal append) could be truncated mid-write. SQLite WAL mode mostly recovered, but partial markdown writes and orphaned file descriptors leaked across shutdowns.
+- New `gracefulShutdown(timeoutMs = 10_000)` helper exported from `kxta-core`: sets a shutdown flag, awaits in-flight count to reach zero (with a hard ceiling), then closes the database cleanly. Returns the count of ops still in-flight at timeout (0 = clean drain).
+- In-flight bookkeeping is centralized inside `withLock` itself — every long-running op already routes through `withLock`, so this gives ~95% coverage with zero per-site instrumentation. A standalone `track<T>(p)` helper is also exported for the rare op that bypasses `withLock`.
+- New helpers from `kxta-core`: `track`, `inFlightCount`, `isShuttingDown`, `setShuttingDown`, `awaitDrain`, `gracefulShutdown`.
+- MCP signal handlers replaced with an async `handleShutdownSignal()` that: kills Hands children → flushes journal capture → awaits `gracefulShutdown(10_000)` → exits. A `_shutdownInFlight` guard prevents repeated `Ctrl+C` from racing.
+
+### Tests
+
+- 8 new vitest cases in `packages/core/tests/util/shutdown.test.ts` covering counter increment/decrement (success + rejection paths), `track()` correctness, `awaitDrain` zero-state and timeout-state, and shutdown-flag toggling. Total core suite: 241 passing (was 233).
+
 ## 2.0.0 — Journaling: persistent Brain layer with auto-capture + mechanical distillation
 
 A new always-on journaling subsystem turns kontexta into a persistent Brain across sessions. Every MCP tool call is automatically captured to a per-project event log; events get distilled into per-topic markdown summaries indexed alongside the rest of the knowledge base. Closed the loop on cross-session, cross-agent memory.

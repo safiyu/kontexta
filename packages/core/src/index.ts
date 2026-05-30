@@ -1,4 +1,4 @@
-export { createDatabase, getDatabase, closeDatabase } from "./db/index.js";
+export { createDatabase, getDatabase, closeDatabase, gracefulShutdown } from "./db/index.js";
 import { createFile, readFile, updateFile, deleteFile, listFiles, moveFile, createFolder, deleteFolder, listProjectFolders, slugify } from "./files/index.js";
 export { createFile, readFile, updateFile, deleteFile, listFiles, moveFile, createFolder, deleteFolder, listProjectFolders, slugify };
 export { parseOutline, findSection, replaceSection, type OutlineNode } from "./files/sections.js";
@@ -11,7 +11,7 @@ export {
   findRelated, getTagsForFiles, type RelatedFileRecord,
 } from "./metadata/index.js";
 export { commitFile, getHistory, getDiff, restoreVersion, syncBackup, syncGlobalVault, getGlobalRemote, setGlobalRemote, isValidGitRemoteUrl, type SyncStage } from "./git/index.js";
-export { withLock } from "./util/safety.js";
+export { withLock, track, inFlightCount, isShuttingDown, setShuttingDown, awaitDrain } from "./util/safety.js";
 export {
   RULE_BLOCK_VERSION,
   RULES_BLOCK_BODY,

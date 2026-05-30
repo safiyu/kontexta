@@ -46,18 +46,22 @@ import {
   syncAgentRules,
   checkAgentRulesStatus,
   RULE_BLOCK_VERSION,
+  gracefulShutdown,
   type AgentId,
 } from "kxta-core";
 import RE2 from "re2";
 import { isAbsolute, join, resolve, sep, dirname } from "node:path";
-import { statSync, lstatSync, openSync, readSync, closeSync, readFileSync, readdirSync, existsSync } from "node:fs";
+import { statSync, lstatSync, openSync, readSync, closeSync, readFileSync, readdirSync, existsSync, realpathSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { HandsRegistry } from "./hands/registry.js";
 import { buildSchemaDoc } from "./hands/schema-doc.js";
 import { formatExecResult } from "./hands/formatter.js";
+import { killAllActiveChildren } from "./hands/executor.js";
 import { initCapture, shutdownCapture, wrapHandler, startGitPoller, setDataDir } from "./journal-capture.js";
 import { registerJournalTools } from "./journal-tools.js";
+import { registerCommitUpgradesTool } from "./journal-commit-upgrades-tool.js";
+import { registerHousekeepTool } from "./journal-housekeep-tool.js";
 
 const dataDir = process.env.KONTEXTA_DATA_DIR || join(process.cwd(), "data");
 const dbPath = process.env.KONTEXTA_DB_PATH || join(dataDir, "kontexta.db");
@@ -192,8 +196,26 @@ initCapture({ projectSlug, baseDir: baseJournalDir, agent, sid });
 setDataDir(dataDir);
 startGitPoller(process.env.KONTEXTA_PROJECT_PATH ?? process.cwd(), 30);
 process.on("exit", shutdownCapture);
-process.on("SIGINT", () => { shutdownCapture(); process.exit(0); });
-process.on("SIGTERM", () => { shutdownCapture(); process.exit(0); });
+// Signal-handler ordering: kill detached Hands children FIRST so their
+// process groups receive SIGTERM before this process exits and orphans
+// them. shutdownCapture flushes the journal; then drain in-flight ops and close DB.
+async function handleShutdownSignal(signal: string) {
+  console.warn(`[kontexta-mcp] received ${signal}; draining…`);
+  killAllActiveChildren("SIGTERM");
+  shutdownCapture();
+  try {
+    const remaining = await gracefulShutdown(10_000);
+    if (remaining > 0) {
+      console.warn(`[kontexta-mcp] drain timeout; ${remaining} ops still in-flight at exit`);
+    }
+  } catch (err) {
+    console.warn(`[kontexta-mcp] gracefulShutdown failed`, err);
+  }
+  process.exit(0);
+}
+let _shutdownInFlight = false;
+process.on("SIGINT", () => { if (!_shutdownInFlight) { _shutdownInFlight = true; void handleShutdownSignal("SIGINT"); } });
+process.on("SIGTERM", () => { if (!_shutdownInFlight) { _shutdownInFlight = true; void handleShutdownSignal("SIGTERM"); } });
 
 // Auto-wrap every tool registration that follows. journal_append (legacy) is excluded
 // because it will be removed in Task 15. Auto-wrap covers all current and future tools.
@@ -1448,8 +1470,26 @@ server.tool(
       } else {
         base = join(dataDir, "knowledge");
       }
-      const baseResolved = resolve(base);
-      const destResolved = resolve(new_path);
+      // Use realpath to follow symlinks before the containment check —
+      // path.resolve() only normalises `.`/`..`, so a symlink inside the
+      // vault pointing outside (e.g. knowledge/escape -> /etc) would let
+      // moveFile write through it. realpath the dest's PARENT since the
+      // destination itself doesn't exist yet.
+      let baseResolved: string;
+      try {
+        baseResolved = realpathSync(resolve(base));
+      } catch {
+        throw new Error(`Base directory does not exist: ${base}`);
+      }
+      const destAbs = resolve(new_path);
+      const destParent = dirname(destAbs);
+      let destParentReal: string;
+      try {
+        destParentReal = realpathSync(destParent);
+      } catch {
+        throw new Error(`Destination parent directory does not exist: ${destParent}`);
+      }
+      const destResolved = join(destParentReal, destAbs.slice(destParent.length + (destParent.endsWith(sep) ? 0 : 1)));
       if (destResolved !== baseResolved && !destResolved.startsWith(baseResolved + sep)) {
         throw new Error(`new_path must be inside ${base}`);
       }
@@ -1458,7 +1498,12 @@ server.tool(
       // ingested, fileRecord.path can point outside the current base — and
       // without this check moveFile would relocate that orphan into the
       // project root.
-      const srcResolved = resolve(file.path);
+      let srcResolved: string;
+      try {
+        srcResolved = realpathSync(resolve(file.path));
+      } catch {
+        srcResolved = resolve(file.path);
+      }
       if (srcResolved !== baseResolved && !srcResolved.startsWith(baseResolved + sep)) {
         throw new Error(`source path ${file.path} is no longer inside ${base}; refusing to move`);
       }
@@ -2253,6 +2298,8 @@ async function main() {
     );
   }
   registerJournalTools(server);
+  registerCommitUpgradesTool(server);
+  registerHousekeepTool(server);
   await server.connect(transport);
   console.error("Kontexta MCP server running on stdio");
 }

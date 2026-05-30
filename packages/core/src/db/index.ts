@@ -112,6 +112,19 @@ export function closeDatabase(): void {
 }
 
 /**
+ * Graceful shutdown: stop accepting new work, drain in-flight ops with a
+ * hard ceiling, then close the database. Returns the count of operations
+ * that were still in-flight when the timeout elapsed (0 = clean drain).
+ */
+export async function gracefulShutdown(timeoutMs: number = 10_000): Promise<number> {
+  const { setShuttingDown, awaitDrain } = await import("../util/safety.js");
+  setShuttingDown(true);
+  const remaining = await awaitDrain(timeoutMs);
+  closeDatabase();
+  return remaining;
+}
+
+/**
  * Run all pending migrations
  */
 export function runMigrations(): void {
