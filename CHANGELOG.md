@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.0.2 — Housekeep refuses to prune undistilled raw events
+
+### Fixed
+
+- **`housekeep_journal` now refuses to prune any raw `.jsonl` file containing events newer than the project's high-water mark.** Previously, an aggressive `retention.raw_days` config (e.g. `1`) combined with stalled distillation could delete raw events before they were ever captured into the durable distilled `.md` layer — irrecoverable data loss. The new guard reads the file's last event timestamp; if it's past the high-water (or no high-water exists at all), the file is preserved and counted under a new `raw_files_skipped_undistilled` field in the result.
+- This is the cheap mitigation for the "two-step grace pruning" item that was on the roadmap; the full grace mechanism is no longer needed because the only real data-loss failure mode is now closed.
+
+### Tests
+
+- 4 housekeep tests (was 2): the "prunes" test now seeds proper events + a high-water mark; new tests cover (a) refusing to prune files with events past the mark, (b) refusing to prune anything when no high-water exists yet. Total core suite: 243 passing.
+
 ## 2.0.1 — Graceful DB shutdown drain
 
 ### Fixed
