@@ -48,8 +48,12 @@ import {
   RULE_BLOCK_VERSION,
   gracefulShutdown,
   type AgentId,
+  migrateEnvVars,
+  migrateDataFiles,
 } from "kxta-core";
 import RE2 from "re2";
+
+migrateEnvVars();
 import { isAbsolute, join, resolve, sep, dirname } from "node:path";
 import { statSync, lstatSync, openSync, readSync, closeSync, readFileSync, readdirSync, existsSync, realpathSync } from "node:fs";
 import { createHash } from "node:crypto";
@@ -154,6 +158,7 @@ function attachTags<T extends { id: number }>(records: T[]): (T & { tags: string
   return records.map((r) => ({ ...r, tags: tagMap.get(r.id) ?? [] }));
 }
 
+migrateDataFiles(dataDir);
 createDatabase(dbPath);
 
 // Robust runtime version loading: walks up directories to find package.json
