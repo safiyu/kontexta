@@ -11,3 +11,4 @@ export {
   registerProject, unregisterProject, discoverFiles, refreshIndex, listTags, listProjects,
   findRelated, getTagsForFiles, type RelatedFileRecord,
 } from "./metadata/index.js";
+export { bundleSearch, type BundleFormat, type BundleOptions, type BundleResult, type BundleIncludedItem, type BundleSkippedItem } from "./bundle/index.js";
