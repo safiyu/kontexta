@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { restoreVersion, readFile, getDatabase } from "kxta-core";
+import { restoreVersion, readFile, getDatabase, updateFile } from "kxta-core";
 import { DATA_DIR, ensureDbInitialized } from "@/lib/db-init";
 
 export async function POST(
@@ -41,7 +41,12 @@ export async function POST(
     }
 
     const content = await restoreVersion(repoDir, file.path, hash);
-    return NextResponse.json({ success: true, content });
+    // Persist as a new revision so the restore actually sticks. Without
+    // this, the route just hands the historical bytes back to the client
+    // and the next watcher event / refresh reverts the in-memory display
+    // to the unchanged disk content.
+    const updated = await updateFile(n, content, DATA_DIR);
+    return NextResponse.json({ success: true, content: updated.content, updated_at: updated.updated_at });
   } catch (error) {
     console.error("Failed to restore version:", error);
     return NextResponse.json({ error: "Failed to restore version" }, { status: 500 });

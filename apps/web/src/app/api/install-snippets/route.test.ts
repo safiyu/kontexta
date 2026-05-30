@@ -14,7 +14,7 @@ describe("GET /api/install-snippets", () => {
     const res = await GET(req("client=claude-code&install=docker") as any);
     const body = await res.json();
     expect(body.kind).toBe("shell");
-    expect(body.body).toContain("/tmp/test-data");
+    expect(body.body).toContain("KONTEXTA_DATA_DIR");
     expect(body.body).toContain("docker run");
   });
   it("400s on bad client", async () => {

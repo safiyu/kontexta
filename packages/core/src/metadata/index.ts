@@ -414,10 +414,18 @@ function reconcileIndex(opts: ReconcileOptions): ReconcileResult {
   let refreshed = 0;
   const newRecords: FileRecord[] = [];
 
-  // Wrap the whole ingest pass in one transaction — much faster than per-file
-  // BEGIN/COMMIT, and atomic w.r.t. concurrent readers.
-  db.transaction(() => {
-    for (const path of onDisk) {
+  // Read disk content OUTSIDE the SQLite write transaction and apply in
+  // bounded chunks. The previous implementation held an exclusive write
+  // lock for the entire scan — on a multi-thousand-file project that
+  // starved every other DB consumer (watcher, search) until reconcile
+  // finished. Per-chunk txns keep each lock-hold short while still
+  // amortising BEGIN/COMMIT overhead across many files.
+  const RECONCILE_CHUNK = 200;
+  const allPaths = Array.from(onDisk);
+  for (let chunkStart = 0; chunkStart < allPaths.length; chunkStart += RECONCILE_CHUNK) {
+    const chunk = allPaths.slice(chunkStart, chunkStart + RECONCILE_CHUNK);
+    const reads: { path: string; content: string; hash: string; title: string }[] = [];
+    for (const path of chunk) {
       let content: string;
       try {
         content = readFileSync(path, "utf8");
@@ -425,30 +433,37 @@ function reconcileIndex(opts: ReconcileOptions): ReconcileResult {
         console.error(`reconcileIndex: failed to read ${path}: ${e?.message ?? e}`);
         continue;
       }
-      const hash = computeHash(content);
-      const title = stripIndexedExt(basename(path));
-      const existing = existingByPath.get(path);
-
-      if (!existing) {
-        const r = insertStmt.run(path, title, projectId, storageType, hash);
-        if (r.changes > 0) {
-          const fileId = Number(r.lastInsertRowid);
-          // Defensive ftsDelete: guards against orphan FTS rows from a reused
-          // rowid if any historical delete path skipped FTS cleanup.
-          ftsDelete.run(fileId);
-          ftsInsert.run(fileId, title, content);
-          newly_indexed++;
-          const rec = selectFileById.get(fileId) as FileRecord | undefined;
-          if (rec) newRecords.push(rec);
-        }
-      } else if (existing.content_hash !== hash) {
-        updateStmt.run(hash, existing.id);
-        ftsDelete.run(existing.id);
-        ftsInsert.run(existing.id, title, content);
-        refreshed++;
-      }
+      reads.push({
+        path,
+        content,
+        hash: computeHash(content),
+        title: stripIndexedExt(basename(path)),
+      });
     }
-  })();
+    db.transaction(() => {
+      for (const r of reads) {
+        const existing = existingByPath.get(r.path);
+        if (!existing) {
+          const result = insertStmt.run(r.path, r.title, projectId, storageType, r.hash);
+          if (result.changes > 0) {
+            const fileId = Number(result.lastInsertRowid);
+            // Defensive ftsDelete: guards against orphan FTS rows from a reused
+            // rowid if any historical delete path skipped FTS cleanup.
+            ftsDelete.run(fileId);
+            ftsInsert.run(fileId, r.title, r.content);
+            newly_indexed++;
+            const rec = selectFileById.get(fileId) as FileRecord | undefined;
+            if (rec) newRecords.push(rec);
+          }
+        } else if (existing.content_hash !== r.hash) {
+          updateStmt.run(r.hash, existing.id);
+          ftsDelete.run(existing.id);
+          ftsInsert.run(existing.id, r.title, r.content);
+          refreshed++;
+        }
+      }
+    })();
+  }
 
   // Prune rows for files no longer on disk. Critical: only run if the
   // top-level walk succeeded — otherwise a transient EACCES wipes the index.

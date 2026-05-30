@@ -1,16 +1,18 @@
 // packages/core/src/journal/renderer.ts
 import type { RawEvent } from "./types.js";
 import { runPatterns } from "./patterns/index.js";
+import type { ExtraPatternDef } from "./patterns/extra-loader.js";
 
 export interface RenderInput {
   task_slug: string;
   events: RawEvent[];
   now: string; // ISO ts of the entry header
+  extraPatterns?: ExtraPatternDef[];
 }
 
 export function renderMechanicalEntry(input: RenderInput): string {
   const { events, now } = input;
-  const patterns = runPatterns(events);
+  const patterns = runPatterns(events, input.extraPatterns ?? []);
   const ts = `${now.slice(0, 10)} ${now.slice(11, 16)}`;
 
   const filesUnique = [...new Set(events.flatMap((e) => e.touched ?? []))];

@@ -56,7 +56,7 @@ export function AboutDialog({ open, onClose }: AboutDialogProps) {
           <div className="flex justify-center -mb-3">
             <AnimatedLogo size="lg" />
           </div>
-          <h1 className="text-3xl font-bold text-[#D4903A] tracking-[4px] font-[family-name:var(--font-title)]">
+          <h1 className="text-3xl font-extrabold tracking-[4px] font-[family-name:var(--font-title)] text-[var(--accent)] dark:text-[#F4F3EF] drop-shadow-[0_0_14px_rgba(180,120,30,0.55)] dark:drop-shadow-none">
             KONTEXTA
           </h1>
           <p className="text-sm font-medium text-[var(--text-secondary)] mt-2">

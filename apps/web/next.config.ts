@@ -2,14 +2,12 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   output: "standalone",
   serverExternalPackages: ["better-sqlite3", "archiver", "jsdom", "oniguruma", "re2", "kontexta-mcp"],
-  experimental: {
-    outputFileTracingIncludes: {
-      "**/*": [
-        "../../packages/core/src/agent-rules/rules-block.md",
-        "../../packages/core/src/db/migrations/*.sql",
-        "../../CHANGELOG.md",
-      ],
-    },
+  outputFileTracingIncludes: {
+    "**/*": [
+      "../../packages/core/src/agent-rules/rules-block.md",
+      "../../packages/core/src/db/migrations/*.sql",
+      "../../CHANGELOG.md",
+    ],
   },
   webpack: (config, { isServer }) => {
     // jsdom, oniguruma, and re2 are native server-only modules loaded dynamically at runtime.

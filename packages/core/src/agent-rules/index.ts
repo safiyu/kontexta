@@ -39,6 +39,40 @@ export const SESSION_START_HOOK_SNIPPET = JSON.stringify({
   },
 }, null, 2);
 
+export const STOP_HOOK_SNIPPET = JSON.stringify({
+  hooks: {
+    Stop: [
+      {
+        matcher: "*",
+        hooks: [
+          {
+            type: "command",
+            command:
+              "echo 'kontexta: end-of-session distill_journal recommended' && true",
+          },
+        ],
+      },
+    ],
+  },
+}, null, 2);
+
+export const POST_TOOL_USE_HOOK_SNIPPET = JSON.stringify({
+  hooks: {
+    PostToolUse: [
+      {
+        matcher: "Bash(git*)|mcp__kontexta__commit_backup|mcp__kontexta__move_file",
+        hooks: [
+          {
+            type: "command",
+            command:
+              "echo 'kontexta: git context refresh hint' && true",
+          },
+        ],
+      },
+    ],
+  },
+}, null, 2);
+
 export type AgentId = "claude-code" | "codex" | "gemini" | "antigravity" | "cursor" | "continue" | "generic";
 
 interface ProjectMeta {
@@ -250,8 +284,13 @@ export interface SyncSkippedEntry {
 export interface SyncResult {
   written: SyncResultEntry[];
   skipped: SyncSkippedEntry[];
-  optional_hook_snippet?: string;
+  optional_hook_snippet?: string;          // backward compat (SessionStart only)
   optional_hook_install_path?: string;
+  optional_hook_snippets?: {
+    SessionStart: string;
+    Stop: string;
+    PostToolUse: string;
+  };
 }
 
 function atomicWrite(absPath: string, content: string): void {
@@ -303,7 +342,12 @@ export function syncAgentRules(opts: SyncOpts): SyncResult {
       written,
       skipped,
       optional_hook_snippet: SESSION_START_HOOK_SNIPPET,
-      optional_hook_install_path: "~/.claude/settings.json (Claude Code only)"
+      optional_hook_install_path: "~/.claude/settings.json (Claude Code only)",
+      optional_hook_snippets: {
+        SessionStart: SESSION_START_HOOK_SNIPPET,
+        Stop: STOP_HOOK_SNIPPET,
+        PostToolUse: POST_TOOL_USE_HOOK_SNIPPET,
+      },
     };
   }
 
@@ -371,7 +415,12 @@ export function syncAgentRules(opts: SyncOpts): SyncResult {
     written,
     skipped,
     optional_hook_snippet: SESSION_START_HOOK_SNIPPET,
-    optional_hook_install_path: "~/.claude/settings.json (Claude Code only)"
+    optional_hook_install_path: "~/.claude/settings.json (Claude Code only)",
+    optional_hook_snippets: {
+      SessionStart: SESSION_START_HOOK_SNIPPET,
+      Stop: STOP_HOOK_SNIPPET,
+      PostToolUse: POST_TOOL_USE_HOOK_SNIPPET,
+    },
   };
 }
 

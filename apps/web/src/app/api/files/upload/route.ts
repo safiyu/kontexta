@@ -31,6 +31,21 @@ function nextAvailableName(existingBasenames: Set<string>, desired: string): str
 export async function POST(req: NextRequest) {
   ensureDbInitialized();
 
+  // Reject obviously oversized uploads BEFORE Next's formData parser
+  // buffers the whole multipart body into memory. The body-level total
+  // includes multipart boundaries/headers so allow ~1MB of slack on
+  // top of MAX_TOTAL_BYTES; per-file checks below still apply.
+  const contentLengthRaw = req.headers.get("content-length");
+  if (contentLengthRaw) {
+    const contentLength = Number(contentLengthRaw);
+    if (Number.isFinite(contentLength) && contentLength > MAX_TOTAL_BYTES + 1024 * 1024) {
+      return NextResponse.json(
+        { error: `Upload body ${contentLength} bytes exceeds cap ${MAX_TOTAL_BYTES}` },
+        { status: 413 }
+      );
+    }
+  }
+
   let form: FormData;
   try {
     form = await req.formData();

@@ -42,13 +42,13 @@ export function TopBar({
   const modifier = isMac ? "⌘" : "Ctrl";
 
   return (
-    <header className="h-16 bg-[#FFFDF7] dark:bg-gradient-to-r dark:from-[var(--bg-secondary)] dark:via-[var(--bg-tertiary)] dark:to-[var(--bg-secondary)] flex items-center px-4 border-b border-[var(--border)] gap-3 overflow-visible">
-      <div className="flex items-center gap-0.5">
+    <header className="h-16 bg-[var(--bg-secondary)] flex items-center px-4 border-b border-[var(--border)] gap-3 overflow-visible">
+      <div className="flex items-center gap-0">
         <AnimatedLogo size="sm" />
         <span
-          className="font-extrabold text-xl tracking-[4px] text-[#D4903A] drop-shadow-[0_0_14px_rgba(212,144,58,0.55)]"
+          className="-ml-3 font-extrabold text-xl tracking-[4px] font-[family-name:var(--font-title)] text-[var(--accent)] dark:text-[#F4F3EF] drop-shadow-[0_0_14px_rgba(180,120,30,0.55)] dark:drop-shadow-none"
         >
-          KONTEXTA
+          ONTEXTA
         </span>
       </div>
 

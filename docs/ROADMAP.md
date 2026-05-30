@@ -59,16 +59,6 @@ The trickier bit is initializing the journal capture singleton + DB without a tr
 
 ---
 
-### 🟢 Two-step grace pruning in `housekeep_journal`
-
-**The gap.** The Phase 2 spec specifies a two-step grace mechanism (mark `pending_deletion` → wait 7 days → actually delete) for safety. The shipped implementation skips that and deletes immediately when `retention.raw_days` is exceeded. In practice this is fine because raw is just audit trail and the distilled markdown survives — but the safety net is missing.
-
-Add a `pending_deletions` column or sidecar JSON; mark in pass 1, delete in pass 2; expose `purge_grace_days` config.
-
-**Trigger to pull forward:** when someone accidentally configures `raw_days: 1`.
-
----
-
 ### 🟢 Subagent prompt template for LLM-upgrade flow
 
 **The gap.** Phase 2's `distill_journal_commit_upgrades` tool exists, but the actual subagent prompt template that takes raw events → polished narrative isn't written yet. Today an agent calling `distill_journal` gets back the events and is expected to construct its own subagent prompt.

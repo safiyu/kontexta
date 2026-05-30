@@ -87,15 +87,15 @@ importers:
       jsdom:
         specifier: ^29.1.1
         version: 29.1.1
-      mermaid:
-        specifier: ^11
-        version: 11.14.0
-      kxta-core:
-        specifier: workspace:*
-        version: link:../../packages/core
       kontexta-mcp:
         specifier: workspace:*
         version: link:../mcp
+      kxta-core:
+        specifier: workspace:*
+        version: link:../../packages/core
+      mermaid:
+        specifier: ^11
+        version: 11.14.0
       next:
         specifier: ^15.3.0
         version: 15.5.15(react-dom@19.2.5(react@19.2.5))(react@19.2.5)

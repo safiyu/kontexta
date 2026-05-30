@@ -1,6 +1,6 @@
-import { JournalWriter, defaultRedactConfig, redactArgs, checkGit, readHighWater, type GitWatcherState } from "kxta-core";
+import { JournalWriter, defaultRedactConfig, redactArgs, checkGit, readHighWater, shouldBlock, backlogErrorPayload, type GitWatcherState } from "kxta-core";
 import type { RawEvent } from "kxta-core";
-import { readdirSync, readFileSync as fsReadFileSync } from "node:fs";
+import { readdirSync, readFileSync as fsReadFileSync, existsSync as fsExistsSync } from "node:fs";
 
 interface CaptureContext {
   writer: JournalWriter;
@@ -35,15 +35,55 @@ export function shutdownCapture(): void {
 
 type Handler<TArgs, TResult> = (args: TArgs) => Promise<TResult>;
 
+let _modeCache: { mode: "lenient" | "strict" | "mechanical-only"; ts: number } | null = null;
+
+function readJournalMode(): "lenient" | "strict" | "mechanical-only" {
+  const now = Date.now();
+  if (_modeCache && now - _modeCache.ts < 5000) return _modeCache.mode;
+  const cfgPath = `${getDataDir()}/kontexta.json`;
+  let mode: "lenient" | "strict" | "mechanical-only" = "lenient";
+  // Also check project root in case caller put kontexta.json there
+  const fallback = `${process.cwd()}/kontexta.json`;
+  for (const p of [cfgPath, fallback]) {
+    if (fsExistsSync(p)) {
+      try {
+        const obj = JSON.parse(fsReadFileSync(p, "utf8"));
+        if (obj?.journal?.mode === "strict" || obj?.journal?.mode === "mechanical-only" || obj?.journal?.mode === "lenient") {
+          mode = obj.journal.mode;
+          break;
+        }
+      } catch { /* ignore */ }
+    }
+  }
+  _modeCache = { mode, ts: now };
+  return mode;
+}
+
+export function resetModeCache(): void {
+  _modeCache = null;
+}
+
 export function wrapHandler<TArgs extends Record<string, unknown>, TResult extends { isError?: boolean; content: any }>(
   toolName: string,
   inner: Handler<TArgs, TResult>,
 ): Handler<TArgs, TResult> {
   return async (args: TArgs) => {
+    // Strict-mode preflight (Task 26)
+    const mode = readJournalMode();
+    const bypass = (args as any).journal_bypass === true;
+    const status = getBacklogStatus(getCurrentProjectSlug());
+    if (shouldBlock(mode, toolName, status, bypass)) {
+      const payload = backlogErrorPayload(status);
+      return { isError: true, content: [{ type: "text", text: JSON.stringify(payload, null, 2) }] } as any;
+    }
+    // Strip journal_bypass from args so it doesn't leak to the inner handler
+    const cleanArgs: any = { ...args };
+    delete cleanArgs.journal_bypass;
+
     const start = Date.now();
     let result: TResult;
     try {
-      result = await inner(args);
+      result = await inner(cleanArgs as TArgs);
     } catch (err) {
       activitySinceLastCheck = true;
       tryWriteEvent({
@@ -52,8 +92,8 @@ export function wrapHandler<TArgs extends Record<string, unknown>, TResult exten
         sid: ctx?.sid ?? "unknown",
         event: "error",
         tool: toolName,
-        args: ctx ? redactArgs(args, defaultRedactConfig) : args,
-        touched: extractTouched(args),
+        args: ctx ? redactArgs(cleanArgs, defaultRedactConfig) : cleanArgs,
+        touched: extractTouched(cleanArgs),
         status: "error",
         ms: Date.now() - start,
         msg: err instanceof Error ? err.message : String(err),
@@ -67,8 +107,8 @@ export function wrapHandler<TArgs extends Record<string, unknown>, TResult exten
       sid: ctx?.sid ?? "unknown",
       event: "tool_call",
       tool: toolName,
-      args: ctx ? redactArgs(args, defaultRedactConfig) : args,
-      touched: extractTouched(args),
+      args: ctx ? redactArgs(cleanArgs, defaultRedactConfig) : cleanArgs,
+      touched: extractTouched(cleanArgs),
       status: result.isError ? "error" : "ok",
       ms: Date.now() - start,
     });

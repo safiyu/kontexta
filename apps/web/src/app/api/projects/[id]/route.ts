@@ -94,6 +94,36 @@ export async function PATCH(
     // concurrent reference-file commit can't land at the old path while we
     // rewrite rows to point at the new path (DB/git divergence). After the
     // swap, future commitFile calls will lock on the new path.
+    // Pre-flight: refuse the rewrite if any file row would point at a
+    // non-existent path under the new base. Without this check, callers
+    // can accidentally re-point a project at an unrelated directory and
+    // every subsequent read/write either 500s or, worse, creates files
+    // at the dangling targets.
+    if (oldBase && oldBase !== newBase) {
+      const oldPrefix = oldBase.endsWith(sep) ? oldBase : oldBase + sep;
+      const newPrefix = newBase.endsWith(sep) ? newBase : newBase + sep;
+      const rows = db
+        .prepare("SELECT id, path FROM files WHERE project_id = ?")
+        .all(n) as { id: number; path: string }[];
+      const missing: string[] = [];
+      for (const r of rows) {
+        let target: string | null = null;
+        if (r.path === oldBase) target = newBase;
+        else if (r.path.startsWith(oldPrefix)) target = newPrefix + r.path.slice(oldPrefix.length);
+        if (target && !existsSync(target)) missing.push(target);
+      }
+      if (missing.length > 0) {
+        return NextResponse.json(
+          {
+            error: `Refusing to rewrite paths: ${missing.length} file(s) missing under new base. First: ${missing[0]}`,
+            missing_count: missing.length,
+            sample: missing.slice(0, 5),
+          },
+          { status: 409 }
+        );
+      }
+    }
+
     const runRewrite = () => {
       db.transaction(() => {
         db.prepare("UPDATE projects SET path = ? WHERE id = ?").run(body.path, n);

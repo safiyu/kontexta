@@ -37,6 +37,29 @@ function gitFor(dir: string): SimpleGit {
   return simpleGit(dir).env(buildGitEnv() as any);
 }
 
+// Make sure the local repo's HEAD is on `main` before pushing to `origin main`.
+// Historically this code did `git branch -M main` unconditionally, which
+// force-renamed (and clobbered) whatever branch the user happened to be on.
+// New behavior: rename only the legacy default `master`; for any other branch
+// name, leave it alone so we don't destroy a deliberate checkout.
+async function ensureOnMain(git: SimpleGit): Promise<void> {
+  let current: string;
+  try {
+    current = (await git.raw(["symbolic-ref", "--short", "HEAD"])).trim();
+  } catch {
+    return;
+  }
+  if (current === "main" || current === "") return;
+  if (current === "master") {
+    await git.branch(["-m", "master", "main"]);
+    return;
+  }
+  throw new Error(
+    `Refusing to push: local HEAD is on '${current}', not 'main'. ` +
+    `Switch to 'main' (git checkout main) before syncing, or rename the branch yourself.`
+  );
+}
+
 /** Validate a git remote URL. Allows https://, ssh://, git://, scp-form (user@host:path). */
 export function isValidGitRemoteUrl(url: string): boolean {
   if (typeof url !== "string" || url.length === 0 || url.length > 2048) return false;
@@ -300,7 +323,7 @@ export async function syncGlobalVault(
     if (pullSucceeded) {
       stage("pushing");
       try {
-        await git.branch(["-M", "main"]);
+        await ensureOnMain(git);
         await git.push("origin", "main");
       } catch (error: any) {
         const msg = redactCredentials(String(error?.message ?? error));
@@ -700,7 +723,7 @@ async function _syncBackupLocked(
   if (globalRemoteUrl) {
     stage("pushing");
     try {
-      await git.branch(["-M", "main"]);
+      await ensureOnMain(git);
       await git.push("origin", "main");
     } catch (error: any) {
       const msg = redactCredentials(String(error?.message ?? error));

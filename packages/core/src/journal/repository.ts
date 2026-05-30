@@ -100,3 +100,9 @@ export function journalRefsByValue(
     .all(ref_type, ref_value) as Array<{ file_id: number }>;
   return rows.map((r) => r.file_id);
 }
+
+export function markUpgradeApplied(file_id: number, status_latest: string | null): void {
+  getDatabase()
+    .prepare(`UPDATE journal_meta SET status_latest = ? WHERE file_id = ?`)
+    .run(status_latest, file_id);
+}

@@ -1,6 +1,7 @@
 import chokidar, { type FSWatcher } from "chokidar";
 import { getDatabase } from "../db/index.js";
 import { isIndexedFile, stripIndexedExt } from "../util/extensions.js";
+import { withLock, fileLockKey } from "../util/safety.js";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
@@ -43,25 +44,42 @@ export function createFileWatcher(
     awaitWriteFinish: { stabilityThreshold: 300, pollInterval: 100 },
   });
 
+  // Per-path lock around every handler so a watcher event fired during a
+  // createFile/updateFile (which hold the same key) queues until the
+  // in-flight write commits. The handlers themselves no-op when the
+  // already-stored hash matches, so the queued run after our own write
+  // is a cheap re-check rather than a duplicate UPSERT.
+  const runLocked = (filePath: string, fn: () => void): void => {
+    void withLock(fileLockKey(filePath), async () => fn()).catch((e) => {
+      console.error(`[watcher] locked handler failed for ${filePath}:`, e);
+    });
+  };
+
   watcher.on("change", (filePath) => {
     if (!isIndexedFile(filePath)) return;
-    // If the row was deleted (e.g. via Time-Travel restore of a previously
-    // unlinked file) and the file is back on disk, treat the change as an
-    // add so FTS gets repopulated instead of silently no-op'ing.
-    updateFileHash(filePath, knowledgeDirs);
-    onEvent({ type: "change", path: filePath });
+    runLocked(filePath, () => {
+      // If the row was deleted (e.g. via Time-Travel restore of a previously
+      // unlinked file) and the file is back on disk, treat the change as an
+      // add so FTS gets repopulated instead of silently no-op'ing.
+      updateFileHash(filePath, knowledgeDirs);
+      onEvent({ type: "change", path: filePath });
+    });
   });
 
   watcher.on("add", (filePath) => {
     if (!isIndexedFile(filePath)) return;
-    handleWatcherAdd(filePath, knowledgeDirs);
-    onEvent({ type: "add", path: filePath });
+    runLocked(filePath, () => {
+      handleWatcherAdd(filePath, knowledgeDirs);
+      onEvent({ type: "add", path: filePath });
+    });
   });
 
   watcher.on("unlink", (filePath) => {
     if (!isIndexedFile(filePath)) return;
-    handleWatcherUnlink(filePath);
-    onEvent({ type: "unlink", path: filePath });
+    runLocked(filePath, () => {
+      handleWatcherUnlink(filePath);
+      onEvent({ type: "unlink", path: filePath });
+    });
   });
 
   return watcher;
@@ -139,10 +157,15 @@ function updateFileHash(filePath: string, knowledgeDirs: string[] = []): void {
     const db = getDatabase();
     const content = fs.readFileSync(filePath, "utf-8");
     const hash = crypto.createHash("sha256").update(content).digest("hex");
-    const file = db.prepare("SELECT id, title FROM files WHERE path = ?").get(filePath) as
-      | { id: number; title: string }
+    const file = db.prepare("SELECT id, title, content_hash FROM files WHERE path = ?").get(filePath) as
+      | { id: number; title: string; content_hash: string }
       | undefined;
     if (file) {
+      // Short-circuit when the row already reflects this content. Common
+      // case: the watcher event was triggered by a createFile/updateFile
+      // we just ran — the row is already up to date and rewriting FTS
+      // is wasted work plus an extra write-lock acquisition.
+      if (file.content_hash === hash) return;
       const updateStmt = db.prepare("UPDATE files SET content_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?");
       const deleteFtsStmt = db.prepare("DELETE FROM fts_index WHERE rowid = ?");
       const insertFtsStmt = db.prepare("INSERT INTO fts_index (rowid, title, content) VALUES (?, ?, ?)");

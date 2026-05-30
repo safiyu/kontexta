@@ -3,47 +3,48 @@
 @tailwind utilities;
 
 :root {
-  /* Warm cream palette: paired with the amber text below, the whole UI
-     reads as a "warm IDE" instead of washed-out slate. The amber-on-cream
-     pairing is intentional and high-enough contrast for body copy
-     (~5.5:1 for primary, ~7:1 for secondary). */
-  --bg-primary: #FFF8EE;
-  --bg-secondary: #F5E9D5;
-  --bg-tertiary: #EAD9BC;
-  --text-primary: #8B5A1F;
-  --text-secondary: #6B4318;
-  --border: #EAD9BC;
+  /* Light mode — warm off-white surfaces, navy text, amber accent.
+     Pairs the muted infrastructure gold with a calm cream that reads
+     premium rather than washed-out. */
+  --bg-primary: #F4F3EF;
+  --bg-secondary: #ECE9E2;
+  --bg-tertiary: #E0DDD3;
+  --text-primary: #0F274F;
+  --text-secondary: #4A5874;
+  --muted: #94A3B8;
+  --border: #D9D5C9;
 
-  --accent: #C2410C;
-  --accent-soft: rgba(194, 65, 12, 0.16);
-  --success: #10D070;
-  --warning: #FFB020;
-  --danger: #FF3355;
+  --accent: #B4781E;
+  --accent-soft: rgba(180, 120, 30, 0.16);
+  --success: #2F855A;
+  --warning: #C0841A;
+  --danger: #C05656;
 
   /* --font-sans / --font-mono / --font-title come from next/font in layout.tsx */
 }
 
 .dark {
-  --bg-primary: #0F172A;
-  --bg-secondary: #020617;
-  --bg-tertiary: #1E293B;
-  /* Match light mode: brand the text in the logo's amber tones. The
-     primary is the logo amber; secondary is a lighter amber so it stays
-     legible against the dark slate background. */
-  --text-primary: #D4903A;
-  --text-secondary: #B8803A;
-  --border: #334155;
+  --bg-primary: #0A0F1A;
+  --bg-secondary: #121A2B;
+  --bg-tertiary: #0F274F;
+  --text-primary: #E8EDF5;
+  --text-secondary: #94A3B8;
+  --muted: #64748B;
+  --border: #24324A;
 
-  --accent: #C2410C;
-  --accent-soft: rgba(194, 65, 12, 0.18);
-  --success: #10D070;
-  --warning: #FFB020;
-  --danger: #FF3355;
+  --accent: #B4781E;
+  --accent-soft: rgba(180, 120, 30, 0.18);
+  --success: #2F855A;
+  --warning: #C0841A;
+  --danger: #C05656;
 }
 
-/* Light theme specific adjustments for icons/emojis */
+/* Light theme specific adjustments for icons/emojis.
+   Tuned for the warm-cream (#F4F3EF) → muted amber (#B4781E) pairing
+   introduced in the 2026-05-12 rebrand. Less saturation than the prior
+   bright-orange pairing required. */
 html:not(.dark) .dark-icon {
-  filter: brightness(0.7) saturate(1.2) contrast(1.1);
+  filter: brightness(0.85) saturate(0.95) contrast(1.05);
 }
 
 
@@ -70,7 +71,7 @@ body {
   body { font-size: 14px; }
 }
 
-/* Thin scrollbar styling */
+/* Thin scrollbar styling — themed via CSS vars */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -81,17 +82,25 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #666666;
+  background: #4A5874;
   border-radius: 3px;
 }
 
+.dark ::-webkit-scrollbar-thumb {
+  background: #24324A;
+}
+
 ::-webkit-scrollbar-thumb:hover {
-  background: #888888;
+  background: var(--accent);
 }
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: #666666 var(--bg-secondary);
+  scrollbar-color: #4A5874 var(--bg-secondary);
+}
+
+.dark * {
+  scrollbar-color: #24324A var(--bg-secondary);
 }
 
 @keyframes logo-float-sm {
@@ -115,14 +124,14 @@ body {
 }
 
 .skeleton {
-  background-color: rgba(212, 144, 58, 0.1);
+  background-color: rgba(180, 120, 30, 0.1);
   background-image: linear-gradient(
     90deg,
-    rgba(212, 144, 58, 0) 0%,
-    rgba(212, 144, 58, 0.1) 40%,
-    rgba(212, 144, 58, 0.45) 50%,
-    rgba(212, 144, 58, 0.1) 60%,
-    rgba(212, 144, 58, 0) 100%
+    rgba(180, 120, 30, 0) 0%,
+    rgba(180, 120, 30, 0.1) 40%,
+    rgba(180, 120, 30, 0.45) 50%,
+    rgba(180, 120, 30, 0.1) 60%,
+    rgba(180, 120, 30, 0) 100%
   );
   background-size: 200% 100%;
   background-repeat: no-repeat;
@@ -171,7 +180,7 @@ select {
   appearance: none;
   -webkit-appearance: none;
   -moz-appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='%23F97316'%3E%3Cpath d='M2 4 L6 8 L10 4 Z'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='%23B4781E'%3E%3Cpath d='M2 4 L6 8 L10 4 Z'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 0.4rem center;
   background-size: 0.65rem;
@@ -191,7 +200,7 @@ option {
   gap: 6px;
   background: transparent;
   border: 1px solid transparent;
-  color: #5C3D24;
+  color: #0F274F;
   font-family: system-ui, -apple-system, sans-serif;
   font-weight: 600;
   cursor: pointer;
@@ -201,7 +210,7 @@ option {
 }
 
 .dark .btn {
-  color: #F5C97A;
+  color: #E5C079;
 }
 
 .btn:hover,
@@ -232,7 +241,7 @@ option {
 .btn:disabled:hover,
 .btn:disabled:active,
 .btn:disabled:focus {
-  color: #c27d4a;
+  color: #94A3B8;
   background: transparent;
 }
 
@@ -243,26 +252,26 @@ option {
 .btn-icon-md { width: 32px; height: 32px; padding: 0; font-size: 16px; border-radius: 6px; }
 
 /* Destructive role */
-.btn-destructive { color: #c47373; }
+.btn-destructive { color: #C05656; }
 
 .btn-destructive:hover,
 .btn-destructive:active,
 .btn-destructive:focus {
-  color: #b91c1c;
-  background: rgba(239, 68, 68, 0.08);
+  color: #ffffff;
+  background: rgba(192, 86, 86, 0.85);
 }
 
 .dark .btn-destructive:hover,
 .dark .btn-destructive:active,
 .dark .btn-destructive:focus {
-  color: #ef4444;
-  background: rgba(239, 68, 68, 0.10);
+  color: #ffffff;
+  background: rgba(192, 86, 86, 0.85);
 }
 
 .btn-destructive:disabled:hover,
 .btn-destructive:disabled:active,
 .btn-destructive:disabled:focus {
-  color: #c47373;
+  color: #C05656;
   background: transparent;
 }
 

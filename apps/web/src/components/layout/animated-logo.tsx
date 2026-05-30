@@ -17,7 +17,8 @@ const LG_PARTICLES: ParticleDef[] = [
 
 const CONFIG = {
   sm: {
-    src: "/logo.png",
+    lightSrc: "/logo.png",
+    darkSrc: "/logo-dark.png",
     imgClass: "h-[56px] w-auto",
     floatClass: "",
     // Top-bar uses a static logo — orbits are reserved for the About dialog.
@@ -25,7 +26,8 @@ const CONFIG = {
     orbitRadius: 0,
   },
   lg: {
-    src: "/logo.png",
+    lightSrc: "/logo.png",
+    darkSrc: "/logo-dark.png",
     imgClass: "h-[150px] w-auto",
     floatClass: "animate-[logo-float-lg_3s_ease-in-out_infinite]",
     particles: LG_PARTICLES,
@@ -34,14 +36,19 @@ const CONFIG = {
 };
 
 export function AnimatedLogo({ size }: { size: "sm" | "lg" }) {
-  const { src, imgClass, floatClass, particles, orbitRadius } = CONFIG[size];
+  const { lightSrc, darkSrc, imgClass, floatClass, particles, orbitRadius } = CONFIG[size];
 
   return (
     <div className="relative inline-flex flex-shrink-0 overflow-visible">
       <img
-        src={src}
+        src={lightSrc}
         alt="Kontexta"
-        className={`block ${imgClass} object-contain ${floatClass}`}
+        className={`block dark:hidden ${imgClass} object-contain ${floatClass}`}
+      />
+      <img
+        src={darkSrc}
+        alt="Kontexta"
+        className={`hidden dark:block ${imgClass} object-contain ${floatClass}`}
       />
       {particles.map((p, i) => (
         <span

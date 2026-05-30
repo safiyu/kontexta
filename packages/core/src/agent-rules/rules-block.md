@@ -31,6 +31,8 @@ This project is registered with kontexta. Honor these rules to keep the index, h
 
 **Use `journal_intent(summary)` when the user pivots.** One short sentence so the distillation step knows the topic shifted.
 
+**Strict mode awareness.** If a project sets `journal.mode = "strict"` in its `kontexta.json`, the MCP server returns a `JOURNAL_BACKLOG` error on read tools (search/read_*/list_*) when undistilled events exist. The error includes `next_action: "distill_journal"`. Either run `distill_journal` first, OR pass `journal_bypass: true` on the read call to override (logged for audit).
+
 **Confirm Hands tokens within 60 seconds.** When a Hands tool returns an approval token, do NOT chain a long question or another tool call before `confirm_hand`. Tokens expire; the user will have to re-issue the whole flow.
 
 **Save specs to a canonical location.** When generating a spec, plan, or design doc, write it to the KB at `specs/<project-name>/<spec-name>.md` (use `create_file` with `destination: "knowledge"`, `folder: "specs/<project-name>"`). One folder per project keeps specs queryable.

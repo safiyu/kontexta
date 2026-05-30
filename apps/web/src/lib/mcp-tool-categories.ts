@@ -48,6 +48,8 @@ export const TOOL_CATEGORIES: Record<string, ToolCategory> = {
   journal_intent: "Write",
   distill_journal: "Write",
   journal_status: "Discovery",
+  housekeep_journal: "Write",
+  distill_journal_commit_upgrades: "Write",
   clip_url: "Write",
   // Search
   search: "Search",

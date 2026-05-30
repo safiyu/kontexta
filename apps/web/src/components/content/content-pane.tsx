@@ -80,10 +80,13 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
     }
   };
 
-  // Mirrors fileId so async handlers can detect a navigation that
-  // happened mid-request and decline to apply stale results.
+  // Mirrors the fileId PROP (not the loaded file?.id) so async handlers
+  // detect navigation as soon as it happens, not after the new file's
+  // GET resolves. Using file?.id leaves a window between click-on-B and
+  // B's fetch landing where the ref still points at A — during which a
+  // stale handler for A can sneak its result through the equality check.
   const fileIdRef = useRef<number | null>(fileId);
-  useEffect(() => { fileIdRef.current = file?.id ?? null; }, [file?.id]);
+  useEffect(() => { fileIdRef.current = fileId; }, [fileId]);
 
   // Bubble dirty state up so the parent can confirm before navigation.
   useEffect(() => {
@@ -181,6 +184,11 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
         },
         body: JSON.stringify({
           content: editContent,
+          // Optimistic-concurrency precondition. Server 409s if the row
+          // was touched (by another tab or a watcher event) since we
+          // loaded it; the catch block below pulls the fresh content so
+          // the user can decide what to keep instead of silently clobbering.
+          expected_updated_at: file.updated_at,
         }),
       });
 
@@ -196,6 +204,26 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
         setEditing(false);
         if (updatedFile.git_warning) {
           setGitErrorMessage(updatedFile.git_warning);
+          setGitErrorOpen(true);
+        }
+      } else if (response.status === 409) {
+        // Conflict: refresh the underlying file so the user sees the
+        // newer disk content and decides whether to overwrite. Their
+        // unsaved edits stay in editContent.
+        let serverContent: string | undefined;
+        let serverUpdatedAt: string | undefined;
+        try {
+          const data = await response.json();
+          serverContent = data?.current?.content;
+          serverUpdatedAt = data?.current?.updated_at;
+        } catch {}
+        if (fileIdRef.current === savingFileId) {
+          if (serverContent !== undefined && serverUpdatedAt !== undefined) {
+            setFile((prev) => prev ? { ...prev, content: serverContent!, updated_at: serverUpdatedAt! } : prev);
+          }
+          setGitErrorMessage(
+            "This file was modified elsewhere since you opened it. Disk content has been reloaded; click Save again to overwrite with your edits."
+          );
           setGitErrorOpen(true);
         }
       } else {

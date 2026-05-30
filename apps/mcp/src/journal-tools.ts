@@ -72,6 +72,7 @@ export function registerJournalTools(server: any): void {
         openTaskWindowDays: 90,
         inFlightWindowSeconds: 300,
         now: new Date(),
+        cooldownSeconds: 60,
       });
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     },

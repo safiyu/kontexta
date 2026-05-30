@@ -139,7 +139,7 @@ The Hands command-orchestration layer adds these top-level MCP tools, plus N dyn
 
 ## Brain tools
 
-The MCP server exposes 47 tools designed for agents that care about context-window economy. Every file-returning response is annotated with `est_tokens` and `size_bytes`; list/search responses also inline `tags` and `match_excerpt` so a single call usually replaces 3-5.
+The MCP server exposes 49 tools designed for agents that care about context-window economy. Every file-returning response is annotated with `est_tokens` and `size_bytes`; list/search responses also inline `tags` and `match_excerpt` so a single call usually replaces 3-5.
 
 ### Reading
 
@@ -167,6 +167,8 @@ The MCP server exposes 47 tools designed for agents that care about context-wind
 | `journal_intent` | Record a topic pivot in the project's journal so distillation knows the focus shifted. | "User redirected to authentication flow work." |
 | `distill_journal` | Run mechanical distillation on accumulated raw events. Writes per-topic markdown entries; idempotent. Defaults to current project. | "Distill the journal for this project." |
 | `journal_status` | Report the current backlog and high-water mark for the project's journal. | "Show me the journal status." |
+| `housekeep_journal` | Run journal retention/archival for a project. Idempotent. Prunes old raw .jsonl files and archives cold tasks. | "Run journal housekeeping for this project." |
+| `distill_journal_commit_upgrades` | After dispatching subagents to upgrade mechanical entries to LLM-narrative, mark them as upgraded in the index. | "Mark these task slugs as upgraded." |
 
 ### Search
 
@@ -248,6 +250,8 @@ Every file-returning tool annotates its response with `size_bytes` and `est_toke
 | `journal_intent` | `{ ok: true, recorded_at: ISO_timestamp }` |
 | `distill_journal` | `{ entries_written, topics_covered, high_water_advanced, events_processed }` |
 | `journal_status` | `{ slug, high_water, mode: "lenient" }` |
+| `housekeep_journal` | `{ raw_files_pruned, archived_tasks, pending_deletions_marked, purged }` |
+| `distill_journal_commit_upgrades` | `{ updated, missing }` |
 | `clip_url` (auth-walled) | `isError: true` with `{ code: "AUTH_REQUIRED", auth_required: true, login_url, signal, www_authenticate?, hint }` — retry with `headers: {"Cookie": "..."}` or `{"Authorization": "Bearer ..."}` |
 | `list_hands` | `{ hands: [{ project, tool, full, danger, confirm, description, disabled }] }` |
 | `reload_hands` | `{ totalRegistered, totalDisabled, perProject: [{ project, registered, disabled, warnings }] }` |

@@ -29,11 +29,18 @@ export function resolveArgv(
   for (let i = 1; i < command.length; i++) {
     const original = command[i];
     let substituted = false;
+    let anyEmptySub = false;
     const replaced = original.replace(PLACEHOLDER_RE, (_m, name) => {
       substituted = true;
-      return resolvedValues[name] ?? "";
+      const v = resolvedValues[name] ?? "";
+      if (v === "") anyEmptySub = true;
+      return v;
     });
-    if (substituted && replaced === "") continue;
+    // If ANY placeholder in this argv element substituted to empty, drop
+    // the whole element. Otherwise `--name={{user}}` with empty `user`
+    // would be passed as the literal `--name=`, which downstream tools
+    // tend to interpret as "set name to empty string" rather than "no name".
+    if (substituted && anyEmptySub) continue;
     if (substituted && !inserted) {
       out.push("--");
       inserted = true;
@@ -80,6 +87,16 @@ export function buildEnv(toolEnv: Record<string, string>): Record<string, string
   return env;
 }
 
+// Track every active child so a SIGINT/SIGTERM on the MCP server can
+// signal its detached process groups before exiting. Without this,
+// `detached: true` kept Hands subprocesses (and their entire group)
+// running orphaned when the parent process exited.
+const _activeChildren = new Set<number>();
+
+export function killAllActiveChildren(sig: NodeJS.Signals = "SIGTERM"): void {
+  for (const pid of _activeChildren) killGroup(pid, sig);
+}
+
 async function runProcess(
   argv: string[],
   cwd: string,
@@ -97,6 +114,8 @@ async function runProcess(
       detached: process.platform !== "win32",
       stdio: ["ignore", "pipe", "pipe"],
     });
+
+    if (child.pid !== undefined) _activeChildren.add(child.pid);
 
     const stdoutBuf = new RingBuffer(maxBytes);
     const stderrBuf = new RingBuffer(maxBytes);
@@ -116,6 +135,7 @@ async function runProcess(
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      if (child.pid !== undefined) _activeChildren.delete(child.pid);
       const status: ExecResult["status"] = timedOut
         ? "timeout"
         : code === 0 ? "success" : "failed";
@@ -135,6 +155,7 @@ async function runProcess(
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      if (child.pid !== undefined) _activeChildren.delete(child.pid);
       resolve({
         status: "rejected",
         exitCode: null,

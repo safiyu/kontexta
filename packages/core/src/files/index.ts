@@ -7,7 +7,7 @@ import { readFileSync, writeFileSync, unlinkSync, renameSync, mkdirSync, readdir
 import { join, dirname, resolve, sep, isAbsolute } from "node:path";
 import { getDatabase } from "../db/index.js";
 import { commitFile } from "../git/index.js";
-import { assertPathInside, escapeLike } from "../util/safety.js";
+import { assertPathInside, escapeLike, withLock, fileLockKey } from "../util/safety.js";
 import type { FileRecord, Destination, FileFilters, StorageType } from "../types.js";
 
 /**
@@ -140,6 +140,12 @@ export async function createFile(opts: CreateFileOptions): Promise<FileRecordWit
     throw new Error(`Unknown destination: ${destination}`);
   }
 
+  // Serialise against any concurrent write to (or watcher event for) the
+  // same file path. Without this, a chokidar `add` fired during the
+  // disk-write window can interleave its own INSERT with this function's
+  // UPSERT, and the FTS index can land with the watcher's interpretation
+  // of the file (no tags, default title) instead of the caller's.
+  return withLock(fileLockKey(filePath), async () => {
   mkdirSync(dirname(filePath), { recursive: true });
   // Stash pre-existing content (if any) so we can fully restore on a
   // DB-txn failure — otherwise writeFileSync below would leave the
@@ -247,6 +253,7 @@ export async function createFile(opts: CreateFileOptions): Promise<FileRecordWit
     content,
     ...(gitWarning ? { git_warning: gitWarning } : {}),
   };
+  });
 }
 
 /**
@@ -279,6 +286,22 @@ export async function updateFile(id: number, content: string, dataDir: string): 
     throw new Error(`File not found: ${id}`);
   }
 
+  // Same path-keyed lock as createFile — serialises against the watcher
+  // so a chokidar `change` fired mid-write can't run its own UPDATE +
+  // FTS rebuild interleaved with ours.
+  return withLock(fileLockKey(fileRecord.path), async () => {
+  // Stash pre-existing content so we can restore the disk file if the DB
+  // transaction below fails — otherwise the new bytes would sit on disk
+  // under a row whose content_hash and FTS index still reflect the old
+  // content, leaving permanent drift.
+  let preExistingContent: Buffer | null = null;
+  if (existsSync(fileRecord.path)) {
+    try {
+      preExistingContent = readFileSync(fileRecord.path);
+    } catch (e) {
+      console.warn("updateFile: failed to stash pre-existing content for rollback:", e);
+    }
+  }
   writeFileSync(fileRecord.path, content, "utf8");
   const contentHash = computeHash(content);
 
@@ -291,11 +314,20 @@ export async function updateFile(id: number, content: string, dataDir: string): 
   const deleteFtsStmt = db.prepare("DELETE FROM fts_index WHERE rowid = ?");
   const insertFtsStmt = db.prepare("INSERT INTO fts_index (rowid, title, content) VALUES (?, ?, ?)");
 
-  db.transaction(() => {
-    updateStmt.run(contentHash, id);
-    deleteFtsStmt.run(id);
-    insertFtsStmt.run(id, fileRecord.title, content);
-  })();
+  try {
+    db.transaction(() => {
+      updateStmt.run(contentHash, id);
+      deleteFtsStmt.run(id);
+      insertFtsStmt.run(id, fileRecord.title, content);
+    })();
+  } catch (dbError) {
+    if (preExistingContent !== null) {
+      try { writeFileSync(fileRecord.path, preExistingContent); } catch (e) {
+        console.error("updateFile: failed to restore pre-existing content after DB error:", e);
+      }
+    }
+    throw dbError;
+  }
 
   let gitWarning: string | undefined;
   try {
@@ -316,6 +348,7 @@ export async function updateFile(id: number, content: string, dataDir: string): 
     content,
     ...(gitWarning ? { git_warning: gitWarning } : {}),
   };
+  });
 }
 
 /**

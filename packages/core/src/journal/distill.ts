@@ -7,6 +7,8 @@ import { renderMechanicalEntry } from "./renderer.js";
 import { readHighWater, writeHighWater } from "./high-water.js";
 import { upsertJournalMeta, openTasksForProject } from "./repository.js";
 import { getDatabase } from "../db/index.js";
+import type { ExtraPatternDef } from "./patterns/extra-loader.js";
+import { acquireCooldown, releaseCooldown } from "./cooldown.js";
 
 export interface DistillJournalOpts {
   projectSlug: string;
@@ -17,6 +19,8 @@ export interface DistillJournalOpts {
   openTaskWindowDays: number;
   inFlightWindowSeconds: number;
   now: Date;
+  extraPatterns?: ExtraPatternDef[];
+  cooldownSeconds?: number;
 }
 
 const REL_BASE = ["knowledge", "journal"]; // joined under dataDir
@@ -29,78 +33,94 @@ function distilledDir(opts: DistillJournalOpts, ts: string): string {
 }
 
 export async function distillJournal(opts: DistillJournalOpts): Promise<DistillResult> {
-  const hw = readHighWater(join(opts.dataDir, ...REL_BASE), opts.projectSlug);
-  const since = hw?.last_event_ts ?? "0000-01-01T00:00:00Z";
-  const cutoff = new Date(opts.now.getTime() - opts.inFlightWindowSeconds * 1000).toISOString();
-
-  // 1. READ
-  const events = readRawEvents(rawDir(opts), since, cutoff, opts.maxEvents);
-  if (events.length === 0) {
-    return { events_processed: 0, tasks_touched: [], tasks_created: [], high_water_advanced_to: since, warnings: [] };
+  const cooldownBase = join(opts.dataDir, ...REL_BASE);
+  const cooldownSec = opts.cooldownSeconds ?? 0;
+  if (!acquireCooldown(cooldownBase, opts.projectSlug, cooldownSec)) {
+    return {
+      events_processed: 0,
+      tasks_touched: [],
+      tasks_created: [],
+      high_water_advanced_to: "",
+      warnings: ["cooldown active"],
+    };
   }
+  try {
+    const hw = readHighWater(join(opts.dataDir, ...REL_BASE), opts.projectSlug);
+    const since = hw?.last_event_ts ?? "0000-01-01T00:00:00Z";
+    const cutoff = new Date(opts.now.getTime() - opts.inFlightWindowSeconds * 1000).toISOString();
 
-  // 2. GROUP
-  const openTasks = loadOpenTasks(opts);
-  const buckets = groupEventsIntoTasks(events, openTasks, opts.ticketRegex);
-
-  // 3. RENDER + 4. INDEX
-  const tasksTouched: string[] = [];
-  const tasksCreated: string[] = [];
-
-  for (const bucket of buckets) {
-    const lastEvent = bucket.events[bucket.events.length - 1];
-    const dir = distilledDir(opts, lastEvent.ts);
-    mkdirSync(dir, { recursive: true });
-    const filename = `task-${bucket.task_slug}.md`;
-    const filePath = join(dir, filename);
-
-    const fm: JournalFrontmatter = buildFrontmatter(bucket, opts.projectSlug);
-    const entry = renderMechanicalEntry({
-      task_slug: bucket.task_slug,
-      events: bucket.events,
-      now: lastEvent.ts,
-    });
-
-    if (existsSync(filePath)) {
-      // Append the new entry above the prior body (entries are reverse-chronological by convention)
-      const existing = readFileSync(filePath, "utf8");
-      writeFileSync(filePath, replaceOrAppendEntry(existing, fm, entry));
-    } else {
-      writeFileSync(filePath, serializeFrontmatter(fm) + "\n\n" + entry);
-      tasksCreated.push(bucket.task_slug);
+    // 1. READ
+    const events = readRawEvents(rawDir(opts), since, cutoff, opts.maxEvents);
+    if (events.length === 0) {
+      return { events_processed: 0, tasks_touched: [], tasks_created: [], high_water_advanced_to: since, warnings: [] };
     }
-    tasksTouched.push(bucket.task_slug);
 
-    // Index — register the file in `files` table if not yet, then upsert journal_meta
-    const fileId = ensureFileRecord(filePath, fm.task, opts.projectId);
-    upsertJournalMeta({
-      file_id: fileId,
-      project_id: opts.projectId,
-      task_slug: bucket.task_slug,
-      status_latest: pickStatusFromTags(fm.tags),
-      started_at: fm.started_at,
-      last_active_at: fm.last_active_at,
-      touched_files: fm.touched_files,
-      raw_sources: fm.distilled_from,
-      git_refs: gitRefsFor(fm),
+    // 2. GROUP
+    const openTasks = loadOpenTasks(opts);
+    const buckets = groupEventsIntoTasks(events, openTasks, opts.ticketRegex);
+
+    // 3. RENDER + 4. INDEX
+    const tasksTouched: string[] = [];
+    const tasksCreated: string[] = [];
+
+    for (const bucket of buckets) {
+      const lastEvent = bucket.events[bucket.events.length - 1];
+      const dir = distilledDir(opts, lastEvent.ts);
+      mkdirSync(dir, { recursive: true });
+      const filename = `task-${bucket.task_slug}.md`;
+      const filePath = join(dir, filename);
+
+      const fm: JournalFrontmatter = buildFrontmatter(bucket, opts.projectSlug);
+      const entry = renderMechanicalEntry({
+        task_slug: bucket.task_slug,
+        events: bucket.events,
+        now: lastEvent.ts,
+        extraPatterns: opts.extraPatterns,
+      });
+
+      if (existsSync(filePath)) {
+        // Append the new entry above the prior body (entries are reverse-chronological by convention)
+        const existing = readFileSync(filePath, "utf8");
+        writeFileSync(filePath, replaceOrAppendEntry(existing, fm, entry));
+      } else {
+        writeFileSync(filePath, serializeFrontmatter(fm) + "\n\n" + entry);
+        tasksCreated.push(bucket.task_slug);
+      }
+      tasksTouched.push(bucket.task_slug);
+
+      // Index — register the file in `files` table if not yet, then upsert journal_meta
+      const fileId = ensureFileRecord(filePath, fm.task, opts.projectId);
+      upsertJournalMeta({
+        file_id: fileId,
+        project_id: opts.projectId,
+        task_slug: bucket.task_slug,
+        status_latest: pickStatusFromTags(fm.tags),
+        started_at: fm.started_at,
+        last_active_at: fm.last_active_at,
+        touched_files: fm.touched_files,
+        raw_sources: fm.distilled_from,
+        git_refs: gitRefsFor(fm),
+      });
+    }
+
+    // 5. ADVANCE high-water
+    const newHw = events[events.length - 1].ts;
+    writeHighWater(join(opts.dataDir, ...REL_BASE), opts.projectSlug, {
+      last_event_ts: newHw,
+      last_distilled_at: opts.now.toISOString(),
+      events_processed: (hw?.events_processed ?? 0) + events.length,
     });
+
+    return {
+      events_processed: events.length,
+      tasks_touched: tasksTouched,
+      tasks_created: tasksCreated,
+      high_water_advanced_to: newHw,
+      warnings: [],
+    };
+  } finally {
+    releaseCooldown(cooldownBase, opts.projectSlug);
   }
-
-  // 5. ADVANCE high-water
-  const newHw = events[events.length - 1].ts;
-  writeHighWater(join(opts.dataDir, ...REL_BASE), opts.projectSlug, {
-    last_event_ts: newHw,
-    last_distilled_at: opts.now.toISOString(),
-    events_processed: (hw?.events_processed ?? 0) + events.length,
-  });
-
-  return {
-    events_processed: events.length,
-    tasks_touched: tasksTouched,
-    tasks_created: tasksCreated,
-    high_water_advanced_to: newHw,
-    warnings: [],
-  };
 }
 
 function readRawEvents(dir: string, sinceTs: string, untilTs: string, max: number): RawEvent[] {

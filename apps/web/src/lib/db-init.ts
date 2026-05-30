@@ -1,10 +1,12 @@
-import { createDatabase } from "kxta-core";
+import { createDatabase, migrateEnvVars, migrateDataFiles } from "kxta-core";
 import path from "node:path";
 import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, "../../../..");
+
+migrateEnvVars();
 
 const DATA_DIR = process.env.KONTEXTA_DATA_DIR || path.join(REPO_ROOT, "data");
 const DB_PATH = process.env.KONTEXTA_DB_PATH || path.join(DATA_DIR, "kontexta.db");
@@ -47,7 +49,8 @@ export function ensureDbInitialized() {
     }
   }
 
-  // Always check if DB exists on globalThis, don't rely on local flag
+  migrateDataFiles(DATA_DIR);
+
   if (!globalThis.__kontextaDb) {
     const dbPath = process.env.KONTEXTA_DB_PATH || DB_PATH;
     createDatabase(dbPath);

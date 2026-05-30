@@ -44,6 +44,36 @@ export async function PUT(
   if (typeof body?.content !== "string") {
     return NextResponse.json({ error: "content must be a string" }, { status: 400 });
   }
+  // Optional optimistic-concurrency precondition. The client passes the
+  // updated_at it last observed; if a watcher event or another tab landed
+  // a newer write in the meantime, we 409 with the current row so the
+  // client can prompt the user to merge or overwrite. Older clients that
+  // don't send the field opt out (last-write-wins, prior behavior).
+  if (body.expected_updated_at !== undefined) {
+    if (typeof body.expected_updated_at !== "string") {
+      return NextResponse.json({ error: "expected_updated_at must be a string" }, { status: 400 });
+    }
+    const db = getDatabase();
+    const cur = db
+      .prepare("SELECT updated_at FROM files WHERE id = ?")
+      .get(n) as { updated_at: string } | undefined;
+    if (!cur) {
+      return NextResponse.json({ error: "File not found" }, { status: 404 });
+    }
+    if (cur.updated_at !== body.expected_updated_at) {
+      const current = readFile(n);
+      const tags = getTagsForFiles([n]).get(n) ?? [];
+      return NextResponse.json(
+        {
+          error: "File was modified since you opened it",
+          current_updated_at: cur.updated_at,
+          expected_updated_at: body.expected_updated_at,
+          current: { ...current, tags },
+        },
+        { status: 409 }
+      );
+    }
+  }
   try {
     const updated = await updateFile(n, body.content, DATA_DIR);
     return NextResponse.json(updated);

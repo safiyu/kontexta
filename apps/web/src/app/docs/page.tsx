@@ -5,12 +5,14 @@ import { Suspense, useCallback } from "react";
 import { ToolsSection } from "./tools/tools-section";
 import { InstallSection } from "./install/install-section";
 import { BuilderSection } from "./builder/builder-section";
+import { JournalPanel } from "./journal/journal-panel";
 
-type Tab = "tools" | "install" | "builder";
+type Tab = "tools" | "install" | "builder" | "journal";
 const TABS: { id: Tab; label: string }[] = [
   { id: "tools", label: "MCP TOOLS DOC" },
   { id: "install", label: "MCP SERVER CONFIG" },
   { id: "builder", label: "HAND TOOLS CONFIG" },
+  { id: "journal", label: "JOURNAL CONFIG" },
 ];
 
 export default function DocsPage() {
@@ -25,7 +27,7 @@ function DocsPageInner() {
   const params = useSearchParams();
   const router = useRouter();
   const raw = params.get("tab");
-  const tab: Tab = raw === "install" || raw === "builder" ? raw : "tools";
+  const tab: Tab = raw === "install" || raw === "builder" || raw === "journal" ? raw : "tools";
   const setTab = useCallback(
     (t: Tab) => {
       const sp = new URLSearchParams(params.toString());
@@ -68,6 +70,7 @@ function DocsPageInner() {
         {tab === "tools" && <ToolsSection />}
         {tab === "install" && <InstallSection />}
         {tab === "builder" && <BuilderSection />}
+        {tab === "journal" && <JournalPanel />}
       </div>
     </div>
   );

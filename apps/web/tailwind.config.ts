@@ -9,23 +9,23 @@ const config: Config = {
         mono: ["var(--font-mono)", "ui-monospace", "SFMono-Regular", "monospace"],
       },
       colors: {
-        // Kept under the `amber` namespace for backwards-compat with the
-        // many `text-amber-accent` / `bg-amber-accent` / `border-amber-accent`
-        // call-sites; the actual color is now a vivid orange so the UI
-        // reads bright instead of dull.
+        // Names predate the 2026-05-12 rebrand and are kept for call-site
+        // stability. The `amber.*` namespace now holds a muted infrastructure
+        // gold (~#B4781E), and `surface.dark-tertiary` now points to navy.
+        // See docs/superpowers/specs/2026-05-12-webui-rebrand-design.md.
         amber: {
-          accent: "#F97316",
-          "accent-dark": "#C2410C",
-          "accent-light": "#FFE2C8",
-          "accent-muted": "#3D1F0B",
+          accent: "#B4781E",
+          "accent-dark": "#8E5E14",
+          "accent-light": "#E5C079",
+          "accent-muted": "#2A1F0F",
         },
         surface: {
-          dark: "#1A1A1A",
-          "dark-secondary": "#141414",
-          "dark-tertiary": "#252525",
-          light: "#FFFFFF",
-          "light-secondary": "#FAFAFA",
-          "light-tertiary": "#F5F5F5",
+          dark: "#0A0F1A",
+          "dark-secondary": "#121A2B",
+          "dark-tertiary": "#0F274F",
+          light: "#F4F3EF",
+          "light-secondary": "#ECE9E2",
+          "light-tertiary": "#E0DDD3",
         },
       },
     },

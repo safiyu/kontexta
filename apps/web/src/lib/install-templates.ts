@@ -27,7 +27,7 @@ function genericJson(vars: TemplateVars, install: Install): Snippet {
         ? ["-y", "kontexta-mcp"]
         : [vars.sourceEntrypoint];
   const body = JSON.stringify(
-    { mcpServers: { kontexta: { command, args, env: { KONTEXTA_DATA_DIR: vars.dataDir } } } },
+    { mcpServers: { kxta: { command, args, env: { KONTEXTA_DATA_DIR: vars.dataDir } } } },
     null,
     2,
   );
@@ -43,7 +43,7 @@ function claudeCodeShell(vars: TemplateVars, install: Install): Snippet {
         : `-- node ${vars.sourceEntrypoint}`;
   return {
     kind: "shell",
-    body: `claude mcp add kontexta -s user \\\n  -e KONTEXTA_DATA_DIR=${vars.dataDir} \\\n  ${tail}`,
+    body: `claude mcp add kxta -s user \\\n  -e KONTEXTA_DATA_DIR=${vars.dataDir} \\\n  ${tail}`,
     notes: [],
   };
 }

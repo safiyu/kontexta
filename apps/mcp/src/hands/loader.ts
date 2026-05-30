@@ -1,6 +1,7 @@
 import { readFileSync, existsSync } from "node:fs";
 import { join, isAbsolute, normalize, sep } from "node:path";
 import { compilePattern, isLiteralArgv0 } from "./sanitizer.js";
+import { migrateProjectConfig } from "kxta-core";
 import type { HandToolDef, LoadResult } from "./types.js";
 
 const TOOL_NAME_RE = /^[a-z][a-z0-9-]*$/;
@@ -16,6 +17,7 @@ const OUTPUT_MAX = 1_000_000;
 const OUTPUT_DEFAULT = 100_000;
 
 export function loadProjectConfig(projectRoot: string): LoadResult {
+  migrateProjectConfig(projectRoot);
   const file = join(projectRoot, "kontexta.json");
   if (!existsSync(file)) {
     return { found: false, tools: {}, disabled: [], warnings: [], errors: [] };
