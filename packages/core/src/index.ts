@@ -12,3 +12,4 @@ export {
   findRelated, getTagsForFiles, type RelatedFileRecord,
 } from "./metadata/index.js";
 export { bundleSearch, type BundleFormat, type BundleOptions, type BundleResult, type BundleIncludedItem, type BundleSkippedItem } from "./bundle/index.js";
+export { clipUrl, ClipError, type ClipErrorCode, type ClipUrlOptions } from "./clip/index.js";
