@@ -6,3 +6,8 @@ import { createFile, readFile, updateFile, deleteFile, listFiles, moveFile, crea
 export { createFile, readFile, updateFile, deleteFile, listFiles, moveFile, createFolder, deleteFolder, listProjectFolders, slugify };
 export { parseOutline, findSection, replaceSection, type OutlineNode } from "./files/sections.js";
 export { commitFile, getHistory, getDiff, restoreVersion, syncBackup, syncGlobalVault, getGlobalRemote, setGlobalRemote, isValidGitRemoteUrl, type SyncStage } from "./git/index.js";
+export {
+  addTags, removeTags, setFavorite, search, FtsQueryError,
+  registerProject, unregisterProject, discoverFiles, refreshIndex, listTags, listProjects,
+  findRelated, getTagsForFiles, type RelatedFileRecord,
+} from "./metadata/index.js";
