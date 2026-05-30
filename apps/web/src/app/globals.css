@@ -1,0 +1,275 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Warm cream palette: paired with the amber text below, the whole UI
+     reads as a "warm IDE" instead of washed-out slate. The amber-on-cream
+     pairing is intentional and high-enough contrast for body copy
+     (~5.5:1 for primary, ~7:1 for secondary). */
+  --bg-primary: #FFF8EE;
+  --bg-secondary: #F5E9D5;
+  --bg-tertiary: #EAD9BC;
+  --text-primary: #8B5A1F;
+  --text-secondary: #6B4318;
+  --border: #EAD9BC;
+
+  --accent: #C2410C;
+  --accent-soft: rgba(194, 65, 12, 0.16);
+  --success: #10D070;
+  --warning: #FFB020;
+  --danger: #FF3355;
+
+  /* --font-sans / --font-mono / --font-title come from next/font in layout.tsx */
+}
+
+.dark {
+  --bg-primary: #0F172A;
+  --bg-secondary: #020617;
+  --bg-tertiary: #1E293B;
+  /* Match light mode: brand the text in the logo's amber tones. The
+     primary is the logo amber; secondary is a lighter amber so it stays
+     legible against the dark slate background. */
+  --text-primary: #D4903A;
+  --text-secondary: #B8803A;
+  --border: #334155;
+
+  --accent: #C2410C;
+  --accent-soft: rgba(194, 65, 12, 0.18);
+  --success: #10D070;
+  --warning: #FFB020;
+  --danger: #FF3355;
+}
+
+/* Light theme specific adjustments for icons/emojis */
+html:not(.dark) .dark-icon {
+  filter: brightness(0.7) saturate(1.2) contrast(1.1);
+}
+
+
+
+body {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 15px;
+  line-height: 1.5;
+  font-weight: 400;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+@media (min-width: 1440px) {
+  body { font-size: 16px; }
+}
+
+@media (min-width: 1920px) {
+  body { font-size: 17px; }
+}
+
+@media (max-width: 768px) {
+  body { font-size: 14px; }
+}
+
+/* Thin scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-secondary);
+}
+
+::-webkit-scrollbar-thumb {
+  background: #666666;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #888888;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #666666 var(--bg-secondary);
+}
+
+@keyframes logo-float-sm {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+@keyframes logo-float-lg {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-12px); }
+}
+
+@keyframes logo-orbit {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes skeleton-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.skeleton {
+  background-color: rgba(212, 144, 58, 0.1);
+  background-image: linear-gradient(
+    90deg,
+    rgba(212, 144, 58, 0) 0%,
+    rgba(212, 144, 58, 0.1) 40%,
+    rgba(212, 144, 58, 0.45) 50%,
+    rgba(212, 144, 58, 0.1) 60%,
+    rgba(212, 144, 58, 0) 100%
+  );
+  background-size: 200% 100%;
+  background-repeat: no-repeat;
+  animation: skeleton-shimmer 1.4s linear infinite;
+  border-radius: 4px;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.2s ease-out;
+}
+
+.btn-press {
+  transition: transform 0.1s ease, box-shadow 0.15s ease;
+}
+
+.btn-press:hover {
+  transform: scale(1.03);
+}
+
+.btn-press:active {
+  transform: scale(0.97);
+}
+
+/* ===== Button system =====
+ * Spec: docs/superpowers/specs/2026-04-30-button-system-design.md
+ *
+ * Usage:
+ *   <button className="btn btn-sm">+ New</button>
+ *   <button className="btn btn-md">Cancel</button>
+ *   <button className="btn btn-md btn-destructive">Delete File</button>
+ *   <button className="btn btn-icon-md" aria-label="Toggle theme">☀</button>
+ *
+ * Active = hover OR press OR focus. All three trigger the same color shift
+ * so touch devices (no hover) get identical feedback on tap.
+ * Light theme is the unqualified default; .dark overrides for dark mode,
+ * mirroring how globals.css already keys theming.
+ */
+
+/* Themed <select> — strip browser chrome, replace with coral chevron, theme options. */
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='%23F97316'%3E%3Cpath d='M2 4 L6 8 L10 4 Z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.4rem center;
+  background-size: 0.65rem;
+  padding-inline-end: 1.4rem !important;
+}
+select::-ms-expand { display: none; }
+
+option {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: #5C3D24;
+  font-family: system-ui, -apple-system, sans-serif;
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+
+.dark .btn {
+  color: #F5C97A;
+}
+
+.btn:hover,
+.btn:active,
+.btn:focus {
+  color: #FFFFFF;
+  background: var(--accent);
+}
+
+.dark .btn:hover,
+.dark .btn:active,
+.dark .btn:focus {
+  color: #FFFFFF;
+  background: var(--accent);
+}
+
+.btn:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.btn:disabled,
+.btn[aria-disabled="true"] {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.btn:disabled:hover,
+.btn:disabled:active,
+.btn:disabled:focus {
+  color: #c27d4a;
+  background: transparent;
+}
+
+/* Sizes */
+.btn-sm      { padding: 4px 10px; font-size: 11px; border-radius: 4px; }
+.btn-md      { padding: 7px 14px; font-size: 13px; border-radius: 6px; }
+.btn-icon-sm { width: 28px; height: 28px; padding: 0; font-size: 14px; border-radius: 4px; }
+.btn-icon-md { width: 32px; height: 32px; padding: 0; font-size: 16px; border-radius: 6px; }
+
+/* Destructive role */
+.btn-destructive { color: #c47373; }
+
+.btn-destructive:hover,
+.btn-destructive:active,
+.btn-destructive:focus {
+  color: #b91c1c;
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.dark .btn-destructive:hover,
+.dark .btn-destructive:active,
+.dark .btn-destructive:focus {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.10);
+}
+
+.btn-destructive:disabled:hover,
+.btn-destructive:disabled:active,
+.btn-destructive:disabled:focus {
+  color: #c47373;
+  background: transparent;
+}
+
+.dropdown-menu {
+  @apply absolute mt-1 min-w-[160px] bg-[var(--bg-primary)] border border-[var(--border)] rounded-md shadow-xl z-50 py-1.5 overflow-hidden;
+}
+
+.dropdown-item {
+  @apply flex items-center w-full px-3 py-2 text-xs font-medium text-[var(--text-secondary)] hover:!text-white hover:!bg-[var(--accent)] focus:!text-white focus:!bg-[var(--accent)] transition-colors text-left gap-2;
+}
