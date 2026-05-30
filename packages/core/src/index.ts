@@ -18,3 +18,7 @@ export {
   whatsNew, resolveSince,
   type WhatsNewOptions, type WhatsNewResult, type WhatsNewEntry, type ChangeKind,
 } from "./whats-new/index.js";
+export {
+  projectMap,
+  type ProjectMapOptions, type ProjectMapResult, type ProjectMapStats,
+} from "./project-map/index.js";
