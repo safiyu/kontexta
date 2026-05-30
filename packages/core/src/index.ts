@@ -43,3 +43,6 @@ export {
   projectMap,
   type ProjectMapOptions, type ProjectMapResult, type ProjectMapStats,
 } from "./project-map/index.js";
+export { migrateEnvVars } from "./compat/env-shim.js";
+export { migrateDataFiles, migrateProjectConfig } from "./compat/file-migration.js";
+export * from "./journal/index.js";

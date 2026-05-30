@@ -15,17 +15,21 @@ The placeholder {{VERSION}} is substituted at module init with RULE_BLOCK_VERSIO
 <!-- BEGIN kontexta:rules v{{VERSION}} -->
 ## Working with kontexta
 
-This project is registered with kontexta. Honor these rules to keep the index, history, and journal coherent — and to avoid burning tokens on workflows kontexta already solves. Tools live under the `kontexta` MCP server.
+This project is registered with kontexta. Honor these rules to keep the index, history, and journal coherent — and to avoid burning tokens on workflows kontexta already solves. Tools live under the `kxta` MCP server.
 
 ### Core rules
 
 **Search before reading.** Use `search`, `bundle_search`, or `regex_search` to find context first. Skipping straight to `read_file` on a guessed path wastes tokens and often misses the right file.
 
-**All KB writes go through kontexta.** Use `create_file` / `update_file` / `update_file_section` / `journal_append`. **Never** edit a KB file with raw filesystem tools (Edit/Write/cat) — the watcher and FTS index will diverge until `refresh_index` runs, and subsequent searches will return stale results.
+**All KB writes go through kontexta.** Use `create_file` / `update_file` / `update_file_section` / `journal_note`. **Never** edit a KB file with raw filesystem tools (Edit/Write/cat) — the watcher and FTS index will diverge until `refresh_index` runs, and subsequent searches will return stale results.
 
 **Batch reads. Don't loop `read_file`.** Need ≥2 files? Call `read_files` (one round-trip, up to 200 IDs) or `bundle_search` (token-budgeted blob). Looping `read_file` wastes round-trips and inflates response overhead.
 
-**Journal every Hands tool run.** After ANY Hands invocation — success or failure — call `journal_append` with the tool name, exit status, and a one-line outcome. Skipping this leaves the user blind to what just happened in their project.
+**Address `journal.suggested_action` before the next tool call.** Many tool responses include a `journal` envelope. If `journal.suggested_action` is set (e.g., `"distill_journal"`), call that tool before issuing your next tool. To dismiss for the rest of the session, pass `journal_acknowledge: true` on your next tool call.
+
+**Use `journal_note(text, tags)` for decisions and abandonments.** When you make a non-obvious call, try something that doesn't work, or capture a workaround, log it. Hands runs are auto-captured now.
+
+**Use `journal_intent(summary)` when the user pivots.** One short sentence so the distillation step knows the topic shifted.
 
 **Confirm Hands tokens within 60 seconds.** When a Hands tool returns an approval token, do NOT chain a long question or another tool call before `confirm_hand`. Tokens expire; the user will have to re-issue the whole flow.
 
@@ -85,7 +89,9 @@ The matrix below is grouped by intent. For each tool: when to reach for it, the 
 | `list_tags` | Enumerate all tags in the vault | Want files for a given tag | `find_related` |
 | `set_favorite` | Pin / unpin a file | Semantic categorization | `add_tags` |
 | `tag_search_results` | Bulk-tag every hit from a search | Tagging a single file | `add_tags` |
-| `journal_append` | Log a Hands run or activity entry | Editing regular content | `update_file` |
+| `journal_note` | Log a decision, workaround, or abandonment | Editing regular content | `update_file` |
+| `journal_intent` | Record a user-initiated topic pivot | Auto-captured tool calls | `journal_note` |
+| `distill_journal` | Summarize accumulated journal events | Individual events | `journal_note` |
 | `clip_url` | Capture a web URL into the KB | Saving a local file | `create_file` |
 | `list_folders` | Enumerate folders in the project | Finding files | `list_files` |
 | `create_folder` | Create a new (possibly nested) folder | Files don't need explicit folders | |

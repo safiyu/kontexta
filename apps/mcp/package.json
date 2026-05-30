@@ -1,6 +1,6 @@
 {
   "name": "kontexta-mcp",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "The local Brain and Hands for AI coding agents (MCP Server)",
   "keywords": [
     "mcp",
@@ -47,7 +47,8 @@
     "LICENSE"
   ],
   "bin": {
-    "kontexta-mcp": "dist/index.js"
+    "kontexta-mcp": "dist/index.js",
+    "kxta": "dist/index.js"
   },
   "scripts": {
     "build": "tsc",
@@ -73,5 +74,5 @@
     "tsup": "^8.3.0",
     "typescript": "^5.7.0"
   },
-  "rulesVersion": "1.0.0"
+  "rulesVersion": "2.0.0"
 }

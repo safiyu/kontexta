@@ -22,6 +22,23 @@ function loadCorePackageVersion(): string {
 
 export const RULE_BLOCK_VERSION = loadCorePackageVersion();
 
+export const SESSION_START_HOOK_SNIPPET = JSON.stringify({
+  hooks: {
+    SessionStart: [
+      {
+        matcher: "*",
+        hooks: [
+          {
+            type: "command",
+            command:
+              "echo 'kontexta: distill_journal recommended at session start' && true",
+          },
+        ],
+      },
+    ],
+  },
+}, null, 2);
+
 export type AgentId = "claude-code" | "codex" | "gemini" | "antigravity" | "cursor" | "continue" | "generic";
 
 interface ProjectMeta {
@@ -233,6 +250,8 @@ export interface SyncSkippedEntry {
 export interface SyncResult {
   written: SyncResultEntry[];
   skipped: SyncSkippedEntry[];
+  optional_hook_snippet?: string;
+  optional_hook_install_path?: string;
 }
 
 function atomicWrite(absPath: string, content: string): void {
@@ -280,7 +299,12 @@ export function syncAgentRules(opts: SyncOpts): SyncResult {
     const initial = scaffold.header(project) + RULES_BLOCK_BODY;
     atomicWrite(absPath, initial);
     written.push({ path: relPath, action: "created", version: RULE_BLOCK_VERSION });
-    return { written, skipped };
+    return {
+      written,
+      skipped,
+      optional_hook_snippet: SESSION_START_HOOK_SNIPPET,
+      optional_hook_install_path: "~/.claude/settings.json (Claude Code only)"
+    };
   }
 
   for (const rel of files) {
@@ -343,7 +367,12 @@ export function syncAgentRules(opts: SyncOpts): SyncResult {
     written.push({ path: rel, action: "updated", version: RULE_BLOCK_VERSION });
   }
 
-  return { written, skipped };
+  return {
+    written,
+    skipped,
+    optional_hook_snippet: SESSION_START_HOOK_SNIPPET,
+    optional_hook_install_path: "~/.claude/settings.json (Claude Code only)"
+  };
 }
 
 export interface RuleStatus {

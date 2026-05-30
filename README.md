@@ -2,7 +2,7 @@
   <img src="docs/intro.png" alt="Kontexta Architecture and Features"><br>
   Kontexta
 </h1>
-<p align="center"><i>(pronounced <b>NEK-sis</b> — silent <code>m</code>, like <em>mnemonic</em>)</i></p>
+<p align="center"><i>(pronounced <b>kon-TEX-tah</b>)</i></p>
 <p align="center"><b>One memory. One toolbox. One feedback loop. Any agent.</b></p>
 
 <p align="center">
@@ -75,7 +75,7 @@ A project-defined command surface that replaces "unrestricted shell access" with
 ### 3. Eyes — The Feedback Engine
 Closes the loop by capturing Hands' output and journaling learnings back into the Brain.
 - **Live Observation**: Tools like `whats_new` and `diff_against_disk` let agents see what actually changed.
-- **Journaling**: `journal_append` creates a timestamped record of decisions and results.
+- **Automatic journaling**: Every MCP tool call is captured to a per-project, append-only event log (Layer 1). The `distill_journal` tool — or the lenient-mode auto-fallback — collapses raw events into per-topic markdown summaries (Layer 2) indexed alongside the rest of the knowledge base. `journal_note` and `journal_intent` let agents enrich the log with decisions and topic pivots. Phase 2 also adds `housekeep_journal` (retention/archival), `distill_journal_commit_upgrades` (closes the subagent dispatch loop), strict mode (configurable per project — blocks read tools when backlog exists), and an opt-in WebUI scheduler that runs mechanical distillation on a 15-minute clock when the dashboard is installed.
 
 ---
 
@@ -89,8 +89,8 @@ Imagine you are switching from **Claude Code** to **Cursor** mid-way through a f
 - **CONTEXT.md** files help, but they get stale, they clutter your PRs, and they don't capture live decisions.
 
 ### The Kontexta Solution
-1. **Journaling**: As Claude Code works, it calls `journal_append` to log its decisions and the "why" behind the code.
-2. **Persistence**: Those logs are saved in your local Kontexta brain, not the chat window.
+1. **Journaling**: As Claude Code works, kontexta automatically captures every tool invocation and decision to a structured event log.
+2. **Persistence**: Those logs are saved in your local Kontexta brain, not the chat window. The `distill_journal` tool consolidates raw events into per-topic markdown entries that are searchable alongside your knowledge base.
 3. **Seamless Handoff**: When you open Cursor, it immediately sees the recent journal entries and architectural state via the Kontexta MCP. 
 4. **Zero Re-explanation**: Cursor "wakes up" with the exact same context Claude had.
 
@@ -125,7 +125,7 @@ The fastest way to try Kontexta is via `npx`. Add this to your MCP client config
 ```json
 {
   "mcpServers": {
-    "kontexta": {
+    "kxta": {
       "command": "npx",
       "args": ["-y", "kontexta-mcp"],
       "env": {
@@ -177,11 +177,17 @@ Recently, I undertook a major effort to industrialize and modularize this engine
 
 ---
 
+## Roadmap
+
+What's deliberately deferred and what triggers will pull it forward lives in [`docs/ROADMAP.md`](docs/ROADMAP.md). Notable open items: per-call project resolution in journaling, server-side LLM upgrade for the WebUI scheduler, and Layer 3 (embeddings + graph + semantic clustering).
+
+---
+
 ## Features Breakdown
 
 ### Brain
 - Global vault with two-way git sync.
-- 47 MCP tools tuned for context economy.
+- 52 MCP tools tuned for context economy.
 - Batch operations (up to 500 files/call), grep, and regex support.
 - Web clipping with auth-wall detection.
 - Full git-backed versioning: `get_history`, `get_diff`, `restore_file`.
@@ -194,7 +200,7 @@ Recently, I undertook a major effort to industrialize and modularize this engine
 - CSPRNG-bound confirmation tokens for high-risk commands.
 
 ### Dashboard
-- Built-in `/docs` page with a searchable catalogue of all 47 core tools.
+- Built-in `/docs` page with a searchable catalogue of all 52 core tools.
 - Form-based `kontexta.json` editor with live validation.
 - Real-time status bar streaming git activity over WebSockets.
 

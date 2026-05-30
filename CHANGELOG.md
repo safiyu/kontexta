@@ -1,5 +1,79 @@
 # Changelog
 
+## 2.0.0 — Journaling: persistent Brain layer with auto-capture + mechanical distillation
+
+A new always-on journaling subsystem turns kontexta into a persistent Brain across sessions. Every MCP tool call is automatically captured to a per-project event log; events get distilled into per-topic markdown summaries indexed alongside the rest of the knowledge base. Closed the loop on cross-session, cross-agent memory.
+
+### Added — Layer 1: automatic capture (zero agent involvement)
+
+- **Per-project append-only JSONL event log** at `data/knowledge/journal/<project>/raw/YYYY-MM-DD.jsonl`. Every MCP tool call writes one event with `ts`, `agent`, `sid`, `tool`, redacted `args`, `touched` files, `status`, `ms`. Per-event `fsync` for crash safety; survives kill -9 / power loss.
+- **MCP server-side wrapping** via a 24-line `server.tool` monkey-patch in `apps/mcp/src/index.ts` — every existing and future tool registration is auto-wrapped at boot. Zero per-handler edits, zero risk of agents skipping logging.
+- **Redaction** of sensitive args (`password|token|secret|auth|cookie|bearer|api[_-]?key`) plus configurable `extra_keys` and `max_arg_size_bytes`. Truncates oversized strings; recurses into nested objects.
+- **Git context awareness**: poller emits `git_context` events on branch changes and `git_commit` events when HEAD advances. Surfaces ticket IDs (configurable regex, default `[A-Z]+-\d+`), branch names, commit shas in the journal index for cross-references.
+- **Voluntary semantic events**: new `journal_note(text, tags?)` and `journal_intent(summary)` MCP tools let agents enrich the log with decisions, abandonments, and topic pivots in real time.
+
+### Added — Layer 2: mechanical distillation
+
+- **`distill_journal` MCP tool** runs the read → group → render → index → advance pipeline. Idempotent; safe to call repeatedly; respects a per-project cooldown lock.
+- **Topic detection** groups events into per-task buckets by branch/ticket-id continuity, touched-files overlap, or freshly-minted slugs from branch basenames. Stable slugs across runs; existing tasks reactivate automatically when matching events appear.
+- **10 built-in pattern detectors**: `error-recovery-cycle`, `exploration`, `test-cycle`, `pivot`, `build-failure-recovery`, `refactor`, `incident-response`, `feature-development`, `tagging-pass`, `read-only-investigation`. Each is a small state machine over the event stream that produces a labeled summary.
+- **`extra_patterns` declarative config** in `kontexta.json` lets users add custom patterns without code (`tag_any`, `tag_all`, `tool_any`, `min_events`, `max_events`).
+- **Mechanical markdown renderer** writes per-task files at `data/knowledge/journal/<project>/YYYY/MM/DD/task-<slug>.md` with full frontmatter (touched files, git refs, ticket IDs, status, started/last_active timestamps, raw-source provenance). Files are indexed automatically via the existing FTS5 watcher.
+
+### Added — SQL index
+
+- **Migration `004-journaling.sql`** introduces:
+  - `journal_meta` (file_id, project_id, task_slug, status_latest, started_at, last_active_at, touched_files, raw_sources)
+  - `journal_touches` (file_id, touched_path) — indexable many-to-many for "every entry that touched X.ts"
+  - `journal_git_refs` (file_id, ref_type ∈ {branch,commit,ticket}, ref_value) — indexable lookup for "every entry related to INC-1234" or "near commit a8b291c"
+  - `journal_high_water` (project_slug, last_event_ts, last_distilled_at, events_processed)
+
+### Added — Enforcement modes (configurable per project)
+
+- **`lenient`** (default) — never blocks; injects a `journal` envelope on every tool response when backlog ≥ 1 (visible nag with `suggested_action: "distill_journal"`); auto-fires mechanical distillation in the background when backlog crosses 500 events or 7 days.
+- **`strict`** — blocks read tools (`search`, `read_*`, `list_*`, `describe_*`) with a `JOURNAL_BACKLOG` error when undistilled events exist. Write tools and `journal_*` tools are not affected. Override on a single call with `journal_bypass: true` (logged for audit).
+- **`mechanical-only`** — disables LLM-upgrade tier guidance; mechanical distillation runs every N tool calls in-process.
+
+### Added — Housekeeping
+
+- **`housekeep_journal` MCP tool** prunes raw `.jsonl` files past `retention.raw_days` and archives cold tasks (last_active_at > `retention.archive_cold_after_days`) to `_archive/` with the DB row updated. Idempotent.
+- Configurable retention defaults: `raw_days: 90`, `mechanical_only_days: 365`, `narrative_days: 0` (forever), `archive_cold_after_days: 365`.
+
+### Added — WebUI
+
+- **`Settings → Journal` panel** at `/docs?tab=journal`. Form controls for mode, retention, ticket pattern, scheduler enable + intervals. Mirrors the existing Hands editor pattern: read full `kontexta.json` → modify only the `journal.*` slice → write back. **Hands editor untouched.**
+- **Live status block** auto-refreshes every 30s (and on WebSocket `journal_status_update` events). Shows current high-water, events processed, open tasks count + first 20 task summaries.
+- **API routes**: `GET/PUT /api/projects/[id]/journal-config` and `GET /api/projects/[id]/journal-status`.
+- **`JournalScheduler`** runs inside the Next.js instrumentation hook (when the dashboard is installed) — mechanical distillation every 15 minutes, housekeeping every 24 hours. Defers per project when MCP is active (presence signal: `.jsonl` mtime within 30s).
+- **WebSocket broadcast** of `journal_status_update` events when scheduled distillation produces work.
+
+### Added — Cross-cutting
+
+- **`distill_journal_commit_upgrades` MCP tool** closes the subagent-dispatch loop: after agents dispatch subagents to upgrade mechanical entries to LLM narrative, this updates `journal_meta.status_latest` to mark them as upgraded.
+- **Cooldown lock** (`.distill.lock` file per project) prevents MCP-side and WebUI-side distillation from racing.
+- **`onboard_agent` hook snippets**: response now surfaces optional `SessionStart`, `Stop`, and `PostToolUse` hook snippets users can paste into `~/.claude/settings.json`. The snippets are informational placeholders; once a one-shot CLI for `distill_journal` exists they can become live commands.
+
+### Removed
+
+- **`journal_append` MCP tool removed.** Superseded by `journal_note` (semantic notes), `journal_intent` (topic pivots), and Layer 1 auto-capture (everything else). The "Journal every Hands tool run" rule in `agent-rules/rules-block.md` is also gone — Hands runs are now captured automatically by L1.
+
+### Changed
+
+- **`rulesVersion` in `packages/core` bumped to `1.3.0`** to force re-injection of the updated rules block on the next `onboard_agent` call. New rules cover `journal.suggested_action` envelope handling, `journal_note` / `journal_intent` usage, and strict-mode `journal_bypass: true` override behavior.
+- **MCP tool count: 50 → 52.** README and the in-app `/docs` catalogue updated; `mcp-tools.json` and `mcp-tool-categories.ts` carry full schemas for the new tools.
+
+### Tests
+
+- **+86 new tests** across all three packages covering pattern detectors, distillation pipeline, topic detection, redaction, repository, cooldown lock, presence signal, housekeep, strict-mode, extra-pattern loader, high-water, JSONL writer, migration, capture wrapper, journal-tools smoke, backlog detection, strict-mode integration, scheduler, byte-identity regression.
+- **Total suite**: 291 tests passing (233 core / 47 MCP / 11 web), zero regressions.
+- **Hands non-regression baseline + byte-identity test** prove that the new Journal panel writes only `journal.*` and never perturbs the `tools.*` slice of `kontexta.json`.
+
+### Notable architectural decisions
+
+- **No "session" concept anywhere in the durable model.** Tasks are *topics*, not sittings. Time gaps within a task are invisible; pauses, breaks, and context switches all just produce the next event in the same task file.
+- **L3 (embeddings, graph, semantic clustering) intentionally deferred.** No vector DB until evidence shows FTS5+tags is the bottleneck.
+- **Server-side LLM upgrade deferred too.** Mechanical mode is "good enough" (~60% quality); the agent-driven LLM-upgrade path via `distill_journal`'s subagent briefs covers cases where narrative quality matters. Adding server-side LLM later is purely additive — no schema changes required.
+
 ## 1.0.0 — Initial kontexta release (Brain + Hands + Eyes)
 
 The first kontexta release after the rename from mnexis. Versioning was reset to `1.0.0` at the rename; this entry summarizes the cumulative behavior shipped under the previous identity (~30 incremental releases) so readers don't need to dig through the pre-rename history.

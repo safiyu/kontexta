@@ -163,7 +163,10 @@ The MCP server exposes 47 tools designed for agents that care about context-wind
 | `update_file_section` | **Surgical**: replace one heading's body without touching siblings. Same git/FTS path as `update_file`. | "Replace the 'Setup' section of the auth note with this." |
 | `delete_file`, `delete_files` | Single or batch (≤500) delete. KB files are unlinked from disk; project-reference files are only un-indexed. | "Delete files 12, 15, and 18." |
 | `move_file` | Rename / relocate. Validation refuses cross-project / cross-section moves. | "Rename file 7 to `archive/auth-2024.md`." |
-| `journal_append` | Append a timestamped `## HH:MM:SS` entry to today's `knowledge/journal/YYYY-MM-DD.md`; creates on first call. | "Add this thought to today's journal: …" |
+| `journal_note` | Record a free-form decision/abandonment/observation note. Stored as a tagged journal event; surfaces in distilled task entries. | "Note: Abandoned the Redis cache approach due to serialization overhead." |
+| `journal_intent` | Record a topic pivot in the project's journal so distillation knows the focus shifted. | "User redirected to authentication flow work." |
+| `distill_journal` | Run mechanical distillation on accumulated raw events. Writes per-topic markdown entries; idempotent. Defaults to current project. | "Distill the journal for this project." |
+| `journal_status` | Report the current backlog and high-water mark for the project's journal. | "Show me the journal status." |
 
 ### Search
 
@@ -241,7 +244,10 @@ Every file-returning tool annotates its response with `size_bytes` and `est_toke
 | `suggest_tags` | `{ file_id, path, existing_tags: string[], suggestions: [{ tag, score, sources }] }` |
 | `diff_against_disk` | `{ status: "in_sync" \| "diverged" \| "disk_unreadable" \| "no_index_row", ...sizes, first_diff_line?, disk_sample?, index_sample? }` |
 | `refresh_index` | `{ scope, newly_indexed, refreshed, pruned }` |
-| `journal_append` | `{ file_id, path, date, time, appended_chars, est_tokens }` |
+| `journal_note` | `{ ok: true, recorded_at: ISO_timestamp }` |
+| `journal_intent` | `{ ok: true, recorded_at: ISO_timestamp }` |
+| `distill_journal` | `{ entries_written, topics_covered, high_water_advanced, events_processed }` |
+| `journal_status` | `{ slug, high_water, mode: "lenient" }` |
 | `clip_url` (auth-walled) | `isError: true` with `{ code: "AUTH_REQUIRED", auth_required: true, login_url, signal, www_authenticate?, hint }` — retry with `headers: {"Cookie": "..."}` or `{"Authorization": "Bearer ..."}` |
 | `list_hands` | `{ hands: [{ project, tool, full, danger, confirm, description, disabled }] }` |
 | `reload_hands` | `{ totalRegistered, totalDisabled, perProject: [{ project, registered, disabled, warnings }] }` |

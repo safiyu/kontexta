@@ -56,6 +56,8 @@ import { fileURLToPath } from "node:url";
 import { HandsRegistry } from "./hands/registry.js";
 import { buildSchemaDoc } from "./hands/schema-doc.js";
 import { formatExecResult } from "./hands/formatter.js";
+import { initCapture, shutdownCapture, wrapHandler, startGitPoller, setDataDir } from "./journal-capture.js";
+import { registerJournalTools } from "./journal-tools.js";
 
 const dataDir = process.env.KONTEXTA_DATA_DIR || join(process.cwd(), "data");
 const dbPath = process.env.KONTEXTA_DB_PATH || join(dataDir, "kontexta.db");
@@ -180,6 +182,32 @@ const server = new McpServer({
 });
 
 const handsRegistry = new HandsRegistry(server);
+
+// Initialize journal capture for auto-wrapping all tool calls
+const baseJournalDir = join(dataDir, "knowledge", "journal");
+const projectSlug = process.env.KONTEXTA_DEFAULT_PROJECT_SLUG ?? "default";
+const agent = process.env.KONTEXTA_AGENT ?? "unknown";
+const sid = `${process.pid}-${Date.now().toString(36)}`;
+initCapture({ projectSlug, baseDir: baseJournalDir, agent, sid });
+setDataDir(dataDir);
+startGitPoller(process.env.KONTEXTA_PROJECT_PATH ?? process.cwd(), 30);
+process.on("exit", shutdownCapture);
+process.on("SIGINT", () => { shutdownCapture(); process.exit(0); });
+process.on("SIGTERM", () => { shutdownCapture(); process.exit(0); });
+
+// Auto-wrap every tool registration that follows. journal_append (legacy) is excluded
+// because it will be removed in Task 15. Auto-wrap covers all current and future tools.
+const _origServerTool = server.tool.bind(server);
+(server as any).tool = function (name: string, ...rest: any[]): any {
+  if (name === "journal_append") {
+    return (_origServerTool as any)(name, ...rest);
+  }
+  const handler = rest[rest.length - 1];
+  if (typeof handler === "function") {
+    rest[rest.length - 1] = wrapHandler(name, handler);
+  }
+  return (_origServerTool as any)(name, ...rest);
+};
 
 server.tool(
   "create_file",
@@ -2021,81 +2049,6 @@ server.tool(
   }
 );
 
-server.tool(
-  "journal_append",
-  "Append a timestamped entry to today's (or `date`'s) journal markdown at `knowledge/journal/YYYY-MM-DD.md`. Creates the file on first use of a date with a `# Journal — DATE` header; subsequent calls APPEND a new `## HH:MM:SS` section without rewriting prior entries. Concurrent calls for the same date are serialised by an internal lock so entries are not lost. SIDE EFFECTS: writes the file (FTS reindex + git commit via the same path as `update_file`/`create_file`); on first use, creates with default tag `['journal']` (overridable). `date` must match `YYYY-MM-DD` or throws. No external auth or rate limits. Returns `{file_id, path, date, time, appended_chars, est_tokens}`.",
-  {
-    text: z.string().min(1).describe("Entry text (markdown allowed)"),
-    date: z.string().optional().describe("Override the journal date as YYYY-MM-DD (default: today, local time)"),
-    tags: z.array(z.string()).optional().describe("Tags to apply to the journal file (default: ['journal'])"),
-  },
-  async ({ text, date, tags }) => {
-    try {
-      const today = (() => {
-        const d = new Date();
-        const pad = (n: number) => String(n).padStart(2, "0");
-        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-      })();
-      const dateStr = date ?? today;
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-        throw new Error(`date must be YYYY-MM-DD, got: ${dateStr}`);
-      }
-
-      const journalPath = join(dataDir, "knowledge", "journal", `${dateStr}.md`);
-      const ts = new Date();
-      const pad = (n: number) => String(n).padStart(2, "0");
-      const timeStr = `${pad(ts.getHours())}:${pad(ts.getMinutes())}:${pad(ts.getSeconds())}`;
-      const entry = `\n\n## ${timeStr}\n\n${text.trimEnd()}\n`;
-
-      const result = await withLock(`journal:${journalPath}`, async () => {
-        const existing = getDatabase()
-          .prepare("SELECT id FROM files WHERE path = ?")
-          .get(journalPath) as { id: number } | undefined;
-        if (existing) {
-          // Apply tags first — addTags is idempotent, so a failed write + retry
-          // won't duplicate the journal entry. Tag failure leaves the file untouched.
-          if (tags && tags.length > 0) addTags(existing.id, tags);
-          const current = readFile(existing.id);
-          return await updateFile(existing.id, current.content + entry, dataDir);
-        }
-        const initial = `# Journal — ${dateStr}${entry}`;
-        return await createFile({
-          title: dateStr,
-          content: initial,
-          destination: "knowledge",
-          folder: "journal",
-          tags: tags ?? ["journal"],
-          dataDir,
-        });
-      });
-
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(
-              {
-                file_id: result.id,
-                path: result.path,
-                date: dateStr,
-                time: timeStr,
-                appended_chars: entry.length,
-                est_tokens: estimateTokensFromBuffer(Buffer.from(result.content, "utf8")),
-              },
-              null,
-              2
-            ),
-          },
-        ],
-      };
-    } catch (e: any) {
-      return {
-        isError: true,
-        content: [{ type: "text", text: JSON.stringify({ error: e?.message ?? String(e) }, null, 2) }],
-      };
-    }
-  }
-);
 
 server.tool(
   "whats_new",
@@ -2299,6 +2252,7 @@ async function main() {
       `Kontexta Hands: loaded ${r.perProject.length} projects, registered ${r.totalRegistered} tools (${r.totalDisabled} disabled)`
     );
   }
+  registerJournalTools(server);
   await server.connect(transport);
   console.error("Kontexta MCP server running on stdio");
 }
