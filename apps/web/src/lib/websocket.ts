@@ -1,7 +1,7 @@
 import { WebSocketServer, WebSocket } from "ws";
 import { createFileWatcher, type WatcherEvent } from "kxta-core";
 import type { SyncEvent } from "./sync-events";
-import { checkAuth } from "@/lib/auth";
+import { checkAuth, verifySession } from "@/lib/auth";
 
 // globalThis-cached so Next.js module duplication doesn't split the
 // open-sockets Set across instances (broadcast would silently no-op).
@@ -21,7 +21,7 @@ function isLoopbackHost(host: string): boolean {
 
 export function startWebSocketServer(port: number, watchPaths: string[]) {
   if (wss) return wss;
-  const host = process.env.KONTEXTA_WS_HOST || "127.0.0.1";
+  const host = process.env.KONTEXTA_WS_HOST || (process.env.HOSTNAME === "0.0.0.0" ? "0.0.0.0" : "127.0.0.1");
   const loopback = isLoopbackHost(host);
 
   // Non-loopback WS leaks absolute paths + project metadata. 
@@ -45,8 +45,13 @@ export function startWebSocketServer(port: number, watchPaths: string[]) {
     }
     // Drop the failed instance so the next start call rebinds.
     try { wss?.close(); } catch {}
-    wss = null;
-    globalThis.__kontextaWss = null;
+    // Only null the reference if the server actually closed; otherwise keep
+    // the old reference so the next start() call doesn't try to bind again
+    // on the same port and loop on EADDRINUSE.
+    if (wss) {
+      wss = null;
+      globalThis.__kontextaWss = null;
+    }
   });
 
   wss.on("connection", (ws, req) => {
@@ -61,7 +66,31 @@ export function startWebSocketServer(port: number, watchPaths: string[]) {
       reqForAuth.headers.set("x-real-ip", clientIp);
     }
     
-    // If programmatic access matches legacy tokens/origins, allow it.
+    // 1. Check for cryptographically-signed short-lived token (used for browser client LAN connections)
+    let oneTimeAuth = false;
+    let tokenRejectReason = "";
+    try {
+      const u = new URL(req.url || "/", "http://_");
+      const queryToken = u.searchParams.get("token");
+      if (queryToken) {
+        const payload = verifySession(queryToken);
+        if (payload) {
+          // Token is valid for 60 seconds from generation to prevent replay/leakage
+          const age = Date.now() - payload.t;
+          if (age >= 0 && age < 60_000) {
+            oneTimeAuth = true;
+          } else {
+            tokenRejectReason = `Token expired (age: ${age}ms)`;
+          }
+        } else {
+          tokenRejectReason = "Invalid token signature";
+        }
+      }
+    } catch (e: any) {
+      tokenRejectReason = `Token parse error: ${e.message}`;
+    }
+
+    // 2. If programmatic access matches legacy tokens/origins, allow it.
     let programmaticAuth = false;
     if (allowedOrigins.length > 0 && req.headers.origin && allowedOrigins.includes(req.headers.origin)) {
       programmaticAuth = true;
@@ -75,7 +104,8 @@ export function startWebSocketServer(port: number, watchPaths: string[]) {
       } catch {}
     }
 
-    if (!programmaticAuth && !checkAuth(reqForAuth as any)) {
+    if (!oneTimeAuth && !programmaticAuth && !checkAuth(reqForAuth as any)) {
+      console.warn(`[Kontexta] WS connection rejected from ${clientIp}. Reason: ${tokenRejectReason || "Unauthorized (no valid session cookie or IP bypass)"}`);
       ws.close(1008, "Unauthorized");
       return;
     }

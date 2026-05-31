@@ -9,26 +9,49 @@
 #   docker compose -f docker-compose.hub.yml up -d
 #
 # Data is persisted in ./kontexta-data on the host.
+#
+# Environment variables (override as needed):
+#   HOST_PORT    — Host port for the web app (default: 3000)
+#   WS_HOST_PORT — Host port for the WebSocket (default: 3001)
+#   WS_ORIGINS   — Comma-separated list of allowed origins (default: localhost)
+#   DATA_DIR     — Host path for persistent data (defaults to ./kontexta-data)
+#   PROJECT_DIR  — Host path to mount your projects (defaults to ./projects)
+#
+# Examples:
+#   # Default (localhost dev):
+#     docker compose -f docker-compose.hub.yml up -d
+#
+#   # Production:
+#     HOST_PORT=80 WS_HOST_PORT=443 \
+#     WS_ORIGINS="https://kontexta.example.com" \
+#     docker compose -f docker-compose.hub.yml up -d
 
 services:
   kontexta:
     image: safiyu/kontexta:latest
     container_name: kontexta
     ports:
-      - "3000:3000"
-      - "3001:3001"
+      - "${HOST_PORT:-3000}:3000"
+      - "${WS_HOST_PORT:-3001}:3001"
     volumes:
-      - ./kontexta-data:/app/data
-      # - /path/to/your/projects:/path/to/your/projects # Mount your projects directory here
+      - "${DATA_DIR:-./kontexta-data}:/app/data"
+      # Mount your projects directory. By default the container exposes it at /projects
+      # IMPORTANT: mount the project directory to the same absolute path
+      # on the host and inside the container so on-disk paths remain stable.
+      - "${PROJECT_DIR}:${PROJECT_DIR}"
     environment:
       - NODE_ENV=production
       - HOSTNAME=0.0.0.0
       - PORT=3000
       - WS_PORT=3001
       - KONTEXTA_WS_HOST=0.0.0.0
-      - KONTEXTA_WS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+      - KONTEXTA_WS_ORIGINS=${WS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
+      - KONTEXTA_WS_CLIENT_PORT=${WS_HOST_PORT:-3001}
       - KONTEXTA_DATA_DIR=/app/data
       - KONTEXTA_DB_PATH=/app/data/kontexta.db
+      # Optional: expose where projects are mounted inside the container
+      - KONTEXTA_PROJECTS_ROOT=${PROJECT_DIR}
+    entrypoint: ["/bin/sh", "-c", "if [ -z \"$PROJECT_DIR\" ]; then echo 'ERROR: PROJECT_DIR is not set. Set PROJECT_DIR to an absolute host path before running docker compose.' >&2; exit 1; fi; exec node apps/web/server.js"]
     restart: always
     healthcheck:
       test: ["CMD-SHELL", "node -e \"require('http').get('http://127.0.0.1:3000/api/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))\""]

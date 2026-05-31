@@ -22,11 +22,6 @@ RUN pnpm install --frozen-lockfile
 # Copy the rest of the source code
 COPY . .
 
-# WebSocket port is baked into the client bundle at build time via
-# NEXT_PUBLIC_WS_PORT. Override at build with --build-arg WS_PORT=...
-ARG WS_PORT=3001
-ENV NEXT_PUBLIC_WS_PORT=${WS_PORT}
-
 # Build everything
 RUN pnpm build
 

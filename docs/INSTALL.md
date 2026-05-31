@@ -38,22 +38,40 @@ Before running `docker compose up`, open `docker-compose.hub.yml` and check the 
 1. **Mount your projects**: For Kontexta to index your code, you **must** mount your host projects directory. Find the `volumes` section and uncomment/edit the projects line:
    ```yaml
    volumes:
-     - ./kontexta-data:/app/data
-     - /home/user/Projects:/home/user/Projects # Match host path to container path
+     - ${DATA_DIR:-./kontexta-data}:/app/data   # data dir on the host
+     # IMPORTANT: `PROJECT_DIR` must be an absolute host path and it is mounted
+     # to the SAME absolute path inside the container so file paths are stable.
+      - ${PROJECT_DIR}:${PROJECT_DIR}  # REQUIRED: must be an absolute host path and match inside the container
    ```
    > [!TIP]
-   > Mounting the host path to the **exact same path** inside the container ensures that the AI client on your host and the MCP server in the container agree on file paths.
+    > Mounting the host path to the **exact same path** inside the container ensures that the AI client on your host and the MCP server in the container agree on file paths.
 
-2. **Data Persistence**: By default, your vault (SQLite, backups, KB) is stored in `./kontexta-data` relative to the compose file. Change the left side of the `- ./kontexta-data:/app/data` mount if you want it elsewhere.
+  **Required:** `PROJECT_DIR` must be set to an absolute path before running compose. The compose file includes a startup check that fails fast if `PROJECT_DIR` is not set.
 
-3. **Port Mapping**: If ports `3000` (Web UI) or `3001` (WebSocket) are already in use on your host, change the left side of the `ports` mapping:
-   ```yaml
-   ports:
-     - "8080:3000" # Web UI on 8080
-     - "8081:3001" # WebSocket on 8081
+2. **Data Persistence**: By default, your vault (SQLite, backups, KB) is stored in `./kontexta-data` relative to the compose file. Use `DATA_DIR` to change the host-side path (e.g., `DATA_DIR=/var/lib/kontexta`).
+
+3. **Port Mapping**: If ports `3000` (Web UI) or `3001` (WebSocket) are already in use on your host, set `HOST_PORT` and `WS_HOST_PORT`:
+   ```bash
+  HOST_PORT=8080 WS_HOST_PORT=8081 \
+  docker compose -f docker-compose.hub.yml up -d
+  ```
+  The WebSocket host port defaults to `3001`. If you change `HOST_PORT`, also set `WS_HOST_PORT`.
+
+**Example (absolute paths):**
+```bash
+DATA_DIR=/var/lib/kontexta \
+PROJECT_DIR=/home/safiyu/Projects \
+HOST_PORT=8080 WS_HOST_PORT=8081 \
+docker compose -f docker-compose.hub.yml up -d
+```
+
+4. **Allowed Origins**: If accessing the UI from a different host, set `WS_ORIGINS`:
+   ```bash
+   WS_ORIGINS="https://kontexta.example.com" \
+   docker compose -f docker-compose.hub.yml up -d
    ```
 
-4. **Version Pinning**: To pin a specific release instead of `latest`, change `image: safiyu/kontexta:latest` to a specific version (e.g., `safiyu/kontexta:7.0.0`).
+5. **Version Pinning**: To pin a specific release instead of `latest`, change `image: safiyu/kontexta:latest` to a specific version (e.g., `safiyu/kontexta:7.0.0`).
 
 To update to the newest image:
 
@@ -71,8 +89,9 @@ The fastest way to run Kontexta in production is using the official Docker Hub i
 ```bash
 docker run -d \
   -p 3000:3000 -p 3001:3001 \
-  -v /absolute/path/to/data:/app/data \
-  -v /home/user/Projects:/home/user/Projects \
+  # using environment variables to keep the host paths explicit
+  -v "$DATA_DIR":/app/data \
+  -v "$PROJECT_DIR":/projects \
   --name kontexta \
   safiyu/kontexta:latest
 ```

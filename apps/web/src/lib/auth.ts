@@ -4,9 +4,19 @@ import { getSetting, setSetting } from "kxta-core";
 const SALT_LEN = 32;
 const KEY_LEN = 64;
 
+declare global {
+  // eslint-disable-next-line no-var
+  var __kontextaTmpSessionSecret: string | undefined;
+  // eslint-disable-next-line no-var
+  var __kontextaSessionSecret: string | undefined;
+}
+
 // Use a consistent secret for signing sessions.
-// We store it in the DB to survive restarts.
+// We store it in the DB to survive restarts and cache it in memory.
 export function getSessionSecret(): string {
+  if (globalThis.__kontextaSessionSecret) {
+    return globalThis.__kontextaSessionSecret;
+  }
   let secret: string | null = null;
   try {
     secret = getSetting("auth_session_secret");
@@ -20,6 +30,7 @@ export function getSessionSecret(): string {
     secret = crypto.randomBytes(32).toString("hex");
     setSetting("auth_session_secret", secret);
   }
+  globalThis.__kontextaSessionSecret = secret;
   return secret;
 }
 
