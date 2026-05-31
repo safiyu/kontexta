@@ -23,6 +23,9 @@ services:
       - KONTEXTA_WS_ORIGINS=${WS_ORIGINS:-http://localhost:${HOST_PORT:-3000},http://127.0.0.1:${HOST_PORT:-3000}}
       - KONTEXTA_DATA_DIR=/app/data
       - KONTEXTA_DB_PATH=/app/data/kontexta.db
+      # Host path for the data directory — used by the web UI to generate
+      # correct volume-mount strings in install snippets (e.g. -v /home/user/data:/app/data).
+      - KONTEXTA_HOST_DATA_DIR=${DATA_DIR:-./kontexta-data}
       - PROJECT_DIR=${PROJECT_DIR}
     restart: "no"
     command: >

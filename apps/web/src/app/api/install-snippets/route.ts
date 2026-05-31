@@ -64,6 +64,7 @@ export async function GET(req: NextRequest) {
   }
   const vars = {
     dataDir: DATA_DIR,
+    hostDataDir: process.env.KONTEXTA_HOST_DATA_DIR ?? null,
     version: loadVersion(),
     sourceEntrypoint: resolveSourceEntrypoint(),
   };
