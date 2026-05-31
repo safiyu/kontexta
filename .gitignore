@@ -44,3 +44,7 @@ Thumbs.db
 .project
 .settings/
 .classpath
+
+# AI tools
+.aider.chat.history.md
+.aider.input.history

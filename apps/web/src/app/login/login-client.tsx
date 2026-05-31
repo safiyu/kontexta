@@ -21,23 +21,36 @@ export function LoginClient({ isSetupRequired }: { isSetupRequired: boolean }) {
       const endpoint = isSetupRequired ? "/api/auth/setup" : "/api/auth/login";
       const payload = isSetupRequired ? { password, bypassIps, trustProxyHeaders } : { password };
 
+      console.log(`[Login] Submitting to ${endpoint}`);
+
       const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
 
-      const data = await res.json();
+      console.log(`[Login] Response status: ${res.status}`);
 
-      if (!res.ok) {
-        throw new Error(data.error || "Authentication failed");
+      let data: any;
+      try {
+        data = await res.json();
+      } catch (parseErr) {
+        console.error(`[Login] Failed to parse response as JSON:`, parseErr);
+        throw new Error(`Server returned invalid JSON (status ${res.status}). Check browser console for details.`);
       }
 
+      if (!res.ok) {
+        console.error(`[Login] Auth failed:`, data);
+        throw new Error(data.error || `Authentication failed (${res.status})`);
+      }
+
+      console.log(`[Login] Auth successful, navigating...`);
       // Use router.push for clean navigation.
       // After first-time setup, include ?setup=1 so the Configure modal opens.
       router.push(isSetupRequired ? "/?setup=1" : "/");
     } catch (err: any) {
-      setError(err.message);
+      console.error(`[Login] Error:`, err);
+      setError(err.message || "An unexpected error occurred. Check browser console.");
     } finally {
       setLoading(false);
     }

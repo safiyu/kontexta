@@ -4,11 +4,26 @@ import { verifyPassword, signSession } from "@/lib/auth";
 import { ensureDbInitialized } from "@/lib/db-init";
 
 export async function POST(req: NextRequest) {
-  ensureDbInitialized();
-  const hash = getSetting("auth_password_hash");
-  const salt = getSetting("auth_password_salt");
+  try {
+    ensureDbInitialized();
+  } catch (err: any) {
+    console.error("[Auth/Login] Database initialization failed:", err);
+    return NextResponse.json({ error: "Database initialization failed" }, { status: 500 });
+  }
+
+  let hash: string | null = null;
+  let salt: string | null = null;
+  
+  try {
+    hash = getSetting("auth_password_hash");
+    salt = getSetting("auth_password_salt");
+  } catch (err: any) {
+    console.error("[Auth/Login] Failed to retrieve auth settings:", err);
+    return NextResponse.json({ error: "Failed to retrieve auth settings" }, { status: 500 });
+  }
   
   if (!hash || !salt) {
+    console.warn("[Auth/Login] Auth not configured (no hash/salt found)");
     return NextResponse.json({ error: "Auth not configured" }, { status: 400 });
   }
 
@@ -16,16 +31,24 @@ export async function POST(req: NextRequest) {
   try {
     body = await req.json();
   } catch {
+    console.error("[Auth/Login] Invalid JSON body");
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
   const { password } = body;
   if (typeof password !== "string") {
+    console.error("[Auth/Login] Password not provided or not a string");
     return NextResponse.json({ error: "Password required" }, { status: 400 });
   }
 
-  if (!verifyPassword(password, hash, salt)) {
-    return NextResponse.json({ error: "Invalid password" }, { status: 401 });
+  try {
+    if (!verifyPassword(password, hash, salt)) {
+      console.warn("[Auth/Login] Invalid password");
+      return NextResponse.json({ error: "Invalid password" }, { status: 401 });
+    }
+  } catch (err: any) {
+    console.error("[Auth/Login] Password verification failed:", err);
+    return NextResponse.json({ error: "Password verification failed" }, { status: 500 });
   }
 
   const token = signSession({ t: Date.now() });
@@ -46,5 +69,6 @@ export async function POST(req: NextRequest) {
   // Clear the explicit lock so IP bypass resumes if configured.
   response.cookies.delete("kontexta_locked");
 
+  console.log("[Auth/Login] Authentication successful");
   return response;
 }
