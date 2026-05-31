@@ -1,0 +1,8 @@
+{
+  "$schema": "https://glama.ai/mcp/schemas/server.json",
+  "maintainers": [
+    "safiyu"
+  ],
+  "version": "2.0.6",
+  "rulesVersion": "2.0.0"
+}
