@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.0.8 — login error handling
+
+### Fixed
+
+
+- **Login errors swallowed silently**: Added comprehensive try-catch error handling to `/api/auth/login` and `/api/auth/setup` routes with console logging at each step. Database initialization, settings queries, password verification, and session signing are now wrapped with proper error responses instead of crashing the request handler.
+- **Login form resets without feedback**: Frontend login component now logs request flow to browser console (`[Login]` prefix) and returns descriptive error messages to the user instead of silently resetting the form.
+
+### Fixes
+
+- **`Config generation`**: changed the way config generation is performed.
+
 ## 2.0.7 — Docker health check security fix
 
 ### Fixed

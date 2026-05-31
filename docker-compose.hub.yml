@@ -49,6 +49,9 @@ services:
       - KONTEXTA_WS_CLIENT_PORT=${WS_HOST_PORT:-3001}
       - KONTEXTA_DATA_DIR=/app/data
       - KONTEXTA_DB_PATH=/app/data/kontexta.db
+      # Host path for the data directory — used by the web UI to generate
+      # correct volume-mount strings in install snippets (e.g. -v /home/user/data:/app/data).
+      - KONTEXTA_HOST_DATA_DIR=${DATA_DIR:-./kontexta-data}
       # Optional: expose where projects are mounted inside the container
       - KONTEXTA_PROJECTS_ROOT=${PROJECT_DIR}
     entrypoint: ["/bin/sh", "-c", "if [ -z \"$PROJECT_DIR\" ]; then echo 'ERROR: PROJECT_DIR is not set. Set PROJECT_DIR to an absolute host path before running docker compose.' >&2; exit 1; fi; exec node apps/web/server.js"]

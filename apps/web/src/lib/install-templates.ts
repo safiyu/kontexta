@@ -8,6 +8,7 @@ export type Install = typeof INSTALLS[number];
 
 export interface TemplateVars {
   dataDir: string;
+  hostDataDir: string | null;
   version: string;
   sourceEntrypoint: string;
 }
@@ -21,9 +22,10 @@ export interface Snippet {
 
 function genericJson(vars: TemplateVars, install: Install): Snippet {
   const command = install === "docker" ? "docker" : install === "npm" ? "npx" : "node";
+  const hostDir = vars.hostDataDir || vars.dataDir;
   const args =
     install === "docker"
-      ? ["run", "--rm", "-i", "-v", `${vars.dataDir}:/app/data`, `safiyu/kontexta:${vars.version}`, "mcp"]
+      ? ["run", "--rm", "-i", "-v", `${hostDir}:/app/data`, `safiyu/kontexta:${vars.version}`, "mcp"]
       : install === "npm"
         ? ["-y", "kontexta-mcp"]
         : [vars.sourceEntrypoint];
@@ -36,9 +38,10 @@ function genericJson(vars: TemplateVars, install: Install): Snippet {
 }
 
 function claudeCodeShell(vars: TemplateVars, install: Install): Snippet {
+  const hostDir = vars.hostDataDir || vars.dataDir;
   const tail =
     install === "docker"
-      ? `-- docker run --rm -i -v ${vars.dataDir}:/app/data safiyu/kontexta:${vars.version} mcp`
+      ? `-- docker run --rm -i -v ${hostDir}:/app/data safiyu/kontexta:${vars.version} mcp`
       : install === "npm"
         ? `-- npx -y kontexta-mcp`
         : `-- node ${vars.sourceEntrypoint}`;
@@ -67,9 +70,10 @@ read:
 
 function clineSnippet(vars: TemplateVars, install: Install): Snippet {
   const command = install === "docker" ? "docker" : install === "npm" ? "npx" : "node";
+  const hostDir = vars.hostDataDir || vars.dataDir;
   const args =
     install === "docker"
-      ? ["run", "--rm", "-i", "-v", `${vars.dataDir}:/app/data`, `safiyu/kontexta:${vars.version}`, "mcp"]
+      ? ["run", "--rm", "-i", "-v", `${hostDir}:/app/data`, `safiyu/kontexta:${vars.version}`, "mcp"]
       : install === "npm"
         ? ["-y", "kontexta-mcp"]
         : [vars.sourceEntrypoint];
@@ -91,9 +95,10 @@ function clineSnippet(vars: TemplateVars, install: Install): Snippet {
 
 function continueSnippet(vars: TemplateVars, install: Install): Snippet {
   const command = install === "docker" ? "docker" : install === "npm" ? "npx" : "node";
+  const hostDir = vars.hostDataDir || vars.dataDir;
   const args =
     install === "docker"
-      ? ["run", "--rm", "-i", "-v", `${vars.dataDir}:/app/data`, `safiyu/kontexta:${vars.version}`, "mcp"]
+      ? ["run", "--rm", "-i", "-v", `${hostDir}:/app/data`, `safiyu/kontexta:${vars.version}`, "mcp"]
       : install === "npm"
         ? ["-y", "kontexta-mcp"]
         : [vars.sourceEntrypoint];
@@ -120,9 +125,10 @@ ${args.map(a => `      - "${a}"`).join('\n')}
 
 function copilotSnippet(vars: TemplateVars, install: Install): Snippet {
   const command = install === "docker" ? "docker" : install === "npm" ? "npx" : "node";
+  const hostDir = vars.hostDataDir || vars.dataDir;
   const args =
     install === "docker"
-      ? ["run", "--rm", "-i", "-v", `${vars.dataDir}:/app/data`, `safiyu/kontexta:${vars.version}`, "mcp"]
+      ? ["run", "--rm", "-i", "-v", `${hostDir}:/app/data`, `safiyu/kontexta:${vars.version}`, "mcp"]
       : install === "npm"
         ? ["-y", "kontexta-mcp"]
         : [vars.sourceEntrypoint];

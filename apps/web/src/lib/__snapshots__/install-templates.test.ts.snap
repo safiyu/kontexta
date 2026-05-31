@@ -3,7 +3,7 @@
 exports[`install-templates > Claude Code + Docker matches snapshot 1`] = `
 {
   "body": "claude mcp add kxta -s user \\
-  -e KONTEXTA_DATA_DIR=/home/user/kontexta-data \\
+  -e KONTEXTA_DATA_DIR=/app/data \\
   -- docker run --rm -i -v /home/user/kontexta-data:/app/data safiyu/kontexta:1.0.0 mcp",
   "configPath": "Run this command in your terminal to configure Claude Code.",
   "kind": "shell",
@@ -22,7 +22,7 @@ exports[`install-templates > Claude Desktop + npm matches snapshot 1`] = `
         "kontexta-mcp"
       ],
       "env": {
-        "KONTEXTA_DATA_DIR": "/home/user/kontexta-data"
+        "KONTEXTA_DATA_DIR": "/app/data"
       }
     }
   }

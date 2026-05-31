@@ -65,6 +65,11 @@ A markdown knowledge vault optimized for context-window economy.
 
 ### 2. Hands — The Command Engine
 A project-defined command surface that replaces "unrestricted shell access" with a sandboxed contract.
+
+<p align="center">
+  <img src="docs/hands.png" alt="Hands command engine" width="80%">
+</p>
+
 - **Explicit boundaries**: You declare exactly what an agent can do via `kontexta.json`. There is no unrestricted shell access.
 - **Sandboxed**: Locked working directory, clean environment, and ring-buffered output.
 - **Human-in-the-loop**: High-risk commands can require a cryptographic one-time token, pausing execution until you explicitly approve it.
@@ -185,7 +190,7 @@ Kontexta's dashboard is designed for **local-first use** — running on `localho
 
 <p align="center">
   <a href="https://youtu.be/kghe72WjahY">
-    <img src="docs/screenshot2.png" alt="Kontexta demo video" width="80%">
+    <img src="docs/dashboard.png" alt="Kontexta demo video" width="80%">
   </a>
 </p>
 
@@ -219,6 +224,11 @@ What's deliberately deferred and what triggers will pull it forward lives in [`d
 
 ### Brain
 - Global vault with two-way git sync.
+
+<p align="center">
+  <img src="docs/sync.png" alt="Git sync" width="80%">
+</p>
+
 - 52 MCP tools tuned for context economy.
 - Batch operations (up to 500 files/call), grep, and regex support.
 - Web clipping with auth-wall detection.

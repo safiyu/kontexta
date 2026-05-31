@@ -113,6 +113,9 @@ export function getDatabase(): Database.Database {
  */
 export function closeDatabase(): void {
   if (db) {
+    // Force checkpoint WAL so writes are visible to other connections/processes
+    // that open the same database file (critical for Docker MCP → Web UI sharing).
+    try { db.pragma("PRAGMA wal_checkpoint(TRUNCATE)"); } catch {}
     db.close();
     db = null;
     globalThis.__kontextaDb = null;
