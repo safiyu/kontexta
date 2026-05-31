@@ -119,21 +119,33 @@ ${args.map(a => `      - "${a}"`).join('\n')}
 }
 
 function copilotSnippet(vars: TemplateVars, install: Install): Snippet {
+  const command = install === "docker" ? "docker" : install === "npm" ? "npx" : "node";
+  const args =
+    install === "docker"
+      ? ["run", "--rm", "-i", "-v", `${vars.dataDir}:/app/data`, `safiyu/kontexta:${vars.version}`, "mcp"]
+      : install === "npm"
+        ? ["-y", "kontexta-mcp"]
+        : [vars.sourceEntrypoint];
+  const body = JSON.stringify(
+    { mcp: { servers: { kxta: { command, args, env: { KONTEXTA_DATA_DIR: vars.dataDir } } } } },
+    null,
+    2,
+  );
   return {
-    kind: "shell",
-    body: `# GitHub Copilot uses .github/copilot-instructions.md for project-level instructions.
-# Kontexta writes workflow rules to: .github/copilot-instructions.md
-#
-# To onboard this project, run:
-#   onboard_agent with target_agent: copilot
-#
-# Copilot reads the file automatically — no additional configuration needed.`,
+    kind: "json",
+    body,
     notes: [
-      "Copilot integration is file-based via .github/copilot-instructions.md.",
-      "Use 'onboard_agent' with 'target_agent: copilot' to scaffold the instructions file.",
-      "Copilot reads this file automatically from the repository root or .github/ directory.",
+      "VS Code Insider's built-in GitHub Copilot chat supports MCP servers via the mcp.servers setting.",
+      "Open Settings (Ctrl+,), search for \"mcp.servers\", and paste this JSON.",
+      "Or add it directly to your settings.json file.",
+      "settings.json location — VS Code: Linux: ~/.config/Code/User/settings.json",
+      "macOS: ~/Library/Application Support/Code/User/settings.json",
+      "Windows: %APPDATA%\\Code\\User\\settings.json",
+      "VS Code Insider: Linux: ~/.config/Code - Insiders/User/settings.json",
+      "macOS: ~/Library/Application Support/Code - Insiders/User/settings.json",
+      "Windows: %APPDATA%\\Code - Insiders\\User\\settings.json",
     ],
-    configPath: ".github/copilot-instructions.md"
+    configPath: "VS Code Settings (mcp.servers)"
   };
 }
 
@@ -161,7 +173,7 @@ const CLIENT_CONFIG_PATHS: Record<Client, string> = {
   "continue": "~/.continue/mcpServers/kontexta.yaml",
   "aider": ".aider.conf.yml (global or project-local)",
   "cline": "~/.cline/mcp_settings.json (Cline extension for VS Code / Cursor)",
-  "copilot": ".github/copilot-instructions.md (GitHub Copilot instructions file)",
+  "copilot": "VS Code Settings → mcp.servers (VS Code Insider built-in Copilot chat)",
   "generic": "Paste into your AI client's MCP configuration settings or file."
 };
 

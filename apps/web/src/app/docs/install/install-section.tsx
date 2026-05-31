@@ -13,7 +13,7 @@ const CLIENTS = [
   { id: "continue", label: "Continue" },
   { id: "aider", label: "Aider" },
   { id: "cline", label: "Cline" },
-  { id: "copilot", label: "GitHub Copilot" },
+  { id: "copilot", label: "GitHub Copilot (VS Code Insider)" },
   { id: "generic", label: "Generic JSON" },
 ];
 const INSTALLS = [

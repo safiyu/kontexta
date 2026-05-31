@@ -13,7 +13,7 @@ describe("install-templates", () => {
       for (const i of INSTALLS) {
         const snip = renderTemplate(c, i, VARS);
         expect(snip, `missing ${c}/${i}`).toBeTruthy();
-        if (c !== "aider" && c !== "copilot") {
+        if (c !== "aider") {
           expect(snip.body).toContain("/home/user/kontexta-data");
         }
       }
