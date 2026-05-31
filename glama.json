@@ -1,7 +1,7 @@
 {
   "$schema": "https://glama.ai/mcp/schemas/server.json",
   "name": "kontexta",
-  "version": "1.0.0",
+  "version": "2.0.4",
   "description": "The local Brain (context engine) and Hands (command engine) for AI coding agents. Brain: git-backed markdown vault with FTS5 search, surgical section edits, and token-aware tools. Hands: sandboxed project-defined commands declared in kontexta.json with optional human approval. All over MCP, all on your machine.",
   "repository": "https://github.com/safiyu/kontexta",
   "license": "Apache-2.0",
@@ -44,5 +44,5 @@
     "local-first",
     "rag"
   ],
-  "rulesVersion": "1.0.0"
+  "rulesVersion": "2.0.0"
 }

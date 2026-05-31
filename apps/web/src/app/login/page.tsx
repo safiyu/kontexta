@@ -5,6 +5,8 @@ import { checkAuth } from "@/lib/auth";
 import { ensureDbInitialized } from "@/lib/db-init";
 import { LoginClient } from "@/app/login/login-client";
 
+export const dynamic = "force-dynamic";
+
 export default async function LoginPage() {
   ensureDbInitialized();
 

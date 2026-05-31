@@ -100,6 +100,7 @@ Use absolute paths — most clients launch the process from their own working di
 - **Codex**: `.codex/mcp_servers.json`
 - **Continue.dev**: `~/.continue/config.json` — add to the `mcpServers` array.
 - **Cursor**: `Settings → Features → MCP`
+- **Cline**: `~/.cline/mcp_settings.json` — the Cline extension for VS Code / Cursor reads this file directly. After adding the config, reload the VS Code / Cursor window.
 
 ---
 
@@ -212,7 +213,7 @@ The MCP server exposes 49 tools designed for agents that care about context-wind
 | :--- | :--- | :--- |
 | `list_folders`, `create_folder`, `delete_folder` | Folder CRUD. `delete_folder` refuses project folders (the watcher would re-ingest); KB only. | "Create a `journal` folder under the KB." |
 | `register_project`, `list_projects` | Add an external repo as a project; Kontexta indexes its `.md` files. Warns when total tokens exceed `KONTEXTA_PROJECT_TOKEN_WARN`. The response also carries a `recommendation` field — update or create — telling the agent whether it should follow up with `onboard_agent`. | "Register `~/code/foo` as a project." |
-| `onboard_agent` | Writes or updates a fenced, version-stamped kontexta workflow rules block into a project's agent context file(s) — `CLAUDE.md` / `AGENTS.md` / `GEMINI.md` / `.cursor/rules/*.mdc` / `.continue/rules/*.md` / `.aider/kontexta.md`. Idempotent (skips on same version, splices on bump). Update mode targets detected files; create mode scaffolds the canonical filename for the chosen `target_agent`. Run after `register_project` when its recommendation suggests it, or any time to refresh the block. | "Onboard this project for Claude Code." |
+| `onboard_agent` | Writes or updates a fenced, version-stamped kontexta workflow rules block into a project's agent context file(s) — `CLAUDE.md` / `AGENTS.md` / `GEMINI.md` / `.cursor/rules/*.mdc` / `.continue/rules/*.md` / `.aider/kontexta.md` / `.clinerules` / `.github/copilot-instructions.md`. Idempotent (skips on same version, splices on bump). Update mode targets detected files; create mode scaffolds the canonical filename for the chosen `target_agent`. Run after `register_project` when its recommendation suggests it, or any time to refresh the block. | "Onboard this project for Claude Code." |
 | `project_map` | Single-call indented outline of folders + file titles + tags + ids — typically 5× denser than `list_files`. | "Give me a map of the `acme` project." |
 | `stats` | Counts: files, untagged, favorites, top tags, by-project breakdown. Optional total token cost. | "How many untagged files are in the KB?" |
 

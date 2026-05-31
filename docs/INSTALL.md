@@ -143,7 +143,7 @@ Multiple matches are all surfaced — a repo with both `CLAUDE.md` and `AGENTS.m
 `register_project` returns a `recommendation` field in its response:
 
 - **Update mode** — one or more context files were detected. The agent surfaces the recommendation, asks the user, and on Yes calls `onboard_agent` with `{ project_id, files: [...] }`.
-- **Create mode** — no context file exists. The agent asks which client you want to scaffold for (`claude-code` | `codex` | `gemini` | `cursor` | `continue` | `aider` | `generic`) and calls `onboard_agent` with `{ project_id, target_agent }`. The right canonical filename is created with a starter scaffold plus the rules block.
+- **Create mode** — no context file exists. The agent asks which client you want to scaffold for (`claude-code` | `codex` | `gemini` | `cursor` | `continue` | `aider` | `cline` | `copilot` | `generic`) and calls `onboard_agent` with `{ project_id, target_agent }`. The right canonical filename is created with a starter scaffold plus the rules block.
 
 No file is ever written without explicit user consent — the recommendation is plain JSON; the agent must surface it and act on the user's reply.
 
