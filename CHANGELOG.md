@@ -1,14 +1,30 @@
 # Changelog
 
-## 2.0.5 — Docker auth & migration fixes
+## 2.0.5 — Docker improvements & authentication fixes
+
+### Added
+
+- **Environment variables for Docker**: Easily customize ports and data paths without editing compose files:
+  - `HOST_PORT` — Web UI port (default: 8007 for local build, 3000 for Docker Hub)
+  - `WS_HOST_PORT` — WebSocket port (default: 8008 for local build, 3001 for Docker Hub)
+  - `DATA_DIR` — Where to persist your vault and database
+  - `PROJECT_DIR` — Where your projects live on the host (now required with startup check)
+  - `WS_ORIGINS` — Allowed domains for WebSocket connections
+
+- **Two Docker workflows**: 
+  - `docker-compose.yml` — Build from source (local development)
+  - `docker-compose.hub.yml` — Use pre-built Docker Hub image (production deployment)
 
 ### Fixed
 
-- **Session cookie over HTTP**: The `kontexta_session` cookie was set with `Secure: true` in production mode. Browsers silently discard `Secure` cookies over plain HTTP, causing the login flow to reset immediately after a successful password entry in Docker deployments. Fixed by removing the `Secure` flag — the HMAC-signed token, `HttpOnly`, and `SameSite: Lax` attributes still provide strong protection.
-- **Migration `005-auth.sql` not running in Docker**: The `settings` table (required for auth) was not being created in Docker because the migration file was missing from the published image (pre-auth build) and `resolveMigrationsDir()` resolved to an inconsistent path at runtime. Fixed by:
-  - Explicitly `COPY`-ing the migrations directory into `/app/packages/core/src/db/migrations` in the Dockerfile runner stage, making the path deterministic regardless of Next.js file-tracing.
-  - Moving the `process.cwd()`-relative candidate to the top of the resolver's priority list so Docker containers find migrations first.
-- **First-connection setup loop**: The root `/` and `/login` pages were statically pre-rendered by Next.js at build time (when the DB is empty), causing them to always redirect to `/login` and show the setup form regardless of runtime state. Added `export const dynamic = "force-dynamic"` to both pages so they are always server-rendered on demand.
+- **Login broken over HTTP in Docker**: Sessions now work reliably when deployed to HTTP (e.g., behind a reverse proxy). Previously the session cookie was marked `Secure`, so browsers discarded it over plain HTTP.
+- **Initial setup stuck in a loop**: Login page now renders on demand instead of being frozen at build time, so you can complete the first-run setup without restarting.
+- **Database migrations missing in Docker**: Auth table migrations now consistently run on container startup, fixing setup failures in Docker deployments.
+
+### Changed
+
+- **`PROJECT_DIR` is required**: The compose file checks it on startup and fails fast if missing, preventing silent file path mismatches between your host and the container.
+- **Updated Docker documentation**: Clear examples for ports, paths, and variable usage.
 
 ## 2.0.4 — GitHub Copilot support
 

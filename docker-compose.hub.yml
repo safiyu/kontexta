@@ -45,7 +45,7 @@ services:
       - PORT=3000
       - WS_PORT=3001
       - KONTEXTA_WS_HOST=0.0.0.0
-      - KONTEXTA_WS_ORIGINS=${WS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
+      - KONTEXTA_WS_ORIGINS=${WS_ORIGINS:-http://localhost:${HOST_PORT:-3000},http://127.0.0.1:${HOST_PORT:-3000}}
       - KONTEXTA_WS_CLIENT_PORT=${WS_HOST_PORT:-3001}
       - KONTEXTA_DATA_DIR=/app/data
       - KONTEXTA_DB_PATH=/app/data/kontexta.db

@@ -1,24 +1,40 @@
 services:
   kontexta:
-    image: safiyu/kontexta:dev-latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runner
     container_name: kontexta
     ports:
-      - "8007:3000"
-      - "8008:3001"
+      - "${HOST_PORT:-8007}:3000"
+      - "${WS_HOST_PORT:-8008}:3001"
     volumes:
-      - /home/safiyu/Homelab/kontexta:/app/data
-      - /home/safiyu/Projects:/home/safiyu/Projects # Mount your projects directory here
+      - "${DATA_DIR:-./kontexta-data}:/app/data"
+      # Mount your projects directory. PROJECT_DIR must be an absolute path and
+      # is mounted to the same path inside the container so file paths remain stable.
+      - "${PROJECT_DIR:-/projects}:${PROJECT_DIR:-/projects}"
     environment:
       - NODE_ENV=production
       - HOSTNAME=0.0.0.0
       - PORT=3000
       - WS_PORT=3001
-      - KONTEXTA_WS_CLIENT_PORT=8008
+      - KONTEXTA_WS_CLIENT_PORT=${WS_HOST_PORT:-8008}
       - KONTEXTA_WS_HOST=0.0.0.0
-      - KONTEXTA_WS_ORIGINS=http://localhost:8007,http://127.0.0.1:8007
+      - KONTEXTA_WS_ORIGINS=${WS_ORIGINS:-http://localhost:${HOST_PORT:-8007},http://127.0.0.1:${HOST_PORT:-8007}}
       - KONTEXTA_DATA_DIR=/app/data
       - KONTEXTA_DB_PATH=/app/data/kontexta.db
-    restart: always
+      - PROJECT_DIR=${PROJECT_DIR}
+    restart: "no"
+    command: >
+      /bin/sh -c '
+        if [ -z "$PROJECT_DIR" ]; then
+          echo "ERROR: PROJECT_DIR must be set to an absolute host path before running compose."
+          echo "Example: PROJECT_DIR=/home/user/Projects docker compose up"
+          exit 1
+        fi
+        echo "Starting Kontexta with PROJECT_DIR=$PROJECT_DIR"
+        exec node apps/web/server.js
+      '
     healthcheck:
       test: ["CMD-SHELL", "node -e \"require('http').get('http://127.0.0.1:3000/api/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))\""]
       interval: 30s

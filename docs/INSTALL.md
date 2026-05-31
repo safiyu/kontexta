@@ -204,6 +204,9 @@ Returns `{ written: [{ path, action, version }], skipped: [{ path, reason }] }`.
 
 ## Local development
 
+> [!IMPORTANT]
+> **Kontexta is a pnpm monorepo.** Do **not** use `npm install` at the workspace root — it will ignore `pnpm-workspace.yaml` and produce a broken `node_modules` layout. You must use **pnpm** (or **corepack**). If you install the MCP server globally via npm (`npm install -g kontexta-mcp`), that is a separate, self-contained package and does not use the monorepo.
+
 ### Prerequisites
 
 | Tool | Version | Why |

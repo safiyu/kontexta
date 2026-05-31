@@ -6,6 +6,10 @@
   "author": "Safiyu",
   "private": true,
   "license": "Apache-2.0",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
   "scripts": {
     "version:sync": "node scripts/sync-versions.js",
     "dev": "turbo dev",
