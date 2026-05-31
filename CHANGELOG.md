@@ -12,6 +12,10 @@
 
 - **`Config generation`**: changed the way config generation is performed.
 
+### Changed
+
+- **`.gitignore`**: Added `.aider.chat.history.md` and `.aider.input.history` under a new "AI tools" section.
+
 ## 2.0.7 — Docker health check security fix
 
 ### Fixed
