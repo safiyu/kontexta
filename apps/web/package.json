@@ -1,6 +1,6 @@
 {
   "name": "kxta-web",
-  "version": "2.0.3",
+  "version": "2.0.4",
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
@@ -29,11 +29,10 @@
     "mermaid": "^11",
     "next": "^15.3.0",
     "next-themes": "^0.4.4",
-    "re2": "^1.21.4",
+    "re2": "^1.24.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-markdown": "^9.0.0",
-    "rehype-shiki": "^0.0.9",
     "remark-gfm": "^4.0.1",
     "ws": "^8.18.0"
   },
@@ -54,5 +53,5 @@
     "unzipper": "^0.12.3",
     "vitest": "^3.0.0"
   },
-  "rulesVersion": "1.0.0"
+  "rulesVersion": "2.0.0"
 }

@@ -16,6 +16,7 @@ const AGENTS = [
   { id: "aider", label: "Aider" },
   { id: "continue", label: "Continue" },
   { id: "gemini", label: "Gemini / Antigravity" },
+  { id: "copilot", label: "GitHub Copilot" },
   { id: "codex", label: "Codex" },
   { id: "generic", label: "Generic JSON" },
 ];

@@ -1,5 +1,5 @@
 export const CLIENTS = [
-  "claude-code", "claude-desktop", "cursor", "codex", "gemini", "antigravity", "continue", "aider", "cline", "generic",
+  "claude-code", "claude-desktop", "cursor", "codex", "gemini", "antigravity", "continue", "aider", "cline", "copilot", "generic",
 ] as const;
 export type Client = typeof CLIENTS[number];
 
@@ -118,6 +118,25 @@ ${args.map(a => `      - "${a}"`).join('\n')}
   };
 }
 
+function copilotSnippet(vars: TemplateVars, install: Install): Snippet {
+  return {
+    kind: "shell",
+    body: `# GitHub Copilot uses .github/copilot-instructions.md for project-level instructions.
+# Kontexta writes workflow rules to: .github/copilot-instructions.md
+#
+# To onboard this project, run:
+#   onboard_agent with target_agent: copilot
+#
+# Copilot reads the file automatically — no additional configuration needed.`,
+    notes: [
+      "Copilot integration is file-based via .github/copilot-instructions.md.",
+      "Use 'onboard_agent' with 'target_agent: copilot' to scaffold the instructions file.",
+      "Copilot reads this file automatically from the repository root or .github/ directory.",
+    ],
+    configPath: ".github/copilot-instructions.md"
+  };
+}
+
 const TEMPLATES: Record<Client, (vars: TemplateVars, install: Install) => Snippet> = {
   "claude-code": claudeCodeShell,
   "claude-desktop": genericJson,
@@ -128,6 +147,7 @@ const TEMPLATES: Record<Client, (vars: TemplateVars, install: Install) => Snippe
   "continue": continueSnippet,
   aider: aiderSnippet,
   cline: clineSnippet,
+  copilot: copilotSnippet,
   generic: genericJson,
 };
 
@@ -141,6 +161,7 @@ const CLIENT_CONFIG_PATHS: Record<Client, string> = {
   "continue": "~/.continue/mcpServers/kontexta.yaml",
   "aider": ".aider.conf.yml (global or project-local)",
   "cline": "~/.cline/mcp_settings.json (Cline extension for VS Code / Cursor)",
+  "copilot": ".github/copilot-instructions.md (GitHub Copilot instructions file)",
   "generic": "Paste into your AI client's MCP configuration settings or file."
 };
 

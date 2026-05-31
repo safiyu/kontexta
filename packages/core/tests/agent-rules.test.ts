@@ -36,7 +36,7 @@ describe("agent-rules constants", () => {
 
   it("SCAFFOLDS covers every supported agent and returns a path + header", () => {
     const project = { name: "Demo", description: "x" } as any;
-    for (const agent of ["claude-code", "codex", "gemini", "cursor", "continue", "generic"] as const) {
+    for (const agent of ["claude-code", "codex", "gemini", "cursor", "continue", "aider", "cline", "copilot", "generic"] as const) {
       const s = SCAFFOLDS[agent];
       expect(s).toBeTruthy();
       expect(s.path).toMatch(/.+/);

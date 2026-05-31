@@ -1,6 +1,6 @@
 {
   "name": "kontexta",
-  "version": "2.0.3",
+  "version": "2.0.4",
   "rulesVersion": "2.0.0",
   "type": "module",
   "author": "Safiyu",
@@ -14,6 +14,7 @@
     "lint": "turbo lint"
   },
   "devDependencies": {
+    "re2": "1.24.1",
     "turbo": "^2.5.0",
     "typescript": "^5.7.0"
   },

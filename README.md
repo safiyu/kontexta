@@ -9,7 +9,7 @@
   <a href="https://glama.ai/mcp/servers/safiyu/kontexta"><img src="https://glama.ai/mcp/servers/safiyu/kontexta/badges/score.svg" alt="kontexta MCP server"></a>
 </p>
 
-Kontexta is a local-first **Model Context Protocol (MCP)** server that gives your AI coding agents — **Claude Code**, **Cursor**, **Gemini**, **Antigravity** — a persistent memory and a controlled command surface. 
+Kontexta is a local-first **Model Context Protocol (MCP)** server that gives your AI coding agents — **Claude Code**, **Cursor**, **Cline**, **GitHub Copilot**, **Gemini**, **Antigravity** — a persistent memory and a controlled command surface. 
 
 Instead of agents losing context between sessions or inventing their own shell commands, Kontexta provides:
 - **Brain**: A git-backed markdown vault with FTS5 search and surgical section edits.
@@ -24,7 +24,7 @@ Most AI tools trap context inside their own chat window. Kontexta moves that con
 - **Switch agents mid-project**: Claude Code journals a decision; Cursor reads it 5 minutes later.
 - **Unified command surface**: Author your `kontexta.json` once; every agent uses the same validated tools and approval gates.
 - **Multi-agent collaboration**: Different agents working on different tasks contribute to the same indexed knowledge base.
-- **Zero-touch onboarding**: `register_project` + `onboard_agent` injects a fenced, version-stamped workflow rules block into `CLAUDE.md` / `AGENTS.md` / `GEMINI.md` / `.cursor/rules` / `.continue/rules` so every new conversation — on any agent — wakes up already knowing how to use kontexta.
+- **Zero-touch onboarding**: `register_project` + `onboard_agent` injects a fenced, version-stamped workflow rules block into `CLAUDE.md` / `AGENTS.md` / `GEMINI.md` / `.cursor/rules` / `.continue/rules` / `.clinerules` / `.github/copilot-instructions.md` so every new conversation — on any agent — wakes up already knowing how to use kontexta.
 
 ### 2. Cross-Project Awareness
 - **Global reach**: An agent working in Project A can instantly search and read the documentation, context, and states of Project B.
@@ -103,7 +103,7 @@ Kontexta doesn't try to replace your favorite agent or memory library — it sit
 | Capability | `CLAUDE.md` / `AGENTS.md` | Vendor memory (Cursor rules, Claude Projects) | mem0 | Zep | **Kontexta** |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Setup cost** | None — just a file | None — built in | SDK integration in your app | SDK + service | MCP server + `kontexta.json` |
-| **Cross-agent portability** | Per-agent flavored files drift apart | Locked to one vendor | App-level, not agent-level | App-level, not agent-level | Same MCP surface for Claude Code, Cursor, Gemini, Antigravity |
+| **Cross-agent portability** | Per-agent flavored files drift apart | Locked to one vendor | App-level, not agent-level | App-level, not agent-level | Same MCP surface for Claude Code, Cursor, Cline, GitHub Copilot, Gemini, Antigravity |
 | **Retrieval model** | Whole file dumped into context | Whole file / vendor-managed | Vector + graph (semantic) | Temporal knowledge graph (semantic) | Deterministic FTS5 + regex; surgical section reads |
 | **Token accounting** | None | None | None exposed to agent | None exposed to agent | Every response carries `est_tokens` / `size_bytes` |
 | **Command execution** | N/A | Vendor-defined tools | N/A (memory only) | N/A (memory only) | Sandboxed `Hands` with per-command contracts and approval tokens |
@@ -206,7 +206,7 @@ What's deliberately deferred and what triggers will pull it forward lives in [`d
 - Batch operations (up to 500 files/call), grep, and regex support.
 - Web clipping with auth-wall detection.
 - Full git-backed versioning: `get_history`, `get_diff`, `restore_file`.
-- **Agent context rules onboarding:** `register_project` detects existing `CLAUDE.md` / `AGENTS.md` / `GEMINI.md` / `.cursor/rules/*.mdc` / `.continue/rules/*.md` and recommends a follow-up. The `onboard_agent` tool injects an idempotent, version-fenced workflow rules block (or scaffolds one for the right agent) so every new conversation starts already aware of kontexta's conventions.
+- **Agent context rules onboarding:** `register_project` detects existing `CLAUDE.md` / `AGENTS.md` / `GEMINI.md` / `.cursor/rules/*.mdc` / `.continue/rules/*.md` / `.clinerules` / `.github/copilot-instructions.md` and recommends a follow-up. The `onboard_agent` tool injects an idempotent, version-fenced workflow rules block (or scaffolds one for the right agent) so every new conversation starts already aware of kontexta's conventions.
 
 ### Hands
 - Project-specific `kontexta.json` tools map.

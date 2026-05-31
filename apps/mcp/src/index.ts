@@ -983,10 +983,10 @@ ERROR CONDITIONS: Returns isError=true if path is missing or unresolvable. Scan 
               next_tool: "onboard_agent" as const,
               next_args: {
                 project_id: project.id,
-                target_agent: "<pass your agent: claude-code | codex | gemini | antigravity | cursor | continue | aider>",
+                target_agent: "<pass your agent: claude-code | codex | gemini | antigravity | cursor | continue | aider | cline | copilot>",
               },
               prompt:
-                "Scaffold an AI agent instructions file now? Tell me which agent you use (claude-code, codex, gemini, antigravity, cursor, continue, or aider) and I'll create the right file (e.g. CLAUDE.md) with the kontexta workflow rules pre-installed, so your agent picks them up on its next session.",
+                "Scaffold an AI agent instructions file now? Tell me which agent you use (claude-code, codex, gemini, antigravity, cursor, continue, aider, cline, or copilot) and I'll create the right file (e.g. CLAUDE.md) with the kontexta workflow rules pre-installed, so your agent picks them up on its next session.",
             };
 
       const content: any[] = [
@@ -1036,14 +1036,14 @@ PARAMETERS:
 - project_id: number, required.
 - confirm: boolean, required. Must be true to proceed.
 - files: string[], optional. Paths relative to project root. For update mode, defaults to recommendation.target_files. Ignored when files is empty AND target_agent is provided (create mode).
-- target_agent: enum claude-code | codex | gemini | cursor | continue | aider | generic. Required when files is empty AND no context file currently exists. Picks the canonical filename and the starter scaffold.
+- target_agent: enum claude-code | codex | gemini | cursor | continue | aider | cline | copilot | generic. Required when files is empty AND no context file currently exists. Picks the canonical filename and the starter scaffold.
 
 RETURNS: { written: [{ path, action: created|updated|skipped, version }], skipped: [{ path, reason }] }`,
   {
     project_id: z.number().describe("Project ID returned from register_project"),
     confirm: z.boolean().describe("MANDATORY: Set to true only after obtaining explicit user consent to modify context files."),
     files: z.array(z.string()).optional().describe("Project-relative paths to update; defaults to detected context files"),
-    target_agent: z.enum(["claude-code", "codex", "gemini", "antigravity", "cursor", "continue", "aider", "generic"]).optional()
+    target_agent: z.enum(["claude-code", "codex", "gemini", "antigravity", "cursor", "continue", "aider", "cline", "copilot", "generic"]).optional()
       .describe("Required when files is empty AND no context file exists. Picks the canonical filename + scaffold."),
   },
   async ({ project_id, confirm, files, target_agent }) => {

@@ -5,6 +5,8 @@ import { getSetting } from "kxta-core";
 import HomePageClient from "./home-client";
 import { ensureDbInitialized } from "@/lib/db-init";
 
+export const dynamic = "force-dynamic";
+
 export default async function Page() {
   ensureDbInitialized();
 

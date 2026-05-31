@@ -73,7 +73,7 @@ export const POST_TOOL_USE_HOOK_SNIPPET = JSON.stringify({
   },
 }, null, 2);
 
-export type AgentId = "claude-code" | "codex" | "gemini" | "antigravity" | "cursor" | "continue" | "aider" | "generic";
+export type AgentId = "claude-code" | "codex" | "gemini" | "antigravity" | "cursor" | "continue" | "aider" | "cline" | "copilot" | "generic";
 
 interface ProjectMeta {
   name: string;
@@ -105,6 +105,8 @@ export const SCAFFOLDS: Record<AgentId, ScaffoldDef> = {
     path: ".aider/kontexta.md",
     header: (p) => `<!--\n  kontexta rules for Aider — ${p.name}\n  To enable, add this to your .aider.conf.yml:\n  read:\n    - .aider/kontexta.md\n-->\n\n`,
   },
+  cline:         { path: ".clinerules", header: claudeStyleHeader },
+  copilot:       { path: ".github/copilot-instructions.md", header: claudeStyleHeader },
   generic:       { path: "CLAUDE.md", header: claudeStyleHeader },
 };
 
@@ -149,7 +151,7 @@ function loadRulesBlockBody(): string {
 
 export const RULES_BLOCK_BODY = loadRulesBlockBody();
 
-const ROOT_FILES = ["CLAUDE.md", "AGENTS.md", "GEMINI.md", "ANTIGRAVITY.md", ".aider.conf.yml"] as const;
+const ROOT_FILES = ["CLAUDE.md", "AGENTS.md", "GEMINI.md", "ANTIGRAVITY.md", ".aider.conf.yml", ".clinerules", ".github/copilot-instructions.md"] as const;
 const SUBDIR_GLOBS = [
   { dir: ".cursor/rules", ext: ".mdc" },
   { dir: ".continue/rules", ext: ".md" },

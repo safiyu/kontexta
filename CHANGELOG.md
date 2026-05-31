@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.0.4 — GitHub Copilot support
+
+### Added
+
+- **GitHub Copilot integration**: Copilot is now a first-class agent in kontexta. Added to `AgentId` type, `SCAFFOLDS` (path: `.github/copilot-instructions.md`), `ROOT_FILES` for context detection, MCP `target_agent` enum, web app `CLIENTS`/`TEMPLATES`/`CLIENT_CONFIG_PATHS`, install configuration page, and onboard modal. Copilot uses a file-based integration (no MCP config needed) — `onboard_agent` scaffolds `.github/copilot-instructions.md` with the kontexta workflow rules block.
+
 ## 2.0.3 — Test suite stabilization & UI authentication integration
 
 ### Fixed
@@ -165,7 +171,7 @@ The first kontexta release after the rename from mnexis. Versioning was reset to
 
 ### Agent onboarding
 
-- **`register_project`** detects existing agent context files (`CLAUDE.md` / `AGENTS.md` / `GEMINI.md` / `.cursor/rules/*.mdc` / `.continue/rules/*.md` / `ANTIGRAVITY.md`) and recommends the right onboarding action.
+- **`register_project`** detects existing agent context files (`CLAUDE.md` / `AGENTS.md` / `GEMINI.md` / `.cursor/rules/*.mdc` / `.continue/rules/*.md` / `ANTIGRAVITY.md` / `.clinerules`) and recommends the right onboarding action.
 - **`onboard_agent`** writes/updates a fenced, version-stamped kontexta workflow rules block in those files. Idempotent; version bumps splice in place. Supports update mode (existing files) and create mode (scaffolds canonical filenames per agent type).
 - **Routing matrix** in the rules block covers all 47 (then 50) MCP tools with when-to-use / when-not-to / suggested alternative columns.
 
