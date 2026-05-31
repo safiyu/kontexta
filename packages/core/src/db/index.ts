@@ -18,9 +18,13 @@ const __dirname = dirname(__filename);
 // - Next.js standalone with cwd in apps/web: walk up two levels
 function resolveMigrationsDir(): string {
   const candidates = [
-    join(__dirname, "migrations"),
-    join(__dirname, "..", "..", "src", "db", "migrations"),
+    // Docker: WORKDIR=/app, migrations explicitly copied to /app/packages/core/src/db/migrations
     join(process.cwd(), "packages", "core", "src", "db", "migrations"),
+    // tsc build: dist/db/migrations (sibling of this file's dist location)
+    join(__dirname, "migrations"),
+    // Next.js standalone: __dirname resolves relative to the traced module
+    join(__dirname, "..", "..", "src", "db", "migrations"),
+    // Fallback: dist copy
     join(process.cwd(), "packages", "core", "dist", "db", "migrations"),
     join(process.cwd(), "..", "..", "packages", "core", "src", "db", "migrations"),
     join(process.cwd(), "..", "..", "packages", "core", "dist", "db", "migrations"),

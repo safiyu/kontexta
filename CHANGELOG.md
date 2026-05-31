@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.0.5 — Docker auth & migration fixes
+
+### Fixed
+
+- **Session cookie over HTTP**: The `kontexta_session` cookie was set with `Secure: true` in production mode. Browsers silently discard `Secure` cookies over plain HTTP, causing the login flow to reset immediately after a successful password entry in Docker deployments. Fixed by removing the `Secure` flag — the HMAC-signed token, `HttpOnly`, and `SameSite: Lax` attributes still provide strong protection.
+- **Migration `005-auth.sql` not running in Docker**: The `settings` table (required for auth) was not being created in Docker because the migration file was missing from the published image (pre-auth build) and `resolveMigrationsDir()` resolved to an inconsistent path at runtime. Fixed by:
+  - Explicitly `COPY`-ing the migrations directory into `/app/packages/core/src/db/migrations` in the Dockerfile runner stage, making the path deterministic regardless of Next.js file-tracing.
+  - Moving the `process.cwd()`-relative candidate to the top of the resolver's priority list so Docker containers find migrations first.
+- **First-connection setup loop**: The root `/` and `/login` pages were statically pre-rendered by Next.js at build time (when the DB is empty), causing them to always redirect to `/login` and show the setup form regardless of runtime state. Added `export const dynamic = "force-dynamic"` to both pages so they are always server-rendered on demand.
+
 ## 2.0.4 — GitHub Copilot support
 
 ### Added
