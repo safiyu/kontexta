@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.0.7 — Docker health check security fix
+
+### Fixed
+
+- **Health endpoint 401 in Docker containers**: The `/api/health` endpoint now allows health checks from localhost (container-internal) without requiring session authentication. External requests still require full auth. This fixes the container being marked unhealthy while keeping the endpoint protected from internet exposure.
+
 ## 2.0.6 — Glama MCP integration
 
 ### Added

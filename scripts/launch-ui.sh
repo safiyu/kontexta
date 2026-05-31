@@ -7,8 +7,8 @@ set -eu
 
 cd "$(dirname "$0")/.."
 
-echo "MNEXIS env vars in this shell:" >&2
-env | grep MNEXIS >&2 || echo "  (none set)" >&2
+echo "KONTEXTA env vars in this shell:" >&2
+env | grep KONTEXTA >&2 || echo "  (none set)" >&2
 
 mode="prod"
 if [ "${1:-}" = "--dev" ] || [ "${1:-}" = "-d" ]; then
@@ -16,11 +16,11 @@ if [ "${1:-}" = "--dev" ] || [ "${1:-}" = "-d" ]; then
 fi
 
 if [ "$mode" = "dev" ]; then
-  exec pnpm -F mnexis-web dev
+  exec pnpm -F kxta-web dev
 else
   if [ ! -d apps/web/.next ]; then
     echo "No build output found at apps/web/.next - running build first..." >&2
-    pnpm -F mnexis-web build
+    pnpm -F kxta-web build
   fi
-  exec pnpm -F mnexis-web start
+  exec pnpm -F kxta-web start
 fi
