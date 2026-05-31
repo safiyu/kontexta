@@ -9,7 +9,7 @@
   <a href="https://glama.ai/mcp/servers/safiyu/kontexta"><img src="https://glama.ai/mcp/servers/safiyu/kontexta/badges/score.svg" alt="kontexta MCP server"></a>
 </p>
 
-Kontexta is a local-first **Model Context Protocol (MCP)** server that gives your AI coding agents — **Claude Code**, **Cursor**, **Cline**, **GitHub Copilot**, **Gemini**, **Antigravity** — a persistent memory and a controlled command surface. [Learn more at kontexta.dev](https://kontexta.dev) 
+Kontexta is a local-first **Model Context Protocol (MCP)** server that gives your AI coding agents — **Claude Code**, **Cursor**, **Cline**, **GitHub Copilot**, **Gemini**, **Antigravity** — a persistent memory and a controlled command surface. [Learn more at kontexta.dev](https://kontexta.dev)
 
 Instead of agents losing context between sessions or inventing their own shell commands, Kontexta provides:
 - **Brain**: A git-backed markdown vault with FTS5 search and surgical section edits.
