@@ -1,5 +1,31 @@
 # Changelog
 
+## 2.0.5 — Docker improvements & authentication fixes
+
+### Added
+
+- **Environment variables for Docker**: Easily customize ports and data paths without editing compose files:
+  - `HOST_PORT` — Web UI port (default: 8007 for local build, 3000 for Docker Hub)
+  - `WS_HOST_PORT` — WebSocket port (default: 8008 for local build, 3001 for Docker Hub)
+  - `DATA_DIR` — Where to persist your vault and database
+  - `PROJECT_DIR` — Where your projects live on the host (now required with startup check)
+  - `WS_ORIGINS` — Allowed domains for WebSocket connections
+
+- **Two Docker workflows**: 
+  - `docker-compose.yml` — Build from source (local development)
+  - `docker-compose.hub.yml` — Use pre-built Docker Hub image (production deployment)
+
+### Fixed
+
+- **Login broken over HTTP in Docker**: Sessions now work reliably when deployed to HTTP (e.g., behind a reverse proxy). Previously the session cookie was marked `Secure`, so browsers discarded it over plain HTTP.
+- **Initial setup stuck in a loop**: Login page now renders on demand instead of being frozen at build time, so you can complete the first-run setup without restarting.
+- **Database migrations missing in Docker**: Auth table migrations now consistently run on container startup, fixing setup failures in Docker deployments.
+
+### Changed
+
+- **`PROJECT_DIR` is required**: The compose file checks it on startup and fails fast if missing, preventing silent file path mismatches between your host and the container.
+- **Updated Docker documentation**: Clear examples for ports, paths, and variable usage.
+
 ## 2.0.4 — GitHub Copilot support
 
 ### Added

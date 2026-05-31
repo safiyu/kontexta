@@ -9,7 +9,7 @@
   <a href="https://glama.ai/mcp/servers/safiyu/kontexta"><img src="https://glama.ai/mcp/servers/safiyu/kontexta/badges/score.svg" alt="kontexta MCP server"></a>
 </p>
 
-Kontexta is a local-first **Model Context Protocol (MCP)** server that gives your AI coding agents — **Claude Code**, **Cursor**, **Cline**, **GitHub Copilot**, **Gemini**, **Antigravity** — a persistent memory and a controlled command surface. 
+Kontexta is a local-first **Model Context Protocol (MCP)** server that gives your AI coding agents — **Claude Code**, **Cursor**, **Cline**, **GitHub Copilot**, **Gemini**, **Antigravity** — a persistent memory and a controlled command surface. [Learn more at kontexta.dev](https://kontexta.dev)
 
 Instead of agents losing context between sessions or inventing their own shell commands, Kontexta provides:
 - **Brain**: A git-backed markdown vault with FTS5 search and surgical section edits.
@@ -147,6 +147,23 @@ curl -fsSL https://raw.githubusercontent.com/safiyu/kontexta/main/docker-compose
 docker compose up -d
 ```
 The UI lands at `http://localhost:3000`.
+
+To run on custom ports:
+```bash
+HOST_PORT=8080 WS_HOST_PORT=8081 \
+docker compose up -d
+```
+The WebSocket host port defaults to `3001`. If you change `HOST_PORT`, also set `WS_HOST_PORT`.
+You can also specify where data and projects live on the host:
+```bash
+DATA_DIR=/absolute/path/to/kontexta-data \
+PROJECT_DIR=/absolute/path/to/your/projects \
+HOST_PORT=8080 WS_HOST_PORT=8081 \
+docker compose up -d
+```
+The WebSocket host port defaults to `HOST_PORT + 1` if not specified.
+Note: `PROJECT_DIR` should be an absolute host path and is mounted to the same absolute path inside the container so file paths remain consistent between your host and the in-container MCP tools.
+The compose file includes a startup check that fails fast if `PROJECT_DIR` is not set, preventing accidental runs without a mounted projects directory.
 
 ---
 

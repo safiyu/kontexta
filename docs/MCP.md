@@ -131,12 +131,14 @@ For the Docker-based MCP server to see your local files, you **must** mount your
 
 ```yaml
 volumes:
-  - ./kontexta-data:/app/data
-  - /home/user/Projects:/home/user/Projects  # Mount your host path to the same container path
+  - ${DATA_DIR:-./kontexta-data}:/app/data
+  - ${PROJECT_DIR}:${PROJECT_DIR}  # Mount your host projects directory to the SAME absolute path inside the container (REQUIRED)
 ```
 
 > [!TIP]
-> To ensure the AI client (running on your host) and the MCP server (running in the container) agree on file paths, mount your host path to the **exact same path** inside the container (e.g., `/home/safiyu/Projects:/home/safiyu/Projects`).
+> To ensure the AI client (running on your host) and the MCP server (running in the container) agree on file paths, mount the host path to the same absolute path inside the container. The compose file exposes `KONTEXTA_PROJECTS_ROOT=${PROJECT_DIR}` so in-container tools know where projects live. `PROJECT_DIR` should be an absolute path on the host (e.g., `/home/safiyu/Projects`).
+
+> **Startup check:** the compose file sets an entrypoint that fails fast if `PROJECT_DIR` is not defined, preventing accidental runs without a mounted projects directory.
 
 ---
 

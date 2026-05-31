@@ -22,11 +22,6 @@ RUN pnpm install --frozen-lockfile
 # Copy the rest of the source code
 COPY . .
 
-# WebSocket port is baked into the client bundle at build time via
-# NEXT_PUBLIC_WS_PORT. Override at build with --build-arg WS_PORT=...
-ARG WS_PORT=3001
-ENV NEXT_PUBLIC_WS_PORT=${WS_PORT}
-
 # Build everything
 RUN pnpm build
 
@@ -59,6 +54,12 @@ COPY --from=builder /app/apps/web/next.config.ts ./
 COPY --from=builder /app/apps/web/public ./apps/web/public
 COPY --from=builder /app/apps/web/.next/standalone ./
 COPY --from=builder /app/apps/web/.next/static ./apps/web/.next/static
+
+# Explicitly copy migration SQL files and agent-rules to a predictable path
+# that resolveMigrationsDir() can always find, regardless of how Next.js
+# file-tracing resolves __dirname at runtime.
+COPY --from=builder /app/packages/core/src/db/migrations ./packages/core/src/db/migrations
+COPY --from=builder /app/packages/core/src/agent-rules/rules-block.md ./packages/core/src/agent-rules/rules-block.md
 
 # Copy deployed MCP server
 COPY --from=builder /app/mcp-deploy ./apps/mcp

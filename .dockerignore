@@ -1,7 +1,9 @@
-node_modules
-.next
-dist
-.git
+**/node_modules
+**/.next
+**/dist
+**/.git
+**/.turbo
+**/kontexta-data
 kontexta.db
 data
 *.log

@@ -2,36 +2,39 @@ services:
   kontexta:
     build:
       context: .
-      args:
-        # Baked into the client bundle. Must match WS_PORT below.
-        WS_PORT: "3001"
+      dockerfile: Dockerfile
+      target: runner
     container_name: kontexta
     ports:
-      - "3000:3000"
-      - "3001:3001"
+      - "${HOST_PORT:-8007}:3000"
+      - "${WS_HOST_PORT:-8008}:3001"
     volumes:
-      - ./kontexta-data:/app/data
-      # - /path/to/your/projects:/path/to/your/projects # Mount your projects directory here
+      - "${DATA_DIR:-./kontexta-data}:/app/data"
+      # Mount your projects directory. PROJECT_DIR must be an absolute path and
+      # is mounted to the same path inside the container so file paths remain stable.
+      - "${PROJECT_DIR:-/projects}:${PROJECT_DIR:-/projects}"
     environment:
       - NODE_ENV=production
       - HOSTNAME=0.0.0.0
       - PORT=3000
       - WS_PORT=3001
-      # Inside the container the WS server must listen on all interfaces so
-      # the published port reaches it. The in-process default is 127.0.0.1.
+      - KONTEXTA_WS_CLIENT_PORT=${WS_HOST_PORT:-8008}
       - KONTEXTA_WS_HOST=0.0.0.0
-      # Origin allowlist for the (non-loopback) WS server. Browsers from
-      # these origins can subscribe; everyone else is rejected. Add your
-      # production hostname (e.g. https://kontexta.example.com) here.
-      - KONTEXTA_WS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
-      # Optional: shared-secret token for WS auth (defends against raw
-      # clients that spoof Origin). Generate with `openssl rand -hex 32`
-      # and set both KONTEXTA_WS_TOKEN here AND NEXT_PUBLIC_WS_TOKEN as a
-      # build arg so the client bundle includes it.
-      # - KONTEXTA_WS_TOKEN=<generate-and-set>
+      - KONTEXTA_WS_ORIGINS=${WS_ORIGINS:-http://localhost:${HOST_PORT:-8007},http://127.0.0.1:${HOST_PORT:-8007}}
       - KONTEXTA_DATA_DIR=/app/data
       - KONTEXTA_DB_PATH=/app/data/kontexta.db
-    restart: always
+      - PROJECT_DIR=${PROJECT_DIR}
+    restart: "no"
+    command: >
+      /bin/sh -c '
+        if [ -z "$PROJECT_DIR" ]; then
+          echo "ERROR: PROJECT_DIR must be set to an absolute host path before running compose."
+          echo "Example: PROJECT_DIR=/home/user/Projects docker compose up"
+          exit 1
+        fi
+        echo "Starting Kontexta with PROJECT_DIR=$PROJECT_DIR"
+        exec node apps/web/server.js
+      '
     healthcheck:
       test: ["CMD-SHELL", "node -e \"require('http').get('http://127.0.0.1:3000/api/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))\""]
       interval: 30s
