@@ -47,6 +47,9 @@ export function useWebSocket(onEvent: (event: { type: string; path: string }) =>
         }
       };
 
+      // Await config before first connect so the correct port is used.
+      await fetchWsConfig();
+
       const connect = async () => {
         if (cancelled || stopReconnecting) return;
 

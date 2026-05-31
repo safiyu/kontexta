@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.0.6 — Glama MCP integration
+
+### Added
+
+- **Glama MCP server badges**: kontexta is now listed on [Glama](https://glama.ai) with live badge support. The web dashboard shows a Glama badge in the README and the MCP server manifest includes Glama metadata for discoverability.
+
 ## 2.0.5 — Docker improvements & authentication fixes
 
 ### Added
