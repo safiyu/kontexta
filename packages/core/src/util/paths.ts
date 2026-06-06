@@ -44,6 +44,25 @@ function isWebContext(): boolean {
   );
 }
 
+/** True when a resolved path looks like a temp/test location that must not be persisted to cache. */
+function isTempOrTestPath(p: string): boolean {
+  const lower = p.toLowerCase();
+  const tmp = os.tmpdir().toLowerCase();
+  return (
+    lower.startsWith("/tmp") ||
+    lower.startsWith(tmp) ||
+    lower.includes(`${path.sep}tmp${path.sep}`) ||
+    lower.includes("test") ||
+    lower.includes("-tmp-") ||
+    (process.platform === "win32" && lower.includes("\\temp\\"))
+  );
+}
+
+/** Resets the in-process data-dir cache. Call in test teardown after changing KONTEXTA_DATA_DIR. */
+export function resetDataDirCache(): void {
+  _resolvedDataDir = null;
+}
+
 export function getDataDir(): string {
   if (_resolvedDataDir) return _resolvedDataDir;
 
@@ -52,39 +71,43 @@ export function getDataDir(): string {
   const envOverride = process.env.KONTEXTA_DATA_DIR;
   const isWeb = isWebContext();
 
-  // 1. Web UI Override takes absolute priority and updates the cache
+  // 1. Web UI Override takes absolute priority and updates the cache —
+  //    but never persist temp/test paths so test runs don't poison the cache.
   if (isWeb && envOverride) {
     _resolvedDataDir = path.resolve(envOverride);
-    try {
-      fs.writeFileSync(cacheFile, _resolvedDataDir, "utf8");
-    } catch {}
+    if (!isTempOrTestPath(_resolvedDataDir)) {
+      try { fs.writeFileSync(cacheFile, _resolvedDataDir, "utf8"); } catch {}
+    }
     return _resolvedDataDir;
   }
 
-  // 2. Check for a persisted "Source of Truth" from a previous run (usually Web UI)
-  const isTest = !!process.env.VITEST || process.env.NODE_ENV === "test" || (envOverride && (envOverride.includes("test") || envOverride.includes("tmp")));
-  if (!isTest && fs.existsSync(cacheFile)) {
+  // 2. Explicit local override (KONTEXTA_DATA_DIR set on this process).
+  //    Wins over cache for non-web contexts. Don't persist temp/test paths.
+  if (envOverride) {
+    _resolvedDataDir = path.resolve(envOverride);
+    const isTestEnv = !!process.env.VITEST || process.env.NODE_ENV === "test";
+    if (!isTempOrTestPath(_resolvedDataDir) && !isTestEnv) {
+      try { fs.writeFileSync(cacheFile, _resolvedDataDir, "utf8"); } catch {}
+    }
+    return _resolvedDataDir;
+  }
+
+  // 3. Check for a persisted "Source of Truth" from a previous run (usually Web UI).
+  //    Only consulted when no local override exists. Skip stale temp-dir entries.
+  const isTestEnv = !!process.env.VITEST || process.env.NODE_ENV === "test";
+  if (!isTestEnv && fs.existsSync(cacheFile)) {
     try {
       const cached = fs.readFileSync(cacheFile, "utf8").trim();
-      if (cached && path.isAbsolute(cached)) {
-        // Even if this process (MCP) has its own override, we favor the cached one
-        // to fulfill the "in case of discrepancy core selects webui override" rule.
+      if (cached && path.isAbsolute(cached) && !isTempOrTestPath(cached)) {
         _resolvedDataDir = cached;
         return _resolvedDataDir;
       }
+      // Cached path is a temp/test path — remove the stale entry.
+      try { fs.unlinkSync(cacheFile); } catch {}
     } catch {}
   }
 
-  // 3. No cache exists. Use the local environment override if set.
-  if (envOverride) {
-    _resolvedDataDir = path.resolve(envOverride);
-    try {
-      fs.writeFileSync(cacheFile, _resolvedDataDir, "utf8");
-    } catch {}
-    return _resolvedDataDir;
-  }
-
-  // 4. Default fallthrough
+  // 4. Default fallthrough to OS-standard directory.
   _resolvedDataDir = defaultDataDir();
   return _resolvedDataDir;
 }

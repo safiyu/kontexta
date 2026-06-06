@@ -161,4 +161,5 @@ The matrix below is grouped by intent. For each tool: when to reach for it, the 
 |---|---|---|---|
 | `register_project` | Register a new project root with kontexta | Already registered | `list_projects` |
 | `onboard_agent` | Write/update the rules block in CLAUDE.md / AGENTS.md / etc. | Editing regular project content | `update_file` |
+| `transfer_agent_context` | Copy CLAUDE.md / AGENTS.md / `.cursor/rules/*.mdc` etc. from the project repo into Kontexta's KB. Originals are NEVER deleted by this tool. | User wants files to stay in the repo (default) | `register_project` (which keeps files in place) |
 <!-- END kontexta:rules v{{VERSION}} -->

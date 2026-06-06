@@ -6,8 +6,9 @@ services:
       target: runner
     container_name: kontexta
     ports:
+      # WebSocket file-watcher shares this same port (upgrade path
+      # /_kontexta_ws), so no second port is published.
       - "${HOST_PORT:-3000}:3000"
-      - "${WS_HOST_PORT:-3001}:3001"
     volumes:
       - "${DATA_DIR:-./kontexta-data}:/app/data"
       # Mount your projects directory. PROJECT_DIR must be an absolute path and
@@ -17,10 +18,6 @@ services:
       - NODE_ENV=production
       - HOSTNAME=0.0.0.0
       - PORT=3000
-      - WS_PORT=3001
-      - KONTEXTA_WS_CLIENT_PORT=${WS_HOST_PORT:-3001}
-      - KONTEXTA_WS_HOST=0.0.0.0
-      - KONTEXTA_WS_ORIGINS=${WS_ORIGINS:-http://localhost:${HOST_PORT:-3000},http://127.0.0.1:${HOST_PORT:-3000}}
       - KONTEXTA_DATA_DIR=/app/data
       - KONTEXTA_DB_PATH=/app/data/kontexta.db
       # Host path for the data directory — used by the web UI to generate

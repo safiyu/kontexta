@@ -80,7 +80,7 @@ import { tmpdir } from "node:os";
 
 function tmpProject(content) {
   const root = mkdtempSync(join(tmpdir(), "hands-"));
-  if (content !== null) writeFileSync(join(root, "mnexis.json"), content);
+  if (content !== null) writeFileSync(join(root, "kontexta.json"), content);
   return root;
 }
 

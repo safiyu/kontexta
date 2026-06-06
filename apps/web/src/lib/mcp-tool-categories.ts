@@ -44,6 +44,7 @@ export const TOOL_CATEGORIES: Record<string, ToolCategory> = {
   delete_folder: "Folders & Projects",
   register_project: "Folders & Projects",
   onboard_agent: "Folders & Projects",
+  transfer_agent_context: "Folders & Projects",
   journal_note: "Write",
   journal_intent: "Write",
   journal_append: "Write",

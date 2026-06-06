@@ -12,14 +12,14 @@
 
 import { spawn } from "node:child_process";
 import { join, resolve } from "node:path";
-import { mkdtempSync, rmSync, mkdirSync, writeFileSync, existsSync } from "node:fs";
+import { mkdtempSync, rmSync, mkdirSync, writeFileSync, existsSync, statSync, readFileSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 
 const REPO = resolve(new URL("../..", import.meta.url).pathname);
 const SERVER = join(REPO, "apps/mcp/dist/index.js");
 
 // Use a fresh temp dataDir so we don't pollute the user's KB.
-const DATA_DIR = mkdtempSync(join(tmpdir(), "mnexis-test-"));
+const DATA_DIR = mkdtempSync(join(tmpdir(), "kontexta-test-"));
 mkdirSync(join(DATA_DIR, "knowledge"), { recursive: true });
 // Seeds will be created via the create_file tool itself (the MCP server
 // doesn't run a watcher — that's the web app's job — so writeFileSync'd
@@ -396,7 +396,7 @@ function assert(cond, msg) {
     // Write a file directly to disk (bypassing create_file). Without
     // refresh_index it would never be indexed in MCP-only mode.
     const sneakyPath = join(DATA_DIR, "knowledge", "sneaked-in.md");
-    writeFileSync(sneakyPath, "# Sneaked\n\nThis file was added behind Mnexis's back.\n");
+    writeFileSync(sneakyPath, "# Sneaked\n\nThis file was added behind Kontexta's back.\n");
     const before = await call("read_file_by_path", { path: sneakyPath }).catch((e) => e.message);
     assert(typeof before === "string" && before.includes("No file indexed"), "file should not be indexed yet");
     const r = await call("refresh_index", { project_id: null });
@@ -476,8 +476,8 @@ function assert(cond, msg) {
 
   // ---- Hands integration ----
   await test("hands: register, list, invoke, confirm", async () => {
-    const handsRoot = mkdtempSync(join(tmpdir(), "mnexis-hands-"));
-    writeFileSync(join(handsRoot, "mnexis.json"), JSON.stringify({
+    const handsRoot = mkdtempSync(join(tmpdir(), "kontexta-hands-"));
+    writeFileSync(join(handsRoot, "kontexta.json"), JSON.stringify({
       version: "1",
       tools: {
         "say-hi": {
@@ -524,7 +524,7 @@ function assert(cond, msg) {
 
   // ---- onboard_agent ----
   await test("register_project recommends onboarding, onboard_agent updates+skips", async () => {
-    const root = mkdtempSync(join(tmpdir(), "mnexis-rules-"));
+    const root = mkdtempSync(join(tmpdir(), "kontexta-rules-"));
     writeFileSync(join(root, "CLAUDE.md"), "# Existing\n\nUser content.\n");
 
     const reg = await call("register_project", { name: "rulesproj", path: root });
@@ -544,7 +544,7 @@ function assert(cond, msg) {
   });
 
   await test("onboard_agent create mode scaffolds AGENTS.md", async () => {
-    const root = mkdtempSync(join(tmpdir(), "mnexis-rules-create-"));
+    const root = mkdtempSync(join(tmpdir(), "kontexta-rules-create-"));
 
     const reg = await call("register_project", { name: "rulesproj-create", path: root });
     assert(reg.recommendation.mode === "create", `expected create mode, got ${reg.recommendation.mode}`);
@@ -559,7 +559,7 @@ function assert(cond, msg) {
   });
 
   await test("onboard_agent create mode scaffolds ANTIGRAVITY.md", async () => {
-    const root = mkdtempSync(join(tmpdir(), "mnexis-rules-antigravity-"));
+    const root = mkdtempSync(join(tmpdir(), "kontexta-rules-antigravity-"));
 
     const reg = await call("register_project", { name: "rulesproj-antigravity", path: root });
     const projId = reg.project.id;
@@ -568,6 +568,73 @@ function assert(cond, msg) {
     assert(r.written?.[0]?.action === "created", `expected created, got ${JSON.stringify(r)}`);
     assert(r.written[0].path === "ANTIGRAVITY.md", `expected ANTIGRAVITY.md, got ${r.written[0].path}`);
     assert(existsSync(join(root, "ANTIGRAVITY.md")), "ANTIGRAVITY.md not created on disk");
+
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  // ---- transfer_agent_context ----
+  await test("transfer_agent_context copies originals, idempotent, never deletes", async () => {
+    const root = mkdtempSync(join(tmpdir(), "kontexta-transfer-"));
+    mkdirSync(join(root, ".cursor", "rules"), { recursive: true });
+    const claudeContent = "# Project rules\n\nUse TypeScript strict mode.\n";
+    const cursorContent = "# Style\n\nNo any.\n";
+    writeFileSync(join(root, "CLAUDE.md"), claudeContent);
+    writeFileSync(join(root, ".cursor", "rules", "style.mdc"), cursorContent);
+
+    const reg = await call("register_project", { name: "transferproj", path: root });
+    const projId = reg.project.id;
+
+    // Snapshot originals to prove we never touch them.
+    const claudeStatBefore = statSync(join(root, "CLAUDE.md"));
+    const cursorStatBefore = statSync(join(root, ".cursor", "rules", "style.mdc"));
+
+    // 1. Refuses without confirm:true (call() throws on isError responses)
+    let consentRefused = false;
+    try {
+      await call("transfer_agent_context", { project_id: projId, confirm: false });
+    } catch (e) {
+      consentRefused = String(e.message).includes("User consent required");
+    }
+    assert(consentRefused, "expected User consent required error when confirm is false");
+
+    // 2. Transfers all detected files
+    const r1 = await call("transfer_agent_context", { project_id: projId, confirm: true });
+    assert(Array.isArray(r1.transferred) && r1.transferred.length === 2, `expected 2 transferred, got ${JSON.stringify(r1)}`);
+    assert(r1.skipped.length === 0, `expected 0 skipped, got ${JSON.stringify(r1.skipped)}`);
+    const paths = r1.transferred.map((t) => t.source_path).sort();
+    assert(paths[0] === ".cursor/rules/style.mdc" && paths[1] === "CLAUDE.md", `unexpected paths: ${paths}`);
+
+    // Confirm KB files exist and content matches
+    for (const t of r1.transferred) {
+      assert(existsSync(t.kb_path), `kb_path missing: ${t.kb_path}`);
+      const expected = t.source_path === "CLAUDE.md" ? claudeContent : cursorContent;
+      assert(readFileSync(t.kb_path, "utf8") === expected, `content mismatch in ${t.kb_path}`);
+    }
+
+    // 3. Originals UNCHANGED — same mtime, size, content
+    const claudeStatAfter = statSync(join(root, "CLAUDE.md"));
+    const cursorStatAfter = statSync(join(root, ".cursor", "rules", "style.mdc"));
+    assert(claudeStatAfter.mtimeMs === claudeStatBefore.mtimeMs, "CLAUDE.md mtime changed — originals must NOT be modified");
+    assert(cursorStatAfter.mtimeMs === cursorStatBefore.mtimeMs, "style.mdc mtime changed");
+    assert(readFileSync(join(root, "CLAUDE.md"), "utf8") === claudeContent, "CLAUDE.md content changed");
+    assert(readFileSync(join(root, ".cursor", "rules", "style.mdc"), "utf8") === cursorContent, "style.mdc content changed");
+
+    // 4. Idempotent — re-run skips both as already_transferred_same_content
+    const r2 = await call("transfer_agent_context", { project_id: projId, confirm: true });
+    assert(r2.transferred.length === 0, `expected 0 on re-run, got ${r2.transferred.length}`);
+    assert(r2.skipped.length === 2, `expected 2 skipped on re-run, got ${r2.skipped.length}`);
+    assert(r2.skipped.every((s) => s.reason === "already_transferred_same_content"), `expected idempotent skip reason, got ${JSON.stringify(r2.skipped)}`);
+
+    // 5. Safety: path-traversal attempt rejected
+    const r3 = await call("transfer_agent_context", { project_id: projId, confirm: true, files: ["../../../etc/passwd"] });
+    assert(r3.skipped[0].reason === "outside_project", `expected outside_project, got ${JSON.stringify(r3)}`);
+    assert(r3.transferred.length === 0, "must not transfer escape path");
+
+    // 6. Symlinks rejected
+    writeFileSync(join(root, "REAL.md"), "real");
+    symlinkSync(join(root, "REAL.md"), join(root, "LINK.md"));
+    const r4 = await call("transfer_agent_context", { project_id: projId, confirm: true, files: ["LINK.md"] });
+    assert(r4.skipped[0].reason === "symlink", `expected symlink reject, got ${JSON.stringify(r4)}`);
 
     rmSync(root, { recursive: true, force: true });
   });

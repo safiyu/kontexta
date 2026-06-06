@@ -27,6 +27,7 @@ export function InstallSection() {
   const [install, setInstall] = useState("docker");
   const [snippet, setSnippet] = useState<{ body: string; configPath?: string; notes?: string[] } | null>(null);
   const [detected, setDetected] = useState<string | null>(null);
+  const [dataDirInfo, setDataDirInfo] = useState<{ dataDir: string; isDefaultDir: boolean; defaultDirDisplay: string } | null>(null);
 
   useEffect(() => {
     fetch(`/api/install-snippets?client=${client}&install=${install}&t=${Date.now()}`)
@@ -34,6 +35,7 @@ export function InstallSection() {
       .then((j) => {
         setSnippet(j);
         if (j.detectedInstall && !detected) setDetected(j.detectedInstall);
+        if (j.dataDir) setDataDirInfo({ dataDir: j.dataDir, isDefaultDir: j.isDefaultDir, defaultDirDisplay: j.defaultDirDisplay });
       })
       .catch(() => {});
   }, [client, install, detected]);
@@ -54,11 +56,25 @@ export function InstallSection() {
           </select>
         </label>
       </div>
+      {dataDirInfo && (
+        <div className="mb-3 text-xs text-[var(--text-secondary)] flex items-center gap-1.5">
+          <span className="opacity-60">📁</span>
+          <span>
+            Data directory:{" "}
+            <code className="text-[var(--text-primary)] font-mono">
+              {dataDirInfo.isDefaultDir ? dataDirInfo.defaultDirDisplay : dataDirInfo.dataDir}
+            </code>
+            {dataDirInfo.isDefaultDir && (
+              <span className="ml-1 opacity-60">(OS default)</span>
+            )}
+          </span>
+        </div>
+      )}
       {snippet && (
-        <InstallSnippetView 
-          body={snippet.body} 
-          configPath={snippet.configPath} 
-          notes={snippet.notes} 
+        <InstallSnippetView
+          body={snippet.body}
+          configPath={snippet.configPath}
+          notes={snippet.notes}
         />
       )}
     </div>

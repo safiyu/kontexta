@@ -1,6 +1,6 @@
 {
   "name": "kxta-core",
-  "version": "2.0.8",
+  "version": "2.0.9",
   "description": "Core context and command engines for Kontexta",
   "private": true,
   "type": "module",
@@ -28,5 +28,5 @@
     "typescript": "^5.7.0",
     "vitest": "^3.0.0"
   },
-  "rulesVersion": "2.0.0"
+  "rulesVersion": "2.1.0"
 }

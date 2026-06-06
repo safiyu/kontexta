@@ -50,28 +50,21 @@ Before running `docker compose up`, open `docker-compose.hub.yml` and check the 
 
 2. **Data Persistence**: By default, your vault (SQLite, backups, KB) is stored in `./kontexta-data` relative to the compose file. Use `DATA_DIR` to change the host-side path (e.g., `DATA_DIR=/var/lib/kontexta`).
 
-3. **Port Mapping**: If ports `3000` (Web UI) or `3001` (WebSocket) are already in use on your host, set `HOST_PORT` and `WS_HOST_PORT`:
+3. **Port Mapping**: If port `3000` is already in use on your host, set `HOST_PORT`:
    ```bash
-  HOST_PORT=8080 WS_HOST_PORT=8081 \
-  docker compose -f docker-compose.hub.yml up -d
-  ```
-  The WebSocket host port defaults to `3001`. If you change `HOST_PORT`, also set `WS_HOST_PORT`.
+   HOST_PORT=8080 docker compose -f docker-compose.hub.yml up -d
+   ```
+   The WebSocket file-watcher shares this same port (upgrade path `/_kontexta_ws`) — no second port to publish.
 
 **Example (absolute paths):**
 ```bash
 DATA_DIR=/var/lib/kontexta \
 PROJECT_DIR=/home/safiyu/Projects \
-HOST_PORT=8080 WS_HOST_PORT=8081 \
+HOST_PORT=8080 \
 docker compose -f docker-compose.hub.yml up -d
 ```
 
-4. **Allowed Origins**: If accessing the UI from a different host, set `WS_ORIGINS`:
-   ```bash
-   WS_ORIGINS="https://kontexta.example.com" \
-   docker compose -f docker-compose.hub.yml up -d
-   ```
-
-5. **Version Pinning**: To pin a specific release instead of `latest`, change `image: safiyu/kontexta:latest` to a specific version (e.g., `safiyu/kontexta:7.0.0`).
+4. **Version Pinning**: To pin a specific release instead of `latest`, change `image: safiyu/kontexta:latest` to a specific version (e.g., `safiyu/kontexta:7.0.0`).
 
 To update to the newest image:
 
@@ -88,7 +81,7 @@ The fastest way to run Kontexta in production is using the official Docker Hub i
 
 ```bash
 docker run -d \
-  -p 3000:3000 -p 3001:3001 \
+  -p 3000:3000 \
   # using environment variables to keep the host paths explicit
   -v "$DATA_DIR":/app/data \
   -v "$PROJECT_DIR":/projects \
@@ -98,8 +91,7 @@ docker run -d \
 
 **Flag breakdown:**
 - `-d`: Run in detached mode (background).
-- `-p 3000:3000`: Publish the Web UI.
-- `-p 3001:3001`: Publish the WebSocket file-watcher channel.
+- `-p 3000:3000`: Publish the Web UI. The WebSocket file-watcher shares this port (upgrade path `/_kontexta_ws`), so no second `-p` is needed.
 - `-v ...:/app/data`: Persist your vault (SQLite, backups, knowledge base).
 - `-v /host/path:/container/path`: Mount your projects so the agent can see them.
 - `--name kontexta`: Give the container a predictable name (useful for `docker exec` MCP tool calls).
@@ -117,18 +109,11 @@ cd kontexta
 docker compose up -d --build
 ```
 
-To change the WebSocket port, override at build time so the value is baked into the client bundle:
-
-```bash
-docker compose build --build-arg WS_PORT=4001
-WS_PORT=4001 docker compose up -d
-```
-
 ---
 
 ## After install
 
-Access the UI at `http://localhost:3000`. Both compose files publish `3001` for the WebSocket file-watcher channel. Data is persisted in `./kontexta-data` on the host. The container is wired with a healthcheck against `/api/health` (returns `{"status":"ok"}` once the SQLite handle is open).
+Access the UI at `http://localhost:3000`. The WebSocket file-watcher shares this same port (upgrade path `/_kontexta_ws`), so a single published port is all you need. Data is persisted in `./kontexta-data` on the host. The container is wired with a healthcheck against `/api/health` (returns `{"status":"ok"}` once the SQLite handle is open).
 
 To stop and remove:
 
@@ -211,10 +196,12 @@ Returns `{ written: [{ path, action, version }], skipped: [{ path, reason }] }`.
 
 | Tool | Version | Why |
 | :--- | :--- | :--- |
-| Node.js | **20.x LTS** | Required by Next 15 + React 19 |
+| Node.js | **22.x LTS** (pinned via `.nvmrc`) | Required by Next 15 + React 19. Pinned to 22 to avoid native-module ABI mismatches. |
 | pnpm | **9.15.0** (pinned via `packageManager`) | Package manager for the workspace |
 | git | 2.20+ | Sync engine shells out via `simple-git` at runtime |
 | C/C++ toolchain | platform-specific (see below) | `better-sqlite3` builds a native module on install |
+
+**Node version:** the repo includes a `.nvmrc` pinned to `22`. If you use nvm, run `nvm use` once inside the repo and you'll always be on the right version. Native modules (`better-sqlite3`, `re2`) compile against the active Node ABI — mixing versions across `pnpm install` and `node` invocations causes `ERR_DLOPEN_FAILED`. Avoid switching Node versions after installing; if you do, run `pnpm rebuild re2 better-sqlite3` to recompile.
 
 **Install pnpm** (matches the repo's pinned version):
 
@@ -241,12 +228,14 @@ Kontexta is a pnpm + turbo monorepo:
 kontexta/
 ├── apps/
 │   ├── web/        # Next.js 15 UI (App Router, React 19, Tailwind)
+│   │   └── scripts/dev-lite.sh  # low-memory dev server helper
 │   └── mcp/        # MCP stdio server for AI agents
 ├── packages/
 │   └── core/       # SQLite/FTS5, git engine, file watcher (kxta-core)
 ├── docker-compose.yml      # build from source
 ├── docker-compose.hub.yml  # pull from Docker Hub (no build)
 ├── Dockerfile
+├── .nvmrc                  # pins Node 22 for native module ABI consistency
 ├── pnpm-workspace.yaml
 └── turbo.json
 ```
@@ -272,8 +261,15 @@ pnpm dev
 
 This starts:
 
-- Next.js dev server on `http://localhost:3000` (with Turbopack hot reload)
-- WebSocket file-watcher on `127.0.0.1:3001` (auto-started by `instrumentation.ts`)
+- Next.js dev server on `http://localhost:3000` (Turbopack hot reload)
+- WebSocket file-watcher attached to the same HTTP server at `/_kontexta_ws` (auto-started by `instrumentation.ts`)
+
+> [!TIP]
+> **Low-memory machine?** Use `pnpm dev:lite` instead. It runs `next dev` on webpack (skips Turbopack's native engine) and caps Node's heap at 1.5 GB via `--max-old-space-size=1536`. Recommended on Cloud Workstations / small VMs where Turbopack can push the host into OOM. Boots to "Ready" in ~8s on a typical workstation.
+>
+> `dev:lite` also kills any orphaned `next-server` process left behind by a previous Ctrl-C before starting, so it always binds port 3000 cleanly. If you ever see the server start on `3001` instead, it means a previous dev server is still running — `dev:lite` handles this automatically.
+>
+> **Cloud Workstations note:** if you see a "Cross origin request" warning about `*.cloudworkstations.dev`, it's harmless — `next.config.ts` already whitelists that domain via `allowedDevOrigins`.
 
 Data is stored in your OS-standard user data directory by default (e.g., `~/.local/share/kontexta` on Linux). See the [Configuration](#configuration) section for exact paths.
 
@@ -308,7 +304,7 @@ With `pnpm dev` running:
 
 1. **UI loads:** open `http://localhost:3000` — the three-pane layout (folder tree / file list / content) renders.
 2. **Health endpoint:** `curl http://localhost:3000/api/health` returns `{"status":"ok"}`.
-3. **WebSocket connected:** open browser DevTools → Network → WS — a connection to `ws://localhost:3001` is open. Footer status bar shows `synced` or `idle` (not red).
+3. **WebSocket connected:** open browser DevTools → Network → WS — a connection to `ws://localhost:3000/_kontexta_ws` (status 101) is open. Footer status bar shows `synced` or `idle` (not red).
 
 ### Run in production (standalone, without Docker)
 
@@ -322,12 +318,10 @@ pnpm build
 NODE_ENV=production \
 KONTEXTA_DATA_DIR=/var/lib/kontexta \
 PORT=3000 \
-WS_PORT=3001 \
-KONTEXTA_WS_HOST=127.0.0.1 \
 node apps/web/.next/standalone/apps/web/server.js
 ```
 
-You must also place `apps/web/.next/static/` and `apps/web/public/` adjacent to `server.js` in the standalone tree (the `Dockerfile` shows the exact layout). Reverse-proxy `/` to `:3000` and the WebSocket path to `:3001` if you want network access — leave both on `127.0.0.1` if the proxy is on the same host.
+You must also place `apps/web/.next/static/` and `apps/web/public/` adjacent to `server.js` in the standalone tree (the `Dockerfile` shows the exact layout). Reverse-proxy `/` to `:3000` — the WebSocket file-watcher rides on the same port at `/_kontexta_ws`, so make sure your proxy forwards the HTTP `Upgrade` header (nginx: `proxy_set_header Upgrade $http_upgrade; proxy_set_header Connection "upgrade";`). No second port to publish or proxy.
 
 ### Tests
 
@@ -351,9 +345,11 @@ If `packages/core/src/db/migrations/` gained new `.sql` files, they run automati
 ### Troubleshooting
 
 - **`better-sqlite3` fails to build during `pnpm install`** — install the C/C++ toolchain (see Prerequisites), then `rm -rf node_modules && pnpm install`.
+- **`ERR_DLOPEN_FAILED` / "Module did not self-register"** — native module (`better-sqlite3` or `re2`) was compiled for a different Node version. Run `pnpm rebuild re2 better-sqlite3` under the correct Node version. Use `nvm use` to activate the version pinned in `.nvmrc` before rebuilding.
 - **`Cannot find module 'kxta-core'`** when starting the web app — you skipped the build step. Run `pnpm -C packages/core build` (or `pnpm build` from the root) once.
 - **`database is locked`** in dev — usually a leftover dev process holding the WAL handle. Stop all `pnpm dev` processes; if it persists, remove `kontexta.db-shm` and `kontexta.db-wal` from the data directory and restart.
-- **WebSocket not connecting** — check that port 3001 is free (`lsof -i :3001` / `netstat -ano | findstr 3001`). The server binds to `127.0.0.1` by default. If your browser is on a different host, set `KONTEXTA_WS_HOST=0.0.0.0` AND configure `KONTEXTA_WS_ORIGINS` (origin allowlist) and/or `KONTEXTA_WS_TOKEN`+`NEXT_PUBLIC_WS_TOKEN` (shared secret) — non-loopback connections are rejected by default to avoid leaking file paths on the LAN. See [Configuration](#configuration).
+- **WebSocket not connecting** — the WS shares the web app's HTTP server at path `/_kontexta_ws`, so if the page loads then port reachability is already fine. Check that you're logged in (the WS uses the same `kontexta_session` cookie for auth, browser-side). If you're behind a reverse proxy, confirm it forwards the HTTP `Upgrade` header (nginx: `proxy_set_header Upgrade $http_upgrade; proxy_set_header Connection "upgrade";`).
+- **Dev server crashes the host with OOM (low-memory machines / Cloud Workstations)** — use `pnpm dev:lite` instead of `pnpm dev`. It runs webpack instead of Turbopack and caps Node's heap at 1.5 GB so Node fails fast with a recoverable error instead of pushing the VM OOM.
 - **Sync fails with "Configured global remote URL is not a valid git remote"** — only `https://`, `http://`, `ssh://`, `git://`, and scp-form (`user@host:path`) URLs are accepted. `file://` and credential helpers are rejected by design.
 - **MCP server returns "Database not initialized"** — ensure `KONTEXTA_DATA_DIR` points to the same directory the web UI uses; the MCP server opens its own SQLite handle and reads from `$KONTEXTA_DATA_DIR/kontexta.db`.
 - **Build succeeds but `/` shows a placeholder asking for a tablet** — your viewport is below 768px. Kontexta targets tablet+ on the desktop UI; widen the window or open on a larger screen.
@@ -378,16 +374,13 @@ You can customize Kontexta behavior using the following environment variables:
 | :--- | :--- | :--- |
 | `KONTEXTA_DATA_DIR` | Knowledge vault location | OS default (e.g., `~/.local/share/kontexta`) |
 | `KONTEXTA_DB_PATH` | Path to the SQLite database | `$KONTEXTA_DATA_DIR/kontexta.db` |
-| `PORT` | Web UI Port | `3000` |
-| `WS_PORT` | WebSocket Port (server-side bind) | `3001` |
-| `NEXT_PUBLIC_WS_PORT` | WebSocket Port baked into the client bundle (set at build time) | `3001` |
-| `KONTEXTA_WS_HOST` | Host the WebSocket server binds to | `127.0.0.1` (`0.0.0.0` in Docker) |
-| `KONTEXTA_WS_ORIGINS` | Comma-separated allowed `Origin` headers for browser WS clients (only enforced when bound non-loopback) | unset (loopback only) |
-| `KONTEXTA_WS_TOKEN` | Shared-secret token required as `?token=…` on the WS handshake (only enforced when bound non-loopback) | unset |
-| `NEXT_PUBLIC_WS_TOKEN` | Same token, baked into the client bundle at build time so the browser can supply it | unset |
+| `PORT` | Web UI port. The WebSocket file-watcher shares this same port at `/_kontexta_ws`. | `3000` |
+| `KONTEXTA_WS_ORIGINS` | (Legacy / programmatic.) Comma-separated allowed `Origin` headers for non-browser WS clients. Browsers authenticate via the session cookie and don't need this. | unset |
+| `KONTEXTA_WS_TOKEN` | (Legacy / programmatic.) Shared-secret bypass token required as `?token=…` on the WS handshake. Browsers use the short-lived session token from `/api/auth/token` and don't need this. | unset |
+| `NEXT_PUBLIC_WS_TOKEN` | Same token, baked into the client bundle at build time. Only set if you've explicitly chosen the static-token auth path. | unset |
 | `KONTEXTA_PROJECT_TOKEN_WARN` | Soft cap (in estimated tokens) above which `register_project` and `project_map` add a `warning` to their response. Set to `0` to disable. | `100000` |
 
-The WebSocket server defaults to loopback because file paths flowing over it leak the local filesystem layout. When `KONTEXTA_WS_HOST` is set to anything non-loopback (e.g. `0.0.0.0` in Docker), the server **rejects every connection by default** until you configure either `KONTEXTA_WS_ORIGINS` (Origin allowlist for browsers) and/or `KONTEXTA_WS_TOKEN` (shared secret, also requires `NEXT_PUBLIC_WS_TOKEN` build arg). The shipped `docker-compose.yml` wires `KONTEXTA_WS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000` so the browser on the host machine works out of the box without exposing file paths to the LAN.
+The WebSocket file-watcher does not bind its own port — it attaches to Next.js's HTTP server on the same port as the web UI and only handles upgrades to `/_kontexta_ws`. Auth piggybacks on the unified system: browsers send the `kontexta_session` cookie (same-origin, automatic); programmatic clients can use the IP bypass list, the legacy `KONTEXTA_WS_ORIGINS` allowlist, or the legacy `KONTEXTA_WS_TOKEN` shared secret. Connections that don't pass any of these checks are dropped with a `1008` close code. File-path leakage onto the LAN is bounded by the same auth surface that protects the dashboard.
 
 ---
 
@@ -395,6 +388,6 @@ The WebSocket server defaults to loopback because file paths flowing over it lea
 
 - **Health check:** `GET /api/health` → `200 {"status":"ok"}` when SQLite responds, `503` otherwise.
 - **Global git remote:** only `https://`, `http://`, `ssh://`, `git://`, and scp-form (`user@host:path`) URLs are accepted. `file://` and other helpers are rejected.
-- **WebSocket auth:** loopback bind = no auth (trusted local). Non-loopback bind requires `KONTEXTA_WS_ORIGINS` and/or `KONTEXTA_WS_TOKEN` (see Configuration). Without either, all connections are dropped with a `1008` close code and a startup warning is logged.
+- **WebSocket auth:** the WS shares the web app's HTTP server at `/_kontexta_ws`. Browsers authenticate via the same `kontexta_session` cookie used for the dashboard (no extra config). Programmatic clients can authenticate via the IP bypass list, `KONTEXTA_WS_ORIGINS`, or `KONTEXTA_WS_TOKEN` (see Configuration). Failed handshakes are dropped with a `1008` close code.
 - **Token estimation:** the file list and content header show `~Nk tok` per file plus per-folder totals. The heuristic samples each file's first 4 KB and switches between `bytes/4` (ASCII-heavy: ~10% accurate) and `bytes/3` (multi-byte: CJK/emoji, more conservative). MCP tool responses include the same `est_tokens` field plus a `total_est_tokens` for list-style tools so agents can budget their context window before pulling content.
 - **Minimum viewport:** the UI targets ≥768px. Below that, a placeholder is shown.
