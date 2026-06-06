@@ -49,7 +49,7 @@ export interface EndpointData {
   response?: string;
 }
 
-export interface GlossaryTerm { term: string; definition: string; }
+export interface GlossaryTerm { id?: string; term: string; definition: string; }
 
 export interface RenderedDoc {
   doc: DocFile;
@@ -59,19 +59,21 @@ export interface RenderedDoc {
   terms?: GlossaryTerm[];  // glossary terms collected during render (optional — only set when glossary blocks exist)
 }
 
-export interface NavItem { title: string; slug: string; folder: string; icon?: string; }
+export interface NavItem { title: string; slug: string; folder: string; path?: string; icon?: string; }
 export interface NavGroup { group: string; items: NavItem[]; }
 
 export type SearchType = "page" | "heading" | "endpoint" | "term";
 export interface SearchEntry {
   title: string;
-  group: string;
+  folder: string;
+  slug: string;
   type: SearchType;
   url: string;     // hash route, e.g. "#/slt/api" or "#/slt/api#auth"
-  text: string;    // searchable text
+  snippet: string; // searchable text snippet
 }
 
 /** markdown-it render env: block rules push collected data here. */
 export interface RenderEnv {
   endpoints: EndpointData[];
+  terms?: GlossaryTerm[];
 }

@@ -1,180 +1,236 @@
 # Changelog
 
-## 2.0.10 — Reliability & developer experience improvements
-
-### Fixed
-
-- **WebSocket works on Cloud Workstations and reverse proxies.** The real-time connection for the status bar and file-watcher now shares the same port as the web app. Previously it needed its own port (3001), which is unreachable in many hosting environments. No config changes needed — it just works now.
-- **Stray "WebSocket failed" error on page reload.** A one-time flicker on fresh page loads is gone. The connection is now properly torn down when React remounts components, so you'll no longer see a ghost error in the console after refreshing.
-- **Dev server sometimes starting on port 3001 instead of 3000.** When you Ctrl-C out of the dev server, the background process could linger and hold port 3000. `pnpm dev:lite` now clears any leftover processes before starting, so it always binds port 3000.
-- **Crash ("Module did not self-register") when running `pnpm dev:lite`.** The database driver was being loaded twice by webpack's hot-reload, causing it to fail on startup. Fixed — the dev server now starts cleanly.
-- **ReferenceError: require is not defined.** Resolved Tailwind CSS typography import issue when running the dev server under Webpack (`pnpm dev:lite`).
+## 2.0.6 — Glama MCP integration
 
 ### Added
 
-- **`pnpm dev:lite` — a low-memory dev server.** Recommended for Cloud Workstations, small VMs, or any machine where `pnpm dev` crashes or feels sluggish. Uses less memory (capped at 1.5 GB), takes about the same time to start, and handles cleanup automatically. Run it with `pnpm dev:lite` from the repo root.
+- **Glama MCP server badges**: kontexta is now listed on [Glama](https://glama.ai) with live badge support. The web dashboard shows a Glama badge in the README and the MCP server manifest includes Glama metadata for discoverability.
+
+## 2.0.5 — Docker improvements & authentication fixes
+
+### Added
+
+- **Environment variables for Docker**: Easily customize ports and data paths without editing compose files:
+  - `HOST_PORT` — Web UI port (default: 8007 for local build, 3000 for Docker Hub)
+  - `WS_HOST_PORT` — WebSocket port (default: 8008 for local build, 3001 for Docker Hub)
+  - `DATA_DIR` — Where to persist your vault and database
+  - `PROJECT_DIR` — Where your projects live on the host (now required with startup check)
+  - `WS_ORIGINS` — Allowed domains for WebSocket connections
+
+- **Two Docker workflows**: 
+  - `docker-compose.yml` — Build from source (local development)
+  - `docker-compose.hub.yml` — Use pre-built Docker Hub image (production deployment)
+
+### Fixed
+
+- **Login broken over HTTP in Docker**: Sessions now work reliably when deployed to HTTP (e.g., behind a reverse proxy). Previously the session cookie was marked `Secure`, so browsers discarded it over plain HTTP.
+- **Initial setup stuck in a loop**: Login page now renders on demand instead of being frozen at build time, so you can complete the first-run setup without restarting.
+- **Database migrations missing in Docker**: Auth table migrations now consistently run on container startup, fixing setup failures in Docker deployments.
 
 ### Changed
 
-- **Simpler Docker setup — one port instead of two.** The compose files no longer publish a separate WebSocket port. Only port 3000 needs to be exposed. Existing setups that mapped `3001` can drop that mapping.
-- **Faster installs.** Removed 8 unused editor packages and deduplicated the database driver (was installed twice). `pnpm install` is faster and the installed footprint is smaller.
-- **Node.js 22 is now the pinned version.** A `.nvmrc` file is included — run `nvm use` in the repo and you're on the right version automatically. This prevents a class of "native module" errors that happen when you switch Node versions mid-project.
-
----
-
-## 2.0.8 — Login reliability
-
-### Fixed
-
-- **Login errors showed nothing.** If something went wrong during login or first-time setup, the form would silently reset with no feedback. Errors are now surfaced to the user with a clear message.
-- **Config generation method updated.** Internal improvement to how config files are generated.
-
----
-
-## 2.0.7 — Docker health check fix
-
-### Fixed
-
-- **Container marked unhealthy on startup.** The health check endpoint was requiring authentication even for localhost requests inside the container, causing Docker to think the app was down. Fixed — health checks from inside the container now work without a session.
-
----
-
-## 2.0.6 — Glama MCP registry
-
-### Added
-
-- **Listed on Glama.** Kontexta is now discoverable on [Glama's MCP registry](https://glama.ai) with live status badges in the README and MCP manifest.
-
----
-
-## 2.0.5 — Docker improvements & auth fixes
-
-### Added
-
-- **Configurable Docker setup via environment variables.** No more editing compose files directly:
-  - `HOST_PORT` — which port to expose the web UI on
-  - `DATA_DIR` — where to store your vault on the host
-  - `PROJECT_DIR` — which folder on your machine to mount as projects (required)
-- **Two Docker modes:** `docker-compose.yml` for building from source, `docker-compose.hub.yml` for pulling the pre-built image.
-
-### Fixed
-
-- **Login broken behind a reverse proxy (HTTP).** Sessions weren't sticking when the app was served over plain HTTP behind a proxy. Fixed.
-- **First-run setup got stuck in a loop.** The setup page now loads on demand instead of being pre-built, so you can complete initial configuration without restarting the container.
-- **Database setup failed in some Docker environments.** Auth migrations now always run on startup.
-
-### Changed
-
-- **`PROJECT_DIR` is required.** The container checks for it on startup and gives a clear error if missing, rather than silently misconfiguring paths.
-
----
+- **`PROJECT_DIR` is required**: The compose file checks it on startup and fails fast if missing, preventing silent file path mismatches between your host and the container.
+- **Updated Docker documentation**: Clear examples for ports, paths, and variable usage.
 
 ## 2.0.4 — GitHub Copilot support
 
 ### Added
 
-- **GitHub Copilot is now a supported agent.** Kontexta can onboard Copilot by scaffolding `.github/copilot-instructions.md` with the workflow rules block. No MCP config needed for Copilot — it's file-based.
+- **GitHub Copilot integration**: Copilot is now a first-class agent in kontexta. Added to `AgentId` type, `SCAFFOLDS` (path: `.github/copilot-instructions.md`), `ROOT_FILES` for context detection, MCP `target_agent` enum, web app `CLIENTS`/`TEMPLATES`/`CLIENT_CONFIG_PATHS`, install configuration page, and onboard modal. Copilot uses a file-based integration (no MCP config needed) — `onboard_agent` scaffolds `.github/copilot-instructions.md` with the kontexta workflow rules block.
 
----
-
-## 2.0.3 — Stability & test suite
+## 2.0.3 — Test suite stabilization & UI authentication integration
 
 ### Fixed
 
-- **Several internal tests were broken** after UI and template changes. All 104 web tests are now passing, along with the full core and MCP suites.
-- **`comprehensive-example` Hands template** had an invalid command format. Fixed.
+- **`install-templates` test**: skips the `dataDir` assertion for the `aider` client — Aider is file-based and does not embed an MCP data-directory path in its snippet body.
+- **`hand-tool-templates` test**: updated expected template count from 4 → 8 to reflect the full set of shipped templates (`npm-install`, `type-check`, `lint-fix`, `comprehensive-example` added since the snapshot was created). Fixed the `comprehensive-example` template's `command` to use `bash ./scripts/deploy.sh …` (bare command, not a relative path) so it passes `validateConfig`'s argv[0] validation. Snapshot regenerated.
+- **`save-bar` test**: aligned label assertions to actual component output — `"1 change"` / `"3 changes"` (component uses the concise form, not `"unsaved change(s)"`).
+- **`tool-form-modal` test**: broadened the submit-button name query to `/(save|create)/i` to cover both the `"Save Changes"` (edit) and `"Create Tool"` (new) labels that `ToolForm` emits depending on context.
+- **`builder-section` tests**: full rewrite to match the three-pane inline-editor UI (left Registry sidebar, centre inline `ToolForm` editor, right Template Gallery) that replaced the old modal/list pattern. Covers: initial load, staged deletion, empty-state gallery, save-bar count lifecycle, template-prefill flow, from-scratch creation, config-file deletion, and per-tool validation error badges.
+- **Native module compatibility**: recompiled `re2` and `better-sqlite3` for Node.js v24.15.0.
 
----
+### Changed
 
-## 2.0.2 — Journal data safety
+- **`hand-tool-templates`**: `comprehensive-example` command changed from `./scripts/deploy.sh …` → `bash ./scripts/deploy.sh …` to satisfy the `argv[0] must be absolute or a bare command` constraint enforced by `validateConfig`.
+
+### Tests
+
+- **`apps/web` suite**: 25 test files / 104 tests — all passing (was 5 failing suites).
+- Total monorepo suite unchanged for `packages/core` and `apps/mcp` (both were already green).
+
+## 2.0.2 — Housekeep refuses to prune undistilled raw events
 
 ### Fixed
 
-- **Raw journal events could be deleted before being processed.** If housekeeping ran aggressively while distillation was stalled, unprocessed events could be permanently lost. Housekeeping now refuses to delete any log file that contains events newer than the last distillation checkpoint.
+- **`housekeep_journal` now refuses to prune any raw `.jsonl` file containing events newer than the project's high-water mark.** Previously, an aggressive `retention.raw_days` config (e.g. `1`) combined with stalled distillation could delete raw events before they were ever captured into the durable distilled `.md` layer — irrecoverable data loss. The new guard reads the file's last event timestamp; if it's past the high-water (or no high-water exists at all), the file is preserved and counted under a new `raw_files_skipped_undistilled` field in the result.
+- This is the cheap mitigation for the "two-step grace pruning" item that was on the roadmap; the full grace mechanism is no longer needed because the only real data-loss failure mode is now closed.
 
----
+### Tests
 
-## 2.0.1 — Clean shutdown
+- 4 housekeep tests (was 2): the "prunes" test now seeds proper events + a high-water mark; new tests cover (a) refusing to prune files with events past the mark, (b) refusing to prune anything when no high-water exists yet. Total core suite: 243 passing.
+
+## 2.0.1 — Graceful DB shutdown drain
 
 ### Fixed
 
-- **In-progress work could be cut short on shutdown.** When the MCP server received a stop signal (Ctrl-C, Docker stop, etc.), it would exit immediately and potentially truncate an in-flight file write or database operation. The server now waits up to 10 seconds for any active work to complete before exiting.
+- **MCP signal handlers now drain in-flight work before exiting.** Previously `SIGINT`/`SIGTERM` killed Hands children, flushed the journal capture, then called `process.exit(0)` immediately — `closeDatabase()` was never invoked, and any long-running `withLock`-protected op (`updateFile`, `commitBackup`, `syncBackup`, `refreshIndex`, journal append) could be truncated mid-write. SQLite WAL mode mostly recovered, but partial markdown writes and orphaned file descriptors leaked across shutdowns.
+- New `gracefulShutdown(timeoutMs = 10_000)` helper exported from `kxta-core`: sets a shutdown flag, awaits in-flight count to reach zero (with a hard ceiling), then closes the database cleanly. Returns the count of ops still in-flight at timeout (0 = clean drain).
+- In-flight bookkeeping is centralized inside `withLock` itself — every long-running op already routes through `withLock`, so this gives ~95% coverage with zero per-site instrumentation. A standalone `track<T>(p)` helper is also exported for the rare op that bypasses `withLock`.
+- New helpers from `kxta-core`: `track`, `inFlightCount`, `isShuttingDown`, `setShuttingDown`, `awaitDrain`, `gracefulShutdown`.
+- MCP signal handlers replaced with an async `handleShutdownSignal()` that: kills Hands children → flushes journal capture → awaits `gracefulShutdown(10_000)` → exits. A `_shutdownInFlight` guard prevents repeated `Ctrl+C` from racing.
 
----
+### Tests
 
-## 2.0.0 — Journaling: persistent memory across sessions
+- 8 new vitest cases in `packages/core/tests/util/shutdown.test.ts` covering counter increment/decrement (success + rejection paths), `track()` correctness, `awaitDrain` zero-state and timeout-state, and shutdown-flag toggling. Total core suite: 241 passing (was 233).
 
-The biggest release since launch. Kontexta now maintains a persistent, auto-updating journal of everything your agents do — automatically, with no changes to your workflow.
+## 2.0.0 — Journaling: persistent Brain layer with auto-capture + mechanical distillation
 
-### What's new
+A new always-on journaling subsystem turns kontexta into a persistent Brain across sessions. Every MCP tool call is automatically captured to a per-project event log; events get distilled into per-topic markdown summaries indexed alongside the rest of the knowledge base. Closed the loop on cross-session, cross-agent memory.
 
-- **Automatic session capture.** Every MCP tool call is silently recorded to a per-project event log. Nothing to configure, nothing to remember to call. Survives crashes and power loss.
-- **Automatic distillation.** Raw events are periodically condensed into structured markdown summaries, organized by task or topic, and indexed alongside your knowledge base so agents can search them.
-- **10 built-in activity patterns** are detected automatically: feature development, refactor, test cycles, error recovery, incident response, exploration, and more.
-- **Voluntary annotations.** Agents can call `journal_note(text)` or `journal_intent(summary)` to mark decisions, pivots, or context worth preserving.
-- **Git-aware.** Branch changes and new commits are captured automatically, with ticket IDs (e.g. `PROJ-123`) extracted and indexed for cross-referencing.
-- **Journal panel in the dashboard.** Configure retention, distillation mode, and scheduling. View open tasks and live distillation status.
-- **Enforcement modes.** `lenient` (default) — nudges agents when a backlog builds up. `strict` — blocks read tools until the backlog is distilled. `mechanical-only` — distillation runs in-process, no LLM involved.
-- **Housekeeping tool.** `housekeep_journal` prunes old raw logs and archives cold tasks according to your retention settings.
-- **Background scheduler.** When the dashboard is running, distillation runs every 15 minutes and housekeeping every 24 hours, deferring automatically when the MCP server is active.
+### Added — Layer 1: automatic capture (zero agent involvement)
+
+- **Per-project append-only JSONL event log** at `data/knowledge/journal/<project>/raw/YYYY-MM-DD.jsonl`. Every MCP tool call writes one event with `ts`, `agent`, `sid`, `tool`, redacted `args`, `touched` files, `status`, `ms`. Per-event `fsync` for crash safety; survives kill -9 / power loss.
+- **MCP server-side wrapping** via a 24-line `server.tool` monkey-patch in `apps/mcp/src/index.ts` — every existing and future tool registration is auto-wrapped at boot. Zero per-handler edits, zero risk of agents skipping logging.
+- **Redaction** of sensitive args (`password|token|secret|auth|cookie|bearer|api[_-]?key`) plus configurable `extra_keys` and `max_arg_size_bytes`. Truncates oversized strings; recurses into nested objects.
+- **Git context awareness**: poller emits `git_context` events on branch changes and `git_commit` events when HEAD advances. Surfaces ticket IDs (configurable regex, default `[A-Z]+-\d+`), branch names, commit shas in the journal index for cross-references.
+- **Voluntary semantic events**: new `journal_note(text, tags?)` and `journal_intent(summary)` MCP tools let agents enrich the log with decisions, abandonments, and topic pivots in real time.
+
+### Added — Layer 2: mechanical distillation
+
+- **`distill_journal` MCP tool** runs the read → group → render → index → advance pipeline. Idempotent; safe to call repeatedly; respects a per-project cooldown lock.
+- **Topic detection** groups events into per-task buckets by branch/ticket-id continuity, touched-files overlap, or freshly-minted slugs from branch basenames. Stable slugs across runs; existing tasks reactivate automatically when matching events appear.
+- **10 built-in pattern detectors**: `error-recovery-cycle`, `exploration`, `test-cycle`, `pivot`, `build-failure-recovery`, `refactor`, `incident-response`, `feature-development`, `tagging-pass`, `read-only-investigation`. Each is a small state machine over the event stream that produces a labeled summary.
+- **`extra_patterns` declarative config** in `kontexta.json` lets users add custom patterns without code (`tag_any`, `tag_all`, `tool_any`, `min_events`, `max_events`).
+- **Mechanical markdown renderer** writes per-task files at `data/knowledge/journal/<project>/YYYY/MM/DD/task-<slug>.md` with full frontmatter (touched files, git refs, ticket IDs, status, started/last_active timestamps, raw-source provenance). Files are indexed automatically via the existing FTS5 watcher.
+
+### Added — SQL index
+
+- **Migration `004-journaling.sql`** introduces:
+  - `journal_meta` (file_id, project_id, task_slug, status_latest, started_at, last_active_at, touched_files, raw_sources)
+  - `journal_touches` (file_id, touched_path) — indexable many-to-many for "every entry that touched X.ts"
+  - `journal_git_refs` (file_id, ref_type ∈ {branch,commit,ticket}, ref_value) — indexable lookup for "every entry related to INC-1234" or "near commit a8b291c"
+  - `journal_high_water` (project_slug, last_event_ts, last_distilled_at, events_processed)
+
+### Added — Enforcement modes (configurable per project)
+
+- **`lenient`** (default) — never blocks; injects a `journal` envelope on every tool response when backlog ≥ 1 (visible nag with `suggested_action: "distill_journal"`); auto-fires mechanical distillation in the background when backlog crosses 500 events or 7 days.
+- **`strict`** — blocks read tools (`search`, `read_*`, `list_*`, `describe_*`) with a `JOURNAL_BACKLOG` error when undistilled events exist. Write tools and `journal_*` tools are not affected. Override on a single call with `journal_bypass: true` (logged for audit).
+- **`mechanical-only`** — disables LLM-upgrade tier guidance; mechanical distillation runs every N tool calls in-process.
+
+### Added — Housekeeping
+
+- **`housekeep_journal` MCP tool** prunes raw `.jsonl` files past `retention.raw_days` and archives cold tasks (last_active_at > `retention.archive_cold_after_days`) to `_archive/` with the DB row updated. Idempotent.
+- Configurable retention defaults: `raw_days: 90`, `mechanical_only_days: 365`, `narrative_days: 0` (forever), `archive_cold_after_days: 365`.
+
+### Added — WebUI
+
+- **`Settings → Journal` panel** at `/docs?tab=journal`. Form controls for mode, retention, ticket pattern, scheduler enable + intervals. Mirrors the existing Hands editor pattern: read full `kontexta.json` → modify only the `journal.*` slice → write back. **Hands editor untouched.**
+- **Live status block** auto-refreshes every 30s (and on WebSocket `journal_status_update` events). Shows current high-water, events processed, open tasks count + first 20 task summaries.
+- **API routes**: `GET/PUT /api/projects/[id]/journal-config` and `GET /api/projects/[id]/journal-status`.
+- **`JournalScheduler`** runs inside the Next.js instrumentation hook (when the dashboard is installed) — mechanical distillation every 15 minutes, housekeeping every 24 hours. Defers per project when MCP is active (presence signal: `.jsonl` mtime within 30s).
+- **WebSocket broadcast** of `journal_status_update` events when scheduled distillation produces work.
+
+### Added — Cross-cutting
+
+- **`distill_journal_commit_upgrades` MCP tool** closes the subagent-dispatch loop: after agents dispatch subagents to upgrade mechanical entries to LLM narrative, this updates `journal_meta.status_latest` to mark them as upgraded.
+- **Cooldown lock** (`.distill.lock` file per project) prevents MCP-side and WebUI-side distillation from racing.
+- **`onboard_agent` hook snippets**: response now surfaces optional `SessionStart`, `Stop`, and `PostToolUse` hook snippets users can paste into `~/.claude/settings.json`. The snippets are informational placeholders; once a one-shot CLI for `distill_journal` exists they can become live commands.
 
 ### Removed
 
-- **`journal_append` tool removed.** Replaced by automatic Layer 1 capture and the new `journal_note` / `journal_intent` tools. The manual journaling rule in agent context files is also gone — it's all automatic now.
+- **`journal_append` MCP tool removed.** Superseded by `journal_note` (semantic notes), `journal_intent` (topic pivots), and Layer 1 auto-capture (everything else). The "Journal every Hands tool run" rule in `agent-rules/rules-block.md` is also gone — Hands runs are now captured automatically by L1.
 
-### Updated
+### Changed
 
-- Agent rules block bumped to `1.3.0` — re-run `onboard_agent` on your projects to get the updated guidance.
-- MCP tool count: 50 → 52 (two new journal tools).
+- **`rulesVersion` in `packages/core` bumped to `1.3.0`** to force re-injection of the updated rules block on the next `onboard_agent` call. New rules cover `journal.suggested_action` envelope handling, `journal_note` / `journal_intent` usage, and strict-mode `journal_bypass: true` override behavior.
+- **MCP tool count: 50 → 52.** README and the in-app `/docs` catalogue updated; `mcp-tools.json` and `mcp-tool-categories.ts` carry full schemas for the new tools.
 
----
+### Tests
 
-## 1.0.0 — Initial release (Brain + Hands + Eyes)
+- **+86 new tests** across all three packages covering pattern detectors, distillation pipeline, topic detection, redaction, repository, cooldown lock, presence signal, housekeep, strict-mode, extra-pattern loader, high-water, JSONL writer, migration, capture wrapper, journal-tools smoke, backlog detection, strict-mode integration, scheduler, byte-identity regression.
+- **Total suite**: 291 tests passing (233 core / 47 MCP / 11 web), zero regressions.
+- **Hands non-regression baseline + byte-identity test** prove that the new Journal panel writes only `journal.*` and never perturbs the `tools.*` slice of `kontexta.json`.
 
-The first public release of Kontexta following the rename from mnexis. This entry summarizes everything shipped across ~30 pre-rename releases.
+### Notable architectural decisions
 
-### Brain — knowledge vault
+- **No "session" concept anywhere in the durable model.** Tasks are *topics*, not sittings. Time gaps within a task are invisible; pauses, breaks, and context switches all just produce the next event in the same task file.
+- **L3 (embeddings, graph, semantic clustering) intentionally deferred.** No vector DB until evidence shows FTS5+tags is the bottleneck.
+- **Server-side LLM upgrade deferred too.** Mechanical mode is "good enough" (~60% quality); the agent-driven LLM-upgrade path via `distill_journal`'s subagent briefs covers cases where narrative quality matters. Adding server-side LLM later is purely additive — no schema changes required.
 
-- Local markdown vault with two-way git sync.
-- SQLite full-text search with stemming (`porter unicode61`) — searches titles and content across all your files.
-- ~50 MCP tools covering read, write, search, organize, tag, history, and discovery.
-- Every tool response includes a token estimate so agents can budget context.
-- Web clipping via `clip_url` with auth-wall detection and SSRF protection.
+## 1.0.0 — Initial kontexta release (Brain + Hands + Eyes)
 
-### Hands — sandboxed commands
+The first kontexta release after the rename from mnexis. Versioning was reset to `1.0.0` at the rename; this entry summarizes the cumulative behavior shipped under the previous identity (~30 incremental releases) so readers don't need to dig through the pre-rename history.
 
-- Per-project `kontexta.json` registers shell commands as MCP tools.
-- Strict sandbox: verified working directory, stripped environment, hard timeouts, no shell execution.
-- Cryptographic confirmation tokens for high-risk commands.
-- ReDoS-proof parameter validation.
+### Brain — markdown vault + deterministic retrieval
+
+- **Local-first knowledge vault** with two-way git sync. Per-project state lives under `data/projects/<slug>/`; the global KB at `data/knowledge/`. Override locations via `KONTEXTA_DATA_DIR` / `KONTEXTA_DB_PATH`.
+- **SQLite + FTS5 indexing** with `porter unicode61` tokenization so technical identifiers, hyphenated filenames, and complex paths search correctly.
+- **~50 MCP tools** organized into find / read / write / organize / history / discover / Hands / onboarding categories. Section-level edits (`update_file_section`), batch reads (`read_files` up to 200 IDs), regex + grep, structure ops (folders, moves), tag management, history (`get_history`, `get_diff`, `restore_file`), and metadata-only inspection (`describe_file`).
+- **Token-aware responses** — every file-returning tool annotates `est_tokens` and `size_bytes` so agents can budget context.
+- **Web clipping** via `clip_url` with auth-wall detection, SSRF protection, and bring-your-own-cookies for authenticated pages.
+- **Cross-project semantic discovery** via `find_related` (tag overlap), `whats_new` (delta since timestamp), and `project_map` (compact tree of folders + titles + tags).
+- **File watcher** with denylisted noise dirs (`.next`, `.venv`, `dist`, build/cache) and incremental FTS reindex on add/change/unlink.
+
+### Hands — sandboxed command orchestration
+
+- **Per-project `kontexta.json`** declares project-defined commands as namespaced MCP tools (`<project>__<tool>`).
+- **Strict sandbox**: realpath-verified CWD, stripped `PATH`, clean env (`PATH`/`HOME`/`USER`/`LANG`/`TZ` only), ring-buffer output cap, hard timeouts, process-group kill on timeout, no shell.
+- **Cryptographic confirm tokens** (CSPRNG, single-use, 60s expiry) for high-risk commands. Optional human-approval flow per command.
+- **ReDoS-proof parameter validation** via `re2`; default `^[^-].*` mitigates argv injection; opt-in `argSeparator: true` for path-accepting tools.
+- **Tools**: `list_hands`, `reload_hands`, `confirm_hand`, `describe_hands_schema` plus the runtime-registered project tools.
 
 ### Eyes — feedback loop
 
-- `whats_new` — catch up on what changed since your last session.
-- `diff_against_disk` + `refresh_index` — detect and reconcile out-of-band changes.
-- `journal_append` — manual session journaling (replaced by auto-capture in 2.0.0).
+- **`whats_new`** — files added/changed since a cutoff. Lets agents catch up at session start without re-reading the whole KB.
+- **`diff_against_disk`** + **`refresh_index`** — detect and reconcile drift after out-of-band changes.
+- **`journal_append`** — agent-callable timestamped journal under `data/knowledge/journal/YYYY-MM-DD.md` with mandatory logging after every Hands run (rule injected via `onboard_agent`). _(Replaced in 2.0.0 by automatic Layer 1 capture.)_
 
-### Dashboard
+### Web dashboard
 
-- Three-pane layout (folders / files / content), light/dark theme.
-- In-app tool catalogue at `/docs` with search.
-- Visual `kontexta.json` editor with live validation.
-- Real-time git sync status via WebSockets.
-- Favorites, tags, web clipping, ZIP export, KB import.
+- Three-pane layout (folder tree / file list / content), light/dark theme with warm amber accent.
+- In-app `/docs` page with a searchable catalogue of all MCP tools.
+- Form-based `kontexta.json` editor for Hands tools with live validation.
+- Real-time status bar streaming git activity over WebSockets.
+- Favorites, tag management, web clipping UI, ZIP-based KB export, knowledge-base import.
+- Animated branding, custom error modals (no browser `alert`), unsaved-edit guard, atomic move/rename.
 
 ### Distribution
 
-- `npx -y kontexta-mcp` — zero-install MCP server with prebuilt binaries for Linux/macOS/Windows.
-- `safiyu/kontexta:latest` — Docker image for the full dashboard.
-- Listed on [Glama MCP Registry](https://glama.ai).
+- **npm package** `kontexta-mcp` with prebuilt `better-sqlite3` binaries for linux/macos/windows × x64/arm64. Install via `npx -y kontexta-mcp` in any MCP client.
+- **Docker image** `safiyu/kontexta:latest` for the full web UI; mounts `KONTEXTA_DATA_DIR` for persistence.
+- **Glama MCP Registry** — published as `registry.glama.ai/mcp-ntrhtsg0bk:n6ifz00shv`.
+- **Tag-driven CI publish** with npm trusted publishing (OIDC, no stored token).
 
-### Security
+### Agent onboarding
 
-- SSRF protection blocks private/loopback IPs, cloud metadata endpoints, and redirect chains.
-- Path containment checks on all file operations.
-- Credential redaction strips secrets from git error output.
-- Symlink-safe directory walkers.
+- **`register_project`** detects existing agent context files (`CLAUDE.md` / `AGENTS.md` / `GEMINI.md` / `.cursor/rules/*.mdc` / `.continue/rules/*.md` / `ANTIGRAVITY.md` / `.clinerules`) and recommends the right onboarding action.
+- **`onboard_agent`** writes/updates a fenced, version-stamped kontexta workflow rules block in those files. Idempotent; version bumps splice in place. Supports update mode (existing files) and create mode (scaffolds canonical filenames per agent type).
+- **Routing matrix** in the rules block covers all 47 (then 50) MCP tools with when-to-use / when-not-to / suggested alternative columns.
 
-### Naming
+### Security hardening
 
-Renamed from **mnexis** → **kontexta**. Versioning reset to `1.0.0`. Pre-rename history (~30 releases, 0.1.0 → 9.5.2) is preserved in git.
+- **SSRF protection in `clip_url`** — rejects private/loopback/link-local IPv4 (incl. `169.254.169.254`), CGNAT, multicast, private IPv6, and special hostnames. DNS resolution + per-hop redirect re-validation. 10 MiB streaming response cap with `Content-Length` pre-check.
+- **`move_file` source containment** — verifies both source and destination paths live under the project/KB base.
+- **HTTP response splitting** in download routes — strips CR/LF from filenames, RFC 5987 `filename*` UTF-8 fallback.
+- **Symlink-loop safety** in walkers (`refresh_index`, backup sync) via `lstatSync` skipping.
+- **FTS index resilience** — defensive `DELETE FROM fts_index WHERE rowid = ?` before INSERT to absorb stale rows from crashed transactions.
+- **Credential redaction** — `redactCredentials()` strips `user:pass@` from git error output.
+
+### Reliability
+
+- **Two-way git sync** (not just backup) — pulls and merges remote changes (additions, modifications, deletions) and reindexes locally.
+- **`withLock` AsyncLocalStorage-based reentrancy detection** fails loudly instead of deadlocking.
+- **Atomic favorite/tag updates**, **race-safe folder fetches**, **journal-append concurrency lock**.
+- **WebSocket** clears failed `wss` on EADDRINUSE so next start rebinds.
+- **Unsaved-edit guard** prompts before discarding in-progress edits; tab-close warning during unsaved edit.
+
+### Architectural milestones (during the 9.x line)
+
+- **Brain → Hands → Eyes** formalized as the core architectural pattern.
+- **Industrialized monorepo** — pnpm workspaces, Turborepo, Docker, dedicated CI workflows for PR / dev / publish.
+- **Single source of truth** for versioning via `pnpm version:sync` propagating root → sub-packages → `glama.json`.
+- **Comparison table** in README against `CLAUDE.md` / vendor memory / mem0 / Zep with explicit tradeoffs.
+
+### Naming reset
+
+- **Renamed mnexis → kontexta** across packages (`kxta-core`, `kontexta-mcp`, `kxta-web`), env vars (`KONTEXTA_DATA_DIR`), Docker images, and the rules-block markers. Versioning reset to `1.0.0` at the rename; the cumulative pre-rename release history (~30 entries spanning 0.1.0 → 9.5.2) is preserved in git but consolidated into this single summary.
