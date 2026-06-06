@@ -1,4 +1,4 @@
-export { getDataDir, getDbPath, ensureDataDir } from "./util/paths.js";
+export { getDataDir, getDbPath, ensureDataDir, resetDataDirCache } from "./util/paths.js";
 export { createDatabase, getDatabase, closeDatabase, gracefulShutdown } from "./db/index.js";
 import { createFile, readFile, updateFile, deleteFile, listFiles, moveFile, createFolder, deleteFolder, listProjectFolders, slugify } from "./files/index.js";
 export { createFile, readFile, updateFile, deleteFile, listFiles, moveFile, createFolder, deleteFolder, listProjectFolders, slugify };
@@ -45,6 +45,4 @@ export {
   projectMap,
   type ProjectMapOptions, type ProjectMapResult, type ProjectMapStats,
 } from "./project-map/index.js";
-export { migrateEnvVars } from "./compat/env-shim.js";
-export { migrateDataFiles, migrateProjectConfig } from "./compat/file-migration.js";
 export * from "./journal/index.js";

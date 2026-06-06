@@ -43,6 +43,7 @@ import {
   moveFile,
   withLock,
   detectAgentContextFiles,
+  assertPathInside,
   syncAgentRules,
   checkAgentRulesStatus,
   RULE_BLOCK_VERSION,
@@ -1089,6 +1090,139 @@ RETURNS: { written: [{ path, action: created|updated|skipped, version }], skippe
       });
       return {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      };
+    } catch (e: any) {
+      return {
+        isError: true,
+        content: [{ type: "text", text: JSON.stringify({ error: e?.message ?? String(e) }, null, 2) }],
+      };
+    }
+  }
+);
+
+server.tool(
+  "transfer_agent_context",
+  `COPY existing agent context files (CLAUDE.md, AGENTS.md, .cursor/rules/*.mdc, etc.) from a project's repo into Kontexta's per-project knowledge base so they're indexed by FTS5 and can be git-synced through Kontexta's own backup engine.
+
+This tool ONLY COPIES. It never deletes or modifies the originals in your repo. After a successful transfer, the response includes the list of source paths so the user can manually remove them if desired. No tool argument, no flag, and no code path in this tool ever calls a destructive filesystem operation against \`project.path\`.
+
+MANDATORY: This tool writes new files into Kontexta's data dir. You MUST seek explicit user consent before calling. Set 'confirm: true' only after the user has agreed.
+
+PARAMETERS:
+- project_id: number, required. Project ID returned from register_project.
+- confirm: boolean, required. Must be true.
+- files: string[], optional. Project-relative paths to transfer. Omit or pass [] to transfer all detected agent context files (uses the same detection list as register_project / onboard_agent).
+
+RETURNS: { transferred: [{ source_path, kb_id, kb_path, est_tokens }], skipped: [{ source_path, reason }], next_action }
+Skip reasons: "missing" | "symlink" | "outside_project" | "already_transferred_same_content" | "read_error" | "write_error".
+
+IDEMPOTENT: re-running with the same files copies nothing if the content is unchanged — duplicate transfers are detected via SHA-256 hash comparison against existing project KB rows.`,
+  {
+    project_id: z.number().describe("Project ID returned from register_project"),
+    confirm: z.boolean().describe("MANDATORY: Set to true only after obtaining explicit user consent."),
+    files: z.array(z.string()).optional().describe("Project-relative paths to transfer. Omit to transfer all detected context files."),
+  },
+  async ({ project_id, confirm, files }) => {
+    try {
+      if (confirm !== true) {
+        return {
+          isError: true,
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              error: "User consent required",
+              details: "This tool copies project files into Kontexta's KB. Explain the proposed transfer to the user and obtain explicit consent, then re-run with 'confirm: true'. Originals in the project repo are NOT touched."
+            }, null, 2)
+          }],
+        };
+      }
+
+      const db = getDatabase();
+      const project = db
+        .prepare("SELECT id, name, slug, path FROM projects WHERE id = ?")
+        .get(project_id) as { id: number; name: string; slug: string; path: string | null } | undefined;
+      if (!project || !project.path) {
+        return {
+          isError: true,
+          content: [{ type: "text", text: JSON.stringify({ error: `Project ${project_id} not found or has no path` }, null, 2) }],
+        };
+      }
+
+      const projectPath = project.path;
+      const targetRels = (files && files.length > 0) ? files : detectAgentContextFiles(projectPath);
+
+      // Pre-load existing project KB content hashes for idempotency check.
+      const existingHashes = new Set<string>(
+        (db.prepare("SELECT content_hash FROM files WHERE project_id = ? AND storage_type = 'local' AND content_hash IS NOT NULL")
+          .all(project.id) as Array<{ content_hash: string }>)
+          .map(r => r.content_hash)
+      );
+
+      const transferred: Array<{ source_path: string; kb_id: number; kb_path: string; est_tokens: number }> = [];
+      const skipped: Array<{ source_path: string; reason: string }> = [];
+
+      for (const rel of targetRels) {
+        // Containment check — reject absolute paths, "..", null bytes.
+        let abs: string;
+        try {
+          abs = assertPathInside(projectPath, rel);
+        } catch {
+          skipped.push({ source_path: rel, reason: "outside_project" });
+          continue;
+        }
+
+        // Must exist and be a regular file (not a symlink).
+        let stat;
+        try { stat = lstatSync(abs); } catch { stat = null; }
+        if (!stat) { skipped.push({ source_path: rel, reason: "missing" }); continue; }
+        if (stat.isSymbolicLink()) { skipped.push({ source_path: rel, reason: "symlink" }); continue; }
+        if (!stat.isFile()) { skipped.push({ source_path: rel, reason: "missing" }); continue; }
+
+        let content: string;
+        try { content = readFileSync(abs, "utf8"); }
+        catch { skipped.push({ source_path: rel, reason: "read_error" }); continue; }
+
+        // Idempotency: skip if same content already exists in this project's KB.
+        const hash = createHash("sha256").update(content, "utf8").digest("hex");
+        if (existingHashes.has(hash)) {
+          skipped.push({ source_path: rel, reason: "already_transferred_same_content" });
+          continue;
+        }
+
+        // Title derived from the relative path so files from different subdirs
+        // don't collide (e.g. CLAUDE.md vs .cursor/rules/CLAUDE.md).
+        // slugify() lowercases + replaces non-alphanumerics with dashes.
+        const titleSource = rel.replace(/\.[^./]+$/, "");
+        const title = titleSource || rel;
+
+        try {
+          const created = await createFile({
+            title,
+            content,
+            destination: "kontexta",
+            projectId: project.id,
+            folder: "agent-context",
+            dataDir,
+            sourcePath: abs,
+          });
+          existingHashes.add(hash);
+          transferred.push({
+            source_path: rel,
+            kb_id: created.id,
+            kb_path: created.path,
+            est_tokens: estimateTokensFromBuffer(Buffer.from(content, "utf8")),
+          });
+        } catch (e: any) {
+          skipped.push({ source_path: rel, reason: `write_error: ${e?.message ?? String(e)}` });
+        }
+      }
+
+      const next_action = transferred.length > 0
+        ? `Copied ${transferred.length} file(s) into Kontexta's KB. Originals in your repo are unchanged. To remove them yourself: ${transferred.map(t => `rm "${join(projectPath, t.source_path)}"`).join(" && ")}`
+        : "No files were transferred. See skipped[] for reasons.";
+
+      return {
+        content: [{ type: "text", text: JSON.stringify({ transferred, skipped, next_action }, null, 2) }],
       };
     } catch (e: any) {
       return {

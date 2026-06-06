@@ -64,8 +64,9 @@ COPY --from=builder /app/packages/core/src/agent-rules/rules-block.md ./packages
 # Copy deployed MCP server
 COPY --from=builder /app/mcp-deploy ./apps/mcp
 
-# Web UI on 3000, file-watcher WebSocket on WS_PORT (default 3001).
-EXPOSE 3000 3001
+# Web UI on 3000. The file-watcher WebSocket shares this same port
+# (upgrade path /_kontexta_ws), so no separate port is exposed.
+EXPOSE 3000
 
 # We use the built standalone server
 CMD ["node", "apps/web/server.js"]

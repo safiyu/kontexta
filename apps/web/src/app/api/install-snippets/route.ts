@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import path from "node:path";
+import os from "node:os";
 import { readFileSync, existsSync } from "node:fs";
 import { createRequire } from "node:module";
 import { renderTemplate, CLIENTS, INSTALLS, type Client, type Install } from "@/lib/install-templates";
@@ -51,6 +52,35 @@ function detectInstall(): Install {
   return "source";
 }
 
+/** OS-standard data directory for the current platform (mirrors core's defaultDataDir). */
+function osDefaultDataDir(): string {
+  const home = os.homedir();
+  switch (process.platform) {
+    case "darwin": return path.join(home, "Library", "Application Support", "kontexta");
+    case "win32":  return path.join(process.env.APPDATA ?? path.join(home, "AppData", "Roaming"), "kontexta");
+    default:       return path.join(process.env.XDG_DATA_HOME ?? path.join(home, ".local", "share"), "kontexta");
+  }
+}
+
+/** Human-readable tilde-abbreviated version of the OS default dir. */
+function osDefaultDataDirDisplay(): string {
+  const full = osDefaultDataDir();
+  const home = os.homedir();
+  return full.startsWith(home) ? `~${full.slice(home.length)}` : full;
+}
+
+/** True when the resolved dataDir looks like a temp/test path — never show these in snippets. */
+function isTempPath(p: string): boolean {
+  const lower = p.toLowerCase();
+  return (
+    lower.startsWith("/tmp") ||
+    lower.startsWith(os.tmpdir().toLowerCase()) ||
+    lower.includes("test") ||
+    lower.includes("-tmp-") ||
+    lower.includes("\\temp")
+  );
+}
+
 export async function GET(req: NextRequest) {
   const sp = new URL(req.url).searchParams;
   const client = sp.get("client") as Client | null;
@@ -62,15 +92,30 @@ export async function GET(req: NextRequest) {
   if (!install || !INSTALLS.includes(install)) {
     return NextResponse.json({ error: "invalid install" }, { status: 400 });
   }
+
+  const defaultDir = osDefaultDataDir();
+  const defaultDirDisplay = osDefaultDataDirDisplay();
+  // Sanitize: never surface temp/test paths in install snippets.
+  // If the running server resolved a temp path (e.g. from a dev test run),
+  // fall back to the OS standard so the snippet stays useful.
+  const rawDataDir = DATA_DIR;
+  const dataDir = isTempPath(rawDataDir) ? defaultDir : rawDataDir;
+  const isDefaultDir = path.resolve(dataDir) === path.resolve(defaultDir);
+
   const vars = {
-    dataDir: DATA_DIR,
+    dataDir,
     hostDataDir: process.env.KONTEXTA_HOST_DATA_DIR ?? null,
     version: loadVersion(),
     sourceEntrypoint: resolveSourceEntrypoint(),
+    isDefaultDir,
+    defaultDirDisplay,
   };
   const snippet = renderTemplate(client, install, vars);
   return NextResponse.json({
     ...snippet,
     detectedInstall: detectInstall(),
+    dataDir,
+    isDefaultDir,
+    defaultDirDisplay,
   });
 }

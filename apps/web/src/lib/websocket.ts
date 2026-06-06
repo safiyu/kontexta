@@ -1,7 +1,15 @@
 import { WebSocketServer, WebSocket } from "ws";
+import type { Server as HttpServer, IncomingMessage } from "node:http";
+import { Server } from "node:http";
+import type { Duplex } from "node:stream";
 import { createFileWatcher, type WatcherEvent } from "kxta-core";
 import type { SyncEvent } from "./sync-events";
 import { checkAuth, verifySession } from "@/lib/auth";
+
+// The dedicated upgrade path. WS shares Next.js's HTTP server (single port);
+// only upgrades to this path are handled here, so Next's HMR upgrades are
+// left untouched for Next's own listener.
+export const WS_PATH = "/_kontexta_ws";
 
 // globalThis-cached so Next.js module duplication doesn't split the
 // open-sockets Set across instances (broadcast would silently no-op).
@@ -10,49 +18,71 @@ declare global {
   var __kontextaWss: WebSocketServer | null | undefined;
   // eslint-disable-next-line no-var
   var __kontextaWsClients: Set<WebSocket> | undefined;
+  // eslint-disable-next-line no-var
+  var __kontextaListenPatched: boolean | undefined;
 }
 
 let wss: WebSocketServer | null = globalThis.__kontextaWss ?? null;
 const clients: Set<WebSocket> = (globalThis.__kontextaWsClients ??= new Set());
 
-function isLoopbackHost(host: string): boolean {
-  return host === "127.0.0.1" || host === "::1" || host === "localhost";
-}
+// Per-server marker so we never attach our upgrade listener twice to the
+// same HTTP server (the listen() patch can fire more than once in dev).
+const ATTACHED = Symbol.for("kontexta.wsUpgradeAttached");
 
-export function startWebSocketServer(port: number, watchPaths: string[]) {
+export function attachWebSocketServer(watchPaths: string[]) {
   if (wss) return wss;
-  const host = process.env.KONTEXTA_WS_HOST || (process.env.HOSTNAME === "0.0.0.0" ? "0.0.0.0" : "127.0.0.1");
-  const loopback = isLoopbackHost(host);
 
-  // Non-loopback WS leaks absolute paths + project metadata. 
-  // We now use the unified auth system (master password + bypass IPs).
-  // The old KONTEXTA_WS_ORIGINS and KONTEXTA_WS_TOKEN are kept for legacy programmatic access,
-  // but browsers will be authenticated via the kontexta_session cookie.
+  // Non-loopback WS leaks absolute paths + project metadata.
+  // We use the unified auth system (master password + bypass IPs).
+  // The old KONTEXTA_WS_ORIGINS and KONTEXTA_WS_TOKEN are kept for legacy
+  // programmatic access, but browsers are authenticated via the
+  // kontexta_session cookie.
   const allowedOrigins = (process.env.KONTEXTA_WS_ORIGINS || "")
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
   const requiredToken = (process.env.KONTEXTA_WS_TOKEN || "").trim();
 
-  wss = new WebSocketServer({ port, host });
+  // No own socket — we ride on Next.js's HTTP server via the upgrade event.
+  wss = new WebSocketServer({ noServer: true });
   globalThis.__kontextaWss = wss;
 
   wss.on("error", (e: any) => {
-    if (e.code === "EADDRINUSE") {
-      console.warn(`[Kontexta] WebSocket server port ${port} is already in use. Fast refresh detected.`);
-    } else {
-      console.error("[Kontexta] WebSocket server error:", e);
-    }
-    // Drop the failed instance so the next start call rebinds.
-    try { wss?.close(); } catch {}
-    // Only null the reference if the server actually closed; otherwise keep
-    // the old reference so the next start() call doesn't try to bind again
-    // on the same port and loop on EADDRINUSE.
-    if (wss) {
-      wss = null;
-      globalThis.__kontextaWss = null;
-    }
+    console.error("[Kontexta] WebSocket server error:", e);
   });
+
+  const handleUpgrade = (req: IncomingMessage, socket: Duplex, head: Buffer) => {
+    let pathname = "";
+    try {
+      pathname = new URL(req.url || "/", "http://_").pathname;
+    } catch {
+      return;
+    }
+    // Not ours (e.g. Next.js HMR) — leave the socket alone so Next's own
+    // upgrade listener can handle it. Never destroy it here.
+    if (pathname !== WS_PATH) return;
+    wss!.handleUpgrade(req, socket, head, (ws) => {
+      wss!.emit("connection", ws, req);
+    });
+  };
+
+  // Patch the stable Node API http.Server.prototype.listen (NOT Next
+  // internals) so that whatever HTTP server Next.js creates gets our
+  // upgrade listener attached the moment it binds. register() runs before
+  // Next calls listen(), and this patch is installed synchronously, so the
+  // listener is in place when the server starts.
+  if (!globalThis.__kontextaListenPatched) {
+    globalThis.__kontextaListenPatched = true;
+    const proto = Server.prototype as any;
+    const originalListen = proto.listen;
+    proto.listen = function (this: HttpServer, ...args: any[]) {
+      if (!(this as any)[ATTACHED]) {
+        (this as any)[ATTACHED] = true;
+        this.on("upgrade", handleUpgrade);
+      }
+      return originalListen.apply(this, args);
+    };
+  }
 
   wss.on("connection", (ws, req) => {
     // WS Auth Logic

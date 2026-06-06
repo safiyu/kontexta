@@ -99,10 +99,6 @@ Scheduler should read project config on each tick (cheap — one JSON file read 
 
 ## Cleanup / debt
 
-### 🟢 `MNEXIS_DATA_DIR` test failures
-
-7 MCP tests fail because the test harness still references `MNEXIS_DATA_DIR` instead of `KONTEXTA_DATA_DIR` (leftover from the rename). They're pre-existing and unrelated to journaling, but they're noise.
-
 ### 🟢 Cold-task auto-reactivation
 
 `housekeep_journal` archives a task when `last_active_at > 365 days ago`. If new events match an archived topic, the design says it should reactivate automatically — currently a new task with a `-revisited` suffix is minted instead. Topic detection needs to look in `_archive/` and pull the file back when matched.

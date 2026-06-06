@@ -153,20 +153,19 @@ docker compose up -d
 ```
 The UI lands at `http://localhost:3000`.
 
-To run on custom ports:
+To run on a custom port:
 ```bash
-HOST_PORT=8080 WS_HOST_PORT=8081 \
-docker compose up -d
+HOST_PORT=8080 docker compose up -d
 ```
-The WebSocket host port defaults to `3001`. If you change `HOST_PORT`, also set `WS_HOST_PORT`.
+The WebSocket file-watcher shares this same port (upgrade path `/_kontexta_ws`) — no second port to manage.
+
 You can also specify where data and projects live on the host:
 ```bash
 DATA_DIR=/absolute/path/to/kontexta-data \
 PROJECT_DIR=/absolute/path/to/your/projects \
-HOST_PORT=8080 WS_HOST_PORT=8081 \
+HOST_PORT=8080 \
 docker compose up -d
 ```
-The WebSocket host port defaults to `HOST_PORT + 1` if not specified.
 Note: `PROJECT_DIR` should be an absolute host path and is mounted to the same absolute path inside the container so file paths remain consistent between your host and the in-container MCP tools.
 The compose file includes a startup check that fails fast if `PROJECT_DIR` is not set, preventing accidental runs without a mounted projects directory.
 
@@ -229,7 +228,7 @@ What's deliberately deferred and what triggers will pull it forward lives in [`d
   <img src="docs/sync.png" alt="Git sync" width="80%">
 </p>
 
-- 52 MCP tools tuned for context economy.
+- 54 MCP tools tuned for context economy.
 - Batch operations (up to 500 files/call), grep, and regex support.
 - Web clipping with auth-wall detection.
 - Full git-backed versioning: `get_history`, `get_diff`, `restore_file`.
@@ -242,7 +241,7 @@ What's deliberately deferred and what triggers will pull it forward lives in [`d
 - CSPRNG-bound confirmation tokens for high-risk commands.
 
 ### Dashboard
-- Built-in `/docs` page with a searchable catalogue of all 52 core tools.
+- Built-in `/docs` page with a searchable catalogue of all 54 core tools.
 - Form-based `kontexta.json` editor with live validation.
 - Real-time status bar streaming git activity over WebSockets.
 

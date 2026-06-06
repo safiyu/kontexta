@@ -9,6 +9,10 @@
       "cache": false,
       "persistent": true
     },
+    "dev:lite": {
+      "cache": false,
+      "persistent": true
+    },
     "test": {
       "dependsOn": ["^build", "build"]
     },

@@ -22,14 +22,16 @@ This is a monorepo managed by `pnpm` and `turbo`.
 ## Getting Started
 
 ### Prerequisites
-- **Node.js**: v20 or higher.
-- **pnpm**: v9 or higher.
+- **Node.js**: **v22 LTS** (pinned via `.nvmrc`). Run `nvm use` in the repo root to activate the correct version. Native modules (`better-sqlite3`, `re2`) must be compiled for the active Node ABI — switching versions after install requires `pnpm rebuild re2 better-sqlite3`.
+- **pnpm**: v9.15.0 (`corepack enable && corepack prepare pnpm@9.15.0 --activate`).
+- **C/C++ toolchain**: required to compile `better-sqlite3` if no prebuilt binary exists for your platform (`build-essential` on Debian/Ubuntu, `xcode-select --install` on macOS).
 
 ### Local Setup
 1. Clone the repository:
    ```bash
    git clone https://github.com/safiyu/kontexta.git
    cd kontexta
+   nvm use        # activates Node 22 from .nvmrc
    ```
 2. Install dependencies:
    ```bash
@@ -57,6 +59,8 @@ cd apps/web
 pnpm dev
 ```
 The dashboard will be available at `http://localhost:3000`.
+
+> **Low-memory machine?** Use `pnpm dev:lite` (or `pnpm dev:lite` from the repo root). It runs `next dev` on webpack instead of Turbopack and caps Node's heap at 1.5 GB — recommended on Cloud Workstations / small VMs where Turbopack can push the host OOM.
 
 ### Running Tests
 We use `vitest` for unit tests and a custom smoke-test harness for the MCP tools.
