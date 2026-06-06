@@ -1,6 +1,6 @@
 # Changelog
 
-## 2.0.9 — Reliability & developer experience improvements
+## 2.0.10 — Reliability & developer experience improvements
 
 ### Fixed
 

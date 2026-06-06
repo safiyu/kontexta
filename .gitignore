@@ -12,6 +12,8 @@ dist/
 # Project specific
 CLAUDE.md
 ANTIGRAVITY.md
+specs/
+apps/publish/
 data/
 kontexta-data/
 kontexta.db

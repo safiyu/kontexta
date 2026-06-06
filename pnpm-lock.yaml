@@ -23,6 +23,9 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: ^1.12.0
         version: 1.29.0(zod@3.25.76)
+      better-sqlite3:
+        specifier: ^12.10.0
+        version: 12.10.0
       chokidar:
         specifier: ^4.0.0
         version: 4.0.3

@@ -1,6 +1,6 @@
 {
   "name": "kontexta-mcp",
-  "version": "2.0.9",
+  "version": "2.0.10",
   "description": "The local Brain and Hands for AI coding agents (MCP Server)",
   "keywords": [
     "mcp",
@@ -61,6 +61,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.0",
+    "better-sqlite3": "^12.10.0",
     "chokidar": "^4.0.0",
     "kxta-core": "workspace:*",
     "re2": "^1.24.1",
