@@ -26,6 +26,10 @@ RUN pnpm install --frozen-lockfile
 RUN cd node_modules/.pnpm/better-sqlite3@12.10.0/node_modules/better-sqlite3 \
     && npx node-gyp rebuild
 
+# Rebuild re2 native binding for this exact Node version.
+RUN cd node_modules/.pnpm/re2@1.24.1/node_modules/re2 \
+    && npx node-gyp rebuild
+
 # Copy the rest of the source code
 COPY . .
 
