@@ -1,4 +1,5 @@
-import RE2 from "re2";
+import RE2Class from "../re2-compat.js";
+import type RE2 from "re2";
 import type { ParamDef } from "./types.js";
 
 const SAFE_INT_MIN = Number.MIN_SAFE_INTEGER;
@@ -63,7 +64,7 @@ export interface PatternMatcher {
 export function compilePattern(src: string): PatternMatcher {
   let r: RE2;
   try {
-    r = new RE2(src);
+    r = new RE2Class(src);
   } catch (e: any) {
     throw new Error(`invalid pattern: ${e?.message ?? e}`);
   }
