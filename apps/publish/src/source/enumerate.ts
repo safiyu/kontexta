@@ -13,10 +13,10 @@ function slugFromPath(path: string): string {
   return basename(path).replace(/\.md$/i, "");
 }
 
-export function enumerateDocs(reader: VaultReader, folders: string[]): DocFile[] {
+export function enumerateDocs(reader: VaultReader, folders: string[], projectPath?: string): DocFile[] {
   const out: DocFile[] = [];
   for (const folder of folders) {
-    for (const meta of reader.listDocs(folder)) {
+    for (const meta of reader.listDocs(folder, projectPath)) {
       const raw = reader.read(meta.id);
       const parsed = matter(raw.content);
       const fm = parsed.data as Frontmatter;

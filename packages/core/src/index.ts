@@ -1,7 +1,7 @@
 export { getDataDir, getDbPath, ensureDataDir, resetDataDirCache } from "./util/paths.js";
 export { createDatabase, getDatabase, closeDatabase, gracefulShutdown } from "./db/index.js";
-import { createFile, readFile, updateFile, deleteFile, listFiles, moveFile, createFolder, deleteFolder, listProjectFolders, slugify } from "./files/index.js";
-export { createFile, readFile, updateFile, deleteFile, listFiles, moveFile, createFolder, deleteFolder, listProjectFolders, slugify };
+import { createFile, readFile, updateFile, deleteFile, listFiles, moveFile, createFolder, deleteFolder, listProjectFolders, listProjectFoldersWithFiles, slugify } from "./files/index.js";
+export { createFile, readFile, updateFile, deleteFile, listFiles, moveFile, createFolder, deleteFolder, listProjectFolders, listProjectFoldersWithFiles, slugify };
 export { parseOutline, findSection, replaceSection, type OutlineNode } from "./files/sections.js";
 export { assertPathInside } from "./util/safety.js";
 export { INDEXED_EXTENSIONS, isIndexedFile, stripIndexedExt } from "./util/extensions.js";

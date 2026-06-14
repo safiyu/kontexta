@@ -101,7 +101,8 @@ ${seoMeta}
     </div>
   </div>
   <nav class="sidebar" id="sidebar"></nav>
-  <main class="content" id="content">${hero}</main>
+  <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
+  <main class="content" id="content"></main>
   <aside class="toc" id="toc"></aside>
 </div>
 

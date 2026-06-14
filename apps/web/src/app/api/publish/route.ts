@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { runPipeline } from "publish/pipeline";
 import { mkdirSync, writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
-import { getDataDir } from "kxta-core";
+import { getDataDir, getDatabase } from "kxta-core";
 
 export interface PublishRequestBody {
   folders?: string[];
@@ -12,6 +12,8 @@ export interface PublishRequestBody {
   llmsTxt?: boolean;
   seo?: boolean;
   output?: string;
+  /** Project ID to publish project folders from. Null or omitted = Knowledge Base. */
+  projectId?: number | null;
 }
 
 export async function POST(request: NextRequest) {
@@ -19,6 +21,23 @@ export async function POST(request: NextRequest) {
     const body: PublishRequestBody = await request.json();
 
     const dataDir = getDataDir();
+    let projectPath: string | undefined = undefined;
+
+    // Resolve projectId to projectPath if provided
+    if (body.projectId !== null && body.projectId !== undefined) {
+      const db = getDatabase();
+      const project = db.prepare(
+        "SELECT path FROM projects WHERE id = ?"
+      ).get(body.projectId) as { path: string | null } | undefined;
+      if (!project?.path) {
+        return NextResponse.json(
+          { success: false, error: `Project not found: ${body.projectId}` },
+          { status: 404 }
+        );
+      }
+      projectPath = project.path;
+    }
+
     const outputDir = body.output || join(dataDir, "publish");
 
     if (!existsSync(outputDir)) {
@@ -27,7 +46,10 @@ export async function POST(request: NextRequest) {
 
     const indexPath = join(outputDir, "index.html");
     const config = {
-      source: { folders: body.folders || ["knowledge"] },
+      source: {
+        folders: body.folders || ["knowledge"],
+        projectPath,
+      },
       site: {
         title: body.title || "Kontexta Docs",
         brand: body.brand || "Kontexta",
@@ -48,7 +70,11 @@ export async function POST(request: NextRequest) {
     if (body.llmsTxt) {
       const { generateLlmsTxt } = await import("publish/render/llms");
       const llmsPath = join(outputDir, "llms.txt");
-      writeFileSync(llmsPath, generateLlmsTxt(result.docs, result.search, config.site.title), "utf-8");
+      writeFileSync(
+        llmsPath,
+        generateLlmsTxt(result.docs, result.search, config.site.title),
+        "utf-8"
+      );
     }
 
     return NextResponse.json({

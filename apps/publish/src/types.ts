@@ -2,6 +2,8 @@
 export interface SourceConfig {
   /** Vault folders to render; each becomes a top-level sidebar group. */
   folders: string[];
+  /** Absolute path to the project root, if publishing a project folder. */
+  projectPath?: string;
 }
 export interface SiteConfig {
   title: string;

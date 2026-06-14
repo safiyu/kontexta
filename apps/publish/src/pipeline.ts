@@ -35,12 +35,13 @@ function renderDocs(config: PublishConfig, docFiles: DocFile[]): { html: string;
 }
 
 export function runPipeline(config: PublishConfig, reader?: VaultReader): { html: string; report: BuildReport; docs: RenderedDoc[]; search: import("./types.js").SearchEntry[] } {
-  const vaultReader = reader || createCoreReader();
-  const docFiles = enumerateDocs(vaultReader, config.source.folders);
+  const projectPath = config.source.projectPath;
+  const vaultReader = reader || createCoreReader({ projectPath });
+  const docFiles = enumerateDocs(vaultReader, config.source.folders, projectPath);
   if (docFiles.length === 0) {
     // Fall back to seed docs when no vault documents exist
     const seedReader = createSeedReader();
-    const seedDocs = enumerateDocs(seedReader, ["seeds"]);
+    const seedDocs = enumerateDocs(seedReader, ["seeds"], projectPath);
     if (seedDocs.length === 0) {
       throw new Error(`No docs found in folders [${config.source.folders.join(", ")}] and no seed docs available.`);
     }

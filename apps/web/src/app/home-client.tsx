@@ -36,6 +36,7 @@ export default function HomePage() {
   const [deleteFolderConfirmOpen, setDeleteFolderConfirmOpen] = useState(false);
   const [unregisterConfirmOpen, setUnregisterConfirmOpen] = useState(false);
   const [publishOpen, setPublishOpen] = useState(false);
+  const [publishMode, setPublishMode] = useState<"publish" | "view">("publish");
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [deletingFolder, setDeletingFolder] = useState(false);
   const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
@@ -545,7 +546,8 @@ export default function HomePage() {
         onSearch={() => setSearchOpen(true)}
         onAbout={() => setAboutOpen(true)}
         onConfigure={() => setDocsOpen(true)}
-        onPublish={() => setPublishOpen(true)}
+        onPublish={() => { setPublishMode("publish"); setPublishOpen(true); }}
+        onViewPublished={() => window.open('/api/publish/html', '_blank')}
         globalRemoteUrl={globalRemoteUrl}
         syncLog={sync.log}
         onSyncAll={handleSyncAll}
@@ -662,7 +664,9 @@ export default function HomePage() {
 
       <PublishDialog
         isOpen={publishOpen}
-        onClose={() => setPublishOpen(false)}
+        onClose={() => { setPublishOpen(false); setPublishMode("publish"); }}
+        mode={publishMode}
+        onSwitchToPublish={() => { setPublishMode("publish"); }}
       />
     </div>
   );
