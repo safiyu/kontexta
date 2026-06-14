@@ -14,6 +14,7 @@ import { NewFolderDialog } from "@/components/folder-tree/new-folder-dialog";
 import { DeleteFolderDialog } from "@/components/folder-tree/delete-folder-dialog";
 import { UnregisterModal } from "@/components/file-list/unregister-modal";
 import { DocsModal } from "@/components/docs/docs-modal";
+import { PublishDialog } from "@/components/publish/publish-dialog";
 import { useProjects } from "@/hooks/use-projects";
 import { useFiles } from "@/hooks/use-files";
 import { useFolders } from "@/hooks/use-folders";
@@ -34,6 +35,8 @@ export default function HomePage() {
   const [newFolderOpen, setNewFolderOpen] = useState(false);
   const [deleteFolderConfirmOpen, setDeleteFolderConfirmOpen] = useState(false);
   const [unregisterConfirmOpen, setUnregisterConfirmOpen] = useState(false);
+  const [publishOpen, setPublishOpen] = useState(false);
+  const [publishMode, setPublishMode] = useState<"publish" | "view">("publish");
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [deletingFolder, setDeletingFolder] = useState(false);
   const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
@@ -543,6 +546,8 @@ export default function HomePage() {
         onSearch={() => setSearchOpen(true)}
         onAbout={() => setAboutOpen(true)}
         onConfigure={() => setDocsOpen(true)}
+        onPublish={() => { setPublishMode("publish"); setPublishOpen(true); }}
+        onViewPublished={() => window.open('/api/publish/html', '_blank')}
         globalRemoteUrl={globalRemoteUrl}
         syncLog={sync.log}
         onSyncAll={handleSyncAll}
@@ -655,6 +660,13 @@ export default function HomePage() {
           handleUnregisterProject();
           setUnregisterConfirmOpen(false);
         }}
+      />
+
+      <PublishDialog
+        isOpen={publishOpen}
+        onClose={() => { setPublishOpen(false); setPublishMode("publish"); }}
+        mode={publishMode}
+        onSwitchToPublish={() => { setPublishMode("publish"); }}
       />
     </div>
   );

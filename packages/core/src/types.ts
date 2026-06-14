@@ -59,6 +59,8 @@ export interface FileFilters {
   untagged?: boolean;
   limit?: number;
   offset?: number;
+  /** When set, scope folder matching to paths under this project root. */
+  project_path?: string;
 }
 
 export interface SearchFilters {

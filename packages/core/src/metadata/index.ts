@@ -11,6 +11,7 @@ import { withLock } from "../util/safety.js";
 import type { TagRecord, ProjectRecord, FileRecord, SearchFilters } from "../types.js";
 import { computeHash } from "../files/index.js";
 import { isIndexedFile, stripIndexedExt } from "../util/extensions.js";
+import { getDataDir } from "../util/paths.js";
 
 export interface FileRecordWithRank extends FileRecord {
   rank: number;
@@ -190,7 +191,7 @@ export function registerProject(
   path: string,
   description?: string,
   remoteUrl?: string
-): ProjectRecord {
+): ProjectRecord & { newlyIndexed: number } {
   const db = getDatabase();
 
   const slug = slugify(name);
@@ -202,33 +203,42 @@ export function registerProject(
   const absolutePath = resolve(path);
   const result = insertStmt.run(name, slug, absolutePath, description || null, remoteUrl || null);
 
+  let projectId: number;
+
   if (result.changes > 0) {
-    const projectId = Number(result.lastInsertRowid);
-    return db.prepare("SELECT * FROM projects WHERE id = ?").get(projectId) as ProjectRecord;
+    projectId = Number(result.lastInsertRowid);
+  } else {
+    // INSERT was ignored — either name OR slug already exists. Look both up so
+    // we can give a precise error when the *path* conflicts with the existing
+    // row, vs. silently returning a stale record under a different path.
+    const byName = db.prepare("SELECT * FROM projects WHERE name = ?").get(name) as ProjectRecord | undefined;
+    const bySlug = db.prepare("SELECT * FROM projects WHERE slug = ?").get(slug) as ProjectRecord | undefined;
+    const existing = byName ?? bySlug;
+    if (!existing) {
+      // Should be unreachable: INSERT was ignored but neither name nor slug matches.
+      throw new Error(`registerProject: insert ignored but no matching project found for name='${name}'`);
+    }
+    if (existing.path !== absolutePath) {
+      const conflicts: string[] = [];
+      if (byName) conflicts.push(`name conflicts with '${byName.name}' at '${byName.path}'`);
+      if (bySlug && bySlug.id !== byName?.id) conflicts.push(`slug '${slug}' conflicts with '${bySlug.name}' at '${bySlug.path}'`);
+      const err = new Error(
+        `Cannot register '${name}' at '${path}': ${conflicts.join("; ")}. ` +
+        `Pick a different name or unregister the existing project first.`
+      );
+      (err as any).code = "PROJECT_CONFLICT";
+      throw err;
+    }
+    projectId = existing.id;
   }
 
-  // INSERT was ignored — either name OR slug already exists. Look both up so
-  // we can give a precise error when the *path* conflicts with the existing
-  // row, vs. silently returning a stale record under a different path.
-  const byName = db.prepare("SELECT * FROM projects WHERE name = ?").get(name) as ProjectRecord | undefined;
-  const bySlug = db.prepare("SELECT * FROM projects WHERE slug = ?").get(slug) as ProjectRecord | undefined;
-  const existing = byName ?? bySlug;
-  if (!existing) {
-    // Should be unreachable: INSERT was ignored but neither name nor slug matches.
-    throw new Error(`registerProject: insert ignored but no matching project found for name='${name}'`);
-  }
-  if (existing.path !== absolutePath) {
-    const conflicts: string[] = [];
-    if (byName) conflicts.push(`name conflicts with '${byName.name}' at '${byName.path}'`);
-    if (bySlug && bySlug.id !== byName?.id) conflicts.push(`slug '${slug}' conflicts with '${bySlug.name}' at '${bySlug.path}'`);
-    const err = new Error(
-      `Cannot register '${name}' at '${path}': ${conflicts.join("; ")}. ` +
-      `Pick a different name or unregister the existing project first.`
-    );
-    (err as any).code = "PROJECT_CONFLICT";
-    throw err;
-  }
-  return existing;
+  // Auto-discover and index files in the project directory.
+  const newlyIndexed = reconcileIndex({ projectId, dataDir: getDataDir() }).newRecords.length;
+
+  return {
+    ...(db.prepare("SELECT * FROM projects WHERE id = ?").get(projectId) as ProjectRecord),
+    newlyIndexed,
+  };
 }
 
 /**
@@ -367,13 +377,20 @@ function reconcileIndex(opts: ReconcileOptions): ReconcileResult {
     } catch (e) {
       if (isTopLevel) {
         if (typeof projectId === "number") {
-          // Surface for project scope — clear config error.
-          throw new Error(`Failed to read project root ${dir}: ${(e as any)?.message ?? e}`);
+          if ((e as any)?.code === "ENOENT") {
+            // Directory doesn't exist yet — treat as empty, not a fatal error.
+            // The project may have just been registered before its path was created.
+            console.warn(`reconcileIndex: project root does not exist yet: ${dir}`);
+          } else {
+            // Surface real IO errors (EACCES, etc.) — clear config error.
+            throw new Error(`Failed to read project root ${dir}: ${(e as any)?.message ?? e}`);
+          }
+        } else {
+          // KB scope: log and bail. The caller (and the topLevelWalkOk guard
+          // below) ensures we don't prune away the entire knowledge base on a
+          // transient EACCES.
+          console.warn(`reconcileIndex: failed to read KB root ${dir}: ${(e as any)?.message ?? e}`);
         }
-        // KB scope: log and bail. The caller (and the topLevelWalkOk guard
-        // below) ensures we don't prune away the entire knowledge base on a
-        // transient EACCES.
-        console.warn(`reconcileIndex: failed to read KB root ${dir}: ${(e as any)?.message ?? e}`);
       }
       return;
     }
@@ -490,7 +507,14 @@ function reconcileIndex(opts: ReconcileOptions): ReconcileResult {
  * files (callers like /api/projects use this to surface "X files indexed" UX).
  */
 export function discoverFiles(projectId: number, dataDir: string): FileRecord[] {
-  return reconcileIndex({ projectId, dataDir }).newRecords;
+  // Reconcile first (index any new/changed files on disk), then return the
+  // full set of indexed files for this project. Returning only newRecords
+  // would give an empty result if registerProject already ran reconcileIndex.
+  reconcileIndex({ projectId, dataDir });
+  const db = getDatabase();
+  return db
+    .prepare("SELECT * FROM files WHERE project_id = ? ORDER BY path")
+    .all(projectId) as FileRecord[];
 }
 
 /**

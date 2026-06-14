@@ -1,6 +1,6 @@
 import { checkAuth } from "@/lib/auth";
 import { NextRequest, NextResponse } from "next/server";
-import { createFolder, getDatabase, listProjectFolders } from "kxta-core";
+import { createFolder, getDatabase, listProjectFolders, listProjectFoldersWithFiles } from "kxta-core";
 import { DATA_DIR, ensureDbInitialized } from "@/lib/db-init";
 import { join } from "node:path";
 
@@ -82,7 +82,7 @@ export async function GET(req: NextRequest) {
     projectPath = join(DATA_DIR, "knowledge");
   }
 
-  const folders = listProjectFolders(projectPath);
+  const folders = listProjectFoldersWithFiles(projectPath);
   return NextResponse.json({ folders, basePath: projectPath });
 }
 

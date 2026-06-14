@@ -1,6 +1,6 @@
 {
   "name": "kontexta-mcp",
-  "version": "2.0.10",
+  "version": "3.0.0",
   "description": "The local Brain and Hands for AI coding agents (MCP Server)",
   "keywords": [
     "mcp",
@@ -38,7 +38,7 @@
     "./hands/types": "./dist/hands/types.js"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "files": [
     "dist",

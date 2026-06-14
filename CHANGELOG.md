@@ -1,5 +1,25 @@
 # Changelog
 
+## 3.0.0 — Documentation publishing & developer experience
+
+### Added
+
+- **Publish module — generate documentation from your knowledge base.** A new `publish` package provides a CLI and pipeline for generating documentation sites, API references, and LLM-readable docs from your kontexta vault. Includes render blocks for endpoints, glossary, mermaid diagrams, navigation, and more.
+- **`setDataDir()` export in journal-capture.** Added to allow tests to override the data directory for isolation.
+- **`listProjectFoldersWithFiles()` in core.** Lists folders containing `.md`/`.mmd` files for project-aware file discovery.
+- **Auto-discover on project registration.** `registerProject()` now returns `{ newlyIndexed: number }` and automatically discovers files on registration.
+
+### Fixed
+
+- **resolveArgv test expectation.** Fixed test that expected empty substituted values to be kept when the code intentionally drops them (matching the test name "drops empty resolved elements").
+- **Strict mode awareness.** MCP server now returns `JOURNAL_BACKLOG` error on read tools when undistilled events exist and strict mode is enabled.
+
+### Changed
+
+- **Version bump to 3.0.0.** Major release with new publish module and improved developer experience.
+
+---
+
 ## 2.0.10 — Reliability & developer experience improvements
 
 ### Fixed

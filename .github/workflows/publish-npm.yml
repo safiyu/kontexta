@@ -31,16 +31,24 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 9.15.0
+          version: "10.34.3"
 
-      - name: Setup Node 24
+      - name: Setup Node 22
         uses: actions/setup-node@v4
         with:
-          node-version: "24"
+          node-version: "22"
           cache: "pnpm"
+
+      - name: Install build tools
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends python3 make g++ gcc
 
       - name: Install
         run: pnpm install --frozen-lockfile
+
+      - name: Rebuild better-sqlite3 from source
+        run: |
+          cd node_modules/.pnpm/better-sqlite3@12.10.0/node_modules/better-sqlite3
+          npx node-gyp rebuild
 
       - name: Verify tag matches package version
         run: |

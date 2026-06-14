@@ -153,25 +153,21 @@ function copilotSnippet(vars: TemplateVars, install: Install): Snippet {
         ? ["-y", "kontexta-mcp"]
         : [vars.sourceEntrypoint];
   const env = install === "docker" || !vars.isDefaultDir ? { KONTEXTA_DATA_DIR: vars.dataDir } : undefined;
-  const serverConfig: Record<string, unknown> = { command, args };
+  const serverConfig: Record<string, unknown> = { type: "stdio", command, args };
   if (env) serverConfig.env = env;
-  const body = JSON.stringify({ mcp: { servers: { kxta: serverConfig } } }, null, 2);
+  const body = JSON.stringify({ servers: { local: serverConfig }, inputs: [] }, null, 2);
   return {
     kind: "json",
     body,
     notes: [
       dataDirNote(vars, install),
-      "VS Code Insider's built-in GitHub Copilot chat supports MCP servers via the mcp.servers setting.",
-      "Open Settings (Ctrl+,), search for \"mcp.servers\", and paste this JSON.",
-      "Or add it directly to your settings.json file.",
-      "settings.json location — VS Code: Linux: ~/.config/Code/User/settings.json",
-      "macOS: ~/Library/Application Support/Code/User/settings.json",
-      "Windows: %APPDATA%\\Code\\User\\settings.json",
-      "VS Code Insider: Linux: ~/.config/Code - Insiders/User/settings.json",
-      "macOS: ~/Library/Application Support/Code - Insiders/User/settings.json",
-      "Windows: %APPDATA%\\Code - Insiders\\User\\settings.json",
+      "VS Code Insider's built-in GitHub Copilot chat supports MCP servers via mcp.json.",
+      "Open your mcp.json file (e.g. ~/.config/Code\\-\\Insiders/User/mcp.json) and paste this JSON.",
+      "mcp.json location — VS Code Insider: Linux: ~/.config/Code - Insiders/User/mcp.json",
+      "macOS: ~/Library/Application Support/Code - Insiders/User/mcp.json",
+      "Windows: %APPDATA%\\Code - Insiders\\User\\mcp.json",
     ],
-    configPath: "VS Code Settings (mcp.servers)"
+    configPath: "VS Code mcp.json (servers.local)"
   };
 }
 

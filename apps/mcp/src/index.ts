@@ -50,7 +50,8 @@ import {
   gracefulShutdown,
   type AgentId,
 } from "kxta-core";
-import RE2 from "re2";
+import RE2Class from "./re2-compat.js";
+import type RE2 from "re2";
 import { isAbsolute, join, resolve, sep, dirname } from "node:path";
 import os from "node:os";
 import { statSync, lstatSync, openSync, readSync, closeSync, readFileSync, readdirSync, existsSync, realpathSync } from "node:fs";
@@ -547,7 +548,7 @@ server.tool(
     try {
       let re: RE2;
       try {
-        re = new RE2(pattern, case_insensitive ? "i" : "");
+        re = new RE2Class(pattern, case_insensitive ? "i" : "");
       } catch (e: any) {
         throw new Error(`invalid regex: ${e?.message ?? e}`);
       }
@@ -603,7 +604,7 @@ server.tool(
     try {
       let re: RE2;
       try {
-        re = new RE2(pattern, case_insensitive ? "i" : "");
+        re = new RE2Class(pattern, case_insensitive ? "i" : "");
       } catch (e: any) {
         throw new Error(`invalid regex: ${e?.message ?? e}`);
       }

@@ -10,6 +10,8 @@ interface TopBarProps {
   onSearch: () => void;
   onAbout: () => void;
   onConfigure: () => void;
+  onPublish: () => void;
+  onViewPublished: () => void;
   // Sync controls (lifted from former StatusBar)
   globalRemoteUrl: string | null;
   syncLog: SyncLogEntry[];
@@ -23,6 +25,8 @@ export function TopBar({
   onSearch,
   onAbout,
   onConfigure,
+  onPublish,
+  onViewPublished,
   globalRemoteUrl,
   syncLog,
   onSyncAll,
@@ -35,11 +39,20 @@ export function TopBar({
   const [mounted, setMounted] = useState(false);
   const [isMac, setIsMac] = useState(false);
   const [syncOpen, setSyncOpen] = useState(false);
+  const [publishMenuOpen, setPublishMenuOpen] = useState(false);
 
   useEffect(() => {
     setMounted(true);
     setIsMac(navigator.platform.toUpperCase().indexOf("MAC") >= 0);
   }, []);
+
+  useEffect(() => {
+    const close = () => setPublishMenuOpen(false);
+    if (publishMenuOpen) {
+      window.addEventListener("click", close);
+      return () => window.removeEventListener("click", close);
+    }
+  }, [publishMenuOpen]);
 
   const modifier = isMac ? "⌘" : "Ctrl";
 
@@ -117,6 +130,52 @@ export function TopBar({
         >
           About
         </button>
+
+        <div className="relative">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setPublishMenuOpen((o) => !o);
+            }}
+            className="btn btn-md !font-mono font-bold uppercase tracking-wider text-[var(--accent)]"
+            aria-label="Publish menu"
+            title="Publish documentation"
+          >
+            Publish ▾
+          </button>
+          {publishMenuOpen && (
+            <div className="absolute right-0 top-full mt-2 w-48 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-xl shadow-xl overflow-hidden z-[100]">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setPublishMenuOpen(false);
+                  onPublish();
+                }}
+                className="w-full px-4 py-2.5 text-left text-sm text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] transition-colors flex items-center gap-2"
+              >
+                <svg className="w-4 h-4 text-[#B4781E]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M4 4h16v16H4z" />
+                  <path d="M12 8v8M8 12h8" />
+                </svg>
+                New Publish
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setPublishMenuOpen(false);
+                  onViewPublished();
+                }}
+                className="w-full px-4 py-2.5 text-left text-sm text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] transition-colors flex items-center gap-2 border-t border-[var(--border)]"
+              >
+                <svg className="w-4 h-4 text-[#B4781E]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                  <circle cx="12" cy="12" r="3" />
+                </svg>
+                View Published
+              </button>
+            </div>
+          )}
+        </div>
 
         <button
           onClick={async () => {

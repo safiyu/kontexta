@@ -4,12 +4,12 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useMediaQuery } from "@/hooks/use-media-query";
 
 const STORAGE_KEY = "kontexta:pane-widths:v1";
-const DEFAULT_LEFT = 200;
-const DEFAULT_MIDDLE = 240;
-const MIN_LEFT = 160;
-const MAX_LEFT = 280;
-const MIN_MIDDLE = 200;
-const MAX_MIDDLE = 360;
+const DEFAULT_LEFT = 240;
+const DEFAULT_MIDDLE = 320;
+const MIN_LEFT = 180;
+const MAX_LEFT = 360;
+const MIN_MIDDLE = 260;
+const MAX_MIDDLE = 600;
 
 interface ThreePaneProps {
   left: ReactNode;
@@ -75,7 +75,11 @@ export function ThreePane({ left, leftRail, middle, right }: ThreePaneProps) {
         leftRail
       ) : (
         <>
-          <div style={{ width: leftWidth }} className="shrink-0 overflow-auto bg-[var(--bg-primary)] border-r border-[var(--border)] scrollbar-thin">
+          <div
+            style={{ width: leftWidth }}
+            className="shrink-0 h-full overflow-y-auto bg-[var(--bg-primary)] border-r border-[var(--border)] scrollbar-thin"
+            onScroll={(e) => e.stopPropagation()}
+          >
             {left}
           </div>
           <div
@@ -84,14 +88,14 @@ export function ThreePane({ left, leftRail, middle, right }: ThreePaneProps) {
           />
         </>
       )}
-      <div style={{ width: middleWidth }} className="shrink-0 overflow-auto bg-[var(--bg-primary)] border-r border-[var(--border)] scrollbar-thin">
+      <div style={{ width: middleWidth }} className="shrink-0 h-full overflow-y-auto bg-[var(--bg-primary)] border-r border-[var(--border)]">
         {middle}
       </div>
       <div
         onPointerDown={onPointerDown("middle")}
         className="w-1 cursor-col-resize bg-transparent hover:bg-[var(--accent)]/40 transition-colors z-10"
       />
-      <div className="flex-1 min-w-0 bg-[var(--bg-secondary)] dark:bg-[var(--bg-primary)] p-3 lg:p-4 transition-all overflow-hidden flex flex-col">
+      <div className="flex-1 min-w-0 bg-[var(--bg-secondary)] dark:bg-[var(--bg-primary)] p-3 lg:p-4 transition-all overflow-y-auto flex flex-col">
         <div className="flex-1 min-w-0 overflow-auto floating-surface rounded-2xl shadow-2xl relative">
           <div className="absolute inset-0 pointer-events-none border border-amber-accent/10 rounded-2xl z-20" />
           {right}

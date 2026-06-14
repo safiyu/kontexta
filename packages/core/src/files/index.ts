@@ -15,7 +15,7 @@ import type { FileRecord, Destination, FileFilters, StorageType } from "../types
  */
 export function listProjectFolders(projectPath: string): string[] {
   const folders: string[] = [];
-  
+
   function scan(dir: string, currentRel: string) {
     const entries = readdirSync(dir);
     for (const entry of entries) {
@@ -43,8 +43,59 @@ export function listProjectFolders(projectPath: string): string[] {
   } catch (e) {
     console.error("Failed to scan project folders:", e);
   }
-  
+
   return folders;
+}
+
+/**
+ * List all folders in a project that contain at least one .md or .mmd file.
+ * Returns only non-empty folders (useful for publish UI).
+ */
+export function listProjectFoldersWithFiles(projectPath: string): string[] {
+  const folderFileCount = new Map<string, number>();
+
+  function scan(dir: string, currentRel: string) {
+    const entries = readdirSync(dir);
+    for (const entry of entries) {
+      if (entry.startsWith(".") || entry === "node_modules") continue;
+
+      const fullPath = join(dir, entry);
+      const relPath = currentRel ? join(currentRel, entry) : entry;
+
+      try {
+        const lst = lstatSync(fullPath);
+        if (lst.isSymbolicLink()) continue;
+        if (lst.isDirectory()) {
+          scan(fullPath, relPath);
+        } else if (lst.isFile()) {
+          const ext = entry.endsWith(".mmd") ? ".mmd" : entry.endsWith(".md") ? ".md" : "";
+          if (ext) {
+            // Count file in every ancestor folder
+            const parts = relPath.split("/");
+            for (let i = 0; i < parts.length - 1; i++) {
+              const ancestor = parts.slice(0, i + 1).join("/");
+              folderFileCount.set(ancestor, (folderFileCount.get(ancestor) ?? 0) + 1);
+            }
+          }
+        }
+      } catch (e) {
+        // Skip files that might have been deleted during scan
+      }
+    }
+  }
+
+  try {
+    scan(projectPath, "");
+  } catch (e) {
+    console.error("Failed to scan project folders with files:", e);
+  }
+
+  // Return only folders with at least one .md/.mmd file
+  const result: string[] = [];
+  for (const [folder, count] of folderFileCount.entries()) {
+    if (count > 0) result.push(folder);
+  }
+  return result.sort();
 }
 
 export interface CreateFileOptions {
@@ -455,12 +506,18 @@ export function listFiles(opts: ListFilesOptions): FileRecord[] {
     }
 
     if (filters.folder !== undefined) {
-      // Anchor on path-segment boundaries (POSIX + Windows variants)
-      // so `src` doesn't match `src-of-something`.
       const segment = escapeLike(filters.folder);
-      sql += " AND (path LIKE ? ESCAPE '\\' OR path LIKE ? ESCAPE '\\')";
-      params.push(`%/${segment}/%`);
-      params.push(`%\\${segment}\\%`);
+      if (filters.project_path) {
+        // Scope to files under the given project root.
+        sql += " AND (path LIKE ? ESCAPE '\\' OR path LIKE ? ESCAPE '\\')";
+        params.push(`${filters.project_path}/${segment}/%`);
+        params.push(`${filters.project_path}\\${segment}\\%`);
+      } else {
+        // Original behaviour: match any path segment named like folder.
+        sql += " AND (path LIKE ? ESCAPE '\\' OR path LIKE ? ESCAPE '\\')";
+        params.push(`%/${segment}/%`);
+        params.push(`%\\${segment}\\%`);
+      }
     }
   }
 
