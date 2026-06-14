@@ -1,9 +1,10 @@
 import { parseArgs } from "node:util";
 import { writeFileSync, existsSync } from "node:fs";
-import { resolve, join } from "node:path";
+import { resolve, join, dirname } from "node:path";
 import { loadConfigFile, mergeConfig, type CliOverrides } from "./config.js";
 import { runPipeline } from "./pipeline.js";
 import { createCoreReader } from "./source/reader.js";
+import { generateLlmsTxt } from "./render/llms.js";
 
 export interface ParsedCli { overrides: CliOverrides; configPath?: string; watch: boolean; }
 
@@ -17,6 +18,9 @@ export function parseCliArgs(argv: string[]): ParsedCli {
       brand: { type: "string" },
       config: { type: "string" },
       watch: { type: "boolean", default: false },
+      llmsTxt: { type: "boolean", default: false },
+      seo: { type: "boolean", default: false },
+      theme: { type: "string" },
     },
     allowPositionals: false,
   });
@@ -26,6 +30,9 @@ export function parseCliArgs(argv: string[]): ParsedCli {
       output: values.output as string | undefined,
       title: values.title as string | undefined,
       brand: values.brand as string | undefined,
+      llmsTxt: Boolean(values.llmsTxt),
+      seo: Boolean(values.seo),
+      theme: (values.theme as string) as "default" | "minimal" | "api-ref" | undefined,
     },
     configPath: values.config as string | undefined,
     watch: Boolean(values.watch),
@@ -35,10 +42,15 @@ export function parseCliArgs(argv: string[]): ParsedCli {
 export function buildOnce(parsed: ParsedCli): void {
   const file = parsed.configPath && existsSync(parsed.configPath) ? loadConfigFile(parsed.configPath) : {};
   const config = mergeConfig(file, parsed.overrides, { requireFolders: true });
-  const { html, report } = runPipeline(config, createCoreReader());
+  const result = runPipeline(config, createCoreReader());
   const out = resolve(config.output);
-  writeFileSync(out, html, "utf8");
-  console.log(`✓ ${out} — ${report.docCount} docs, ${report.endpointCount} endpoints, ${report.termCount} terms (folders: ${report.folders.join(", ")})`);
+  writeFileSync(out, result.html, "utf8");
+  console.log(`✓ ${out} — ${result.report.docCount} docs, ${result.report.endpointCount} endpoints, ${result.report.termCount} terms (folders: ${result.report.folders.join(", ")})`);
+  if (config.llmsTxt) {
+    const llms = generateLlmsTxt(result.docs, result.search, config.site.title);
+    writeFileSync(join(dirname(out), "llms.txt"), llms, "utf8");
+    console.log(`  llms.txt — ${result.docs.length} docs indexed`);
+  }
 }
 
 export async function main(argv: string[]): Promise<void> {

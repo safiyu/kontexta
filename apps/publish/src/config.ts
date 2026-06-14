@@ -12,6 +12,9 @@ export type FileConfig = Partial<{
   source: Partial<PublishConfig["source"]>;
   site: Partial<PublishConfig["site"]>;
   output: string;
+  llmsTxt: boolean;
+  seo: boolean;
+  theme: "default" | "minimal" | "api-ref";
 }>;
 
 /** CLI overrides parsed from flags. */
@@ -20,6 +23,9 @@ export interface CliOverrides {
   output?: string;
   title?: string;
   brand?: string;
+  llmsTxt?: boolean;
+  seo?: boolean;
+  theme?: "default" | "minimal" | "api-ref";
 }
 
 export function mergeConfig(
@@ -37,6 +43,9 @@ export function mergeConfig(
       hero: file.site?.hero ?? DEFAULT_CONFIG.site.hero,
     },
     output: cli.output ?? file.output ?? DEFAULT_CONFIG.output,
+    llmsTxt: cli.llmsTxt ?? file.llmsTxt ?? false,
+    seo: cli.seo ?? file.seo ?? false,
+    theme: cli.theme ?? file.theme ?? "default",
   };
   if (opts.requireFolders && cfg.source.folders.length === 0) {
     throw new Error("No source folders configured. Set source.folders in the config file or pass --folder.");

@@ -40,7 +40,7 @@ export function LoginClient({ isSetupRequired }: { isSetupRequired: boolean }) {
       }
 
       if (!res.ok) {
-        console.error(`[Login] Auth failed:`, data);
+        console.log(`[Login] Auth failed:`, data);
         throw new Error(data.error || `Authentication failed (${res.status})`);
       }
 

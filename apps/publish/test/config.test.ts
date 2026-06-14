@@ -28,4 +28,31 @@ describe("mergeConfig", () => {
   it("throws when no folders resolved", () => {
     expect(() => mergeConfig({}, {}, { requireFolders: true })).toThrow(/folder/i);
   });
+
+  it("defaults llmsTxt, seo to false and theme to default", () => {
+    const cfg = mergeConfig({}, {});
+    expect(cfg.llmsTxt).toBe(false);
+    expect(cfg.seo).toBe(false);
+    expect(cfg.theme).toBe("default");
+  });
+
+  it("file config overrides llmsTxt, seo, theme", () => {
+    const cfg = mergeConfig(
+      { llmsTxt: true, seo: true, theme: "minimal" },
+      {},
+    );
+    expect(cfg.llmsTxt).toBe(true);
+    expect(cfg.seo).toBe(true);
+    expect(cfg.theme).toBe("minimal");
+  });
+
+  it("CLI flags override file config for new fields", () => {
+    const cfg = mergeConfig(
+      { llmsTxt: false, seo: false, theme: "default" },
+      { llmsTxt: true, seo: true, theme: "api-ref" },
+    );
+    expect(cfg.llmsTxt).toBe(true);
+    expect(cfg.seo).toBe(true);
+    expect(cfg.theme).toBe("api-ref");
+  });
 });

@@ -7,8 +7,12 @@
     "kxta-publish": "dist/index.js"
   },
   "main": "dist/index.js",
+  "exports": {
+    "./pipeline": "./dist/pipeline.js",
+    "./render/llms": "./dist/render/llms.js"
+  },
   "scripts": {
-    "build": "tsc && mkdir -p dist/template dist/seeds && cp src/template/theme.css src/template/app.js dist/template/ && cp src/seeds/*.md dist/seeds/",
+    "build": "tsc && mkdir -p dist/template dist/seeds && cp src/template/theme.css src/template/minimal.css src/template/api-ref.css src/template/app.js dist/template/ && cp src/seeds/*.md dist/seeds/",
     "test": "vitest run",
     "test:watch": "vitest",
     "dev": "tsc --watch"

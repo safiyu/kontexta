@@ -14,6 +14,12 @@ export interface PublishConfig {
   site: SiteConfig;
   /** Output file path, resolved relative to cwd. */
   output: string;
+  /** Emit an llms.txt file alongside the HTML. */
+  llmsTxt?: boolean;
+  /** Emit OpenGraph / SEO meta tags in the HTML head. */
+  seo?: boolean;
+  /** CSS theme preset: "default" | "minimal" | "api-ref". */
+  theme?: "default" | "minimal" | "api-ref";
 }
 
 /** Frontmatter we read from each doc (all optional). */

@@ -30,6 +30,31 @@ export interface ShellInput {
 const MERMAID_CDN = "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";
 const FONTS = "https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&family=JetBrains+Mono:wght@400;600&family=Manrope:wght@600;700;800&display=swap";
 
+/** Generate OpenGraph / SEO meta tags for the HTML head. */
+function generateSeoMeta(config: PublishConfig, docs: RenderedDoc[]): string {
+  const title = config.site.title;
+  const brand = config.site.brand || title;
+  // Extract a description from the first doc's HTML
+  const firstDoc = docs[0];
+  const description = firstDoc
+    ? firstDoc.html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 160)
+    : `${brand} documentation`;
+
+  const ogImage = config.site.logo
+    ? `<meta property="og:image" content="${config.site.logo}">`
+    : "";
+
+  return `<!-- SEO / OpenGraph -->
+<meta name="description" content="${description}">
+<meta property="og:title" content="${title}">
+<meta property="og:description" content="${description}">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="${title}">
+<meta name="twitter:description" content="${description}">
+${ogImage}`;
+}
+
 export function assembleShell(input: ShellInput): string {
   const { config, nav, docs, search } = input;
   const theme = readAsset("theme.css");
@@ -48,8 +73,14 @@ export function assembleShell(input: ShellInput): string {
     ? `<div class="hero"><div class="brand">${config.site.brand}</div><h1>${config.site.title}</h1></div>`
     : "";
 
+  // SEO / OpenGraph meta tags
+  const seoMeta = config.seo ? generateSeoMeta(config, docs) : "";
+
+  // Theme class for HTML element
+  const themeClass = config.theme === "minimal" ? "minimal" : config.theme === "api-ref" ? "api-ref" : "";
+
   return `<!doctype html>
-<html lang="en" class="dark">
+<html lang="en" class="dark${themeClass ? " " + themeClass : ""}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -57,6 +88,7 @@ export function assembleShell(input: ShellInput): string {
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="${FONTS}" rel="stylesheet">
 <style>${theme}</style>
+${seoMeta}
 </head>
 <body>
 <div class="layout">

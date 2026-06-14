@@ -10,6 +10,7 @@ interface TopBarProps {
   onSearch: () => void;
   onAbout: () => void;
   onConfigure: () => void;
+  onPublish: () => void;
   // Sync controls (lifted from former StatusBar)
   globalRemoteUrl: string | null;
   syncLog: SyncLogEntry[];
@@ -23,6 +24,7 @@ export function TopBar({
   onSearch,
   onAbout,
   onConfigure,
+  onPublish,
   globalRemoteUrl,
   syncLog,
   onSyncAll,
@@ -116,6 +118,15 @@ export function TopBar({
           aria-label="About Kontexta"
         >
           About
+        </button>
+
+        <button
+          onClick={onPublish}
+          className="btn btn-md !font-mono font-bold uppercase tracking-wider text-[var(--accent)]"
+          aria-label="Publish documentation"
+          title="Publish documentation site"
+        >
+          Publish
         </button>
 
         <button

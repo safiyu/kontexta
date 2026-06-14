@@ -1,16 +1,19 @@
+import { writeFileSync } from "node:fs";
+import { join, dirname } from "node:path";
 import type { PublishConfig, RenderedDoc, DocFile } from "./types.js";
 import type { VaultReader } from "./source/reader.js";
 import { enumerateDocs } from "./source/enumerate.js";
 import { renderDocBody } from "./render/markdown.js";
 import { buildNav, buildSearchIndex } from "./render/nav.js";
 import { assembleShell } from "./template/shell.js";
+import { generateLlmsTxt } from "./render/llms.js";
 import { createSeedReader } from "./seeds/seeds.js";
 import { createCoreReader } from "./source/reader.js";
 
 export interface BuildReport { docCount: number; endpointCount: number; termCount: number; folders: string[]; }
 
 /** Render a list of doc files into RenderedDoc[] and produce HTML + report. */
-function renderDocs(config: PublishConfig, docFiles: DocFile[]): { html: string; report: BuildReport } {
+function renderDocs(config: PublishConfig, docFiles: DocFile[]): { html: string; report: BuildReport; docs: RenderedDoc[]; search: import("./types.js").SearchEntry[] } {
   const docs: RenderedDoc[] = docFiles.map((doc) => {
     const { html, toc, endpoints, terms } = renderDocBody(doc.body);
     return { doc, html, toc, endpoints, terms };
@@ -26,10 +29,12 @@ function renderDocs(config: PublishConfig, docFiles: DocFile[]): { html: string;
       termCount: docs.reduce((n, d) => n + (d.terms?.length ?? 0), 0),
       folders: config.source.folders,
     },
+    docs,
+    search,
   };
 }
 
-export function runPipeline(config: PublishConfig, reader?: VaultReader): { html: string; report: BuildReport } {
+export function runPipeline(config: PublishConfig, reader?: VaultReader): { html: string; report: BuildReport; docs: RenderedDoc[]; search: import("./types.js").SearchEntry[] } {
   const vaultReader = reader || createCoreReader();
   const docFiles = enumerateDocs(vaultReader, config.source.folders);
   if (docFiles.length === 0) {

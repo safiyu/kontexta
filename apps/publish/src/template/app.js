@@ -109,7 +109,7 @@ function openPalette() { document.getElementById("search-overlay").classList.add
 function closePalette() { document.getElementById("search-overlay").classList.remove("open"); }
 function runSearch(q) {
   const ql = q.toLowerCase().trim();
-  const hits = ql ? SEARCH.filter((e) => e.text.toLowerCase().includes(ql)).slice(0, 30) : [];
+  const hits = ql ? SEARCH.filter((e) => (e.title + " " + (e.snippet || "")).toLowerCase().includes(ql)).slice(0, 30) : [];
   document.getElementById("search-results").innerHTML = hits.map((h) =>
     `<a class="search-result" href="${h.url}" onclick="closePaletteSoon()"><span class="search-type">${h.type}</span> ${h.title}</a>`
   ).join("") || `<div class="search-empty">No matches</div>`;
