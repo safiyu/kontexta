@@ -236,6 +236,12 @@ What's deliberately deferred and what triggers will pull it forward lives in [`d
 - Form-based `kontexta.json` editor with live validation.
 - Real-time status bar streaming git activity over WebSockets.
 
+### Publish
+- **CLI-driven documentation generation.** Turn your knowledge base into polished documentation sites, API references, and LLM-readable docs.
+- **Render blocks.** Composable output blocks for endpoints, glossary, mermaid diagrams, navigation, LLMs, markdown, and more.
+- **Seed templates.** Pre-built templates for common documentation patterns — get started in minutes.
+- **Pipeline architecture.** Pluggable pipeline with configurable sources, renderers, and output targets.
+
 ---
 
 > [!TIP]
