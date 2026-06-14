@@ -43,12 +43,12 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends python3 make g++ gcc
 
       - name: Install
-        env:
-          npm_config_build_from_source: "true"
         run: pnpm install --frozen-lockfile
 
       - name: Rebuild better-sqlite3 from source
-        run: pnpm rebuild better-sqlite3 --build-from-source
+        run: |
+          cd node_modules/.pnpm/better-sqlite3@12.10.0/node_modules/better-sqlite3
+          npx node-gyp rebuild
 
       - name: Verify tag matches package version
         run: |
