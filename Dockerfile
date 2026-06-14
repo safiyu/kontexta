@@ -24,11 +24,11 @@ RUN pnpm install --frozen-lockfile
 # pnpm's content-addressable store may contain a binary built for a different
 # Node ABI; running node-gyp directly in the package dir bypasses that cache.
 RUN cd node_modules/.pnpm/better-sqlite3@12.10.0/node_modules/better-sqlite3 \
-    && npx node-gyp rebuild
+    && npx node-gyp rebuild -j max
 
 # Rebuild re2 native binding for this exact Node version.
 RUN cd node_modules/.pnpm/re2@1.24.1/node_modules/re2 \
-    && npx node-gyp rebuild
+    && npx node-gyp rebuild -j max
 
 # Copy the rest of the source code
 COPY . .
