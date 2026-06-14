@@ -33,8 +33,10 @@ COPY . .
 RUN pnpm build
 
 # Deploy MCP server with its production dependencies
-# This creates a standalone directory with its own node_modules
-RUN pnpm --filter kontexta-mcp deploy /app/mcp-deploy
+# This creates a standalone directory with its own node_modules.
+# --legacy: pnpm v10 now requires inject-workspace-packages by default;
+# this flag restores the pre-v10 copy behaviour for deployment bundles.
+RUN pnpm --filter kontexta-mcp deploy --legacy /app/mcp-deploy
 
 # Stage 2: Runner
 FROM node:24-slim AS runner
