@@ -1,5 +1,5 @@
 # Stage 1: Build
-FROM node:20-slim AS builder
+FROM node:24-slim AS builder
 WORKDIR /app
 
 # Install pnpm and native build tools (required for oniguruma, better-sqlite3, etc.)
@@ -30,7 +30,7 @@ RUN pnpm build
 RUN pnpm --filter kontexta-mcp deploy /app/mcp-deploy
 
 # Stage 2: Runner
-FROM node:20-slim AS runner
+FROM node:24-slim AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production

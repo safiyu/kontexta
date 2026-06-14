@@ -7,7 +7,7 @@
   "private": true,
   "license": "Apache-2.0",
   "engines": {
-    "node": ">=20.0.0",
+    "node": ">=22.0.0",
     "pnpm": ">=9.0.0"
   },
   "scripts": {
@@ -23,5 +23,5 @@
     "turbo": "^2.5.0",
     "typescript": "^5.7.0"
   },
-  "packageManager": "pnpm@9.15.0"
+  "packageManager": "pnpm@10.34.3"
 }

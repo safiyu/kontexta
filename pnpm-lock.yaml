@@ -8,6 +8,9 @@ importers:
 
   .:
     devDependencies:
+      pnpm:
+        specifier: ^10.34.3
+        version: 10.34.3
       re2:
         specifier: 1.24.1
         version: 1.24.1
@@ -24,8 +27,8 @@ importers:
         specifier: ^1.12.0
         version: 1.29.0(zod@3.25.76)
       better-sqlite3:
-        specifier: ^11.7.0
-        version: 11.10.0
+        specifier: ^12.10.0
+        version: 12.10.0
       chokidar:
         specifier: ^4.0.0
         version: 4.0.3
@@ -1503,9 +1506,6 @@ packages:
     engines: {node: '>=6.0.0'}
     hasBin: true
 
-  better-sqlite3@11.10.0:
-    resolution: {integrity: sha512-EwhOpyXiOEL/lKzHz9AW1msWFNzGc/z+LzeB3/jnFJpxu+th2yqvzsSWas1v9jgs9+xiXJcD5A8CJxAG2TaghQ==}
-
   better-sqlite3@12.10.0:
     resolution: {integrity: sha512-CyzaZRQKyHkB2ZInfTTl2nvT33EbDpjkLEbE8/Zck3Ll6O0qqvuGdrJ45HgtH+HykRg88ITY3AdreBGN70aBSQ==}
     engines: {node: 20.x || 22.x || 23.x || 24.x || 25.x || 26.x}
@@ -2833,6 +2833,11 @@ packages:
 
   pkg-types@1.3.1:
     resolution: {integrity: sha512-/Jm5M4RvtBFVkKWRu2BLUTNP8/M2a+UwuAX+ae4770q1qVGtfjG+WTCupoZixokjmHiry8uI+dlY8KXYV5HVVQ==}
+
+  pnpm@10.34.3:
+    resolution: {integrity: sha512-8sUxsIgp175/A8kK3cJmYV+cVHdGPkvx0nXLJjzp6lfPDVWZEQ2UZJqbs/7Z8LXvzqdKcBa2FTKiTLmth4YMHQ==}
+    engines: {node: '>=18.12'}
+    hasBin: true
 
   points-on-curve@0.2.0:
     resolution: {integrity: sha512-0mYKnYYe9ZcqMCWhUjItv/oHjvgEsfKvnUTg8sAtnHr3GVy7rGkXCb6d5cSyqrWqL4k81b9CPg3urd+T7aop3A==}
@@ -4766,11 +4771,6 @@ snapshots:
 
   baseline-browser-mapping@2.10.33: {}
 
-  better-sqlite3@11.10.0:
-    dependencies:
-      bindings: 1.5.0
-      prebuild-install: 7.1.3
-
   better-sqlite3@12.10.0:
     dependencies:
       bindings: 1.5.0
@@ -6321,6 +6321,8 @@ snapshots:
       confbox: 0.1.8
       mlly: 1.8.2
       pathe: 2.0.3
+
+  pnpm@10.34.3: {}
 
   points-on-curve@0.2.0: {}
 
