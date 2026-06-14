@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { runPipeline } from "publish/pipeline";
+import { runPipeline } from "kxta-publish/pipeline";
 import { mkdirSync, writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { getDataDir, getDatabase } from "kxta-core";
@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
 
     // Write llms.txt if enabled
     if (body.llmsTxt) {
-      const { generateLlmsTxt } = await import("publish/render/llms");
+      const { generateLlmsTxt } = await import("kxta-publish/render/llms");
       const llmsPath = join(outputDir, "llms.txt");
       writeFileSync(
         llmsPath,
