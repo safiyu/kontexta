@@ -14,6 +14,7 @@ RUN npm install -g pnpm
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
 COPY apps/web/package.json ./apps/web/
 COPY apps/mcp/package.json ./apps/mcp/
+COPY apps/publish/package.json ./apps/publish/
 COPY packages/core/package.json ./packages/core/
 
 # Install dependencies
