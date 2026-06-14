@@ -1,6 +1,12 @@
-import { getDataDir, JournalWriter, defaultRedactConfig, redactArgs, checkGit, readHighWater, shouldBlock, backlogErrorPayload, type GitWatcherState } from "kxta-core";
+import { getDataDir, JournalWriter, defaultRedactConfig, redactArgs, checkGit, readHighWater, shouldBlock, backlogErrorPayload, type GitWatcherState, resetDataDirCache } from "kxta-core";
 import type { RawEvent } from "kxta-core";
 import { readdirSync, readFileSync as fsReadFileSync, existsSync as fsExistsSync } from "node:fs";
+
+/** Override the data directory for testing. */
+export function setDataDir(dir: string): void {
+  process.env.KONTEXTA_DATA_DIR = dir;
+  resetDataDirCache();
+}
 
 interface CaptureContext {
   writer: JournalWriter;

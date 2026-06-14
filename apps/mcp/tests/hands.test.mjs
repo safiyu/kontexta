@@ -260,7 +260,8 @@ test("resolveArgv: substitutes per element, drops empty resolved elements", () =
     },
     false
   );
-  assert.deepEqual(argv, ["echo", "--name="]);
+  // Both {{a}} and --name={{b}} are dropped because their values are empty
+  assert.deepEqual(argv, ["echo"]);
 });
 
 test("resolveArgv: substitutes non-empty values, leaves whitespace intact", () => {
