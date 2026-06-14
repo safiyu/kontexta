@@ -39,11 +39,16 @@ jobs:
           node-version: "22"
           cache: "pnpm"
 
+      - name: Install build tools
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends python3 make g++ gcc
+
       - name: Install
+        env:
+          npm_config_build_from_source: "true"
         run: pnpm install --frozen-lockfile
 
-      - name: Rebuild native dependencies
-        run: pnpm rebuild
+      - name: Rebuild better-sqlite3 from source
+        run: pnpm rebuild better-sqlite3 --build-from-source
 
       - name: Verify tag matches package version
         run: |
