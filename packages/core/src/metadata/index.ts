@@ -377,13 +377,20 @@ function reconcileIndex(opts: ReconcileOptions): ReconcileResult {
     } catch (e) {
       if (isTopLevel) {
         if (typeof projectId === "number") {
-          // Surface for project scope — clear config error.
-          throw new Error(`Failed to read project root ${dir}: ${(e as any)?.message ?? e}`);
+          if ((e as any)?.code === "ENOENT") {
+            // Directory doesn't exist yet — treat as empty, not a fatal error.
+            // The project may have just been registered before its path was created.
+            console.warn(`reconcileIndex: project root does not exist yet: ${dir}`);
+          } else {
+            // Surface real IO errors (EACCES, etc.) — clear config error.
+            throw new Error(`Failed to read project root ${dir}: ${(e as any)?.message ?? e}`);
+          }
+        } else {
+          // KB scope: log and bail. The caller (and the topLevelWalkOk guard
+          // below) ensures we don't prune away the entire knowledge base on a
+          // transient EACCES.
+          console.warn(`reconcileIndex: failed to read KB root ${dir}: ${(e as any)?.message ?? e}`);
         }
-        // KB scope: log and bail. The caller (and the topLevelWalkOk guard
-        // below) ensures we don't prune away the entire knowledge base on a
-        // transient EACCES.
-        console.warn(`reconcileIndex: failed to read KB root ${dir}: ${(e as any)?.message ?? e}`);
       }
       return;
     }
@@ -500,7 +507,14 @@ function reconcileIndex(opts: ReconcileOptions): ReconcileResult {
  * files (callers like /api/projects use this to surface "X files indexed" UX).
  */
 export function discoverFiles(projectId: number, dataDir: string): FileRecord[] {
-  return reconcileIndex({ projectId, dataDir }).newRecords;
+  // Reconcile first (index any new/changed files on disk), then return the
+  // full set of indexed files for this project. Returning only newRecords
+  // would give an empty result if registerProject already ran reconcileIndex.
+  reconcileIndex({ projectId, dataDir });
+  const db = getDatabase();
+  return db
+    .prepare("SELECT * FROM files WHERE project_id = ? ORDER BY path")
+    .all(projectId) as FileRecord[];
 }
 
 /**
