@@ -42,7 +42,7 @@ export function createMarkdown(): MarkdownIt {
 
     if (lang === "mermaid") return renderMermaid(body, token.attrGet("id") || "m" + idx);
     if (lang === "endpoints") return renderEndpoints(body, env.endpoints);
-    if (lang === "glossary") return renderGlossary(body);
+    if (lang === "glossary") return renderGlossary(body, env);
 
     // Default: normal code block
     const langName = lang || options.langPrefix || "";

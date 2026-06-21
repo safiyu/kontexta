@@ -36,4 +36,11 @@ describe("markdown rendering", () => {
     expect(toc.find((t) => t.text === "Section A")?.id).toBe("section-a");
     expect(endpoints).toEqual([]);
   });
+
+  it("renderDocBody collects glossary terms from a glossary fence", () => {
+    const { terms } = renderDocBody("```glossary\n- term: SLT\n  definition: replication\n- term: XEED\n  definition: framed\n```");
+    expect(terms).toHaveLength(2);
+    expect(terms.map((t) => t.term)).toEqual(["SLT", "XEED"]);
+    expect(terms[0].id).toBe("slt");
+  });
 });

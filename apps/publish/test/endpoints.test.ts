@@ -31,4 +31,36 @@ describe("renderEndpoints", () => {
   it("throws on malformed yaml with a helpful message", () => {
     expect(() => renderEndpoints("::: not yaml :::", [])).toThrow(/endpoints/i);
   });
+
+  it("escapes HTML in path and description", () => {
+    const evil = `
+- method: GET
+  path: '/p"><img src=x>'
+  description: 'a & b < c > d'
+`;
+    const html = renderEndpoints(evil, []);
+    expect(html).not.toContain('"><img');
+    expect(html).toContain("&quot;&gt;&lt;img");
+    expect(html).toContain("a &amp; b &lt; c &gt; d");
+  });
+
+  it("falls back to GET for a non-alphabetic method", () => {
+    const collected: any[] = [];
+    renderEndpoints("- method: '<x>'\n  path: /a\n", collected);
+    expect(collected[0].method).toBe("GET");
+  });
+
+  it("drops an unknown badge value", () => {
+    const collected: any[] = [];
+    const html = renderEndpoints("- method: GET\n  path: /a\n  badge: 'evil\"><svg>'\n", collected);
+    expect(collected[0].badge).toBeUndefined();
+    expect(html).not.toContain('<svg');
+    expect(html).not.toContain('api-badge-evil');
+  });
+
+  it("disambiguates duplicate endpoint ids", () => {
+    const collected: any[] = [];
+    renderEndpoints("- method: GET\n  path: /x/y\n- method: GET\n  path: /x_y\n", collected);
+    expect(collected.map((e) => e.id)).toEqual(["get-x-y", "get-x-y-2"]);
+  });
 });

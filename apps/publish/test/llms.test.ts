@@ -31,8 +31,8 @@ describe("generateLlmsTxt", () => {
 
   it("lists all docs with links and descriptions", () => {
     const result = generateLlmsTxt(docs, search, "My Docs");
-    expect(result).toContain("- [API Reference](#slt/api)");
-    expect(result).toContain("- [User Guide](#slt/guide)");
+    expect(result).toContain("- [API Reference](#/slt/api)");
+    expect(result).toContain("- [User Guide](#/slt/guide)");
     // descriptions are stripped HTML
     expect(result).toContain("REST API for managing resources");
     expect(result).toContain("A comprehensive guide to using the platform");

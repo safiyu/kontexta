@@ -8,6 +8,7 @@ const rulesVersion = rootPkg.rulesVersion;
 
 const targets = [
   'apps/mcp/package.json',
+  'apps/publish/package.json',
   'apps/web/package.json',
   'packages/core/package.json',
   'glama.json'

@@ -35,4 +35,8 @@ describe("parseCliArgs", () => {
     expect(a.overrides.seo).toBe(true);
     expect(a.overrides.theme).toBe("api-ref");
   });
+
+  it("rejects an unknown --theme value", () => {
+    expect(() => parseCliArgs(["--theme", "bogus"])).toThrow(/Invalid --theme/);
+  });
 });

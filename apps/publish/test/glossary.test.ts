@@ -22,4 +22,21 @@ describe("renderGlossary", () => {
   it("throws on non-list yaml", () => {
     expect(() => renderGlossary("term: x")).toThrow(/glossary/i);
   });
+
+  it("collects terms into env and stamps unique ids", () => {
+    const env: { endpoints: any[]; terms?: any[] } = { endpoints: [] };
+    const html = renderGlossary(YAML, env as any);
+    expect(env.terms).toHaveLength(2);
+    expect(env.terms![0].id).toBe("slt");
+    expect(env.terms![1].id).toBe("xeed");
+    expect(html).toContain('id="slt"');
+    expect(html).toContain('id="xeed"');
+  });
+
+  it("escapes HTML in term and definition", () => {
+    const html = renderGlossary("- term: '<a>'\n  definition: 'b & c'\n");
+    expect(html).not.toContain("<a>");
+    expect(html).toContain("&lt;a&gt;");
+    expect(html).toContain("b &amp; c");
+  });
 });

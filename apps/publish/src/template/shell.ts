@@ -20,6 +20,19 @@ function embed(value: unknown): string {
   return JSON.stringify(value).replace(/</g, "\\u003c").replace(/-->/g, "--\\>");
 }
 
+/** HTML-escape for use in element text content. */
+function escapeHtml(s: string): string {
+  return String(s ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+/** HTML attribute-escape (covers both " and ' quoted attributes). */
+function escapeAttr(s: string): string {
+  return escapeHtml(s).replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+
 export interface ShellInput {
   config: PublishConfig;
   nav: NavGroup[];
@@ -32,16 +45,16 @@ const FONTS = "https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;7
 
 /** Generate OpenGraph / SEO meta tags for the HTML head. */
 function generateSeoMeta(config: PublishConfig, docs: RenderedDoc[]): string {
-  const title = config.site.title;
-  const brand = config.site.brand || title;
+  const title = escapeAttr(config.site.title);
   // Extract a description from the first doc's HTML
   const firstDoc = docs[0];
-  const description = firstDoc
+  const rawDesc = firstDoc
     ? firstDoc.html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 160)
-    : `${brand} documentation`;
+    : `${config.site.brand || config.site.title} documentation`;
+  const description = escapeAttr(rawDesc);
 
   const ogImage = config.site.logo
-    ? `<meta property="og:image" content="${config.site.logo}">`
+    ? `<meta property="og:image" content="${escapeAttr(config.site.logo)}">`
     : "";
 
   return `<!-- SEO / OpenGraph -->
@@ -69,9 +82,6 @@ export function assembleShell(input: ShellInput): string {
     for (const ep of r.endpoints) endpoints[ep.id] = ep;
   }
 
-  const hero = config.site.hero
-    ? `<div class="hero"><div class="brand">${config.site.brand}</div><h1>${config.site.title}</h1></div>`
-    : "";
 
   // SEO / OpenGraph meta tags
   const seoMeta = config.seo ? generateSeoMeta(config, docs) : "";
@@ -84,7 +94,7 @@ export function assembleShell(input: ShellInput): string {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>${config.site.title}</title>
+<title>${escapeHtml(config.site.title)}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="${FONTS}" rel="stylesheet">
 <style>${theme}</style>
@@ -93,7 +103,7 @@ ${seoMeta}
 <body>
 <div class="layout">
   <div class="topbar">
-    <div class="brand">${config.site.brand || config.site.title}</div>
+    <div class="brand">${escapeHtml(config.site.brand || config.site.title)}</div>
     <div>
       <button id="nav-toggle" aria-label="Menu">☰</button>
       <button id="search-trigger" onclick="document.getElementById('search-input').focus()">Search ⌘K</button>
