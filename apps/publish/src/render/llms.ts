@@ -16,7 +16,7 @@ export function generateLlmsTxt(docs: RenderedDoc[], search: SearchEntry[], site
     const slug = doc.doc.slug;
     const folder = doc.doc.folder;
     const desc = extractDescription(doc.html);
-    lines.push(`- [${title}](#${folder}/${slug}) - ${desc}`);
+    lines.push(`- [${title}](#/${folder}/${slug}) - ${desc}`);
   }
 
   lines.push("");

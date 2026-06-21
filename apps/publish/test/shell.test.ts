@@ -86,4 +86,18 @@ describe("assembleShell", () => {
     expect(html).toContain('<html lang="en" class="dark">');
     expect(html).not.toContain('class="dark default"');
   });
+
+  it("escapes HTML in site.title and site.brand", () => {
+    const evilCfg: PublishConfig = {
+      ...cfg,
+      seo: true,
+      site: { title: '<script>x</script>', brand: 'a"><img>', hero: true },
+    };
+    const html = assembleShell({ config: evilCfg, nav, docs, search });
+    expect(html).not.toContain('<script>x</script>');
+    expect(html).not.toContain('a"><img>');
+    expect(html).toContain('&lt;script&gt;');
+    // attribute-safe encoding for meta content
+    expect(html).toMatch(/<meta property="og:title" content="&lt;script&gt;/);
+  });
 });

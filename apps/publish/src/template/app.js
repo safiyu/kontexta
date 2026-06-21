@@ -1,6 +1,15 @@
 // ---- Mermaid zoom/fullscreen (per-diagram) ----
 const _zoomMap = new Map();
 
+function escapeHtml(s) {
+  return String(s ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function zoomDiagram(id, delta) {
   const current = _zoomMap.get(id) ?? 1;
   const level = Math.max(0.25, Math.min(4, current + delta));
@@ -63,10 +72,11 @@ function firstDocKey() {
 function renderSidebar() {
   const el = document.getElementById("sidebar");
   el.innerHTML = NAV.map((g) =>
-    `<div class="nav-group-label">${g.group}</div>` +
-    g.items.map((i) =>
-      `<a class="nav-item" data-key="${i.folder}/${i.slug}" href="#/${i.folder}/${i.slug}">${i.icon ? i.icon + " " : ""}${i.title}</a>`
-    ).join("")
+    `<div class="nav-group-label">${escapeHtml(g.group)}</div>` +
+    g.items.map((i) => {
+      const key = `${escapeHtml(i.folder)}/${escapeHtml(i.slug)}`;
+      return `<a class="nav-item" data-key="${key}" href="#/${key}">${i.icon ? escapeHtml(i.icon) + " " : ""}${escapeHtml(i.title)}</a>`;
+    }).join("")
   ).join("");
 }
 
@@ -74,7 +84,7 @@ function renderToc(doc) {
   const el = document.getElementById("toc");
   el.innerHTML = `<div class="toc-label">On this page</div>` +
     (doc.toc || []).map((t) =>
-      `<a class="toc-item level-${t.level}" href="#/${doc.folder}/${doc.slug}#${t.id}" data-id="${t.id}">${t.text}</a>`
+      `<a class="toc-item level-${escapeHtml(t.level)}" href="#/${escapeHtml(doc.folder)}/${escapeHtml(doc.slug)}#${escapeHtml(t.id)}" data-id="${escapeHtml(t.id)}">${escapeHtml(t.text)}</a>`
     ).join("");
 }
 
@@ -154,13 +164,13 @@ window.openEndpoint = function (id) {
 };
 
 function endpointHtml(ep) {
-  const rows = (obj) => Object.entries(obj || {}).map(([k, v]) => `<div><code>${k}</code> — ${v}</div>`).join("");
-  return `<div class="modal-section-title">${ep.method} ${ep.path}</div>
-    ${ep.description ? `<p>${ep.description}</p>` : ""}
+  const rows = (obj) => Object.entries(obj || {}).map(([k, v]) => `<div><code>${escapeHtml(k)}</code> — ${escapeHtml(v)}</div>`).join("");
+  return `<div class="modal-section-title">${escapeHtml(ep.method)} ${escapeHtml(ep.path)}</div>
+    ${ep.description ? `<p>${escapeHtml(ep.description)}</p>` : ""}
     ${ep.headers ? `<div class="modal-section"><div class="modal-section-title">Headers</div>${rows(ep.headers)}</div>` : ""}
     ${ep.statusCodes ? `<div class="modal-section"><div class="modal-section-title">Status Codes</div>${rows(ep.statusCodes)}</div>` : ""}
-    ${ep.request ? `<div class="modal-section"><div class="modal-section-title">Request</div><pre>${ep.request}</pre></div>` : ""}
-    ${ep.response ? `<div class="modal-section"><div class="modal-section-title">Response</div><pre>${ep.response}</pre></div>` : ""}`;
+    ${ep.request ? `<div class="modal-section"><div class="modal-section-title">Request</div><pre>${escapeHtml(ep.request)}</pre></div>` : ""}
+    ${ep.response ? `<div class="modal-section"><div class="modal-section-title">Response</div><pre>${escapeHtml(ep.response)}</pre></div>` : ""}`;
 }
 
 function closeModal() { document.getElementById("modal").classList.remove("open"); }
@@ -173,7 +183,7 @@ function runSearch(q) {
   const ql = q.toLowerCase().trim();
   const hits = ql ? SEARCH.filter((e) => (e.title + " " + (e.snippet || "")).toLowerCase().includes(ql)).slice(0, 30) : [];
   document.getElementById("search-results").innerHTML = hits.map((h) =>
-    `<a class="search-result" href="${h.url}" onclick="closePaletteSoon()"><span class="search-type">${h.type}</span> ${h.title}</a>`
+    `<a class="search-result" href="${escapeHtml(h.url)}" onclick="closePaletteSoon()"><span class="search-type">${escapeHtml(h.type)}</span> ${escapeHtml(h.title)}</a>`
   ).join("") || `<div class="search-empty">No results found</div>`;
 }
 window.closePaletteSoon = () => setTimeout(closePalette, 0);

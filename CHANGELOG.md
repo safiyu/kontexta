@@ -1,5 +1,16 @@
 # Changelog
 
+## 3.0.1 — Stability & reliability fixes
+
+### Fixed
+
+- **Duplicate ID generation in documentation output.** The publish tool now ensures that API endpoints and glossary terms with the same names receive unique HTML IDs instead of causing page collisions.
+- **Robust HTML escaping.** Improved sanitization for endpoint data, HTTP methods, and glossary definitions to prevent malformed page structures.
+- **API badge sanitization.** The publish tool now restricts endpoint badge values to a set of valid options (`direct`, `remove`, `evolve`), falling back gracefully if invalid values are supplied.
+- **Target anchors for interactive blocks.** Added proper HTML `id` attributes to glossary items and API endpoint cards so they can be linked to directly.
+
+---
+
 ## 3.0.0 — Documentation publishing & developer experience
 
 ### Added
