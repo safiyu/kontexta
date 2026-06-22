@@ -46,3 +46,4 @@ export {
   type ProjectMapOptions, type ProjectMapResult, type ProjectMapStats,
 } from "./project-map/index.js";
 export * from "./journal/index.js";
+export * from "./profile/index.js";

@@ -8,6 +8,7 @@ import { join, dirname, resolve, sep, isAbsolute } from "node:path";
 import { getDatabase } from "../db/index.js";
 import { commitFile } from "../git/index.js";
 import { assertPathInside, escapeLike, withLock, fileLockKey } from "../util/safety.js";
+import { profileRelPath, repairProfile } from "../profile/index.js";
 import type { FileRecord, Destination, FileFilters, StorageType } from "../types.js";
 
 /**
@@ -143,10 +144,11 @@ export function slugify(name: string): string {
  */
 export async function createFile(opts: CreateFileOptions): Promise<FileRecordWithContent> {
   const db = getDatabase();
-  const { title, content, destination, projectId, folder, tags = [], dataDir, sourcePath, format = "md" } = opts;
+  let { title, content, destination, projectId, folder, tags = [], dataDir, sourcePath, format = "md" } = opts;
 
   let filePath: string;
   let storageType: StorageType;
+  let repairedContent: string;
 
   const slug = slugify(title);
   if (!slug) {
@@ -208,6 +210,14 @@ export async function createFile(opts: CreateFileOptions): Promise<FileRecordWit
     } catch (e) {
       console.warn("createFile: failed to stash pre-existing content for rollback:", e);
     }
+  }
+  // Auto-repair profile.md — insert missing required sections.
+  const isProfile = destination === "knowledge" && filePath === join(dataDir, profileRelPath());
+  let repairedSections: string[] | undefined;
+  if (isProfile) {
+    let { content: repairedContent, repaired } = repairProfile(content);
+    repairedSections = repaired;
+    content = repairedContent;
   }
   writeFileSync(filePath, content, "utf8");
   const contentHash = computeHash(content);

@@ -29,6 +29,7 @@ export const TOOL_CATEGORIES: Record<string, ToolCategory> = {
   read_file_by_path: "Read",
   describe_file: "Read",
   list_files: "Read",
+  get_profile: "Read",
   list_folders: "Folders & Projects",
   list_projects: "Folders & Projects",
   list_tags: "Tags & Favorites",

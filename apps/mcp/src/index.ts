@@ -65,6 +65,7 @@ import { initCapture, shutdownCapture, wrapHandler, startGitPoller } from "./jou
 import { registerJournalTools } from "./journal-tools.js";
 import { registerCommitUpgradesTool } from "./journal-commit-upgrades-tool.js";
 import { registerHousekeepTool } from "./journal-housekeep-tool.js";
+import { handleGetProfile } from "./profile-tool.js";
 import { getDataDir } from "kxta-core";
 
 const dataDir = getDataDir();
@@ -2474,6 +2475,18 @@ server.tool(
   "Return the complete authoring reference for `kontexta.json`: JSON schema, validation rules, security guarantees, limitations, and an annotated example. Static document — does not read any project file or DB row. Read-only; no side effects, auth, or rate limits. Takes no parameters. Use when helping a user write or fix a `kontexta.json`; to see the loaded tools themselves use `list_hands`; to apply edits use `reload_hands`.",
   {},
   async () => ({ content: [{ type: "text", text: buildSchemaDoc() }] })
+);
+
+server.tool(
+  "get_profile",
+  "Return the user profile stored in the Knowledge Base. The profile helps AI agents understand the user's context, role, preferences, and goals. Read-only; no side effects, auth, or rate limits. Returns existence status, full content, list of missing required sections, and a hint for new users. Use at session start to understand who you're working with.",
+  {},
+  async () => {
+    const result = handleGetProfile(dataDir);
+    return {
+      content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+    };
+  }
 );
 
 async function main() {

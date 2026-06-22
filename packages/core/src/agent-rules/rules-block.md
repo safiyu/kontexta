@@ -94,6 +94,7 @@ The matrix below is grouped by intent. For each tool: when to reach for it, the 
 | `read_section` | Known heading | Need the whole file | `read_file` |
 | `read_file_outline` | Triaging an unfamiliar file's structure | Structure already known | `describe_file` |
 | `describe_file` | Metadata only (size, tags, mtime) | Need content | `read_file` |
+| `get_profile` | Read user profile/context at session start | Reading normal files | `read_file` |
 
 #### Write
 

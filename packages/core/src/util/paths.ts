@@ -48,13 +48,14 @@ function isWebContext(): boolean {
 function isTempOrTestPath(p: string): boolean {
   const lower = p.toLowerCase();
   const tmp = os.tmpdir().toLowerCase();
+  const segments = p.split(path.sep).map((s) => s.toLowerCase());
   return (
     lower.startsWith("/tmp") ||
     lower.startsWith(tmp) ||
-    lower.includes(`${path.sep}tmp${path.sep}`) ||
-    lower.includes("test") ||
+    segments.includes("tmp") ||
+    segments.includes("test") ||
     lower.includes("-tmp-") ||
-    (process.platform === "win32" && lower.includes("\\temp\\"))
+    (process.platform === "win32" && segments.includes("temp"))
   );
 }
 
