@@ -19,7 +19,8 @@ function redactCredentials(s: string): string {
 }
 
 // Strip env that would let git spawn an editor/pager/credential helper —
-// any of those would hang a server-side request.
+// any of those would hang a server-side request. Also strips vars that could
+// redirect git operations (SSH commands, exec paths, external diffs).
 function buildGitEnv(): Record<string, string | undefined> {
   const env: Record<string, string | undefined> = { ...process.env, GIT_TERMINAL_PROMPT: "0" };
   for (const k of [
@@ -27,6 +28,12 @@ function buildGitEnv(): Record<string, string | undefined> {
     "GIT_EDITOR", "GIT_PAGER", "GIT_SEQUENCE_EDITOR",
     "GIT_ASKPASS", "SSH_ASKPASS",
     "GIT_PROXY_COMMAND", "GIT_HTTP_USER_AGENT", "GIT_EXTERNAL_DIFF",
+    // Prevent SSH/command redirection
+    "GIT_SSH", "GIT_SSH_COMMAND",
+    // Prevent exec path manipulation
+    "GIT_EXEC_PATH",
+    // Prevent credential helper injection
+    "GIT_CONFIG_COUNT", // clears GIT_CONFIG_COUNT + GIT_CONFIG_KEY_N/VALUE_N pairs
   ]) {
     delete env[k];
   }

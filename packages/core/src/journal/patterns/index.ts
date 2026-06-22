@@ -43,8 +43,13 @@ export function runPatterns(
   const extras = loadExtraPatterns(extraDefs);
   const matches: PatternMatch[] = [];
   for (const p of [...builtinPatterns, ...extras]) {
-    const m = p.detect(events);
-    if (m) matches.push(m);
+    try {
+      const m = p.detect(events);
+      if (m) matches.push(m);
+    } catch (e) {
+      // Isolate buggy pattern detectors so one failure doesn't crash distillation.
+      console.warn(`[journal/patterns] detector '${p.name}' threw:`, e);
+    }
   }
   return matches;
 }

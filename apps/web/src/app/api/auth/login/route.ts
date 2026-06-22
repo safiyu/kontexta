@@ -3,7 +3,36 @@ import { getSetting } from "kxta-core";
 import { verifyPassword, signSession } from "@/lib/auth";
 import { ensureDbInitialized } from "@/lib/db-init";
 
+// Simple in-memory rate limiter: tracks failed attempts per IP.
+// Resets on server restart (acceptable for local-first app).
+const loginAttempts = new Map<string, { count: number; resetAt: number }>();
+const MAX_ATTEMPTS = 10;
+const LOCKOUT_MS = 5 * 60 * 1000; // 5 minutes
+
+function isRateLimited(ip: string): boolean {
+  const entry = loginAttempts.get(ip);
+  if (!entry) return false;
+  if (Date.now() > entry.resetAt) {
+    loginAttempts.delete(ip);
+    return false;
+  }
+  return entry.count >= MAX_ATTEMPTS;
+}
+
+function recordAttempt(ip: string, success: boolean) {
+  const entry = loginAttempts.get(ip) ?? { count: 0, resetAt: Date.now() + LOCKOUT_MS };
+  if (!success) entry.count++;
+  else loginAttempts.delete(ip); // reset on success
+  loginAttempts.set(ip, entry);
+}
+
 export async function POST(req: NextRequest) {
+  const ip = req.headers.get("x-forwarded-for") ?? req.headers.get("x-real-ip") ?? "unknown";
+
+  if (isRateLimited(ip)) {
+    console.warn(`[Auth/Login] Rate limited: ${ip}`);
+    return NextResponse.json({ error: "Too many attempts. Try again later." }, { status: 429 });
+  }
   try {
     ensureDbInitialized();
   } catch (err: any) {
@@ -43,13 +72,16 @@ export async function POST(req: NextRequest) {
 
   try {
     if (!verifyPassword(password, hash, salt)) {
-      console.warn("[Auth/Login] Invalid password");
+      recordAttempt(ip, false);
+      console.warn("[Auth/Login] Invalid password from", ip);
       return NextResponse.json({ error: "Invalid password" }, { status: 401 });
     }
   } catch (err: any) {
     console.error("[Auth/Login] Password verification failed:", err);
     return NextResponse.json({ error: "Password verification failed" }, { status: 500 });
   }
+
+  recordAttempt(ip, true);
 
   const token = signSession({ t: Date.now() });
   

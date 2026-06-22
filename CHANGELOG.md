@@ -1,5 +1,26 @@
 # Changelog
 
+## 3.1.0 — User profile, security hardening, and reliability
+
+### Added
+
+- **User profile system.** A new `knowledge/profile.md` file with required sections (Name, Role, Vision, Roadmap, Preferences, Notes) helps AI agents understand user context. Auto-repaired on creation — missing sections are inserted automatically.
+- **`get_profile` MCP tool.** Returns the user profile content, lists missing required sections, and provides setup hints for new users. Agents can call it at session start to understand who they're working with.
+- **Profile banner in the web UI.** Surfaces profile status and missing sections directly in the file list, with a first-run wizard to guide new users through setup.
+- **Login rate limiting.** The login endpoint now tracks failed attempts per IP (10 attempts, 5-minute lockout) to prevent brute-force attacks.
+
+### Fixed
+
+- **Git environment security hardening.** Additional dangerous environment variables are now stripped before git operations (`GIT_SSH`, `GIT_SSH_COMMAND`, `GIT_EXEC_PATH`, `GIT_CONFIG_COUNT`) to prevent SSH/command redirection and credential helper injection.
+- **Temp/test path detection on Windows.** Path segment matching now uses proper path separators instead of substring matching, avoiding false positives on Windows paths containing "temp" as part of a directory name.
+- **Journal meta typing.** Added explicit `RawJournalMetaRow` interface and injectable `now` parameter in `openTasksForProject` for better testability.
+
+### Changed
+
+- **Journal pattern loader improvements.** Enhanced extra-loader and pattern index for more robust journal entry parsing.
+
+---
+
 ## 3.0.1 — Stability & reliability fixes
 
 ### Fixed

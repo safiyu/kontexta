@@ -62,11 +62,22 @@ export function upsertJournalMeta(input: UpsertJournalMetaInput): void {
   })();
 }
 
+interface RawJournalMetaRow {
+  file_id: number;
+  project_id: number;
+  task_slug: string;
+  status_latest: string | null;
+  started_at: string;
+  last_active_at: string;
+  touched_files: string;
+  raw_sources: string;
+}
+
 export function journalMetaForFile(file_id: number): JournalMetaRow | null {
   const db = getDatabase();
   const row = db
     .prepare(`SELECT * FROM journal_meta WHERE file_id = ?`)
-    .get(file_id) as any;
+    .get(file_id) as RawJournalMetaRow | undefined;
   if (!row) return null;
   return {
     ...row,
@@ -75,14 +86,18 @@ export function journalMetaForFile(file_id: number): JournalMetaRow | null {
   };
 }
 
-export function openTasksForProject(project_id: number, openWindowDays: number): JournalMetaRow[] {
+export function openTasksForProject(
+  project_id: number,
+  openWindowDays: number,
+  now: Date = new Date(),
+): JournalMetaRow[] {
   const db = getDatabase();
-  const cutoff = new Date(Date.now() - openWindowDays * 24 * 60 * 60 * 1000).toISOString();
+  const cutoff = new Date(now.getTime() - openWindowDays * 24 * 60 * 60 * 1000).toISOString();
   const rows = db
     .prepare(
       `SELECT * FROM journal_meta WHERE project_id = ? AND last_active_at >= ? ORDER BY last_active_at DESC`,
     )
-    .all(project_id, cutoff) as any[];
+    .all(project_id, cutoff) as RawJournalMetaRow[];
   return rows.map((row) => ({
     ...row,
     touched_files: JSON.parse(row.touched_files),

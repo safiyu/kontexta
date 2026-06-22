@@ -17,7 +17,8 @@ export function loadExtraPatterns(defs: ExtraPatternDef[] | null | undefined): P
   const out: PatternDetector[] = [];
   for (const def of defs) {
     if (!def || typeof def.name !== "string" || !def.match) {
-      console.warn("[journal/extra-loader] skipping malformed extra pattern", def);
+      // Log only the name (if present) to avoid dumping potentially sensitive pattern defs.
+      console.warn(`[journal/extra-loader] skipping malformed extra pattern: ${def?.name ?? "<unnamed>"}`);
       continue;
     }
     out.push(compile(def));

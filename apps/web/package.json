@@ -1,6 +1,6 @@
 {
   "name": "kxta-web",
-  "version": "3.0.1",
+  "version": "3.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
@@ -26,8 +26,9 @@
     "jsdom": "^29.1.1",
     "kontexta-mcp": "workspace:*",
     "kxta-core": "workspace:*",
-    "mermaid": "^11",
     "kxta-publish": "workspace:*",
+    "lucide-react": "^1.21.0",
+    "mermaid": "^11",
     "next": "^15.3.0",
     "next-themes": "^0.4.4",
     "re2": "^1.24.1",
@@ -54,5 +55,5 @@
     "unzipper": "^0.12.3",
     "vitest": "^3.0.0"
   },
-  "rulesVersion": "2.1.0"
+  "rulesVersion": "2.2.0"
 }
