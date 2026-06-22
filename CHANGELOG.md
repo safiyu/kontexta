@@ -1,5 +1,14 @@
 # Changelog
 
+## 3.1.1 — Publish template fixes & build repair
+
+### Fixed
+
+- **Mermaid syntax errors rendered after the footer.** Broken diagrams now silently hide their wrapper instead of displaying a large error block with a bomb icon. Added `logLevel: "fatal"` to the mermaid config, error handling in `app.js` to suppress failed renders, and a CSS fallback across all three themes.
+- **Web build failure (type error).** `targetAgent` in the onboard API route expected `AgentId` but received a plain `string`. Fixed by importing and casting to `AgentId`.
+
+---
+
 ## 3.1.0 — User profile, security hardening, and reliability
 
 ### Added

@@ -139,7 +139,7 @@ window.__ENDPOINTS__ = ${embed(endpoints)};
 </script>
 <script type="module">
 import mermaid from "${MERMAID_CDN}";
-mermaid.initialize({ startOnLoad: false, theme: "dark" });
+mermaid.initialize({ startOnLoad: false, theme: "dark", logLevel: "fatal" });
 window.mermaid = mermaid;
 </script>
 <script>${app}</script>

@@ -113,7 +113,21 @@ function showDoc(key) {
     document.querySelectorAll('.mermaid').forEach(el => {
       el.removeAttribute('data-processed');
     });
-    window.mermaid.run({ querySelector: '#content .mermaid' });
+    window.mermaid.run({ querySelector: '#content .mermaid' }).then((result) => {
+      // Hide diagrams that failed to render (syntax errors, etc.)
+      if (result.nodes) {
+        result.nodes.forEach((node) => {
+          if (node.error) {
+            const wrap = document.getElementById(node.id)?.closest('.mermaid-wrap');
+            if (wrap) wrap.style.display = 'none';
+          }
+        });
+      } else if (result.error) {
+        const el = document.querySelector('#content .mermaid');
+        const wrap = el?.closest('.mermaid-wrap');
+        if (wrap) wrap.style.display = 'none';
+      }
+    });
   }
 
   // Scroll to fragment or top
