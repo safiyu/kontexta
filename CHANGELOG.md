@@ -1,5 +1,14 @@
 # Changelog
 
+## 3.2.1
+
+### Fixed
+
+- **Docker native bindings rebuild.** Reverted the builder stage back to explicit `node-gyp rebuild` commands for `better-sqlite3` and `re2`. This bypasses the pnpm cache to force compilation from source for the correct target ABI.
+- **Bypass manifest generation in Docker builds.** Added a `KONTEXTA_SKIP_MANIFEST` flag to skip running the MCP server during the web app's prebuild phase inside the Docker builder, avoiding failures due to missing SQLite databases at build time.
+- **Dynamic package version reading in Publish.** Resolved version drift by changing the publish tool's `VERSION` variable to load dynamically from `package.json` at runtime.
+- **Externalized `undici` in MCP.** Prevented `esbuild` dynamic import/require errors of Node.js built-ins (like `assert`) by externalizing `undici` in the MCP server's tsup configuration.
+
 ## 3.2.0 — Security hardening, journal reliability, and publish resilience
 
 ### Added
