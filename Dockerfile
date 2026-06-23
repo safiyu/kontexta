@@ -30,6 +30,11 @@ RUN pnpm rebuild better-sqlite3 re2
 # Copy the rest of the source code
 COPY . .
 
+# Skip manifest generation during Docker builds — gen:manifest spawns the MCP
+# binary which calls listProjects() → SQLite at startup, but no DB exists at
+# build time. The manifest is only used by the web UI to list available tools.
+ENV KONTEXTA_SKIP_MANIFEST=1
+
 # Build everything
 RUN pnpm build
 
