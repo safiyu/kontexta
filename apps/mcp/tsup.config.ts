@@ -16,6 +16,9 @@ export default defineConfig({
   noExternal: ["kxta-core"],
   // Native + runtime-resolved deps. tsup will leave these as plain imports
   // so npm install resolves prebuilt binaries / platform-specific modules.
+  // undici is also external: it's a CJS module that uses dynamic require()
+  // of Node built-ins (e.g. "assert"), which esbuild cannot bundle into ESM.
+  // It's available at runtime on Node 18+ as the fetch implementation.
   external: [
     "better-sqlite3",
     "chokidar",
@@ -23,6 +26,7 @@ export default defineConfig({
     "@modelcontextprotocol/sdk",
     "zod",
     "simple-git",
+    "undici",
   ],
   // Migration .sql files live under packages/core/src/db/migrations/ in
   // the source tree but `runMigrations()` in the bundled output reads
