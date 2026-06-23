@@ -21,11 +21,16 @@ COPY packages/core/package.json ./packages/core/
 RUN pnpm install --frozen-lockfile
 
 # Rebuild native bindings (better-sqlite3, re2) for this exact Node version.
-# pnpm's content-addressable store may contain binaries built for a different
-# Node ABI; `pnpm rebuild` discovers the install paths from the lockfile, so
-# this stays correct across version bumps (vs `cd .pnpm/foo@X.Y.Z/...` which
-# silently breaks the moment X.Y.Z changes).
-RUN pnpm rebuild better-sqlite3 re2
+# pnpm's content-addressable store may contain a binary built for a different
+# Node ABI; running node-gyp directly in the package dir forces a full
+# recompile from source. `pnpm rebuild` is avoided here because it can pick
+# up a cached prebuilt and skip compilation, leaving the wrong ABI binary.
+RUN cd node_modules/.pnpm/better-sqlite3@12.10.0/node_modules/better-sqlite3 \
+    && npx node-gyp rebuild -j max
+
+# Rebuild re2 native binding for this exact Node version.
+RUN cd node_modules/.pnpm/re2@1.24.1/node_modules/re2 \
+    && npx node-gyp rebuild -j max
 
 # Copy the rest of the source code
 COPY . .
