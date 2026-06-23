@@ -3,6 +3,8 @@ import { runPipeline } from "kxta-publish/pipeline";
 import { mkdirSync, writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { getDataDir, getDatabase } from "kxta-core";
+import { checkAuth } from "@/lib/auth";
+import { assertSafeOutputPath } from "@/lib/safe-path";
 
 export interface PublishRequestBody {
   folders?: string[];
@@ -17,6 +19,9 @@ export interface PublishRequestBody {
 }
 
 export async function POST(request: NextRequest) {
+  if (!checkAuth(request)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
   try {
     const body: PublishRequestBody = await request.json();
 
@@ -38,7 +43,18 @@ export async function POST(request: NextRequest) {
       projectPath = project.path;
     }
 
-    const outputDir = body.output || join(dataDir, "publish");
+    const defaultOutput = join(dataDir, "publish");
+    let outputDir = defaultOutput;
+    if (body.output) {
+      try {
+        outputDir = assertSafeOutputPath(body.output, dataDir);
+      } catch (err) {
+        return NextResponse.json(
+          { success: false, error: (err as Error).message },
+          { status: 400 }
+        );
+      }
+    }
 
     if (!existsSync(outputDir)) {
       mkdirSync(outputDir, { recursive: true });
@@ -86,12 +102,19 @@ export async function POST(request: NextRequest) {
       llmsTxt: body.llmsTxt ? join(outputDir, "llms.txt") : null,
     });
   } catch (error) {
+    // Log the full stack to the dev terminal so the cause is visible without
+    // forcing the user to open browser DevTools and inspect the response
+    // body. The trimmed message still goes back to the client.
+    console.error("[api/publish] POST failed:", error);
     const message = error instanceof Error ? error.message : "Publish failed";
     return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  if (!checkAuth(request)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
   // Return publish status / last build info
   try {
     const dataDir = getDataDir();

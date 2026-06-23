@@ -1,7 +1,7 @@
-#!/bin/sh
+#!/usr/bin/env bash
 # Build every package + app in the workspace via Turborepo.
 # Usage:  scripts/build-all.sh
-set -eu
+set -euo pipefail
 
 cd "$(dirname "$0")/.."
 pnpm install --frozen-lockfile

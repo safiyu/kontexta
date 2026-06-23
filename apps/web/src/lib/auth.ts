@@ -4,6 +4,11 @@ import { getSetting, setSetting } from "kxta-core";
 const SALT_LEN = 32;
 const KEY_LEN = 64;
 
+// Session lifetime. Cookie maxAge in login/route.ts is 30 days; we reject any
+// token older than this on verification so a leaked cookie (e.g. scraped from a
+// shared workstation) can't be replayed forever.
+const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
 declare global {
   // eslint-disable-next-line no-var
   var __kontextaTmpSessionSecret: string | undefined;
@@ -58,13 +63,44 @@ export function verifySession(token: string): { ip?: string; t: number } | null 
     if (!data || !hmac) return null;
     const secret = getSessionSecret();
     const expectedHmac = crypto.createHmac("sha256", secret).update(data).digest("hex");
-    if (!crypto.timingSafeEqual(Buffer.from(hmac, "hex"), Buffer.from(expectedHmac, "hex"))) {
+    const hmacBuf = Buffer.from(hmac, "hex");
+    const expectedBuf = Buffer.from(expectedHmac, "hex");
+    if (hmacBuf.length !== expectedBuf.length) return null;
+    if (!crypto.timingSafeEqual(hmacBuf, expectedBuf)) {
       return null;
     }
-    return JSON.parse(Buffer.from(data, "base64").toString("utf-8"));
+    const payload = JSON.parse(Buffer.from(data, "base64").toString("utf-8"));
+    if (typeof payload?.t !== "number") return null;
+    if (Date.now() - payload.t > SESSION_TTL_MS) return null;
+    return payload;
   } catch {
     return null;
   }
+}
+
+/**
+ * Resolve client IP from the request. Forwarded headers are trusted ONLY when
+ * the auth_trust_proxy_headers setting is enabled — otherwise a caller could
+ * spoof an arbitrary IP to dodge per-IP rate limiting. Returns "direct" for
+ * connections without a trustable header so all direct clients share a single
+ * rate-limit bucket (better than collapsing on the literal "unknown").
+ */
+export function getClientIp(req: Request | { headers: Headers }): string {
+  let trustProxy = false;
+  try {
+    trustProxy = getSetting("auth_trust_proxy_headers") === "true";
+  } catch {
+    trustProxy = false;
+  }
+  if (!trustProxy) return "direct";
+  const xff = req.headers.get("x-forwarded-for");
+  if (xff) {
+    const first = xff.split(",")[0].trim();
+    if (first) return first;
+  }
+  const xri = req.headers.get("x-real-ip");
+  if (xri) return xri.trim();
+  return "direct";
 }
 
 /**

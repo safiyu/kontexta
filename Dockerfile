@@ -20,9 +20,11 @@ COPY packages/core/package.json ./packages/core/
 # Install dependencies
 RUN pnpm install --frozen-lockfile
 
-# Rebuild better-sqlite3 native binding for this exact Node version.
+# Rebuild native bindings (better-sqlite3, re2) for this exact Node version.
 # pnpm's content-addressable store may contain a binary built for a different
-# Node ABI; running node-gyp directly in the package dir bypasses that cache.
+# Node ABI; running node-gyp directly in the package dir forces a full
+# recompile from source. `pnpm rebuild` is avoided here because it can pick
+# up a cached prebuilt and skip compilation, leaving the wrong ABI binary.
 RUN cd node_modules/.pnpm/better-sqlite3@12.10.0/node_modules/better-sqlite3 \
     && npx node-gyp rebuild -j max
 
@@ -32,6 +34,11 @@ RUN cd node_modules/.pnpm/re2@1.24.1/node_modules/re2 \
 
 # Copy the rest of the source code
 COPY . .
+
+# Skip manifest generation during Docker builds — gen:manifest spawns the MCP
+# binary which calls listProjects() → SQLite at startup, but no DB exists at
+# build time. The manifest is only used by the web UI to list available tools.
+ENV KONTEXTA_SKIP_MANIFEST=1
 
 # Build everything
 RUN pnpm build
@@ -59,8 +66,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Fix "dubious ownership" errors for mounted volumes
 RUN git config --global --add safe.directory '*'
 
-# Create data directory with proper permissions
-RUN mkdir -p /app/data
+# Create data directory and switch to non-root user for the runtime.
+# The `node` user ships with the official image (uid/gid 1000); chown ensures
+# the data dir is writable for it.
+RUN mkdir -p /app/data && chown -R node:node /app/data
 
 # Copy built standalone web app
 COPY --from=builder /app/apps/web/next.config.ts ./
@@ -80,6 +89,9 @@ COPY --from=builder /app/mcp-deploy ./apps/mcp
 # Web UI on 3000. The file-watcher WebSocket shares this same port
 # (upgrade path /_kontexta_ws), so no separate port is exposed.
 EXPOSE 3000
+
+# Drop privileges. Anything bind-mounted in must be readable by uid 1000.
+USER node
 
 # We use the built standalone server
 CMD ["node", "apps/web/server.js"]

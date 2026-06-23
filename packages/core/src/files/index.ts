@@ -4,9 +4,9 @@
  */
 import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync, unlinkSync, renameSync, mkdirSync, readdirSync, statSync, lstatSync, existsSync, rmSync } from "node:fs";
-import { join, dirname, resolve, sep, isAbsolute } from "node:path";
+import { join, dirname, resolve, sep, isAbsolute, basename } from "node:path";
 import { getDatabase } from "../db/index.js";
-import { commitFile } from "../git/index.js";
+import { commitFile, commitDelete } from "../git/index.js";
 import { assertPathInside, escapeLike, withLock, fileLockKey } from "../util/safety.js";
 import { profileRelPath, repairProfile } from "../profile/index.js";
 import type { FileRecord, Destination, FileFilters, StorageType } from "../types.js";
@@ -416,8 +416,13 @@ export async function updateFile(id: number, content: string, dataDir: string): 
  * Delete a file. Always removes the DB row; only unlinks from disk when
  * the file is inside `<dataDir>/knowledge/` (project files are never
  * physically deleted — we only un-index).
+ *
+ * Now also commits the deletion to git so the deleted file doesn't get
+ * resurrected by a later `git pull` / restore / stash pop, which then
+ * triggers the watcher to re-index it with a fresh row id (making it look
+ * like delete silently came back).
  */
-export function deleteFile(id: number, dataDir?: string): void {
+export async function deleteFile(id: number, dataDir?: string): Promise<void> {
   const db = getDatabase();
 
   const file = db.prepare("SELECT path, project_id FROM files WHERE id = ?").get(id) as
@@ -428,11 +433,14 @@ export function deleteFile(id: number, dataDir?: string): void {
     throw new Error(`File not found: ${id}`);
   }
 
-  if (file && dataDir) {
+  let unlinked = false;
+  let inKnowledge = false;
+  let filePathResolved = file.path;
+
+  if (dataDir) {
     const knowledgeRoot = resolve(dataDir, "knowledge");
-    // Resolve file path relative to dataDir if it's not absolute
-    const filePathResolved = isAbsolute(file.path) ? file.path : resolve(dataDir, file.path);
-    const inKnowledge =
+    filePathResolved = isAbsolute(file.path) ? file.path : resolve(dataDir, file.path);
+    inKnowledge =
       filePathResolved === knowledgeRoot ||
       filePathResolved.startsWith(knowledgeRoot + sep);
 
@@ -440,6 +448,7 @@ export function deleteFile(id: number, dataDir?: string): void {
       try {
         if (existsSync(filePathResolved)) {
           unlinkSync(filePathResolved);
+          unlinked = true;
         }
       } catch (e) {
         console.error("Failed to delete Knowledge Base file from disk:", e);
@@ -454,6 +463,18 @@ export function deleteFile(id: number, dataDir?: string): void {
     deleteFtsStmt.run(id);
     deleteStmt.run(id);
   })();
+
+  // Commit the deletion to git so the file doesn't resurrect from HEAD on
+  // the next pull/restore/stash pop. Only relevant for KB files (we
+  // actually unlinked them) — for project files we leave the source tree
+  // untouched. Best-effort; failures don't block the delete.
+  if (unlinked && dataDir) {
+    try {
+      await commitDelete(dataDir, filePathResolved, `Delete context file: ${basename(filePathResolved)}`);
+    } catch (e) {
+      console.warn("Failed to commit KB file deletion to git:", e);
+    }
+  }
 }
 
 /**
@@ -548,9 +569,15 @@ export function listFiles(opts: ListFilesOptions): FileRecord[] {
 }
 
 /**
- * Move a file to a new path
+ * Move a file to a new path.
+ *
+ * `newPath` must resolve INSIDE the file's owning project (or under
+ * `knowledge/` for KB files). Without this guard a caller could move a file
+ * over arbitrary paths the server process can write — the MCP layer enforced
+ * this externally, but the core library API is shared with the web app and
+ * future tools that may forget.
  */
-export function moveFile(id: number, newPath: string): FileRecord {
+export function moveFile(id: number, newPath: string, dataDir?: string): FileRecord {
   const db = getDatabase();
 
   const fileRecord = db.prepare("SELECT * FROM files WHERE id = ?").get(id) as FileRecord | undefined;
@@ -558,17 +585,70 @@ export function moveFile(id: number, newPath: string): FileRecord {
     throw new Error(`File not found: ${id}`);
   }
 
+  if (typeof newPath !== "string" || newPath.length === 0 || newPath.includes("\0")) {
+    throw new Error(`moveFile: invalid newPath`);
+  }
+  if (!isAbsolute(newPath)) {
+    throw new Error(`moveFile: newPath must be absolute`);
+  }
+
+  // Path containment: newPath must be under the project's root (or the KB
+  // knowledge dir for project_id=NULL). assertPathInside enforces this AND
+  // resolves traversal segments, so `..` can't escape.
+  let allowedRoot: string | null = null;
+  if (fileRecord.project_id) {
+    const proj = db.prepare("SELECT path FROM projects WHERE id = ?").get(fileRecord.project_id) as { path: string | null } | undefined;
+    if (proj?.path) allowedRoot = proj.path;
+  } else if (dataDir) {
+    allowedRoot = join(dataDir, "knowledge");
+  }
+  if (allowedRoot) {
+    // assertPathInside throws on traversal; the returned path is the
+    // canonicalised join. We pass newPath as a relative-style arg by
+    // computing the suffix the caller intended.
+    const rootResolved = resolve(allowedRoot);
+    const newResolved = resolve(newPath);
+    const rootWithSep = rootResolved.endsWith(sep) ? rootResolved : rootResolved + sep;
+    if (newResolved !== rootResolved && !newResolved.startsWith(rootWithSep)) {
+      throw new Error(`moveFile: destination escapes allowed root ${allowedRoot}: ${newPath}`);
+    }
+  }
+
   const oldPath = fileRecord.path;
   if (newPath !== oldPath && existsSync(newPath)) {
     throw new Error(`moveFile: destination already exists: ${newPath}`);
   }
   mkdirSync(dirname(newPath), { recursive: true });
-  renameSync(oldPath, newPath);
+  try {
+    renameSync(oldPath, newPath);
+  } catch (err: any) {
+    if (err?.code === "EXDEV") {
+      // Cross-device move (e.g. Docker bind mount → tmpfs). renameSync can't
+      // span devices on POSIX; fall back to copy + unlink, atomic on the
+      // destination via .tmp + rename trick.
+      const tmpDest = `${newPath}.${process.pid}.${Date.now()}.tmp`;
+      try {
+        const buf = readFileSync(oldPath);
+        writeFileSync(tmpDest, buf);
+        renameSync(tmpDest, newPath);
+        unlinkSync(oldPath);
+      } catch (copyErr) {
+        try { if (existsSync(tmpDest)) unlinkSync(tmpDest); } catch {}
+        try { if (existsSync(newPath) && !existsSync(oldPath)) renameSync(newPath, oldPath); } catch {}
+        throw copyErr;
+      }
+    } else {
+      throw err;
+    }
+  }
 
   // If the DB UPDATE fails (UNIQUE conflict, etc.) we'd be left with the
   // file at newPath but the row pointing at oldPath — in the web app the
   // watcher would then unlink the row (losing tags/favorites). Roll the
-  // disk rename back so the system stays consistent.
+  // disk rename back so the system stays consistent. (Best-effort: if the
+  // original move went EXDEV the rollback path may also need a copy
+  // fallback, but in practice rollback is on the same device that just
+  // hosted the file.)
   const updateStmt = db.prepare("UPDATE files SET path = ?, updated_at = datetime('now') WHERE id = ?");
   try {
     updateStmt.run(newPath, id);

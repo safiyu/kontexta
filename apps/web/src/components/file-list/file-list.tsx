@@ -73,6 +73,8 @@ export function FileList({
   const [filter, setFilter] = useState("");
   const [uploadOpen, setUploadOpen] = useState(false);
   const [selectMode, setSelectMode] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [clipDialogOpen, setClipDialogOpen] = useState(false);
   const [onboardOpen, setOnboardOpen] = useState(false);
@@ -330,26 +332,104 @@ export function FileList({
         // or sort change.
         const visibleIds = new Set(filteredAndSorted.map((f) => f.id));
         const visibleSelected = [...selectedIds].filter((id) => visibleIds.has(id));
+        // /api/export/zip now requires `scope` (kb | <projectId>) to avoid
+        // cross-project read-anything via file_ids. Mirror the current pane.
+        const scope = selectedProject ? String(selectedProject.id) : "kb";
+        const handleBulkDelete = async () => {
+          if (visibleSelected.length === 0 || bulkDeleting) return;
+          setBulkDeleting(true);
+          // Sequential to keep ordering predictable in the dev log and to
+          // avoid contending on the same git lock from many parallel DELETEs.
+          const failures: Array<{ id: number; error: string }> = [];
+          for (const id of visibleSelected) {
+            try {
+              const res = await fetch(`/api/files/${id}`, { method: "DELETE" });
+              if (!res.ok) {
+                const body = await res.json().catch(() => ({}));
+                failures.push({ id, error: body?.error ?? `HTTP ${res.status}` });
+              }
+            } catch (e: any) {
+              failures.push({ id, error: e?.message ?? "Network error" });
+            }
+          }
+          setBulkDeleting(false);
+          setBulkConfirmOpen(false);
+          setSelectedIds(new Set());
+          // Refresh the list either way; the user can see what's left.
+          onRefresh();
+          if (failures.length > 0) {
+            console.error("[bulk-delete] failures:", failures);
+            alert(
+              `Deleted ${visibleSelected.length - failures.length}/${visibleSelected.length} files.\n` +
+              `${failures.length} failed:\n` +
+              failures.slice(0, 5).map((f) => `  #${f.id}: ${f.error}`).join("\n") +
+              (failures.length > 5 ? `\n  …and ${failures.length - 5} more (see console)` : ""),
+            );
+          }
+        };
         return (
       <div className="flex-1 overflow-y-auto">
         {selectMode && visibleSelected.length > 0 && (
-          <div className="sticky top-0 z-10 px-3 py-2 bg-[var(--bg-secondary)] border-b border-amber-accent/40 flex items-center justify-between text-[11px]">
-            <span>{visibleSelected.length} selected</span>
-            <div className="flex items-center gap-2">
+          <div className="sticky top-0 z-10 px-3 py-2 bg-[var(--bg-secondary)] border-b border-amber-accent/40 flex items-center justify-between gap-2 text-[11px]">
+            <span className="whitespace-nowrap shrink-0">{visibleSelected.length} selected</span>
+            <div className="flex items-center gap-1.5 shrink-0">
               <a
-                href={`/api/export/zip?file_ids=${visibleSelected.join(",")}`}
+                href={`/api/export/zip?file_ids=${visibleSelected.join(",")}&scope=${scope}`}
                 download
-                className="px-2 py-1 bg-amber-accent text-black font-bold rounded"
+                className="px-2 py-1 bg-amber-accent text-black font-bold rounded whitespace-nowrap leading-none"
+                title="Download selected files as ZIP"
               >
-                Download ZIP
+                ZIP
               </a>
               <button
                 type="button"
+                onClick={() => setBulkConfirmOpen(true)}
+                disabled={bulkDeleting}
+                className={`px-2 py-1 bg-red-600 text-white font-bold rounded whitespace-nowrap leading-none ${bulkDeleting ? "opacity-50" : "hover:bg-red-700"}`}
+                title={`Delete ${visibleSelected.length} selected file(s)`}
+              >
+                {bulkDeleting ? "…" : "Delete"}
+              </button>
+              <button
+                type="button"
                 onClick={() => setSelectedIds(new Set())}
-                className="btn btn-sm"
+                className="px-2 py-1 border border-[var(--border)] rounded whitespace-nowrap leading-none hover:bg-[var(--bg-tertiary)]"
+                title="Clear selection"
               >
                 Clear
               </button>
+            </div>
+          </div>
+        )}
+        {bulkConfirmOpen && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50">
+            <div className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-xl p-5 max-w-md w-full shadow-2xl">
+              <h2 className="text-base font-bold text-[var(--text-primary)] mb-2">
+                Delete {visibleSelected.length} file{visibleSelected.length === 1 ? "" : "s"}?
+              </h2>
+              <p className="text-sm text-[var(--text-secondary)] mb-4">
+                Knowledge Base files will be removed from disk and the deletion will be
+                committed to git (recoverable via Time Travel). Project files are only
+                un-indexed; the source file on disk is left intact.
+              </p>
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  onClick={() => setBulkConfirmOpen(false)}
+                  disabled={bulkDeleting}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className={`px-3 py-1.5 bg-red-600 text-white font-bold rounded ${bulkDeleting ? "opacity-50" : "hover:bg-red-700"}`}
+                  onClick={handleBulkDelete}
+                  disabled={bulkDeleting}
+                >
+                  {bulkDeleting ? "Deleting…" : "Delete"}
+                </button>
+              </div>
             </div>
           </div>
         )}

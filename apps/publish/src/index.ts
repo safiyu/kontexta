@@ -1,9 +1,29 @@
 #!/usr/bin/env node
 import { main } from "./cli.js";
 import { fileURLToPath } from "node:url";
-import { realpathSync } from "node:fs";
+import { realpathSync, readFileSync, existsSync } from "node:fs";
+import { dirname, join } from "node:path";
 
-export const VERSION = "3.0.1";
+// Read version dynamically from package.json so it never drifts from the
+// package manifest. Walks up from the compiled file's directory to find the
+// nearest package.json belonging to kxta-publish.
+function readVersion(): string {
+  try {
+    let dir = dirname(fileURLToPath(import.meta.url));
+    while (dir !== dirname(dir)) {
+      const p = join(dir, "package.json");
+      if (existsSync(p)) {
+        const pkg = JSON.parse(readFileSync(p, "utf8"));
+        if (pkg.name === "kxta-publish" && pkg.version) return pkg.version;
+      }
+      dir = dirname(dir);
+    }
+  } catch { /* fall through */ }
+  return "0.0.0";
+}
+
+export const VERSION = readVersion();
+
 
 function isMainEntry(): boolean {
   const argv1 = process.argv[1];

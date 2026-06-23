@@ -15,21 +15,26 @@ import type { RenderEnv, EndpointData, GlossaryTerm } from "../types.js";
 export function createMarkdown(): MarkdownIt {
   const md = new MarkdownIt({ html: false, linkify: false, breaks: false });
 
-  // Inject slugified ids into headings
+  // Inject slugified ids into headings, deduplicated within the document so
+  // repeated headings (e.g. two "## Setup" sections) get distinct anchors.
   md.core.ruler.push("heading-id", (state) => {
-    for (const tok of state.tokens) {
-      if (tok.type === "heading_open") {
-        const level = Number(tok.tag.replace("h", ""));
-        // Collect tokens until closing heading to build the id
-        const idx = state.tokens.indexOf(tok);
-        let text = "";
-        for (let i = idx + 1; i < state.tokens.length; i++) {
-          if (state.tokens[i].type === "heading_close") break;
-          if (state.tokens[i].content) text += state.tokens[i].content;
-        }
-        tok.attrSet("id", slugify(text).toLowerCase());
-        tok.attrSet("data-heading-level", String(level));
+    const seen = new Set<string>();
+    for (let idx = 0; idx < state.tokens.length; idx++) {
+      const tok = state.tokens[idx];
+      if (tok.type !== "heading_open") continue;
+      const level = Number(tok.tag.replace("h", ""));
+      let text = "";
+      for (let i = idx + 1; i < state.tokens.length; i++) {
+        if (state.tokens[i].type === "heading_close") break;
+        if (state.tokens[i].content) text += state.tokens[i].content;
       }
+      const base = slugify(text).toLowerCase() || `h${level}`;
+      let id = base;
+      let n = 2;
+      while (seen.has(id)) id = `${base}-${n++}`;
+      seen.add(id);
+      tok.attrSet("id", id);
+      tok.attrSet("data-heading-level", String(level));
     }
     return false;
   });

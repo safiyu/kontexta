@@ -68,4 +68,10 @@ export interface SearchFilters {
   project_id?: number;
   tags?: string[];
   favorite?: boolean;
+  /**
+   * Max number of FTS results to return. Defaults to 50 (the historical hard
+   * cap). bundleSearch overrides this so a large token budget can include
+   * more than 50 files.
+   */
+  limit?: number;
 }

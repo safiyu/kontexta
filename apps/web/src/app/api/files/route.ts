@@ -115,8 +115,50 @@ export async function POST(req: NextRequest) {
   } catch {
     return NextResponse.json({ error: "Body must be JSON" }, { status: 400 });
   }
+  // Explicit allowlist: never spread the raw body into createFile, otherwise
+  // a client can forge `sourcePath` (provenance spoofing for clipUrl dedup)
+  // or pass arbitrary fields that createFile may grow to honor later.
+  const b = (body ?? {}) as Record<string, unknown>;
+  const title = typeof b.title === "string" ? b.title : undefined;
+  const content = typeof b.content === "string" ? b.content : undefined;
+  const destination =
+    b.destination === "knowledge" || b.destination === "project" || b.destination === "kontexta"
+      ? b.destination
+      : undefined;
+  const projectId =
+    typeof b.projectId === "number" && Number.isInteger(b.projectId) && b.projectId > 0
+      ? b.projectId
+      : undefined;
+  const folder = typeof b.folder === "string" ? b.folder : undefined;
+  const tags = Array.isArray(b.tags) && b.tags.every((t) => typeof t === "string")
+    ? (b.tags as string[])
+    : undefined;
+  const format = b.format === "md" || b.format === "mmd" ? b.format : undefined;
+
+  if (title === undefined || content === undefined || destination === undefined) {
+    return NextResponse.json(
+      { error: "title, content, and destination are required" },
+      { status: 400 }
+    );
+  }
+  if ((destination === "project" || destination === "kontexta") && projectId === undefined) {
+    return NextResponse.json(
+      { error: "projectId required for project/kontexta destination" },
+      { status: 400 }
+    );
+  }
+
   try {
-    const file = await createFile({ ...(body as object), dataDir: DATA_DIR } as any);
+    const file = await createFile({
+      title,
+      content,
+      destination,
+      projectId,
+      folder,
+      tags,
+      format,
+      dataDir: DATA_DIR,
+    } as any);
     return NextResponse.json(file, { status: 201 });
   } catch (error: any) {
     console.error("createFile failed:", error);

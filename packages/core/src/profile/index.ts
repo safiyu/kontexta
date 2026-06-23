@@ -19,9 +19,17 @@ export function repairProfile(content: string): { content: string; repaired: str
   const repaired: string[] = [];
   let working = content;
 
-  // Ensure H1 exists at the top.
+  // Ensure H1 `# Profile` exists at the top. If a foreign H1 is present
+  // (e.g. user wrote `# My profile`), REPLACE it instead of prepending —
+  // prepending produces a file with two H1s, which downstream tooling
+  // treats as malformed.
   if (!/^#\s+Profile\s*$/m.test(working)) {
-    working = `# Profile\n\n${working.replace(/^\s+/, "")}`;
+    const otherH1 = /^#\s+(?!Profile\s*$).+$/m.exec(working);
+    if (otherH1) {
+      working = working.replace(otherH1[0], "# Profile");
+    } else {
+      working = `# Profile\n\n${working.replace(/^\s+/, "")}`;
+    }
   }
 
   // Parse existing sections into a map: heading -> body (without trailing newline).
@@ -107,17 +115,32 @@ function parseSections(content: string): Map<string, string> {
   const lines = content.split("\n");
   let current: string | null = null;
   let buf: string[] = [];
+  const commit = () => {
+    if (current == null) return;
+    const newBody = buf.join("\n");
+    // Preserve content from duplicate-titled sections rather than letting the
+    // second silently overwrite the first. We append with a `---` separator
+    // so the user can see the merge happened.
+    const existing = map.get(current);
+    if (existing != null && existing.trim().length > 0 && newBody.trim().length > 0) {
+      map.set(current, `${existing.replace(/\n+$/, "")}\n\n---\n\n${newBody}`);
+    } else if (existing != null && existing.trim().length > 0) {
+      map.set(current, existing);
+    } else {
+      map.set(current, newBody);
+    }
+  };
   for (const line of lines) {
     const m = /^##\s+(.+?)\s*$/.exec(line);
     if (m) {
-      if (current) map.set(current, buf.join("\n"));
+      commit();
       current = m[1];
       buf = [];
     } else if (current) {
       buf.push(line);
     }
   }
-  if (current) map.set(current, buf.join("\n"));
+  commit();
   return map;
 }
 
@@ -135,13 +158,17 @@ function extractPreamble(content: string): string {
   return rest.slice(0, firstH2.index).trim();
 }
 
-/** Return all `##` heading titles in document order. */
+/** Return all `##` heading titles in document order, deduplicated. */
 function parseSectionsWithOrder(content: string): string[] {
   const headings: string[] = [];
+  const seen = new Set<string>();
   const lines = content.split("\n");
   for (const line of lines) {
     const m = /^##\s+(.+?)\s*$/.exec(line);
-    if (m) headings.push(m[1]);
+    if (m && !seen.has(m[1])) {
+      headings.push(m[1]);
+      seen.add(m[1]);
+    }
   }
   return headings;
 }

@@ -10,6 +10,7 @@ export interface JournalWriterOptions {
 export class JournalWriter {
   private fd: number | null = null;
   private currentDay: string | null = null;
+  private closed = false;
   private readonly rawDir: string;
 
   constructor(opts: JournalWriterOptions) {
@@ -17,6 +18,12 @@ export class JournalWriter {
   }
 
   append(event: RawEvent): void {
+    if (this.closed) {
+      // Silently drop after close — throwing EBADF mid-shutdown is worse
+      // than losing a trailing journal line that's mostly a status ping.
+      // Callers should re-create the writer if they want to reopen.
+      return;
+    }
     const day = event.ts.slice(0, 10); // YYYY-MM-DD
     if (day !== this.currentDay) this.rotate(day);
     const line = JSON.stringify(event) + "\n";
@@ -25,6 +32,7 @@ export class JournalWriter {
   }
 
   close(): void {
+    this.closed = true;
     if (this.fd !== null) {
       closeSync(this.fd);
       this.fd = null;

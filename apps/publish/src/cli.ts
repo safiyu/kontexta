@@ -51,11 +51,23 @@ export function parseCliArgs(argv: string[]): ParsedCli {
 }
 
 /** Atomically write `content` to `path`, creating parent dirs as needed. */
+let _tmpSeq = 0;
 function writeFileAtomic(path: string, content: string): void {
   mkdirSync(dirname(path), { recursive: true });
-  const tmp = `${path}.${process.pid}.tmp`;
-  writeFileSync(tmp, content, "utf8");
-  renameSync(tmp, path);
+  // Unique per call so a leaked tmp from a prior failed rename doesn't get
+  // overwritten and so two near-simultaneous writes in the same process
+  // can't collide.
+  const tmp = `${path}.${process.pid}.${++_tmpSeq}.tmp`;
+  try {
+    writeFileSync(tmp, content, "utf8");
+    renameSync(tmp, path);
+  } catch (err) {
+    try {
+      const { unlinkSync } = require("node:fs") as typeof import("node:fs");
+      if (existsSync(tmp)) unlinkSync(tmp);
+    } catch {}
+    throw err;
+  }
 }
 
 export function buildOnce(parsed: ParsedCli): void {
@@ -86,19 +98,39 @@ export async function main(argv: string[]): Promise<void> {
   const { createFileWatcher, getDataDir } = await import("kxta-core");
   const knowledgeDir = join(getDataDir(), "knowledge");
   console.log("watching for changes… (Ctrl+C to stop)");
+  // Tracks the highest exit code reached across rebuilds — exposed via
+  // process.exitCode so a supervisor sees a non-zero status if the watcher
+  // is terminated after a streak of failed rebuilds, instead of the silent
+  // catch-and-log that used to swallow them entirely.
   let timer: NodeJS.Timeout | null = null;
-  let inFlight = false;
-  let pending = false;
   const runBuild = () => {
-    if (inFlight) { pending = true; return; }
-    inFlight = true;
-    try { buildOnce(parsed); } catch (e) { console.error("rebuild failed:", (e as Error).message); }
-    inFlight = false;
-    if (pending) { pending = false; runBuild(); }
+    try {
+      buildOnce(parsed);
+    } catch (e) {
+      console.error("rebuild failed:", (e as Error).message);
+      process.exitCode = 1;
+    }
   };
   const rebuild = () => {
     if (timer) clearTimeout(timer);
     timer = setTimeout(runBuild, 150);
   };
-  createFileWatcher([knowledgeDir], rebuild);
+  const watcher = createFileWatcher([knowledgeDir], rebuild);
+
+  // Graceful shutdown: close the watcher and cancel any pending debounce so
+  // the process can exit cleanly instead of relying on Node's default
+  // SIGINT/SIGTERM handler killing us mid-write.
+  const shutdown = () => {
+    if (timer) { clearTimeout(timer); timer = null; }
+    try {
+      // createFileWatcher's return shape varies — accept either a function or
+      // an object with close()/dispose() without forcing a tight contract.
+      const w = watcher as unknown as { close?: () => void; dispose?: () => void } | (() => void);
+      if (typeof w === "function") w();
+      else if (w?.close) w.close();
+      else if (w?.dispose) w.dispose();
+    } catch {}
+  };
+  process.once("SIGINT", () => { shutdown(); process.exit(process.exitCode ?? 0); });
+  process.once("SIGTERM", () => { shutdown(); process.exit(process.exitCode ?? 0); });
 }

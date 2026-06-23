@@ -3,6 +3,14 @@ import { spawn } from "node:child_process";
 import { writeFileSync, existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
 
+// Allow CI / Docker builds to skip this step. The manifest is used only by
+// the web UI to display available tools; the app builds and runs correctly
+// without it. Set KONTEXTA_SKIP_MANIFEST=1 to skip.
+if (process.env.KONTEXTA_SKIP_MANIFEST === "1") {
+  console.log("KONTEXTA_SKIP_MANIFEST=1 — skipping manifest generation.");
+  process.exit(0);
+}
+
 const MCP_BIN = path.resolve(import.meta.dirname, "../dist/index.js");
 const OUT = path.resolve(import.meta.dirname, "../../web/src/lib/mcp-tools.json");
 

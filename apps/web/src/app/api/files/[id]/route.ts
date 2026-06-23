@@ -2,6 +2,7 @@ import { checkAuth } from "@/lib/auth";
 import { NextRequest, NextResponse } from "next/server";
 import { readFile, updateFile, deleteFile, getDatabase, addTags, removeTags, setFavorite, getTagsForFiles } from "kxta-core";
 import { ensureDbInitialized, DATA_DIR } from "@/lib/db-init";
+import { existsSync } from "node:fs";
 
 function parseId(raw: string): number | null {
   const n = Number(raw);
@@ -18,15 +19,38 @@ export async function GET(
   const { id } = await params;
   const n = parseId(id);
   if (n === null) return NextResponse.json({ error: `Invalid id: ${id}` }, { status: 400 });
+
+  // Pre-check so we can give the UI a specific error code instead of a
+  // generic 404 when the DB row exists but the file on disk has vanished —
+  // a real situation when chokidar misses an unlink event or the user
+  // deletes a file while the app isn't running.
+  const db = getDatabase();
+  const row = db.prepare("SELECT id, path FROM files WHERE id = ?").get(n) as { id: number; path: string } | undefined;
+  if (!row) {
+    return NextResponse.json({ error: "File row not found", kind: "row_missing", id: n }, { status: 404 });
+  }
+  if (!existsSync(row.path)) {
+    return NextResponse.json(
+      {
+        error: `File is indexed but missing on disk: ${row.path}`,
+        kind: "disk_missing",
+        id: n,
+        path: row.path,
+      },
+      { status: 410 } // Gone — semantically right; client can offer "remove from index"
+    );
+  }
+
   try {
     const file = readFile(n);
-    // Annotate with tags + favorite so the UI doesn't need a second round-trip.
     const tags = getTagsForFiles([n]).get(n) ?? [];
-    const db = getDatabase();
     const isFav = !!db.prepare("SELECT 1 FROM favorites WHERE file_id = ?").get(n);
     return NextResponse.json({ ...file, tags, favorite: isFav });
-  } catch (error) {
-    return NextResponse.json({ error: "File not found" }, { status: 404 });
+  } catch (error: any) {
+    return NextResponse.json(
+      { error: error?.message ?? "Failed to read file", kind: "read_failed", id: n },
+      { status: 500 }
+    );
   }
 }
 
@@ -160,7 +184,7 @@ export async function DELETE(
   const n = parseId(id);
   if (n === null) return NextResponse.json({ error: `Invalid id: ${id}` }, { status: 400 });
   try {
-    deleteFile(n, DATA_DIR);
+    await deleteFile(n, DATA_DIR);
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error("Delete failed:", error);

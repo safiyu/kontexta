@@ -40,6 +40,37 @@ export function TopBar({
   const [isMac, setIsMac] = useState(false);
   const [syncOpen, setSyncOpen] = useState(false);
   const [publishMenuOpen, setPublishMenuOpen] = useState(false);
+  const [reindexing, setReindexing] = useState(false);
+  // null = no toast, otherwise the success/error line shown briefly below.
+  const [reindexToast, setReindexToast] = useState<string | null>(null);
+
+  const handleReindex = async () => {
+    if (reindexing) return;
+    setReindexing(true);
+    setReindexToast(null);
+    try {
+      const res = await fetch("/api/reindex", { method: "POST" });
+      const body = await res.json().catch(() => ({}));
+      if (res.ok && body?.success) {
+        const t = body.totals ?? { newly_indexed: 0, refreshed: 0, pruned: 0, errors: 0 };
+        setReindexToast(
+          `Reindexed ${body.scopes?.length ?? 0} scope(s) in ${body.duration_ms ?? "?"}ms — ` +
+          `+${t.newly_indexed} new, ${t.refreshed} updated, ${t.pruned} removed` +
+          (t.errors ? `, ${t.errors} scope error(s)` : ""),
+        );
+      } else if (res.status === 409) {
+        setReindexToast("Reindex already in progress");
+      } else {
+        setReindexToast(`Reindex failed: ${body?.error ?? `HTTP ${res.status}`}`);
+      }
+    } catch (e: any) {
+      setReindexToast(`Reindex failed: ${e?.message ?? "Network error"}`);
+    } finally {
+      setReindexing(false);
+      // Auto-clear after 8s so the toast doesn't sit forever.
+      setTimeout(() => setReindexToast(null), 8000);
+    }
+  };
 
   useEffect(() => {
     setMounted(true);
@@ -90,22 +121,6 @@ export function TopBar({
       </div>
 
       <div className="flex items-center gap-2">
-        {mounted && (
-          <button
-            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-            className="relative w-8 h-4 bg-[var(--accent)] border border-black/10 rounded-full flex items-center justify-between px-1 text-[8px]"
-            aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
-            title={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
-          >
-            <span aria-hidden className={`transition-opacity ${theme === "dark" ? "opacity-60" : "opacity-100"} text-white text-[9px] leading-none`}>☀</span>
-            <span aria-hidden className={`transition-opacity ${theme === "light" ? "opacity-60" : "opacity-100"} text-black text-[9px] leading-none`}>☽</span>
-            <span
-              aria-hidden
-              className={`absolute top-0.5 left-0.5 w-3 h-3 bg-white border border-black/10 rounded-full shadow transition-transform ${theme === "dark" ? "translate-x-4" : ""}`}
-            />
-          </button>
-        )}
-
         <button
           onClick={() => setSyncOpen((o) => !o)}
           className="btn btn-md !font-mono font-bold uppercase tracking-wider text-[var(--accent)]"
@@ -113,6 +128,16 @@ export function TopBar({
           title="Open sync menu"
         >
           Sync ▾
+        </button>
+
+        <button
+          onClick={handleReindex}
+          disabled={reindexing}
+          className={`btn btn-md !font-mono font-bold uppercase tracking-wider text-[var(--accent)] ${reindexing ? "opacity-50" : ""}`}
+          aria-label="Reindex — scan disk to add new files and remove orphan rows"
+          title="Reindex Knowledge Base + all projects: add new files and drop orphan rows"
+        >
+          {reindexing ? "Reindexing…" : "Reindex"}
         </button>
 
         <button
@@ -184,11 +209,40 @@ export function TopBar({
             // navigating — prevents a spurious 1008 WS reconnect error.
             router.push("/login");
           }}
-          className="btn btn-md !font-mono font-bold uppercase tracking-wider text-[var(--text-secondary)] hover:text-red-400"
+          className="p-2 rounded-md text-[var(--text-secondary)] hover:text-red-400 hover:bg-[var(--bg-tertiary)] transition-colors"
           aria-label="Lock Kontexta"
+          title="Lock Kontexta"
         >
-          Lock
+          <svg
+            className="w-4 h-4"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden
+          >
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+          </svg>
         </button>
+
+        {mounted && (
+          <button
+            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+            className="relative w-8 h-4 bg-[var(--accent)] border border-black/10 rounded-full flex items-center justify-between px-1 text-[8px]"
+            aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
+            title={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
+          >
+            <span aria-hidden className={`transition-opacity ${theme === "dark" ? "opacity-60" : "opacity-100"} text-white text-[9px] leading-none`}>☀</span>
+            <span aria-hidden className={`transition-opacity ${theme === "light" ? "opacity-60" : "opacity-100"} text-black text-[9px] leading-none`}>☽</span>
+            <span
+              aria-hidden
+              className={`absolute top-0.5 left-0.5 w-3 h-3 bg-white border border-black/10 rounded-full shadow transition-transform ${theme === "dark" ? "translate-x-4" : ""}`}
+            />
+          </button>
+        )}
       </div>
 
       <SyncPopover
@@ -201,6 +255,14 @@ export function TopBar({
         selectedProjectName={selectedProjectName ?? null}
         onSyncProject={onSyncProject}
       />
+      {reindexToast && (
+        <div
+          role="status"
+          className="fixed top-20 right-6 z-[100] max-w-md px-4 py-3 rounded-lg shadow-xl bg-[var(--bg-secondary)] border border-[var(--border)] text-sm text-[var(--text-primary)]"
+        >
+          {reindexToast}
+        </div>
+      )}
     </header>
   );
 }

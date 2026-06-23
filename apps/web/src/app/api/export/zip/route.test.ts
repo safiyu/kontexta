@@ -33,8 +33,17 @@ describe("GET /api/export/zip", () => {
     expect(res.status).toBe(400);
   });
 
-  test("404 when no files resolved", async () => {
+  test("400 when file_ids supplied without scope", async () => {
     const res = await GET(new Request("http://localhost/api/export/zip?file_ids=999") as any);
+    expect(res.status).toBe(400);
+  });
+
+  test("404 when no files resolved", async () => {
+    const dataDir = process.env.KONTEXTA_DATA_DIR || "";
+    const projectDir = join(dataDir, "test-project-empty");
+    mkdirSync(projectDir, { recursive: true });
+    const project = registerProject("TestProjEmpty", projectDir);
+    const res = await GET(new Request(`http://localhost/api/export/zip?file_ids=999&scope=${project.id}`) as any);
     expect(res.status).toBe(404);
   });
 
@@ -46,7 +55,7 @@ describe("GET /api/export/zip", () => {
     const f1 = await createFile({ title: "a", content: "AAA", destination: "project", projectId: project.id, folder: "specs", dataDir });
     const f2 = await createFile({ title: "b", content: "BBB", destination: "project", projectId: project.id, folder: "notes", dataDir });
 
-    const res = await GET(new Request(`http://localhost/api/export/zip?file_ids=${f1.id},${f2.id}`) as any);
+    const res = await GET(new Request(`http://localhost/api/export/zip?file_ids=${f1.id},${f2.id}&scope=${project.id}`) as any);
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toContain("application/zip");
     const entries = await readZipEntries(res);

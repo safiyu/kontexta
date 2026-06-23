@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 
 interface Project {
   id: number;
@@ -20,29 +20,29 @@ interface UseProjectsReturn {
 export function useProjects(): UseProjectsReturn {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
+  // Monotonic sequence so out-of-order responses don't clobber newer data.
+  const seqRef = useRef(0);
 
-  const fetchProjects = async () => {
+  const refresh = useCallback(async () => {
+    const mySeq = ++seqRef.current;
     try {
       setLoading(true);
       const response = await fetch("/api/projects");
       if (response.ok) {
         const data = await response.json();
+        if (mySeq !== seqRef.current) return;
         setProjects(data);
       }
     } catch (error) {
       console.error("Failed to fetch projects:", error);
     } finally {
-      setLoading(false);
+      if (mySeq === seqRef.current) setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    fetchProjects();
   }, []);
 
-  return {
-    projects,
-    loading,
-    refresh: fetchProjects,
-  };
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  return { projects, loading, refresh };
 }

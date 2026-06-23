@@ -1,5 +1,5 @@
 // packages/core/src/journal/housekeep.ts
-import { readdirSync, statSync, unlinkSync, renameSync, mkdirSync, existsSync, readFileSync } from "node:fs";
+import { readdirSync, statSync, unlinkSync, renameSync, mkdirSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { getDatabase } from "../db/index.js";
 import { readHighWater } from "./high-water.js";
@@ -94,7 +94,26 @@ export function housekeepJournal(cfg: HousekeepConfig): HousekeepResult {
     for (const row of cold) {
       const dest = join(archiveDir, row.path.split("/").pop() ?? `task-${row.file_id}.md`);
       if (!existsSync(dest) && existsSync(row.path)) {
-        renameSync(row.path, dest);
+        try {
+          renameSync(row.path, dest);
+        } catch (err: any) {
+          if (err?.code === "EXDEV") {
+            // Cross-device: _archive/ sits on a different mount than the
+            // source. Fall back to copy + unlink so a single mis-located
+            // archive dir doesn't abort the whole housekeep run.
+            try {
+              const buf = readFileSync(row.path);
+              writeFileSync(dest, buf);
+              unlinkSync(row.path);
+            } catch (copyErr) {
+              console.warn(`[housekeep] EXDEV copy fallback failed for ${row.path}:`, copyErr);
+              continue;
+            }
+          } else {
+            console.warn(`[housekeep] archive failed for ${row.path}:`, err);
+            continue;
+          }
+        }
         db.prepare(`UPDATE files SET path = ? WHERE id = ?`).run(dest, row.file_id);
         result.archived_tasks++;
       }

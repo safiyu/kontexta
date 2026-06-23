@@ -75,11 +75,32 @@ export function assembleShell(input: ShellInput): string {
 
   const docsMap: Record<string, { html: string; toc: RenderedDoc["toc"]; title: string; folder: string; slug: string }> = {};
   const endpoints: Record<string, EndpointData> = {};
+  // Per-doc env.endpoints uses a local seen set, so two different docs can
+  // both produce an endpoint with id "get-users" and silently clobber each
+  // other in this global map (last write wins). Detect collisions and uniquify
+  // by appending the doc key, then rewrite the corresponding onclick/id in
+  // the rendered HTML so the modal still resolves.
   for (const r of docs) {
     docsMap[`${r.doc.folder}/${r.doc.slug}`] = {
       html: r.html, toc: r.toc, title: r.doc.title, folder: r.doc.folder, slug: r.doc.slug,
     };
-    for (const ep of r.endpoints) endpoints[ep.id] = ep;
+    const docKey = `${r.doc.folder}/${r.doc.slug}`;
+    for (const ep of r.endpoints) {
+      if (endpoints[ep.id]) {
+        const newId = `${docKey}__${ep.id}`.replace(/[^A-Za-z0-9_-]/g, "-");
+        // Patch the doc HTML so the card's id and onclick reference newId.
+        const oldId = ep.id;
+        const doc = docsMap[docKey];
+        const escOld = oldId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        doc.html = doc.html
+          .replace(new RegExp(`id="${escOld}" data-endpoint-id="${escOld}"`, "g"),
+            `id="${newId}" data-endpoint-id="${newId}"`)
+          .replace(new RegExp(`openEndpoint\\('${escOld}'\\)`, "g"),
+            `openEndpoint('${newId}')`);
+        ep.id = newId;
+      }
+      endpoints[ep.id] = ep;
+    }
   }
 
 
@@ -139,7 +160,7 @@ window.__ENDPOINTS__ = ${embed(endpoints)};
 </script>
 <script type="module">
 import mermaid from "${MERMAID_CDN}";
-mermaid.initialize({ startOnLoad: false, theme: "dark" });
+mermaid.initialize({ startOnLoad: false, theme: "dark", logLevel: "fatal" });
 window.mermaid = mermaid;
 </script>
 <script>${app}</script>

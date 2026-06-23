@@ -34,8 +34,12 @@ function distilledDir(opts: DistillJournalOpts, ts: string): string {
 
 export async function distillJournal(opts: DistillJournalOpts): Promise<DistillResult> {
   const cooldownBase = join(opts.dataDir, ...REL_BASE);
-  const cooldownSec = opts.cooldownSeconds ?? 0;
-  if (!acquireCooldown(cooldownBase, opts.projectSlug, cooldownSec)) {
+  // Default 60s is the minimum window in which two redundant distill runs are
+  // unlikely to produce useful work; previously the default of 0 made the
+  // cooldown lock vacuous (always-stale).
+  const cooldownSec = opts.cooldownSeconds ?? 60;
+  const lockToken = acquireCooldown(cooldownBase, opts.projectSlug, cooldownSec);
+  if (!lockToken) {
     return {
       events_processed: 0,
       tasks_touched: [],
@@ -47,10 +51,11 @@ export async function distillJournal(opts: DistillJournalOpts): Promise<DistillR
   try {
     const hw = readHighWater(join(opts.dataDir, ...REL_BASE), opts.projectSlug);
     const since = hw?.last_event_ts ?? "0000-01-01T00:00:00Z";
+    const seenKeys = new Set<string>(hw?.last_event_keys ?? []);
     const cutoff = new Date(opts.now.getTime() - opts.inFlightWindowSeconds * 1000).toISOString();
 
     // 1. READ
-    const events = readRawEvents(opts, since, cutoff, opts.maxEvents);
+    const events = readRawEvents(opts, since, cutoff, opts.maxEvents, seenKeys);
     if (events.length === 0) {
       return { events_processed: 0, tasks_touched: [], tasks_created: [], high_water_advanced_to: since, warnings: [] };
     }
@@ -79,9 +84,13 @@ export async function distillJournal(opts: DistillJournalOpts): Promise<DistillR
       });
 
       if (existsSync(filePath)) {
-        // Append the new entry above the prior body (entries are reverse-chronological by convention)
+        // Re-emit frontmatter so last_active_at / touched_files / git_refs
+        // reflect this run, then prepend the new entry above prior bodies.
+        // Previously only the entry was prepended and the old frontmatter
+        // was kept verbatim, diverging from what the DB row recorded.
         const existing = readFileSync(filePath, "utf8");
-        writeFileSync(filePath, replaceOrAppendEntry(existing, fm, entry));
+        const mergedFm = mergeFrontmatter(parseExistingFrontmatter(existing), fm);
+        writeFileSync(filePath, replaceOrAppendEntry(existing, mergedFm, entry));
       } else {
         writeFileSync(filePath, serializeFrontmatter(fm) + "\n\n" + entry);
         tasksCreated.push(bucket.task_slug);
@@ -104,9 +113,17 @@ export async function distillJournal(opts: DistillJournalOpts): Promise<DistillR
     }
 
     // 5. ADVANCE high-water
+    // Use the LATEST ts across all events (sorted). Persist the per-event
+    // dedup keys for events that share that exact ts, so on the next run we
+    // can filter with `ev.ts >= newHw && !seenKeys.has(key)` and avoid
+    // dropping any event that shared a sub-ms timestamp with the boundary.
     const newHw = events[events.length - 1].ts;
+    const boundaryKeys = events
+      .filter((e) => e.ts === newHw)
+      .map((e) => eventKey(e));
     writeHighWater(join(opts.dataDir, ...REL_BASE), opts.projectSlug, {
       last_event_ts: newHw,
+      last_event_keys: boundaryKeys,
       last_distilled_at: opts.now.toISOString(),
       events_processed: (hw?.events_processed ?? 0) + events.length,
     });
@@ -119,18 +136,42 @@ export async function distillJournal(opts: DistillJournalOpts): Promise<DistillR
       warnings: [],
     };
   } finally {
-    releaseCooldown(cooldownBase, opts.projectSlug);
+    releaseCooldown(cooldownBase, opts.projectSlug, lockToken);
   }
 }
 
-function readRawEvents(opts: DistillJournalOpts, sinceTs: string, untilTs: string, max: number): RawEvent[] {
+/**
+ * Stable key for a raw event so we can distinguish two events that happen to
+ * share the same ISO ms timestamp. Combines ts + event type + first touched
+ * path (or sha/branch for git events) which is unique in practice.
+ */
+function eventKey(ev: RawEvent): string {
+  const tail = ev.sha
+    ?? ev.branch
+    ?? (ev.touched?.[0] ?? "")
+    ?? "";
+  return `${ev.ts}|${ev.event}|${tail}`;
+}
+
+function readRawEvents(
+  opts: DistillJournalOpts,
+  sinceTs: string,
+  untilTs: string,
+  max: number,
+  seenKeys: Set<string>,
+): RawEvent[] {
   const dirs = [rawDir(opts)];
   const defaultDir = join(opts.dataDir, ...REL_BASE, "default", "raw");
   if (defaultDir !== dirs[0] && existsSync(defaultDir)) {
     dirs.push(defaultDir);
   }
 
-  const out: RawEvent[] = [];
+  // Collect ALL candidate events first (no per-source truncation), then sort
+  // by ts, THEN truncate. The previous implementation returned early at
+  // `max` while still inside the primary dir — defaultDir events with a
+  // smaller ts that should have come first were silently skipped, and the
+  // high-water advanced past them so they were lost forever.
+  const all: RawEvent[] = [];
   for (const dir of dirs) {
     if (!existsSync(dir)) continue;
     const files = readdirSync(dir).filter((f) => f.endsWith(".jsonl")).sort();
@@ -139,23 +180,28 @@ function readRawEvents(opts: DistillJournalOpts, sinceTs: string, untilTs: strin
       for (const line of lines) {
         try {
           const ev = JSON.parse(line) as RawEvent;
-          if (ev.ts > sinceTs && ev.ts < untilTs) {
-            // If it's from the default dir, we MUST check project affinity
-            if (dir === defaultDir) {
-              const matchesProject = (ev.args?.project_id === opts.projectId) || 
-                                   (ev.touched?.some(p => p.startsWith(opts.projectSlug))); // simplistic
-              if (!matchesProject) continue;
-            }
-            out.push(ev);
+          // Use >= with a per-event dedup key — two events sharing the same
+          // ms timestamp at the high-water boundary would both qualify with
+          // the previous strict `>` filter from only one direction; this
+          // way we include them all on the boundary and skip the ones the
+          // previous run already processed.
+          if (ev.ts < sinceTs || ev.ts >= untilTs) continue;
+          if (seenKeys.has(eventKey(ev))) continue;
+          // If it's from the default dir, check project affinity.
+          if (dir === defaultDir) {
+            const matchesProject = (ev.args?.project_id === opts.projectId) ||
+                                 (ev.touched?.some(p => p.startsWith(opts.projectSlug)));
+            if (!matchesProject) continue;
           }
-          if (out.length >= max) return out;
+          all.push(ev);
         } catch {
           // skip malformed line
         }
       }
     }
   }
-  return out.sort((a, b) => a.ts.localeCompare(b.ts));
+  all.sort((a, b) => a.ts.localeCompare(b.ts));
+  return all.slice(0, max);
 }
 
 function loadOpenTasks(opts: DistillJournalOpts): JournalFrontmatter[] {
@@ -242,12 +288,49 @@ function serializeFrontmatter(fm: JournalFrontmatter): string {
 }
 
 function replaceOrAppendEntry(existing: string, fm: JournalFrontmatter, newEntry: string): string {
-  // Naive Phase-1 strategy: prepend the new entry just below the frontmatter block.
-  // Phase 2 will do smart merging of frontmatter + dedup.
+  // Replace the frontmatter block entirely with the merged value, then
+  // prepend the new entry just below it. Entries below remain in order.
   const fmEnd = existing.indexOf("\n---", 4) + 4;
-  const head = existing.slice(0, fmEnd);
   const body = existing.slice(fmEnd);
-  return head + "\n\n" + newEntry + body;
+  return serializeFrontmatter(fm) + "\n\n" + newEntry + body;
+}
+
+function parseExistingFrontmatter(existing: string): JournalFrontmatter | null {
+  // Minimal extractor: we only consume what mergeFrontmatter needs from the
+  // prior file; everything else gets overwritten by the new fm anyway. Treats
+  // anything malformed as "no prior" — the caller then keeps fm as-is.
+  if (!existing.startsWith("---\n")) return null;
+  const end = existing.indexOf("\n---", 4);
+  if (end < 0) return null;
+  const block = existing.slice(4, end);
+  const get = (k: string) => {
+    const m = block.match(new RegExp(`^${k}:\\s*(.*)$`, "m"));
+    return m ? m[1].trim() : "";
+  };
+  const startedAt = get("started_at");
+  if (!startedAt) return null;
+  return {
+    task: get("task"),
+    project: get("project"),
+    tags: [],
+    touched_files: [],
+    git: { branches: [], commits: [], ticket_ids: [] },
+    status_latest: null,
+    started_at: startedAt,
+    last_active_at: get("last_active_at"),
+    distilled_from: [],
+  };
+}
+
+function mergeFrontmatter(
+  prior: JournalFrontmatter | null,
+  next: JournalFrontmatter,
+): JournalFrontmatter {
+  if (!prior) return next;
+  // Preserve the original started_at (the file's earliest event). Everything
+  // else is taken from the new batch — last_active_at, touched_files etc.
+  // are intentionally overwritten so the DB and file agree.
+  return { ...next, started_at: prior.started_at };
 }
 
 function ensureFileRecord(filePath: string, title: string, projectId: number): number {

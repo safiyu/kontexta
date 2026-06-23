@@ -404,6 +404,9 @@ h1, h2, h3, .brand, .nav-group-label { font-family: var(--font-title); }
 .mermaid-stage:fullscreen { max-height: none; background: var(--bg-primary); }
 .mermaid-stage:fullscreen svg { max-width: 90vw; }
 
+/* Hide mermaid error divs (fallback if JS error detection fails) */
+.mermaid > div[id^="dmermaid"] { display: none !important; }
+
 /* ---- endpoint cards ---- */
 #content .api-endpoint {
   background: var(--bg-secondary);

@@ -48,8 +48,16 @@ interface ContentPaneProps {
   onDirtyChange?: (dirty: boolean) => void;
 }
 
+interface LoadError {
+  kind: "disk_missing" | "row_missing" | "read_failed" | "http" | "network";
+  message: string;
+  status?: number;
+  path?: string;
+}
+
 export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: ContentPaneProps) {
   const [file, setFile] = useState<File | null>(null);
+  const [loadError, setLoadError] = useState<LoadError | null>(null);
   const [editing, setEditing] = useState(false);
   const [viewHistory, setViewHistory] = useState(false);
   const [history, setHistory] = useState<any[]>([]);
@@ -62,6 +70,7 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
   const [gitErrorOpen, setGitErrorOpen] = useState(false);
   const [gitErrorMessage, setGitErrorMessage] = useState("");
   const [refreshing, setRefreshing] = useState(false);
+  const [removingOrphan, setRemovingOrphan] = useState(false);
 
   const handleRefresh = async () => {
     if (!fileId) return;
@@ -88,59 +97,125 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
   const fileIdRef = useRef<number | null>(fileId);
   useEffect(() => { fileIdRef.current = fileId; }, [fileId]);
 
-  // Bubble dirty state up so the parent can confirm before navigation.
+  // Keep onDirtyChange in a ref so the dirty-state effect can call the latest
+  // callback without listing it as a dependency. Parents commonly pass an
+  // inline arrow (`(d) => { ref.current = d }`), which would otherwise cause
+  // the cleanup-only effect below to fire on every parent render and flip the
+  // flag to false mid-edit.
+  const onDirtyChangeRef = useRef(onDirtyChange);
+  useEffect(() => { onDirtyChangeRef.current = onDirtyChange; }, [onDirtyChange]);
+
   useEffect(() => {
     const dirty = editing && file != null && editContent !== file.content;
-    onDirtyChange?.(dirty);
-  }, [editing, editContent, file?.content, onDirtyChange]);
-  useEffect(() => () => { onDirtyChange?.(false); }, [onDirtyChange]);
+    onDirtyChangeRef.current?.(dirty);
+  }, [editing, editContent, file?.content]);
+  useEffect(() => () => { onDirtyChangeRef.current?.(false); }, []);
 
   useEffect(() => {
     if (fileId === null) {
       setFile(null);
+      setLoadError(null);
       setEditing(false);
       setViewHistory(false);
       return;
     }
 
+    const controller = new AbortController();
     const fetchFile = async () => {
       setLoading(true);
+      setLoadError(null);
       try {
-        const response = await fetch(`/api/files/${fileId}`);
+        const response = await fetch(`/api/files/${fileId}`, { signal: controller.signal });
+        if (fileIdRef.current !== fileId) return;
         if (response.ok) {
           const data = await response.json();
+          if (fileIdRef.current !== fileId) return;
           setFile(data);
           setEditContent(data.content);
+        } else {
+          // Surface the error instead of silently no-op'ing — otherwise a
+          // click on a file whose row points at a missing disk path just
+          // does nothing, and the user can't tell whether the click
+          // registered or the file is broken.
+          let body: any = null;
+          try { body = await response.json(); } catch {}
+          if (fileIdRef.current !== fileId) return;
+          setFile(null);
+          setLoadError({
+            kind: body?.kind ?? "http",
+            message: body?.error ?? `Request failed with HTTP ${response.status}`,
+            status: response.status,
+            path: body?.path,
+          });
         }
-      } catch (error) {
+      } catch (error: any) {
+        if (error?.name === "AbortError") return;
         console.error("Failed to fetch file:", error);
+        if (fileIdRef.current !== fileId) return;
+        setFile(null);
+        setLoadError({
+          kind: "network",
+          message: error?.message ?? "Network error",
+        });
       } finally {
-        setLoading(false);
+        if (fileIdRef.current === fileId) setLoading(false);
       }
     };
 
     fetchFile();
     setViewHistory(false);
+    return () => controller.abort();
   }, [fileId]);
+
+  const handleRemoveOrphanFromIndex = async () => {
+    if (fileId == null) return;
+    setRemovingOrphan(true);
+    try {
+      const res = await fetch(`/api/files/${fileId}`, { method: "DELETE" });
+      if (res.ok) {
+        setLoadError(null);
+        setFile(null);
+        onDelete(fileId).catch((e) => console.error("onDelete after orphan remove failed:", e));
+        onChanged?.();
+      } else {
+        const body = await res.json().catch(() => ({}));
+        setLoadError({
+          kind: "http",
+          message: body?.error ?? `Remove failed: HTTP ${res.status}`,
+          status: res.status,
+        });
+      }
+    } catch (e: any) {
+      setLoadError({
+        kind: "network",
+        message: e?.message ?? "Network error while removing orphan row",
+      });
+    } finally {
+      setRemovingOrphan(false);
+    }
+  };
 
   const fetchHistory = async () => {
     if (!fileId) return;
+    const issuedFor = fileId;
     setFetchingHistory(true);
     try {
       const response = await fetch(`/api/files/${fileId}/history`);
       if (response.ok) {
         const data = await response.json();
+        if (fileIdRef.current !== issuedFor) return;
         setHistory(data);
       }
     } catch (error) {
       console.error("Failed to fetch history:", error);
     } finally {
-      setFetchingHistory(false);
+      if (fileIdRef.current === issuedFor) setFetchingHistory(false);
     }
   };
 
   const handleRestore = async (hash: string) => {
     if (!fileId) return;
+    const issuedFor = fileId;
     try {
       const response = await fetch(`/api/files/${fileId}/history/restore`, {
         method: "POST",
@@ -149,7 +224,8 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
       });
       if (response.ok) {
         const data = await response.json();
-        setFile((prev) => prev ? { ...prev, content: data.content } : null);
+        if (fileIdRef.current !== issuedFor) return;
+        setFile((prev) => (prev && prev.id === issuedFor ? { ...prev, content: data.content } : prev));
         setEditContent(data.content);
         setViewHistory(false);
       }
@@ -288,6 +364,52 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
   }
 
   if (!file) {
+    // Specific UX for each failure mode so the user knows whether to:
+    //  - Remove the orphan row (disk file vanished out from under the index)
+    //  - Refresh / retry (transient HTTP / network)
+    //  - Live with it (row truly missing — likely a stale selection)
+    if (loadError?.kind === "disk_missing") {
+      return (
+        <div className="h-full flex flex-col items-center justify-center text-[#475569] dark:text-[#94A3B8] gap-4 animate-fade-in p-8">
+          <span className="text-6xl opacity-40 dark-icon">⚠️</span>
+          <div className="text-center max-w-lg">
+            <p className="text-lg font-bold text-[#0F172A] dark:text-[#F1F5F9]">File is missing on disk</p>
+            <p className="text-sm font-medium text-[#475569] dark:text-[#94A3B8] mt-2">
+              The index still has a row for this file, but the file at the path below no longer exists.
+              This usually happens when the file was deleted while the watcher wasn't running.
+            </p>
+            {loadError.path && (
+              <pre className="mt-3 p-2 bg-zinc-900 text-zinc-100 text-xs overflow-x-auto rounded">
+                {loadError.path}
+              </pre>
+            )}
+            <button
+              type="button"
+              className="btn btn-sm mt-4"
+              onClick={handleRemoveOrphanFromIndex}
+              disabled={removingOrphan}
+            >
+              {removingOrphan ? "Removing…" : "Remove from index"}
+            </button>
+          </div>
+        </div>
+      );
+    }
+    if (loadError) {
+      return (
+        <div className="h-full flex flex-col items-center justify-center text-[#475569] dark:text-[#94A3B8] gap-3 animate-fade-in p-8">
+          <span className="text-6xl opacity-40 dark-icon">⚠️</span>
+          <div className="text-center max-w-lg">
+            <p className="text-lg font-bold text-[#0F172A] dark:text-[#F1F5F9]">
+              Failed to load file{loadError.status ? ` (HTTP ${loadError.status})` : ""}
+            </p>
+            <p className="text-sm font-medium text-[#475569] dark:text-[#94A3B8] mt-2 break-words">
+              {loadError.message}
+            </p>
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="h-full flex flex-col items-center justify-center text-[#475569] dark:text-[#94A3B8] gap-3 animate-fade-in">
         <span className="text-6xl opacity-40 dark-icon">🔍</span>
@@ -429,10 +551,12 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
                 title={`Remove tag ${t}`}
                 onClick={async () => {
                   if (!file) return;
-                  const next = file.tags.filter((x) => x !== t);
-                  setFile({ ...file, tags: next });
+                  const fileId = file.id;
+                  const original = file.tags;
+                  const next = original.filter((x) => x !== t);
+                  setFile((prev) => (prev && prev.id === fileId ? { ...prev, tags: next } : prev));
                   try {
-                    const res = await fetch(`/api/files/${file.id}`, {
+                    const res = await fetch(`/api/files/${fileId}`, {
                       method: "PATCH",
                       headers: { "Content-Type": "application/json" },
                       body: JSON.stringify({ tags: next }),
@@ -440,7 +564,7 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
                     if (!res.ok) throw new Error("PATCH failed");
                     onChanged?.();
                   } catch (e) {
-                    setFile({ ...file, tags: file.tags });
+                    setFile((prev) => (prev && prev.id === fileId ? { ...prev, tags: original } : prev));
                     console.error("Failed to remove tag:", e);
                   }
                 }}
@@ -463,11 +587,13 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
                 e.currentTarget.value = "";
                 return;
               }
-              const next = [...file.tags, tag];
-              setFile({ ...file, tags: next });
+              const fileId = file.id;
+              const original = file.tags;
+              const next = [...original, tag];
+              setFile((prev) => (prev && prev.id === fileId ? { ...prev, tags: next } : prev));
               e.currentTarget.value = "";
               try {
-                const res = await fetch(`/api/files/${file.id}`, {
+                const res = await fetch(`/api/files/${fileId}`, {
                   method: "PATCH",
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({ tags: next }),
@@ -475,7 +601,7 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
                 if (!res.ok) throw new Error("PATCH failed");
                 onChanged?.();
               } catch (err) {
-                setFile({ ...file, tags: file.tags });
+                setFile((prev) => (prev && prev.id === fileId ? { ...prev, tags: original } : prev));
                 console.error("Failed to add tag:", err);
               }
             }}

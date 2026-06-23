@@ -17,8 +17,29 @@ export function enumerateDocs(reader: VaultReader, folders: string[], projectPat
   const out: DocFile[] = [];
   for (const folder of folders) {
     for (const meta of reader.listDocs(folder, projectPath)) {
-      const raw = reader.read(meta.id);
-      const parsed = matter(raw.content);
+      // Skip unreadable docs (e.g. DB row points at a path that was deleted
+      // out from under the watcher). Without this, a single orphan row
+      // would tank the entire publish run with an ENOENT — the user clicks
+      // "Publish" and gets a 500 with no actionable signal. Log the path
+      // so it shows up in the server logs for cleanup.
+      let raw;
+      try {
+        raw = reader.read(meta.id);
+      } catch (err) {
+        console.warn(
+          `[publish] skipping unreadable doc id=${meta.id} path=${meta.path}: ${(err as Error).message}`,
+        );
+        continue;
+      }
+      let parsed;
+      try {
+        parsed = matter(raw.content);
+      } catch (err) {
+        console.warn(
+          `[publish] skipping doc with bad frontmatter id=${meta.id} path=${meta.path}: ${(err as Error).message}`,
+        );
+        continue;
+      }
       const fm = parsed.data as Frontmatter;
       const body = parsed.content;
       out.push({

@@ -58,9 +58,26 @@ const SITE = window.__SITE__ || {};
 
 function routeKey() {
   const h = location.hash.replace(/^#\/+/g, "");
-  const [folder, slugWithFrag] = h.split("/");
-  const slug = (slugWithFrag || "").split("#")[0];
-  return folder && slug ? `${folder}/${slug}` : firstDocKey();
+  if (!h) return firstDocKey();
+  // Strip any in-page fragment first: "folder/slug#heading" → "folder/slug".
+  const pathPart = h.split("#")[0];
+  // Folders can be NESTED ("specs/slt-cdc"), so a naive split("/") would
+  // misread the folder as the first segment only and the slug as the
+  // second — DOCS[ ] then misses and the content pane stays empty. Use
+  // the LAST "/" as the folder/slug boundary; slugs are always a single
+  // filename and never contain "/".
+  const lastSlash = pathPart.lastIndexOf("/");
+  if (lastSlash < 0) return firstDocKey();
+  const folder = pathPart.slice(0, lastSlash);
+  const slug = pathPart.slice(lastSlash + 1);
+  if (!folder || !slug) return firstDocKey();
+  // URI-decode each segment so a navigation to `#/foo%26bar/slug` (escaped &)
+  // produces the same raw key as the data-key attribute on the matching nav
+  // item. Tolerate malformed URI escapes by falling back to the raw value.
+  let f = folder, s = slug;
+  try { f = decodeURIComponent(folder); } catch {}
+  try { s = decodeURIComponent(slug); } catch {}
+  return `${f}/${s}`;
 }
 
 function firstDocKey() {
@@ -74,8 +91,17 @@ function renderSidebar() {
   el.innerHTML = NAV.map((g) =>
     `<div class="nav-group-label">${escapeHtml(g.group)}</div>` +
     g.items.map((i) => {
-      const key = `${escapeHtml(i.folder)}/${escapeHtml(i.slug)}`;
-      return `<a class="nav-item" data-key="${key}" href="#/${key}">${i.icon ? escapeHtml(i.icon) + " " : ""}${escapeHtml(i.title)}</a>`;
+      // Use the raw key for the data attribute (escaping just for HTML safety
+      // when emitting) so dataset.key after the browser decodes the attribute
+      // matches the raw key returned by routeKey(). Previously we built the
+      // key from already-HTML-escaped halves, then re-embedded that escaped
+      // string into the attribute, producing a double-encoded value that
+      // never matched the raw routeKey() comparison for folder names
+      // containing &, <, > etc.
+      const rawKey = `${i.folder}/${i.slug}`;
+      const attrKey = escapeHtml(rawKey);
+      const href = `#/${encodeURI(rawKey)}`;
+      return `<a class="nav-item" data-key="${attrKey}" href="${href}">${i.icon ? escapeHtml(i.icon) + " " : ""}${escapeHtml(i.title)}</a>`;
     }).join("")
   ).join("");
 }
@@ -113,7 +139,15 @@ function showDoc(key) {
     document.querySelectorAll('.mermaid').forEach(el => {
       el.removeAttribute('data-processed');
     });
-    window.mermaid.run({ querySelector: '#content .mermaid' });
+    window.mermaid.run({ querySelector: '#content .mermaid' }).then(() => {
+      // Hide wrappers for diagrams that failed to render (syntax errors, etc.)
+      // Mermaid renders an SVG with aria-roledescription="error" for broken diagrams.
+      document.querySelectorAll('#content .mermaid-wrap').forEach((wrap) => {
+        if (wrap.querySelector('svg[aria-roledescription="error"]')) {
+          wrap.style.display = 'none';
+        }
+      });
+    });
   }
 
   // Scroll to fragment or top

@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { listProjects, registerProject, discoverFiles } from "kxta-core";
 import { DATA_DIR, ensureDbInitialized } from "@/lib/db-init";
 import { existsSync, statSync } from "node:fs";
-import { isAbsolute } from "node:path";
+import { assertSafeUserPath } from "@/lib/safe-path";
 
 export async function GET(req: NextRequest) {
   if (!checkAuth(req)) return new NextResponse("Unauthorized", { status: 401 });
@@ -35,17 +35,17 @@ export async function POST(req: NextRequest) {
   if (typeof path !== "string" || path.length === 0) {
     return NextResponse.json({ error: "path is required" }, { status: 400 });
   }
-  if (!isAbsolute(path)) {
-    return NextResponse.json({ error: "path must be absolute" }, { status: 400 });
+  let canonicalPath: string;
+  try {
+    canonicalPath = assertSafeUserPath(path);
+  } catch (e: any) {
+    return NextResponse.json({ error: e?.message ?? "Invalid path" }, { status: 400 });
   }
-  if (path.includes("\0")) {
-    return NextResponse.json({ error: "path contains null byte" }, { status: 400 });
-  }
-  if (!existsSync(path)) {
+  if (!existsSync(canonicalPath)) {
     return NextResponse.json({ error: `path does not exist: ${path}` }, { status: 400 });
   }
   try {
-    if (!statSync(path).isDirectory()) {
+    if (!statSync(canonicalPath).isDirectory()) {
       return NextResponse.json({ error: "path must be a directory" }, { status: 400 });
     }
   } catch (e: any) {
@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const project = registerProject(name, path, description ?? undefined);
+    const project = registerProject(name, canonicalPath, description ?? undefined);
     let discoveredCount = 0;
     let totalEstTokens = 0;
     try {

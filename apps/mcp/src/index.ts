@@ -694,7 +694,7 @@ server.tool(
     id: z.number().describe("File ID"),
   },
   async ({ id }) => {
-    deleteFile(id, dataDir);
+    await deleteFile(id, dataDir);
     return {
       content: [{ type: "text", text: JSON.stringify({ success: true }, null, 2) }],
     };
@@ -1801,7 +1801,7 @@ server.tool(
     const errors: { id: number; error: string }[] = [];
     for (const id of ids) {
       try {
-        deleteFile(id, dataDir);
+        await deleteFile(id, dataDir);
         deleted.push(id);
       } catch (e: any) {
         errors.push({ id, error: e?.message ?? String(e) });

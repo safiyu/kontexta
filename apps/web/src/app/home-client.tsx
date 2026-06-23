@@ -14,7 +14,7 @@ import { NewFolderDialog } from "@/components/folder-tree/new-folder-dialog";
 import { DeleteFolderDialog } from "@/components/folder-tree/delete-folder-dialog";
 import { UnregisterModal } from "@/components/file-list/unregister-modal";
 import { DocsModal } from "@/components/docs/docs-modal";
-import { PublishDialog } from "@/components/publish/publish-dialog";
+import { PublishDialog, type PublishResult } from "@/components/publish/publish-dialog";
 import { useProjects } from "@/hooks/use-projects";
 import { useFiles } from "@/hooks/use-files";
 import { useFolders } from "@/hooks/use-folders";
@@ -37,6 +37,7 @@ export default function HomePage() {
   const [unregisterConfirmOpen, setUnregisterConfirmOpen] = useState(false);
   const [publishOpen, setPublishOpen] = useState(false);
   const [publishMode, setPublishMode] = useState<"publish" | "view">("publish");
+  const [publishToast, setPublishToast] = useState<PublishResult | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [deletingFolder, setDeletingFolder] = useState(false);
   const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
@@ -667,7 +668,57 @@ export default function HomePage() {
         onClose={() => { setPublishOpen(false); setPublishMode("publish"); }}
         mode={publishMode}
         onSwitchToPublish={() => { setPublishMode("publish"); }}
+        onPublishSuccess={(r) => setPublishToast(r)}
       />
+
+      {publishToast && (
+        // Persistent toast bottom-right with View Published + Dismiss. Stays
+        // until the user explicitly dismisses so they can't miss the ack.
+        <div
+          role="status"
+          className="fixed bottom-6 right-6 z-[150] max-w-md p-4 rounded-xl shadow-2xl bg-[var(--bg-secondary)] border border-green-500/40"
+        >
+          <div className="flex items-start gap-3">
+            <svg className="w-5 h-5 text-green-500 shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <circle cx="12" cy="12" r="10" />
+              <path d="M9 12l2 2 4-4" />
+            </svg>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-bold text-green-500">Publish successful</p>
+              <div className="text-xs text-[var(--text-secondary)] mt-1 space-y-0.5">
+                <p>
+                  📄 {publishToast.docCount ?? 0} docs
+                  {publishToast.endpointCount !== undefined && publishToast.endpointCount > 0 && (
+                    <> · 🔗 {publishToast.endpointCount} endpoints</>
+                  )}
+                  {publishToast.termCount !== undefined && publishToast.termCount > 0 && (
+                    <> · 📚 {publishToast.termCount} terms</>
+                  )}
+                </p>
+                {publishToast.output && (
+                  <p className="break-all font-mono text-[10px] opacity-70">{publishToast.output}</p>
+                )}
+              </div>
+              <div className="flex items-center gap-2 mt-3">
+                <button
+                  type="button"
+                  onClick={() => window.open("/api/publish/html", "_blank", "noopener,noreferrer")}
+                  className="px-3 py-1.5 rounded-lg bg-green-500 text-black text-xs font-bold hover:bg-green-400 transition-colors"
+                >
+                  View Published
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPublishToast(null)}
+                  className="px-3 py-1.5 rounded-lg text-xs font-medium text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] transition-colors"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

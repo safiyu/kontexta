@@ -169,7 +169,13 @@ export function search(filters: SearchFilters): FileRecordWithRank[] {
     }
   }
 
-  sql += " ORDER BY rank LIMIT 50";
+  // Deterministic ordering: FTS rank ties are otherwise resolved by rowid
+  // in implementation-defined ways (undocumented). Include files.id as the
+  // tiebreaker so bundle output is reproducible across rebuilds.
+  const limit = Number.isInteger(filters.limit) && (filters.limit as number) > 0
+    ? Math.min(filters.limit as number, 1000)
+    : 50;
+  sql += ` ORDER BY rank, files.id LIMIT ${limit}`;
 
   const stmt = db.prepare(sql);
   try {
