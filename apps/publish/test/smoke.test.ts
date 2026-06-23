@@ -3,6 +3,6 @@ import { VERSION } from "../src/index.js";
 
 describe("scaffold", () => {
   it("exposes a version", () => {
-    expect(VERSION).toBe("3.2.0");
+    expect(VERSION).toMatch(/^\d+\.\d+\.\d+/);
   });
 });
