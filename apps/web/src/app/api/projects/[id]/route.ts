@@ -3,7 +3,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDatabase, unregisterProject, isValidGitRemoteUrl, withLock } from "kxta-core";
 import { DATA_DIR, ensureDbInitialized } from "@/lib/db-init";
 import { existsSync, statSync } from "node:fs";
-import { isAbsolute, resolve, sep } from "node:path";
+import { resolve, sep } from "node:path";
+import { assertSafeUserPath } from "@/lib/safe-path";
 
 function parseId(raw: string): number | null {
   const n = Number(raw);
@@ -74,17 +75,17 @@ export async function PATCH(
     if (typeof body.path !== "string" || body.path.length === 0) {
       return NextResponse.json({ error: "path must be a non-empty string" }, { status: 400 });
     }
-    if (body.path.includes("\0")) {
-      return NextResponse.json({ error: "path contains null byte" }, { status: 400 });
+    let canonicalNewPath: string;
+    try {
+      canonicalNewPath = assertSafeUserPath(body.path);
+    } catch (e: any) {
+      return NextResponse.json({ error: e?.message ?? "Invalid path" }, { status: 400 });
     }
-    if (!isAbsolute(body.path)) {
-      return NextResponse.json({ error: "path must be absolute" }, { status: 400 });
-    }
-    if (!existsSync(body.path)) {
+    if (!existsSync(canonicalNewPath)) {
       return NextResponse.json({ error: `path does not exist: ${body.path}` }, { status: 400 });
     }
     try {
-      if (!statSync(body.path).isDirectory()) {
+      if (!statSync(canonicalNewPath).isDirectory()) {
         return NextResponse.json({ error: "path must be a directory" }, { status: 400 });
       }
     } catch (e: any) {
@@ -93,47 +94,43 @@ export async function PATCH(
 
     const oldRow = db.prepare("SELECT path FROM projects WHERE id = ?").get(n) as { path: string | null };
     const oldBase = oldRow?.path ? resolve(oldRow.path) : null;
-    const newBase = resolve(body.path);
+    const newBase = canonicalNewPath;
 
     // Hold the same git lock commitFile uses on the OLD project path so a
     // concurrent reference-file commit can't land at the old path while we
     // rewrite rows to point at the new path (DB/git divergence). After the
     // swap, future commitFile calls will lock on the new path.
-    // Pre-flight: refuse the rewrite if any file row would point at a
-    // non-existent path under the new base. Without this check, callers
-    // can accidentally re-point a project at an unrelated directory and
-    // every subsequent read/write either 500s or, worse, creates files
-    // at the dangling targets.
-    if (oldBase && oldBase !== newBase) {
-      const oldPrefix = oldBase.endsWith(sep) ? oldBase : oldBase + sep;
-      const newPrefix = newBase.endsWith(sep) ? newBase : newBase + sep;
-      const rows = db
-        .prepare("SELECT id, path FROM files WHERE project_id = ?")
-        .all(n) as { id: number; path: string }[];
-      const missing: string[] = [];
-      for (const r of rows) {
-        let target: string | null = null;
-        if (r.path === oldBase) target = newBase;
-        else if (r.path.startsWith(oldPrefix)) target = newPrefix + r.path.slice(oldPrefix.length);
-        if (target && !existsSync(target)) missing.push(target);
+    //
+    // The pre-flight `missing[]` check is INSIDE the lock so a concurrent
+    // filesystem operation can't unlink the target between the check and the
+    // DB rewrite (previously a TOCTOU window).
+    const runRewriteWithChecks = (): NextResponse | null => {
+      if (oldBase && oldBase !== newBase) {
+        const oldPrefix = oldBase.endsWith(sep) ? oldBase : oldBase + sep;
+        const newPrefix = newBase.endsWith(sep) ? newBase : newBase + sep;
+        const rows = db
+          .prepare("SELECT id, path FROM files WHERE project_id = ?")
+          .all(n) as { id: number; path: string }[];
+        const missing: string[] = [];
+        for (const r of rows) {
+          let target: string | null = null;
+          if (r.path === oldBase) target = newBase;
+          else if (r.path.startsWith(oldPrefix)) target = newPrefix + r.path.slice(oldPrefix.length);
+          if (target && !existsSync(target)) missing.push(target);
+        }
+        if (missing.length > 0) {
+          return NextResponse.json(
+            {
+              error: `Refusing to rewrite paths: ${missing.length} file(s) missing under new base. First: ${missing[0]}`,
+              missing_count: missing.length,
+              sample: missing.slice(0, 5),
+            },
+            { status: 409 }
+          );
+        }
       }
-      if (missing.length > 0) {
-        return NextResponse.json(
-          {
-            error: `Refusing to rewrite paths: ${missing.length} file(s) missing under new base. First: ${missing[0]}`,
-            missing_count: missing.length,
-            sample: missing.slice(0, 5),
-          },
-          { status: 409 }
-        );
-      }
-    }
-
-    const runRewrite = () => {
       db.transaction(() => {
-        db.prepare("UPDATE projects SET path = ? WHERE id = ?").run(body.path, n);
-        // Rewrite each row's path prefix so file ids (and the tags/favorites
-        // joined to them) survive the move.
+        db.prepare("UPDATE projects SET path = ? WHERE id = ?").run(canonicalNewPath, n);
         if (oldBase && oldBase !== newBase) {
           const oldPrefix = oldBase.endsWith(sep) ? oldBase : oldBase + sep;
           const newPrefix = newBase.endsWith(sep) ? newBase : newBase + sep;
@@ -150,12 +147,15 @@ export async function PATCH(
           }
         }
       })();
+      return null;
     };
+    let earlyExit: NextResponse | null = null;
     if (oldBase) {
-      await withLock(`git:${oldBase}`, async () => runRewrite());
+      earlyExit = await withLock(`git:${oldBase}`, async () => runRewriteWithChecks());
     } else {
-      runRewrite();
+      earlyExit = runRewriteWithChecks();
     }
+    if (earlyExit) return earlyExit;
   }
 
   const project = db.prepare("SELECT * FROM projects WHERE id = ?").get(n);

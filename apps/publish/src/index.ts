@@ -3,7 +3,7 @@ import { main } from "./cli.js";
 import { fileURLToPath } from "node:url";
 import { realpathSync } from "node:fs";
 
-export const VERSION = "3.0.1";
+export const VERSION = "3.1.1";
 
 function isMainEntry(): boolean {
   const argv1 = process.argv[1];

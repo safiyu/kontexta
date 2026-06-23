@@ -58,10 +58,38 @@ export async function GET(req: NextRequest) {
   let rootName = "kontexta-export";
 
   if (isFileIdsMode) {
+    // Require an explicit scope so file_ids can't be used as a cross-project
+    // arbitrary-file-read primitive. Caller must pass scope=kb or scope=N
+    // (project id), and every file in the list must belong to that scope.
+    const scope = url.searchParams.get("scope");
+    if (!scope) {
+      return NextResponse.json(
+        { error: "file_ids requires scope=kb or scope=<project_id>" },
+        { status: 400 }
+      );
+    }
+    let scopeProjectId: number | null = null;
+    if (scope !== "kb") {
+      const n = Number(scope);
+      if (!Number.isInteger(n) || n < 0) {
+        return NextResponse.json({ error: "Invalid scope" }, { status: 400 });
+      }
+      scopeProjectId = n;
+      if (!getProjectPath(scopeProjectId)) {
+        return NextResponse.json({ error: "Scope project not found" }, { status: 404 });
+      }
+    }
     const ids = fileIdsRaw!.split(",").map((s) => Number(s.trim())).filter((n) => Number.isInteger(n) && n >= 0);
     for (const id of ids) {
       try {
         const file = readFile(id);
+        const fileProjectId = file.project_id ?? null;
+        if (fileProjectId !== scopeProjectId) {
+          // Silently drop files outside the declared scope rather than 403'ing,
+          // so a single missing/moved row doesn't tank the whole export. The
+          // returned archive only contains files matching the scope.
+          continue;
+        }
         let archive_path: string;
         if (file.project_id) {
           const projectPath = getProjectPath(file.project_id);

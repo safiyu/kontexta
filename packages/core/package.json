@@ -1,13 +1,13 @@
 {
   "name": "kxta-core",
-  "version": "3.1.1",
+  "version": "3.2.0",
   "description": "Core context and command engines for Kontexta",
   "private": true,
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
-    "build": "tsc && cp -r src/db/migrations dist/db/ && mkdir -p dist/agent-rules && cp src/agent-rules/rules-block.md dist/agent-rules/rules-block.md",
+    "build": "tsc && node scripts/copy-assets.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "dev": "tsc --watch"
@@ -19,7 +19,8 @@
     "glob": "^11.0.0",
     "jsdom": "^29.1.1",
     "simple-git": "^3.27.0",
-    "turndown": "^7.2.4"
+    "turndown": "^7.2.4",
+    "undici": "^7.0.0"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.12",

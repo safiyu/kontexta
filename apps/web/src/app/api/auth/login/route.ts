@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSetting } from "kxta-core";
-import { verifyPassword, signSession } from "@/lib/auth";
+import { verifyPassword, signSession, getClientIp } from "@/lib/auth";
 import { ensureDbInitialized } from "@/lib/db-init";
 
 // Simple in-memory rate limiter: tracks failed attempts per IP.
@@ -27,7 +27,7 @@ function recordAttempt(ip: string, success: boolean) {
 }
 
 export async function POST(req: NextRequest) {
-  const ip = req.headers.get("x-forwarded-for") ?? req.headers.get("x-real-ip") ?? "unknown";
+  const ip = getClientIp(req);
 
   if (isRateLimited(ip)) {
     console.warn(`[Auth/Login] Rate limited: ${ip}`);

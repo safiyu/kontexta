@@ -78,15 +78,24 @@ export function createDatabase(dbPath: string): Database.Database {
       } catch {}
     };
     process.once("beforeExit", close);
-    // Brief drain window so in-flight requests can finish their DB work
-    // before we yank the connection out from under them.
+    // Real drain: stop accepting new work via setShuttingDown, await the
+    // in-flight tracker (bounded by SHUTDOWN_DRAIN_MS), then close. The
+    // previous setTimeout-only implementation never invoked the drain
+    // machinery, so in-flight ops were killed mid-flight regardless of
+    // how quickly they could have finished.
     const SHUTDOWN_DRAIN_MS = Number(process.env.KONTEXTA_SHUTDOWN_DRAIN_MS ?? 1500);
     const gracefulExit = (signal: string) => {
-      console.error(`[Database] ${signal} received, draining for ${SHUTDOWN_DRAIN_MS}ms before close`);
-      setTimeout(() => {
-        close();
+      console.error(`[Database] ${signal} received, draining up to ${SHUTDOWN_DRAIN_MS}ms before close`);
+      gracefulShutdown(SHUTDOWN_DRAIN_MS).then((remaining) => {
+        if (remaining > 0) {
+          console.error(`[Database] drain timed out with ${remaining} op(s) still in flight`);
+        }
         process.exit(0);
-      }, SHUTDOWN_DRAIN_MS);
+      }).catch((e) => {
+        console.error(`[Database] gracefulShutdown failed:`, e);
+        try { close(); } catch {}
+        process.exit(1);
+      });
     };
     process.once("SIGINT", () => gracefulExit("SIGINT"));
     process.once("SIGTERM", () => gracefulExit("SIGTERM"));
@@ -115,7 +124,11 @@ export function closeDatabase(): void {
   if (db) {
     // Force checkpoint WAL so writes are visible to other connections/processes
     // that open the same database file (critical for Docker MCP → Web UI sharing).
-    try { db.pragma("PRAGMA wal_checkpoint(TRUNCATE)"); } catch {}
+    // better-sqlite3's db.pragma() expects the body WITHOUT the "PRAGMA"
+    // keyword. The previous duplicate-keyword form threw a syntax error
+    // that the catch silently swallowed, so the checkpoint never ran —
+    // defeating the "WAL visible to other connections" guarantee.
+    try { db.pragma("wal_checkpoint(TRUNCATE)"); } catch {}
     db.close();
     db = null;
     globalThis.__kontextaDb = null;
@@ -130,6 +143,13 @@ export function closeDatabase(): void {
 export async function gracefulShutdown(timeoutMs: number = 10_000): Promise<number> {
   const { setShuttingDown, awaitDrain } = await import("../util/safety.js");
   setShuttingDown(true);
+  // Close file watchers FIRST so pending chokidar events stop firing before
+  // we tear down the DB. Otherwise the drained "in-flight" count goes back up
+  // mid-shutdown as new watcher events queue.
+  try {
+    const { closeAllFileWatchers } = await import("../watcher/index.js");
+    await closeAllFileWatchers();
+  } catch {}
   const remaining = await awaitDrain(timeoutMs);
   closeDatabase();
   return remaining;

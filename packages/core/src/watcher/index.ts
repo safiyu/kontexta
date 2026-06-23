@@ -17,10 +17,45 @@ function isUnder(filePath: string, baseDir: string): boolean {
   return !!rel && !rel.startsWith("..") && !path.isAbsolute(rel);
 }
 
+/**
+ * Active watchers — registered so a global shutdown can close them all
+ * without each caller wiring its own SIGINT handler. Without this, pending
+ * chokidar events fired after the DB was torn down, surfacing as
+ * "Database not initialized" noise (filtered above) but still leaking FDs
+ * and polling intervals.
+ */
+const _activeWatchers = new Set<FSWatcher>();
+let _shutdownHooksRegistered = false;
+
+function registerShutdownHooks() {
+  if (_shutdownHooksRegistered) return;
+  _shutdownHooksRegistered = true;
+  const closeAll = () => {
+    for (const w of _activeWatchers) {
+      try { void w.close(); } catch {}
+    }
+    _activeWatchers.clear();
+  };
+  process.once("beforeExit", closeAll);
+  // Don't add SIGINT/SIGTERM here — db/index.ts already owns those and will
+  // call closeAllWatchers() via the shutdown chain below if wired in.
+}
+
+/** Close every watcher created by createFileWatcher in this process. */
+export function closeAllFileWatchers(): Promise<void> {
+  const promises: Array<Promise<unknown>> = [];
+  for (const w of _activeWatchers) {
+    try { promises.push(Promise.resolve(w.close())); } catch {}
+  }
+  _activeWatchers.clear();
+  return Promise.all(promises).then(() => undefined);
+}
+
 export function createFileWatcher(
   watchPaths: string[],
   onEvent: (event: WatcherEvent) => void
 ): FSWatcher {
+  registerShutdownHooks();
   // Auto-ingest scope: files under <dataDir>/knowledge/ or a registered
   // project. Anything else is ignored (stray files would otherwise be
   // adopted as KB and could then be unlinked from disk on UI delete).
@@ -82,6 +117,13 @@ export function createFileWatcher(
     });
   });
 
+  _activeWatchers.add(watcher);
+  // Auto-deregister on close so the set doesn't leak references.
+  const origClose = watcher.close.bind(watcher);
+  watcher.close = (() => {
+    _activeWatchers.delete(watcher);
+    return origClose();
+  }) as typeof watcher.close;
   return watcher;
 }
 

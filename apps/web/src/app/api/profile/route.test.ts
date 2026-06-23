@@ -19,7 +19,7 @@ describe("profile API route", () => {
   });
 
   it("GET returns exists:false when profile doesn't exist", async () => {
-    const res = await GET();
+    const res = await GET(new NextRequest("http://localhost/api/profile"));
     expect(res.status).toBe(200);
     const data = await res.json();
     expect(data.exists).toBe(false);
@@ -33,7 +33,7 @@ describe("profile API route", () => {
     mkdirSync(knowledgeDir, { recursive: true });
     writeFileSync(profilePath, "# Name\n\nJohn Doe\n");
 
-    const res = await GET();
+    const res = await GET(new NextRequest("http://localhost/api/profile"));
     expect(res.status).toBe(200);
     const data = await res.json();
     expect(data.exists).toBe(true);

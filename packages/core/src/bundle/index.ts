@@ -66,11 +66,19 @@ function escapeForCdata(s: string): string {
   return s.replace(/\]\]>/g, "]]]]><![CDATA[>");
 }
 
+function escapeXmlAttr(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
 function renderXml(docs: DocFields[]): string {
   const inner = docs
     .map((d, i) => {
       const tagsAttr = d.tags.join(",");
-      return `  <document index="${i + 1}" id="${d.id}" path="${d.path}" project="${d.project}" tags="${tagsAttr}"><![CDATA[
+      return `  <document index="${i + 1}" id="${d.id}" path="${escapeXmlAttr(d.path)}" project="${escapeXmlAttr(d.project)}" tags="${escapeXmlAttr(tagsAttr)}"><![CDATA[
 ${escapeForCdata(d.content)}
 ]]></document>`;
     })
@@ -101,7 +109,10 @@ export async function bundleSearch(
   const format: BundleFormat = opts.format ?? "xml";
   const max_tokens = opts.max_tokens ?? 50000;
 
-  const hits = search(filters);
+  // Pass through a generous limit so a large token budget isn't silently
+  // capped at search()'s default of 50. Cap at 1000 (search()'s hard ceiling)
+  // — beyond that, a single bundle is unlikely to fit any usable budget.
+  const hits = search({ ...filters, limit: filters.limit ?? 1000 });
 
   const included: BundleIncludedItem[] = [];
   const skipped: BundleSkippedItem[] = [];

@@ -3,13 +3,36 @@ import type { EndpointData } from "../../types.js";
 
 const VALID_BADGES = new Set(["direct", "remove", "evolve"]);
 
-function escapeHtml(s: string): string {
-  return s
+function escapeHtml(s: unknown): string {
+  // Coerce defensively — endpoint YAML fields may be non-string after parsing
+  // (e.g. `description: 42` yields a number). The .replace chain throws on
+  // non-strings, which would crash the entire build with an obscure stack.
+  const str = s == null ? "" : String(s);
+  return str
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
+}
+
+function asStringOrUndefined(v: unknown): string | undefined {
+  if (v == null) return undefined;
+  if (typeof v === "string") return v;
+  if (typeof v === "number" || typeof v === "boolean") return String(v);
+  // Arrays/objects — stringify to JSON so the user sees what was emitted
+  // rather than the build crashing on `.replace`.
+  try { return JSON.stringify(v); } catch { return String(v); }
+}
+
+function asStringMapOrUndefined(v: unknown): Record<string, string> | undefined {
+  if (v == null) return undefined;
+  if (typeof v !== "object" || Array.isArray(v)) return undefined;
+  const out: Record<string, string> = {};
+  for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
+    out[k] = asStringOrUndefined(val) ?? "";
+  }
+  return out;
 }
 
 function endpointId(method: string, path: string): string {
@@ -58,12 +81,12 @@ export function renderEndpoints(body: string, collected: EndpointData[]): string
       id,
       method,
       path,
-      description: raw.description as string | undefined,
+      description: asStringOrUndefined(raw.description),
       badge,
-      headers: raw.headers as Record<string, string> | undefined,
-      statusCodes: raw.statusCodes as Record<string, string> | undefined,
-      request: raw.request as string | undefined,
-      response: raw.response as string | undefined,
+      headers: asStringMapOrUndefined(raw.headers),
+      statusCodes: asStringMapOrUndefined(raw.statusCodes),
+      request: asStringOrUndefined(raw.request),
+      response: asStringOrUndefined(raw.response),
     };
     collected.push(ep);
     const badgeHtml = badge

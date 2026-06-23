@@ -15,6 +15,34 @@ function nextId(): string {
   return `mermaid-${Date.now()}-${idCounter}`;
 }
 
+/**
+ * mermaid.render() appends temporary DOM nodes to `document.body` to compute
+ * SVG dimensions. On parse/render errors mermaid renders its built-in
+ * "Syntax error in text" diagram (the bomb / cherry-style icon + version
+ * banner) into that temp node AND skips its own cleanup path — so the error
+ * SVG ends up orphaned at the bottom of the page, often visible AFTER the
+ * footer. Remove everything keyed off the render id we passed in.
+ */
+function cleanupMermaidLeftovers(id: string): void {
+  if (typeof document === "undefined") return;
+  const exactIds = [id, `d${id}`, `i${id}`, `dom-${id}`];
+  for (const eid of exactIds) {
+    const el = document.getElementById(eid);
+    if (el) el.remove();
+  }
+  // Belt-and-suspenders: mermaid's internal id format has shifted across
+  // major versions; sweep any node whose id is prefixed with ours.
+  try {
+    const prefixed = document.querySelectorAll(
+      `[id="${id}"], [id^="d${id}"], [id^="i${id}"], [id^="dom-${id}"]`,
+    );
+    prefixed.forEach((el) => el.remove());
+  } catch {
+    // Selector failure (invalid id chars escaping into CSS) — fall back
+    // silently; the exact-id pass above is best-effort.
+  }
+}
+
 function sanitizeFilename(name?: string): string {
   if (!name) return "diagram";
   // Strip any path segments and trim
@@ -32,6 +60,7 @@ export function MermaidViewer({ source, className, filename }: MermaidViewerProp
 
   useEffect(() => {
     let cancelled = false;
+    const renderId = nextId();
     setError(null);
     setSvg(null);
 
@@ -44,15 +73,22 @@ export function MermaidViewer({ source, className, filename }: MermaidViewerProp
           theme: resolvedTheme === "light" ? "default" : "dark",
           securityLevel: "strict",
         });
-        const id = nextId();
-        const { svg: rendered } = await mermaid.render(id, source);
+        const { svg: rendered } = await mermaid.render(renderId, source);
         if (!cancelled) {
           setSvg(rendered);
           if (containerRef.current) {
             containerRef.current.innerHTML = rendered;
           }
         }
+        // Even on success, mermaid sometimes leaves its measuring sandbox
+        // attached. Cheap to sweep.
+        cleanupMermaidLeftovers(renderId);
       } catch (e) {
+        // Remove mermaid's leaked "syntax error" diagram from document.body
+        // before surfacing our own error UI — otherwise the user sees BOTH
+        // our pre block AND mermaid's orphaned error block (with version
+        // banner) tacked onto the end of the page.
+        cleanupMermaidLeftovers(renderId);
         if (!cancelled) {
           const msg = e instanceof Error ? e.message : String(e);
           setError(msg);
@@ -64,6 +100,10 @@ export function MermaidViewer({ source, className, filename }: MermaidViewerProp
 
     return () => {
       cancelled = true;
+      // Effect re-ran (source/theme changed) or component unmounted before
+      // the async render resolved: still sweep any node mermaid may have
+      // attached under this id.
+      cleanupMermaidLeftovers(renderId);
     };
   }, [source, resolvedTheme]);
 

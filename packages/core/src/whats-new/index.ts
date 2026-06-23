@@ -58,10 +58,25 @@ export function resolveSince(since: string, now: Date = new Date()): string {
     const unit = dur[2].toLowerCase();
     cutoff = new Date(now.getTime() - n * UNIT_MS[unit]);
   } else {
+    // Reject naive ISO timestamps (no Z, no +HH:MM offset) — Date.parse
+    // treats them as LOCAL time per ECMA-262, while updated_at is stored as
+    // UTC. A user in UTC+10 passing "2026-01-15T00:00:00" would get a cutoff
+    // 10 hours off from intent. Require explicit timezone so the meaning is
+    // unambiguous, OR accept date-only ("YYYY-MM-DD") which Date.parse
+    // correctly treats as UTC.
+    const isDateOnly = /^\d{4}-\d{2}-\d{2}$/.test(trimmed);
+    const hasTz = /([Zz]|[+-]\d{2}:?\d{2})$/.test(trimmed);
+    if (!isDateOnly && !hasTz) {
+      throw new RangeError(
+        `Naive ISO timestamp without timezone is ambiguous: ${JSON.stringify(since)}. ` +
+        `Append "Z" for UTC or "+HH:MM"/"-HH:MM" for an explicit offset (e.g. "2026-01-15T00:00:00Z"), ` +
+        `or use a relative duration like "1h", "7d", "2w".`
+      );
+    }
     const t = Date.parse(trimmed);
     if (Number.isNaN(t)) {
       throw new RangeError(
-        `Cannot parse \`since\`: ${JSON.stringify(since)}. Expected ISO 8601 timestamp or relative duration like "1h", "7d", "2w".`
+        `Cannot parse \`since\`: ${JSON.stringify(since)}. Expected ISO 8601 timestamp (with timezone) or relative duration like "1h", "7d", "2w".`
       );
     }
     cutoff = new Date(t);

@@ -34,6 +34,11 @@ function buildGitEnv(): Record<string, string | undefined> {
     "GIT_EXEC_PATH",
     // Prevent credential helper injection
     "GIT_CONFIG_COUNT", // clears GIT_CONFIG_COUNT + GIT_CONFIG_KEY_N/VALUE_N pairs
+    // Prevent host env from pointing git at attacker-controlled config files.
+    "GIT_CONFIG_GLOBAL", "GIT_CONFIG_SYSTEM", "GIT_CONFIG_NOSYSTEM",
+    // Prevent trace logs from leaking sensitive data (and from being a side-channel).
+    "GIT_TRACE", "GIT_TRACE_PACK_ACCESS", "GIT_TRACE_PACKET",
+    "GIT_TRACE_PERFORMANCE", "GIT_TRACE_SETUP", "GIT_TRACE_CURL",
   ]) {
     delete env[k];
   }
@@ -67,7 +72,11 @@ async function ensureOnMain(git: SimpleGit): Promise<void> {
   );
 }
 
-/** Validate a git remote URL. Allows https://, ssh://, git://, scp-form (user@host:path). */
+/** Validate a git remote URL. Allows https://, ssh://, git://, scp-form (user@host:path).
+ *
+ * Rejects http:// — backups containing source code shouldn't transit cleartext
+ * (especially if the URL embeds credentials). Use https:// or ssh:// instead.
+ */
 export function isValidGitRemoteUrl(url: string): boolean {
   if (typeof url !== "string" || url.length === 0 || url.length > 2048) return false;
   if (/[\s\x00-\x1f]/.test(url)) return false;
@@ -75,7 +84,7 @@ export function isValidGitRemoteUrl(url: string): boolean {
   if (/^[A-Za-z0-9_.+-]+@[A-Za-z0-9.-]+:[^\s]+$/.test(url)) return true; // scp-form
   try {
     const u = new URL(url);
-    return u.protocol === "https:" || u.protocol === "http:" || u.protocol === "ssh:" || u.protocol === "git:";
+    return u.protocol === "https:" || u.protocol === "ssh:" || u.protocol === "git:";
   } catch {
     return false;
   }
@@ -124,6 +133,59 @@ export async function commitFile(
     await git.add(["-f", relativePath]);
     // Path-scoped commit so concurrent activity in the repo can't get swept in.
     await git.commit(message, [relativePath], { "--no-verify": null, "--no-gpg-sign": null });
+  });
+}
+
+/**
+ * Record a file deletion in git: `git rm -f <path>` + commit.
+ *
+ * Symmetric with `commitFile` — without this, deleteFile() unlinks the file
+ * from disk but git still has it in HEAD. Any subsequent operation that
+ * touches the working tree (a `git pull` from syncGlobalVault, a manual
+ * `git restore`, a stash pop) resurrects the file, and the watcher's `add`
+ * handler then re-indexes it as a new row, making it look like delete
+ * silently "came back".
+ *
+ * Best-effort: if the file isn't in git (untracked) or git fails, we swallow
+ * the error rather than block the delete. The DB/disk delete already
+ * succeeded — leaving an uncommitted delete in the working tree is better
+ * than failing the user's delete action.
+ */
+export async function commitDelete(
+  repoDir: string,
+  filePath: string,
+  message: string,
+): Promise<void> {
+  await withLock(`git:${resolve(repoDir)}`, async () => {
+    try {
+      await ensureGitRepo(repoDir);
+      const git: SimpleGit = gitFor(repoDir);
+      const relativePath = relative(repoDir, filePath);
+      // Use `git rm -f --ignore-unmatch` so it's a no-op when the path was
+      // never tracked. --cached would only update the index; we want both
+      // index AND remove-from-working-tree-if-still-there.
+      try {
+        await git.raw(["rm", "-f", "--ignore-unmatch", "--", relativePath]);
+      } catch (rmErr) {
+        // Even if `git rm` itself errors, fall through to commit attempt —
+        // the disk file is already gone, so `git status` should still see
+        // the deletion.
+        console.warn(`commitDelete: git rm failed for ${relativePath}:`, (rmErr as Error).message);
+      }
+      // Commit the deletion, scoped to this path. `--allow-empty` so we
+      // don't bomb when the file wasn't tracked at all (nothing staged).
+      try {
+        await git.commit(message, [relativePath], {
+          "--no-verify": null,
+          "--no-gpg-sign": null,
+          "--allow-empty": null,
+        });
+      } catch (commitErr) {
+        console.warn(`commitDelete: git commit failed for ${relativePath}:`, (commitErr as Error).message);
+      }
+    } catch (e) {
+      console.warn(`commitDelete: failed for ${filePath}:`, (e as Error).message);
+    }
   });
 }
 
@@ -188,10 +250,22 @@ export async function restoreVersion(
     const git: SimpleGit = gitFor(repoDir);
     const relativePath = relative(repoDir, filePath);
 
+    // Reject anything that doesn't look like a hex commit hash (or a
+    // strict short hash). HEAD~N / branch names / arbitrary revspecs are
+    // intentionally NOT allowed via this entry point — restoreVersion is
+    // meant for points reachable via getHistory(), all of which return
+    // full SHAs. A value beginning with `-` would otherwise be parsed by
+    // git as a flag.
+    if (!/^[A-Fa-f0-9]{4,64}$/.test(commitHash)) {
+      throw new Error(`restoreVersion: commitHash must be a hex SHA, got: ${JSON.stringify(commitHash)}`);
+    }
+
     // cat-file (not simple-git's `show`) so non-utf-8 bytes survive intact.
+    // The `--` separator forces git to treat the next token as a positional,
+    // not a flag — defense-in-depth on top of the hex-only validation above.
     const result = spawnSync(
       "git",
-      ["-C", repoDir, "cat-file", "-p", `${commitHash}:${relativePath}`],
+      ["-C", repoDir, "cat-file", "-p", "--", `${commitHash}:${relativePath}`],
       { env: buildGitEnv() as NodeJS.ProcessEnv, encoding: "buffer", maxBuffer: 64 * 1024 * 1024 }
     );
     if (result.status !== 0) {

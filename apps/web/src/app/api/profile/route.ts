@@ -2,8 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { profileRelPath, getMissingSections, repairProfile, assembleProfile, getDataDir } from "kxta-core";
+import { checkAuth } from "@/lib/auth";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  if (!checkAuth(request)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
   try {
     const dataDir = getDataDir();
     const profilePath = join(dataDir, profileRelPath());
@@ -29,6 +33,9 @@ export async function GET() {
 }
 
 export async function PUT(request: NextRequest) {
+  if (!checkAuth(request)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
   try {
     const dataDir = getDataDir();
     const profilePath = join(dataDir, profileRelPath());

@@ -6,6 +6,15 @@ import type {
   SearchEntry,
 } from "../types.js";
 
+/** Slice without splitting a UTF-16 surrogate pair. */
+function safeSnippet(s: string, n: number): string {
+  if (s.length <= n) return s;
+  let end = n;
+  const code = s.charCodeAt(end - 1);
+  if (code >= 0xd800 && code <= 0xdbff) end -= 1;
+  return s.slice(0, end);
+}
+
 /**
  * Build a navigation tree grouped by folder.
  *
@@ -71,7 +80,7 @@ export function buildSearchIndex(docs: RenderedDoc[]): SearchEntry[] {
       folder: r.doc.folder,
       slug: r.doc.slug,
       url: `#${base}`,
-      snippet: r.doc.body.slice(0, 200),
+      snippet: safeSnippet(r.doc.body, 200),
     });
 
     // Heading entries

@@ -42,5 +42,17 @@ export function generateLlmsTxt(docs: RenderedDoc[], search: SearchEntry[], site
 function extractDescription(html: string): string {
   // Strip HTML tags and get first ~200 characters
   const text = html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
-  return text.length > 200 ? text.slice(0, 200) + "..." : text;
+  return safeSlice(text, 200);
+}
+
+/**
+ * Slice without splitting a UTF-16 surrogate pair: if `n` lands on a high
+ * surrogate, back off by one so the resulting string is well-formed.
+ */
+function safeSlice(s: string, n: number): string {
+  if (s.length <= n) return s;
+  let end = n;
+  const code = s.charCodeAt(end - 1);
+  if (code >= 0xd800 && code <= 0xdbff) end -= 1;
+  return s.slice(0, end) + "...";
 }

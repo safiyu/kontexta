@@ -46,17 +46,17 @@ export function FirstRunWizard({ open, onClose, initialStep = 1, projects, onSav
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Reset state when wizard opens
+  // Reset state when wizard opens or when its inputs (initialStep, projects)
+  // change while open. Without listing all read deps the wizard kept its
+  // stale defaults whenever projects arrived asynchronously after open.
   useEffect(() => {
-    if (open) {
-      setStep(initialStep);
-      setError(null);
-      // Default to first project if multiple exist
-      if (projects.length > 0 && !selectedProject) {
-        setSelectedProject(projects[0].id);
-      }
+    if (!open) return;
+    setStep(initialStep);
+    setError(null);
+    if (projects.length > 0 && !selectedProject) {
+      setSelectedProject(projects[0].id);
     }
-  }, [open]);
+  }, [open, initialStep, projects, selectedProject]);
 
   if (!open) return null;
 

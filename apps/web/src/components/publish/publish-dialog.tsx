@@ -11,7 +11,7 @@ interface PublishConfig {
   seo: boolean;
 }
 
-interface PublishResult {
+export interface PublishResult {
   success: boolean;
   output?: string;
   docCount?: number;
@@ -35,7 +35,7 @@ function displayName(folder: string, projectSlug: string | null): string {
   return folder;
 }
 
-export function PublishDialog({ isOpen, onClose, mode = "publish", onSwitchToPublish }: { isOpen: boolean; onClose: () => void; mode?: "publish" | "view"; onSwitchToPublish?: () => void }) {
+export function PublishDialog({ isOpen, onClose, mode = "publish", onSwitchToPublish, onPublishSuccess }: { isOpen: boolean; onClose: () => void; mode?: "publish" | "view"; onSwitchToPublish?: () => void; onPublishSuccess?: (result: PublishResult) => void }) {
   const [folders, setFolders] = useState<string[]>([]);
   const [selectedFolders, setSelectedFolders] = useState<string[]>([]);
   const [config, setConfig] = useState<PublishConfig>({
@@ -110,7 +110,14 @@ export function PublishDialog({ isOpen, onClose, mode = "publish", onSwitchToPub
       const res = await fetch(url);
       if (res.ok) {
         const data = await res.json();
-        setFolders(data.folders || []);
+        const list: string[] = data.folders || [];
+        setFolders(list);
+        // Auto-select everything by default. Previously the dialog loaded
+        // with zero selections — the orange Publish button stayed disabled
+        // (no onClick fires from a disabled <button>) and to the user it
+        // looked like "click does nothing, no error". The user can still
+        // untick anything they don't want before publishing.
+        setSelectedFolders(list);
       }
     } catch (err) {
       console.error("Failed to fetch folders:", err);
@@ -159,14 +166,20 @@ export function PublishDialog({ isOpen, onClose, mode = "publish", onSwitchToPub
       });
 
       const data: PublishResult = await res.json();
-      setResult(data);
 
-      if (data.success) {
-        setTimeout(() => {
-          onClose();
-        }, 2000);
-      } else {
+      if (!data.success) {
+        // Failures stay in the dialog so the user can read the message and
+        // adjust folders/options without losing context.
+        setResult(data);
         setError(data.error || "Publish failed");
+      } else {
+        // Success: close the dialog and bubble the result up so the parent
+        // can show a persistent toast (dismissable, with View Published).
+        // Previously the success panel was rendered at the bottom of the
+        // dialog where the user wouldn't see it without scrolling — they
+        // could publish from the top and have no idea anything happened.
+        onPublishSuccess?.(data);
+        onClose();
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Publish failed";
@@ -441,27 +454,8 @@ export function PublishDialog({ isOpen, onClose, mode = "publish", onSwitchToPub
                 </div>
               )}
 
-              {/* Result */}
-              {result && result.success && (
-                <div className="p-4 rounded-xl bg-green-500/10 border border-green-500/20 space-y-2">
-                  <p className="text-sm font-medium text-green-500">Publish successful!</p>
-                  <div className="text-xs text-[var(--text-secondary)] space-y-1">
-                    <p>📄 {result.docCount} documents published</p>
-                    {result.endpointCount !== undefined && (
-                      <p>🔗 {result.endpointCount} endpoints indexed</p>
-                    )}
-                    {result.termCount !== undefined && (
-                      <p>📚 {result.termCount} glossary terms indexed</p>
-                    )}
-                    {result.output && (
-                      <p>📁 Output: {result.output}</p>
-                    )}
-                    {result.llmsTxt && (
-                      <p>🤖 llms.txt generated at: {result.llmsTxt}</p>
-                    )}
-                  </div>
-                </div>
-              )}
+              {/* Success no longer rendered here — bubbled up to a parent toast.
+                  Only failures stay in the dialog so the user can fix and retry. */}
             </div>
           )}
         </div>
@@ -475,6 +469,14 @@ export function PublishDialog({ isOpen, onClose, mode = "publish", onSwitchToPub
           >
             Close
           </button>
+          {!isViewMode && selectedFolders.length === 0 && (
+            <span
+              className="text-xs text-[var(--text-secondary)] italic"
+              title="The orange Publish button is disabled until at least one folder is selected"
+            >
+              Select at least one folder to enable Publish
+            </span>
+          )}
           {!isViewMode && (
             <button
               onClick={handlePublish}

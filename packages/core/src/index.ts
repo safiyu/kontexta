@@ -12,7 +12,7 @@ export {
   findRelated, getTagsForFiles, type RelatedFileRecord,
 } from "./metadata/index.js";
 export { getSetting, setSetting, deleteSetting } from "./metadata/settings.js";
-export { commitFile, getHistory, getDiff, restoreVersion, syncBackup, syncGlobalVault, getGlobalRemote, setGlobalRemote, isValidGitRemoteUrl, type SyncStage } from "./git/index.js";
+export { commitFile, commitDelete, getHistory, getDiff, restoreVersion, syncBackup, syncGlobalVault, getGlobalRemote, setGlobalRemote, isValidGitRemoteUrl, type SyncStage } from "./git/index.js";
 export { withLock, track, inFlightCount, isShuttingDown, setShuttingDown, awaitDrain } from "./util/safety.js";
 export {
   RULE_BLOCK_VERSION,

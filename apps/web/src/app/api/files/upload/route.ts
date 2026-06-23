@@ -1,6 +1,6 @@
 import { checkAuth } from "@/lib/auth";
 import { NextRequest, NextResponse } from "next/server";
-import { createFile, listFiles, slugify } from "kxta-core";
+import { createFile, listFiles, slugify, withLock } from "kxta-core";
 import { ensureDbInitialized, DATA_DIR } from "@/lib/db-init";
 import { basename, extname, dirname } from "node:path";
 
@@ -124,35 +124,43 @@ export async function POST(req: NextRequest) {
 
   const destination = projectId ? "project" : "knowledge";
 
-  // Collision avoidance must compare against the actual on-disk filename
-  // createFile will produce — that's `slugify(stem) + ".md"`, NOT the
-  // original upload name. Otherwise `Auth Notes.md` and `auth-notes.md`
-  // both slug to `auth-notes.md` and clobber each other while the
-  // response dishonestly reports success.
-  // Also scope to the destination directory only (same `folder`), not the
-  // entire project — `notes.md` in folder A shouldn't conflict with one in B.
-  const existing = listFiles({
-    dataDir: DATA_DIR,
-    filters: { project_id: projectId ?? null, folder: folder || undefined },
-  });
-  const existingBasenames = new Set<string>(
-    existing
-      .filter((f) => {
-        // listFiles' folder filter is path-segment LIKE, which can match
-        // nested subfolders. Restrict to the exact destination directory
-        // by comparing the file's dirname.
-        if (!folder) return true; // root: include all of this scope
-        const dir = dirname(f.path);
-        return dir.endsWith("/" + folder) || dir.endsWith("\\" + folder) || dir === folder;
-      })
-      .map((f) => basename(f.path))
-  );
-
+  // Hold a per-folder advisory lock for the entire collision-detection +
+  // create loop. Without this, two concurrent uploads of the same name into
+  // the same folder both snapshot `existing` BEFORE either writes, both
+  // resolve `nextAvailableName` to the same value, and the second
+  // createFile silently clobbers the first.
+  const lockKey = `upload:${projectId ?? "kb"}:${folder || ""}`;
   const uploaded: UploadedItem[] = [];
   const rejected: RejectedItem[] = [];
-  let runningTotal = 0;
 
-  for (const file of files) {
+  await withLock(lockKey, async () => {
+    // Collision avoidance must compare against the actual on-disk filename
+    // createFile will produce — that's `slugify(stem) + ".md"`, NOT the
+    // original upload name. Otherwise `Auth Notes.md` and `auth-notes.md`
+    // both slug to `auth-notes.md` and clobber each other.
+    // Path-segment-exact match: avoid the suffix-ish hazard where
+    // `endsWith("/" + folder)` matches `/whatever/<folder>` instead of just
+    // `/projectRoot/<folder>`.
+    const folderSegment = folder ? folder.replace(/\\/g, "/") : "";
+    const existing = listFiles({
+      dataDir: DATA_DIR,
+      filters: { project_id: projectId ?? null, folder: folder || undefined },
+    });
+    const existingBasenames = new Set<string>(
+      existing
+        .filter((f) => {
+          if (!folder) return true;
+          const dir = dirname(f.path).replace(/\\/g, "/");
+          // Match if dir ends with "/<folder>" as a full segment, not as a
+          // string suffix that could collide with `/other-folder`.
+          return dir === folderSegment || dir.endsWith("/" + folderSegment);
+        })
+        .map((f) => basename(f.path))
+    );
+
+    let runningTotal = 0;
+
+    for (const file of files) {
     const original = file.name;
     const ext = extname(original).toLowerCase();
     if (!ALLOWED_EXT.has(ext)) {
@@ -213,7 +221,8 @@ export async function POST(req: NextRequest) {
     } catch (e: any) {
       rejected.push({ name: original, reason: `create_failed: ${e?.message ?? String(e)}` });
     }
-  }
+    }
+  });
 
   return NextResponse.json({ uploaded, rejected });
 }

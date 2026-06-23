@@ -1,5 +1,44 @@
 # Changelog
 
+## 3.2.0 — Security hardening, journal reliability, and publish resilience
+
+### Added
+
+- **`/api/reindex` endpoint.** Triggers a full index refresh across all projects and the KB. Only one run at a time (concurrent requests get 409).
+- **DB-backed cross-process journal locks.** Migration 006 adds `journal_locks`, replacing file-based cooldown locks with atomic SQLite WAL transactions. `acquireCooldown` now returns an ownership token.
+- **`closeAllFileWatchers()`.** Global watcher registry for clean process shutdown.
+- **`getClientIp()` in `auth.ts`.** Proxy-aware IP resolution, gated behind `auth_trust_proxy_headers` to prevent rate-limit bypass via spoofed headers.
+- **`safe-path.ts`.** `assertSafeUserPath` / `assertSafeOutputPath` resolve symlinks and block access to system and sensitive home directories.
+- **Configurable FTS result limit.** `SearchFilters.limit` (default 50, max 1000) lets large bundles include more than 50 files.
+
+### Fixed
+
+- **CSRF on logout.** `Origin` is now validated against `Host` / `X-Forwarded-Host` before the session cookie is cleared.
+- **Session token expiry.** Tokens older than 30 days are rejected; HMAC length is checked before timing-safe comparison.
+- **Publish endpoints gated behind auth.** `/api/publish` and `/api/publish/html` now return 401 for unauthenticated requests.
+- **Path traversal guards on project registration and publish output.** Paths are symlink-resolved and checked against system prefixes before use.
+- **Export ZIP scope enforcement.** `file_ids` mode requires an explicit `scope=kb|<id>` parameter; out-of-scope files are silently dropped.
+- **Project PATCH TOCTOU fix.** Missing-file pre-flight check now runs inside `withLock` so the filesystem can't change between check and DB rewrite.
+- **Journal distill boundary dedup.** Per-event keys stored in `HighWater` prevent events at the same millisecond from being lost or double-processed.
+- **Journal `started_at` preserved on re-distill.** `mergeFrontmatter` retains the original start date from the existing file.
+- **Housekeep EXDEV fallback.** Cross-device archive moves now fall back to copy + unlink instead of aborting.
+- **`JournalWriter` post-close safety.** Events written after `close()` are silently dropped instead of throwing `EBADF`.
+- **`resolveSince` rejects naive ISO timestamps.** Timestamps without a timezone suffix now throw a clear `RangeError`.
+- **Publish resilience.** Unreadable or bad-frontmatter docs are skipped with a warning instead of aborting the whole run.
+- **Publish nested folder routing.** `routeKey()` uses the last `/` as the boundary, fixing navigation for nested folder paths.
+- **Publish endpoint ID collisions.** Duplicate IDs across docs are uniquified with the doc-key prefix; rendered HTML is patched to match.
+- **Publish nav URI encoding.** `href` values are `encodeURI`-encoded; `data-key` attributes use raw values, fixing routing for special-character folder names.
+- **Publish dialog UX.** Folders auto-selected on open; success closes the dialog and bubbles up a toast instead of rendering silently at the bottom.
+- **Content pane stale fetch.** `AbortController` cancels in-flight requests on file switch; `onDirtyChange` stabilised via ref.
+- **`useProjects` stale response guard.** Monotonic sequence number prevents out-of-order responses from clobbering newer data.
+
+### Changed
+
+- **Shell scripts hardened.** `build-all.sh` and `launch-ui.sh` use `#!/usr/bin/env bash` + `set -euo pipefail`; launch script checks `BUILD_ID` instead of `.next/` directory.
+- **Turbo `test` and `lint` declare `outputs: []`.** Prevents spurious cache replays.
+
+---
+
 ## 3.1.1 — Publish template fixes & build repair
 
 ### Fixed

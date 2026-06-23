@@ -3,6 +3,14 @@ import { join } from "node:path";
 
 export interface HighWater {
   last_event_ts: string;
+  /**
+   * Dedup keys for events sharing the exact last_event_ts. On the next run,
+   * events at the boundary timestamp that match one of these keys are
+   * skipped — events at the same ms that did NOT make this batch will be
+   * processed. Without this, sub-millisecond-collision events were
+   * silently lost across runs.
+   */
+  last_event_keys?: string[];
   last_distilled_at: string;
   events_processed: number;
 }

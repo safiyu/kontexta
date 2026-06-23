@@ -25,6 +25,7 @@ describe("Migration 004: journaling tables", () => {
     expect(tables).toEqual([
       "journal_git_refs",
       "journal_high_water",
+      "journal_locks",
       "journal_meta",
       "journal_touches",
     ]);

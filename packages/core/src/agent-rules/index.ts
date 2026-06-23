@@ -149,9 +149,37 @@ function loadRulesBlockBody(): string {
   );
 }
 
-export const RULES_BLOCK_BODY = loadRulesBlockBody();
+// Try eagerly so existing `import { RULES_BLOCK_BODY }` consumers still see
+// the content, but DON'T throw if the asset is missing — previously a missing
+// rules-block.md broke every `import "kxta-core"` (web, MCP, publish, etc.)
+// even for callers that never touch agent-rules. The deferred error surfaces
+// only when getRulesBlockBody() is actually called.
+let _rulesBlockBody: string | null = null;
+let _rulesBlockError: Error | null = null;
+try {
+  _rulesBlockBody = loadRulesBlockBody();
+} catch (e: any) {
+  _rulesBlockError = e instanceof Error ? e : new Error(String(e));
+}
+export function getRulesBlockBody(): string {
+  if (_rulesBlockBody != null) return _rulesBlockBody;
+  // Retry once in case the file appeared after module load (HMR / lazy copy).
+  try {
+    _rulesBlockBody = loadRulesBlockBody();
+    _rulesBlockError = null;
+    return _rulesBlockBody;
+  } catch (e: any) {
+    _rulesBlockError = e instanceof Error ? e : new Error(String(e));
+    throw _rulesBlockError;
+  }
+}
+export const RULES_BLOCK_BODY = _rulesBlockBody ?? "";
 
-const ROOT_FILES = ["CLAUDE.md", "AGENTS.md", "GEMINI.md", "ANTIGRAVITY.md", ".aider.conf.yml", ".clinerules", ".github/copilot-instructions.md"] as const;
+// Note: .aider.conf.yml is intentionally NOT in this list. It's a YAML file;
+// injectOrUpdate writes HTML-comment markers (<!-- BEGIN... -->) which would
+// syntax-corrupt YAML. Aider's rules go in .aider/kontexta.md (see SCAFFOLDS),
+// referenced from the YAML via a `read:` directive.
+const ROOT_FILES = ["CLAUDE.md", "AGENTS.md", "GEMINI.md", "ANTIGRAVITY.md", ".clinerules", ".github/copilot-instructions.md"] as const;
 const SUBDIR_GLOBS = [
   { dir: ".cursor/rules", ext: ".mdc" },
   { dir: ".continue/rules", ext: ".md" },
@@ -300,9 +328,27 @@ export interface SyncResult {
   };
 }
 
+let _atomicWriteSeq = 0;
 function atomicWrite(absPath: string, content: string): void {
+  // Refuse to write THROUGH a symlink. The intended use is to manage agent
+  // context files; replacing a user's intentional symlink with a regular
+  // file via the renameSync below would silently undo their setup.
+  try {
+    const st = lstatSync(absPath);
+    if (st.isSymbolicLink()) {
+      throw new Error(`Refusing to write through symlink: ${absPath}`);
+    }
+  } catch (e: any) {
+    if (e?.code !== "ENOENT") {
+      // Re-throw the explicit symlink error; ignore stat-failures so a
+      // missing parent dir still goes through the mkdir path below.
+      if (e?.message?.startsWith("Refusing")) throw e;
+    }
+  }
   mkdirSync(dirname(absPath), { recursive: true });
-  const tmp = `${absPath}.tmp.${process.pid}.${Date.now()}`;
+  // Counter + pid + ms gives a unique tmp name even when two concurrent
+  // calls land on the same millisecond inside the same process.
+  const tmp = `${absPath}.tmp.${process.pid}.${Date.now()}.${++_atomicWriteSeq}`;
   try {
     writeFileSync(tmp, content, "utf8");
     renameSync(tmp, absPath);
@@ -342,7 +388,7 @@ export function syncAgentRules(opts: SyncOpts): SyncResult {
       skipped.push({ path: relPath, reason: "escape" });
       return { written, skipped };
     }
-    const initial = scaffold.header(project) + RULES_BLOCK_BODY;
+    const initial = scaffold.header(project) + getRulesBlockBody();
     atomicWrite(absPath, initial);
     written.push({ path: relPath, action: "created", version: RULE_BLOCK_VERSION });
     return {
@@ -395,7 +441,7 @@ export function syncAgentRules(opts: SyncOpts): SyncResult {
 
     let result;
     try {
-      result = injectOrUpdate(content, RULES_BLOCK_BODY, RULE_BLOCK_VERSION);
+      result = injectOrUpdate(content, getRulesBlockBody(), RULE_BLOCK_VERSION);
     } catch (e) {
       if (e instanceof InjectError) {
         skipped.push({ path: rel, reason: e.code === "malformed" ? "malformed marker" : "duplicate marker" });
