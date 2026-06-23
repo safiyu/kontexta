@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.2.2
+
+### Fixed
+
+- **MCP undici runtime dependency.** Added `undici` to `dependencies` in `apps/mcp/package.json` to fix `ERR_MODULE_NOT_FOUND` runtime crashes in strict package resolution environments (e.g. CI/CD runners).
+
 ## 3.2.1
 
 ### Fixed
