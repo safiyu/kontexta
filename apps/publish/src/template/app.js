@@ -162,6 +162,34 @@ function showDoc(key) {
   }
 
   initScrollSpy();
+  attachCopyButtons();
+}
+
+/** Add a "Copy" button to every <pre> in the content pane. Idempotent —
+ *  re-running on the same DOM (e.g. after route change) won't duplicate. */
+function attachCopyButtons() {
+  document.querySelectorAll('#content pre').forEach((pre) => {
+    if (pre.querySelector(':scope > .copy-btn')) return;
+    pre.classList.add('has-copy');
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'copy-btn';
+    btn.setAttribute('aria-label', 'Copy code');
+    btn.textContent = 'Copy';
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const text = (pre.querySelector('code') || pre).innerText;
+      try {
+        await navigator.clipboard.writeText(text);
+        btn.textContent = 'Copied';
+        btn.classList.add('copied');
+      } catch {
+        btn.textContent = 'Failed';
+      }
+      setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 1500);
+    });
+    pre.appendChild(btn);
+  });
 }
 
 // scroll-spy for TOC

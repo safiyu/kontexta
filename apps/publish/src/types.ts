@@ -10,6 +10,8 @@ export interface SiteConfig {
   brand: string;
   logo?: string;
   hero: boolean;
+  /** Optional subtitle rendered under the hero title. */
+  tagline?: string;
 }
 export interface PublishConfig {
   source: SourceConfig;
@@ -20,8 +22,8 @@ export interface PublishConfig {
   llmsTxt?: boolean;
   /** Emit OpenGraph / SEO meta tags in the HTML head. */
   seo?: boolean;
-  /** CSS theme preset: "default" | "minimal" | "api-ref". */
-  theme?: "default" | "minimal" | "api-ref";
+  /** CSS theme preset. */
+  theme?: "default" | "minimal" | "api-ref" | "flat" | "terminal" | "paper" | "solarized" | "brutalist" | "ocean";
 }
 
 /** Frontmatter we read from each doc (all optional). */

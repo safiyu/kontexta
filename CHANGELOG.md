@@ -1,5 +1,20 @@
 # Changelog
 
+## 3.3.0 — Publish theme expansion & journal auto-slug
+
+### Added
+
+- **Six new publish themes.** `flat`, `terminal`, `paper`, `solarized`, `brutalist`, and `ocean` join the existing `default` / `minimal` / `api-ref` set. Each ships as its own CSS file under `apps/publish/src/template/`, is accepted by the CLI, `PublishConfig`, and the `/api/publish` request body.
+- **`tagline` in `SiteConfig`.** Optional subtitle rendered under the hero title; wired through the publish pipeline, HTML shell, `/api/publish`, and the web publish dialog.
+- **`hero` toggle on `/api/publish`.** Requests can now opt out of the hero block via `hero: false`; defaults to `true`.
+- **Publish `lastBuilt` / `sizeBytes` in status response.** `GET /api/publish` now returns the `index.html` mtime (ISO) and size, so the dialog can show a "built Xm ago" hint.
+- **Theme picker with swatches in publish dialog.** Nine themes surface as clickable tiles with a 4-swatch preview, plus a "last built" relative-time chip.
+- **Auto-resolved project slug in journal capture.** New `resolveProjectSlug()` in `apps/mcp/src/journal-capture.ts` picks the slug from (in order) the active MCP context, `KONTEXTA_DEFAULT_PROJECT_SLUG` env, an exact `projects.path` match against `cwd`, or the longest matching prefix. Result cached for 30s; `resetProjectSlugCache()` exposed for tests. Falls back to `"default"` if the DB is unavailable.
+
+### Changed
+
+- **`pnpm install` now compiles `better-sqlite3`.** Added `onlyBuiltDependencies: [better-sqlite3]` to `pnpm-workspace.yaml` so pnpm 10's build-script allowlist runs the native rebuild automatically on fresh installs — no more `pnpm rebuild better-sqlite3` after every clone.
+
 ## 3.2.2
 
 ### Fixed

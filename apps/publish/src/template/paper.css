@@ -1,0 +1,33 @@
+/* ---- paper theme — warm off-white, serif body, printed-manual feel ---- */
+:root {
+  --accent: #8b4513;
+  --accent-soft: rgba(139,69,19,0.08);
+  --bg-primary: #faf6f1;
+  --bg-secondary: #f3ece1;
+  --bg-tertiary: #e8ddc9;
+  --text-primary: #2b2620;
+  --text-secondary: #4a4036;
+  --muted: #8a7c6a;
+  --border: #d9cdb8;
+  --success: #4d7c0f; --warning: #b45309; --danger: #991b1b;
+  --font-sans: 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif;
+  --font-mono: 'Courier New', Courier, monospace;
+}
+.dark {
+  --accent: #d2a679;
+  --accent-soft: rgba(210,166,121,0.12);
+  --bg-primary: #1f1b16;
+  --bg-secondary: #2a241d;
+  --bg-tertiary: #352d24;
+  --text-primary: #ede4d3;
+  --text-secondary: #c9bea7;
+  --muted: #8a7c6a;
+  --border: #3a3128;
+}
+
+.content { max-width: 720px; margin: 0 auto; }
+.content h1, .content h2, .content h3, .brand { font-family: var(--font-sans); font-style: normal; }
+.content p { text-align: justify; hyphens: auto; }
+.content blockquote { font-style: italic; border-left-style: double; border-left-width: 4px; }
+.api-method { font-family: var(--font-mono); }
+.content pre { background: var(--bg-secondary); border-color: var(--border); }

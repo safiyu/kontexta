@@ -1,0 +1,37 @@
+/* ---- terminal theme — green phosphor on black, CRT vibes ---- */
+:root {
+  --accent: #00ff41;
+  --accent-soft: rgba(0,255,65,0.10);
+  --bg-primary: #000000;
+  --bg-secondary: #0a0f0a;
+  --bg-tertiary: #111811;
+  --text-primary: #00ff41;
+  --text-secondary: #33cc33;
+  --muted: #007a1f;
+  --border: #1a3a1a;
+  --success: #00ff41; --warning: #ffb000; --danger: #ff4136;
+  --font-sans: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', ui-monospace, monospace;
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', ui-monospace, monospace;
+}
+.dark {
+  --accent: #00ff41;
+  --bg-primary: #000000;
+  --bg-secondary: #0a0f0a;
+  --bg-tertiary: #111811;
+  --text-primary: #00ff41;
+  --text-secondary: #33cc33;
+  --muted: #007a1f;
+  --border: #1a3a1a;
+}
+
+body { text-shadow: 0 0 2px rgba(0,255,65,0.4); }
+.topbar button, .api-endpoint, .glossary-item, .content pre,
+.modal-card, .search-palette, .mermaid-wrap {
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+.api-method { border-radius: 0 !important; text-transform: uppercase; }
+.content h1::before { content: "$ "; color: var(--muted); }
+.content h2::before { content: "> "; color: var(--muted); }
+.nav-item.active::before { content: "▶ "; }
+::selection { background: var(--accent); color: #000 !important; }

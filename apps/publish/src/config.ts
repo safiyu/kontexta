@@ -14,7 +14,7 @@ export type FileConfig = Partial<{
   output: string;
   llmsTxt: boolean;
   seo: boolean;
-  theme: "default" | "minimal" | "api-ref";
+  theme: "default" | "minimal" | "api-ref" | "flat" | "terminal" | "paper" | "solarized" | "brutalist" | "ocean";
 }>;
 
 /** CLI overrides parsed from flags. */
@@ -25,7 +25,7 @@ export interface CliOverrides {
   brand?: string;
   llmsTxt?: boolean;
   seo?: boolean;
-  theme?: "default" | "minimal" | "api-ref";
+  theme?: "default" | "minimal" | "api-ref" | "flat" | "terminal" | "paper" | "solarized" | "brutalist" | "ocean";
 }
 
 export function mergeConfig(
@@ -53,7 +53,7 @@ export function mergeConfig(
   return cfg;
 }
 
-const VALID_THEMES = new Set(["default", "minimal", "api-ref"]);
+const VALID_THEMES = new Set(["default", "minimal", "api-ref", "flat", "terminal", "paper", "solarized", "brutalist", "ocean"]);
 
 export function loadConfigFile(path: string): FileConfig {
   const raw = JSON.parse(readFileSync(path, "utf8"));
