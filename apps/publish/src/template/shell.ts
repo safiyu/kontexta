@@ -68,9 +68,34 @@ function generateSeoMeta(config: PublishConfig, docs: RenderedDoc[]): string {
 ${ogImage}`;
 }
 
+/** Build the landing hero block. The matching `.hero` styles already exist
+ *  in every theme; this is the missing markup that wires them up. */
+function renderHero(config: PublishConfig): string {
+  const headline = escapeHtml(config.site.title);
+  const brand = config.site.brand ? `<span class="brand">${escapeHtml(config.site.brand)}</span>` : "";
+  const tagline = config.site.tagline ? `<p class="hero-tagline">${escapeHtml(config.site.tagline)}</p>` : "";
+  const logo = config.site.logo
+    ? `<img class="hero-logo" src="${escapeAttr(config.site.logo)}" alt="${escapeAttr(config.site.brand || config.site.title)}">`
+    : "";
+  return `<div class="hero">${logo}${brand}<h1>${headline}</h1>${tagline}</div>`;
+}
+
 export function assembleShell(input: ShellInput): string {
   const { config, nav, docs, search } = input;
-  const theme = readAsset("theme.css");
+  // Standalone themes ship a complete stylesheet; layered themes are variable
+  // overrides applied on top of minimal.css as a structural base.
+  const STANDALONE_THEMES: Record<string, string> = {
+    default: "theme.css",
+    minimal: "minimal.css",
+    "api-ref": "api-ref.css",
+  };
+  const LAYERED_THEMES = new Set(["flat", "terminal", "paper", "solarized", "brutalist", "ocean"]);
+  const themeName = config.theme ?? "default";
+  const theme = STANDALONE_THEMES[themeName]
+    ? readAsset(STANDALONE_THEMES[themeName])
+    : LAYERED_THEMES.has(themeName)
+      ? readAsset("minimal.css") + "\n" + readAsset(`${themeName}.css`)
+      : readAsset("theme.css");
   const app = readAsset("app.js");
 
   const docsMap: Record<string, { html: string; toc: RenderedDoc["toc"]; title: string; folder: string; slug: string }> = {};
@@ -104,11 +129,22 @@ export function assembleShell(input: ShellInput): string {
   }
 
 
+  // Prepend a hero block to the landing doc (first doc) when site.hero is on.
+  // Lives inside the first doc's HTML so navigating away clears it naturally;
+  // no separate "home" route is needed.
+  if (config.site.hero !== false) {
+    const firstNavItem = nav[0]?.items[0];
+    const firstKey = firstNavItem ? `${firstNavItem.folder}/${firstNavItem.slug}` : null;
+    if (firstKey && docsMap[firstKey]) {
+      docsMap[firstKey].html = renderHero(config) + docsMap[firstKey].html;
+    }
+  }
+
   // SEO / OpenGraph meta tags
   const seoMeta = config.seo ? generateSeoMeta(config, docs) : "";
 
-  // Theme class for HTML element
-  const themeClass = config.theme === "minimal" ? "minimal" : config.theme === "api-ref" ? "api-ref" : "";
+  // Theme class for HTML element (default has no class)
+  const themeClass = themeName === "default" ? "" : themeName;
 
   return `<!doctype html>
 <html lang="en" class="dark${themeClass ? " " + themeClass : ""}">

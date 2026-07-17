@@ -6,7 +6,9 @@ interface PublishConfig {
   folders: string[];
   title: string;
   brand: string;
-  theme: "default" | "minimal" | "api-ref";
+  tagline: string;
+  hero: boolean;
+  theme: "default" | "minimal" | "api-ref" | "flat" | "terminal" | "paper" | "solarized" | "brutalist" | "ocean";
   llmsTxt: boolean;
   seo: boolean;
 }
@@ -27,6 +29,35 @@ interface ProjectOption {
   slug: string;
 }
 
+type ThemeKey = PublishConfig["theme"];
+
+/** "Just now" / "5m ago" / "3h ago" / "2d ago" / absolute date if older than a week. */
+function formatRelative(iso: string | null): string | null {
+  if (!iso) return null;
+  const t = new Date(iso).getTime();
+  if (!Number.isFinite(t)) return null;
+  const diff = Date.now() - t;
+  if (diff < 60_000) return "just now";
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
+  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
+  if (diff < 7 * 86_400_000) return `${Math.floor(diff / 86_400_000)}d ago`;
+  return new Date(iso).toLocaleDateString();
+}
+
+/** Theme options shown in the picker, with a 4-swatch preview pulled from
+ *  the theme's CSS (accent + the three main bg/text colors). */
+const THEME_OPTIONS: { key: ThemeKey; label: string; swatches: string[] }[] = [
+  { key: "default", label: "Default", swatches: ["#B4781E", "#1a1a1a", "#e5e5e5", "#252525"] },
+  { key: "minimal", label: "Minimal", swatches: ["#2563eb", "#ffffff", "#1a1a1a", "#e0e0e0"] },
+  { key: "api-ref", label: "API Ref", swatches: ["#0ea5e9", "#0c1222", "#e2e8f0", "#1e293b"] },
+  { key: "flat", label: "Flat", swatches: ["#e91e63", "#00bcd4", "#ff9800", "#9c27b0"] },
+  { key: "terminal", label: "Terminal", swatches: ["#00ff41", "#000000", "#33cc33", "#1a3a1a"] },
+  { key: "paper", label: "Paper", swatches: ["#8b4513", "#faf6f1", "#2b2620", "#d9cdb8"] },
+  { key: "solarized", label: "Solarized", swatches: ["#b58900", "#268bd2", "#2aa198", "#dc322f"] },
+  { key: "brutalist", label: "Brutalist", swatches: ["#000000", "#ffff00", "#ffffff", "#555555"] },
+  { key: "ocean", label: "Ocean", swatches: ["#5eead4", "#c4b5fd", "#fda4af", "#0b1220"] },
+];
+
 /** Display name: "ProjectName: folder" for project folders, plain name for KB folders. */
 function displayName(folder: string, projectSlug: string | null): string {
   if (projectSlug) {
@@ -42,6 +73,8 @@ export function PublishDialog({ isOpen, onClose, mode = "publish", onSwitchToPub
     folders: [],
     title: "Kontexta Docs",
     brand: "Kontexta",
+    tagline: "",
+    hero: true,
     theme: "default",
     llmsTxt: true,
     seo: true,
@@ -51,6 +84,7 @@ export function PublishDialog({ isOpen, onClose, mode = "publish", onSwitchToPub
   const [error, setError] = useState<string | null>(null);
   const [viewLoading, setViewLoading] = useState(false);
   const [viewExists, setViewExists] = useState(false);
+  const [lastBuilt, setLastBuilt] = useState<string | null>(null);
 
   // Project selection state
   const [projects, setProjects] = useState<ProjectOption[]>([]);
@@ -63,11 +97,22 @@ export function PublishDialog({ isOpen, onClose, mode = "publish", onSwitchToPub
       } else {
         fetchProjects();
         fetchFolders();
+        fetchLastBuilt();
       }
       setResult(null);
       setError(null);
     }
   }, [isOpen, mode]);
+
+  const fetchLastBuilt = async () => {
+    try {
+      const res = await fetch("/api/publish");
+      if (res.ok) {
+        const data = await res.json();
+        setLastBuilt(data?.lastBuilt ?? null);
+      }
+    } catch { /* swallow — footer line just won't render */ }
+  };
 
   useEffect(() => {
     if (isOpen && mode === "publish") {
@@ -158,6 +203,8 @@ export function PublishDialog({ isOpen, onClose, mode = "publish", onSwitchToPub
           folders: selectedFolders,
           title: config.title,
           brand: config.brand,
+          tagline: config.tagline,
+          hero: config.hero,
           theme: config.theme,
           llmsTxt: config.llmsTxt,
           seo: config.seo,
@@ -403,23 +450,56 @@ export function PublishDialog({ isOpen, onClose, mode = "publish", onSwitchToPub
                 </div>
               </div>
 
+              {/* Hero toggle + tagline */}
+              <div>
+                <label className="flex items-center gap-2 cursor-pointer mb-2">
+                  <input
+                    type="checkbox"
+                    checked={config.hero}
+                    onChange={(e) => setConfig((c) => ({ ...c, hero: e.target.checked }))}
+                    className="w-4 h-4 rounded border-[var(--border)] text-[#B4781E] focus:ring-[#B4781E] focus:ring-offset-0 bg-[var(--bg-tertiary)]"
+                  />
+                  <span className="text-sm font-medium text-[var(--text-secondary)]">
+                    Show hero on landing page
+                  </span>
+                </label>
+                {config.hero && (
+                  <input
+                    type="text"
+                    value={config.tagline}
+                    onChange={(e) => setConfig((c) => ({ ...c, tagline: e.target.value }))}
+                    placeholder="Optional tagline shown under the title"
+                    className="w-full px-3 py-2 rounded-xl bg-[var(--bg-tertiary)] border border-[var(--border)] text-[var(--text-primary)] text-sm focus:outline-none focus:ring-2 focus:ring-[#B4781E]/50"
+                  />
+                )}
+              </div>
+
               {/* Theme Selection */}
               <div>
                 <label className="block text-sm font-medium text-[var(--text-secondary)] mb-3">
                   Theme
                 </label>
                 <div className="grid grid-cols-3 gap-3">
-                  {(["default", "minimal", "api-ref"] as const).map((theme) => (
+                  {THEME_OPTIONS.map(({ key, label, swatches }) => (
                     <button
-                      key={theme}
-                      onClick={() => setConfig((c) => ({ ...c, theme }))}
-                      className={`px-4 py-3 rounded-xl border-2 text-sm font-medium transition-all ${
-                        config.theme === theme
+                      key={key}
+                      onClick={() => setConfig((c) => ({ ...c, theme: key }))}
+                      className={`px-3 py-3 rounded-xl border-2 text-sm font-medium transition-all flex flex-col items-start gap-2 ${
+                        config.theme === key
                           ? "border-[#B4781E] bg-[#B4781E]/10 text-[#B4781E]"
                           : "border-[var(--border)] bg-[var(--bg-tertiary)]/30 text-[var(--text-secondary)] hover:border-[var(--border)]"
                       }`}
                     >
-                      {theme.charAt(0).toUpperCase() + theme.slice(1)}
+                      <span>{label}</span>
+                      <span className="flex gap-1">
+                        {swatches.map((c, i) => (
+                          <span
+                            key={i}
+                            className="w-3 h-3 rounded-full border border-black/10"
+                            style={{ background: c }}
+                          />
+                        ))}
+                      </span>
                     </button>
                   ))}
                 </div>
@@ -461,7 +541,14 @@ export function PublishDialog({ isOpen, onClose, mode = "publish", onSwitchToPub
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-[var(--border)] bg-[var(--bg-tertiary)]/30">
+        <div className="flex items-center justify-between gap-3 px-6 py-4 border-t border-[var(--border)] bg-[var(--bg-tertiary)]/30">
+          <div className="text-xs text-[var(--text-secondary)] flex-1">
+            {!isViewMode && lastBuilt && (
+              <span title={new Date(lastBuilt).toLocaleString()}>
+                Last built {formatRelative(lastBuilt)}
+              </span>
+            )}
+          </div>
           <button
             onClick={onClose}
             disabled={publishing}

@@ -1,0 +1,57 @@
+/* ---- brutalist theme — high-contrast B&W, thick borders, no shadows ---- */
+:root {
+  --accent: #000000;
+  --accent-soft: #ffff00;
+  --bg-primary: #ffffff;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #f0f0f0;
+  --text-primary: #000000;
+  --text-secondary: #000000;
+  --muted: #555555;
+  --border: #000000;
+  --success: #008000; --warning: #ff8c00; --danger: #ff0000;
+  --font-sans: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --font-mono: 'Courier New', Courier, monospace;
+}
+.dark {
+  --accent: #ffffff;
+  --accent-soft: #ffff00;
+  --bg-primary: #000000;
+  --bg-secondary: #000000;
+  --bg-tertiary: #1a1a1a;
+  --text-primary: #ffffff;
+  --text-secondary: #ffffff;
+  --muted: #aaaaaa;
+  --border: #ffffff;
+}
+
+* { box-shadow: none !important; }
+.topbar, .sidebar, .toc { border-width: 2px !important; }
+.topbar button, .api-endpoint, .glossary-item, .content pre,
+.modal-card, .search-palette, .mermaid-wrap, .content blockquote {
+  border-radius: 0 !important;
+  border-width: 2px !important;
+  border-color: var(--border) !important;
+  box-shadow: none !important;
+}
+.api-method { border-radius: 0 !important; border: 2px solid currentColor; font-weight: 800; }
+/* Anything that lands on a yellow background must use black text — readable
+   in both light and dark mode (yellow stays yellow either way). */
+.topbar button:hover,
+.nav-item:hover, .nav-item.active, .nav-item.active:hover,
+.api-endpoint:hover,
+.search-result:hover, .search-result.active,
+.toc-item.active,
+.mermaid-zoom-bar button, .mermaid-zoom-bar button:hover,
+.content blockquote, .content blockquote * {
+  background: var(--accent-soft) !important;
+  color: #000000 !important;
+  border-color: #000000 !important;
+}
+/* Blockquote shouldn't recolor itself on hover — keep its yellow bg static. */
+.content blockquote { background: var(--accent-soft) !important; }
+.nav-item.active { border: 2px solid #000000; font-weight: 800; }
+.mermaid-zoom-bar button { border: 2px solid #000000 !important; border-radius: 0 !important; }
+.content h1, .content h2 { border-bottom-width: 3px !important; text-transform: uppercase; letter-spacing: -0.5px; }
+.content a { text-decoration: underline; text-underline-offset: 2px; }
+::selection { background: var(--accent-soft); color: #000000; }

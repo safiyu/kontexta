@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { runPipeline } from "kxta-publish/pipeline";
-import { mkdirSync, writeFileSync, existsSync } from "node:fs";
+import { mkdirSync, writeFileSync, existsSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { getDataDir, getDatabase } from "kxta-core";
 import { checkAuth } from "@/lib/auth";
@@ -10,7 +10,9 @@ export interface PublishRequestBody {
   folders?: string[];
   title?: string;
   brand?: string;
-  theme?: "default" | "minimal" | "api-ref";
+  tagline?: string;
+  hero?: boolean;
+  theme?: "default" | "minimal" | "api-ref" | "flat" | "terminal" | "paper" | "solarized" | "brutalist" | "ocean";
   llmsTxt?: boolean;
   seo?: boolean;
   output?: string;
@@ -69,7 +71,8 @@ export async function POST(request: NextRequest) {
       site: {
         title: body.title || "Kontexta Docs",
         brand: body.brand || "Kontexta",
-        hero: true,
+        hero: body.hero ?? true,
+        tagline: body.tagline || undefined,
       },
       output: indexPath,
       llmsTxt: body.llmsTxt ?? false,
@@ -127,11 +130,23 @@ export async function GET(request: NextRequest) {
     const indexPath = join(outputDir, "index.html");
     const llmsPath = join(outputDir, "llms.txt");
 
+    const indexExists = existsSync(indexPath);
+    let lastBuilt: string | null = null;
+    let sizeBytes: number | null = null;
+    if (indexExists) {
+      try {
+        const st = statSync(indexPath);
+        lastBuilt = st.mtime.toISOString();
+        sizeBytes = st.size;
+      } catch { /* ignore stat failures */ }
+    }
     return NextResponse.json({
       exists: true,
       outputDir,
-      indexHtml: existsSync(indexPath),
+      indexHtml: indexExists,
       llmsTxt: existsSync(llmsPath),
+      lastBuilt,
+      sizeBytes,
     });
   } catch {
     return NextResponse.json({ exists: false });

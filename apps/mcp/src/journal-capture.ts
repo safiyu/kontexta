@@ -1,4 +1,4 @@
-import { getDataDir, JournalWriter, defaultRedactConfig, redactArgs, checkGit, readHighWater, shouldBlock, backlogErrorPayload, type GitWatcherState, resetDataDirCache } from "kxta-core";
+import { getDataDir, getDatabase, JournalWriter, defaultRedactConfig, redactArgs, checkGit, readHighWater, shouldBlock, backlogErrorPayload, type GitWatcherState, resetDataDirCache } from "kxta-core";
 import type { RawEvent } from "kxta-core";
 import { readdirSync, readFileSync as fsReadFileSync, existsSync as fsExistsSync } from "node:fs";
 
@@ -205,8 +205,52 @@ export function appendVoluntaryEvent(ev: RawEvent): void {
   tryWriteEvent(ev);
 }
 
+let _resolvedSlugCache: { slug: string; ts: number } | null = null;
+
+function resolveProjectSlug(): string {
+  if (ctx?.projectSlug) return ctx.projectSlug;
+
+  const now = Date.now();
+  if (_resolvedSlugCache && now - _resolvedSlugCache.ts < 30_000) {
+    return _resolvedSlugCache.slug;
+  }
+
+  const envSlug = process.env.KONTEXTA_DEFAULT_PROJECT_SLUG?.trim();
+  let resolved: string | null = null;
+
+  try {
+    const db = getDatabase();
+    if (envSlug) {
+      const row = db.prepare("SELECT 1 FROM projects WHERE slug = ?").get(envSlug);
+      if (row) resolved = envSlug;
+    }
+    if (!resolved) {
+      const cwd = process.cwd();
+      const exact = db.prepare("SELECT slug FROM projects WHERE path = ?").get(cwd) as { slug: string } | undefined;
+      if (exact?.slug) {
+        resolved = exact.slug;
+      } else {
+        const rows = db.prepare("SELECT slug, path FROM projects WHERE path IS NOT NULL").all() as { slug: string; path: string }[];
+        // Longest matching prefix wins (handles nested project paths).
+        const matches = rows
+          .filter((r) => cwd === r.path || cwd.startsWith(r.path.endsWith("/") ? r.path : r.path + "/"))
+          .sort((a, b) => b.path.length - a.path.length);
+        if (matches[0]) resolved = matches[0].slug;
+      }
+    }
+  } catch { /* DB unavailable — fall through */ }
+
+  const out = resolved ?? envSlug ?? "default";
+  _resolvedSlugCache = { slug: out, ts: now };
+  return out;
+}
+
+export function resetProjectSlugCache(): void {
+  _resolvedSlugCache = null;
+}
+
 export function getCurrentProjectSlug(): string {
-  return ctx?.projectSlug ?? "default";
+  return resolveProjectSlug();
 }
 export function getCurrentAgent(): string {
   return ctx?.agent ?? "unknown";

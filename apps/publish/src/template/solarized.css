@@ -1,0 +1,162 @@
+/* ---- solarized theme — Ethan Schoonover's signature palette ---- */
+:root {
+  /* base3=#fdf6e3 base2=#eee8d5 base00=#657b83 base01=#586e75 */
+  --sol-yellow: #b58900;
+  --sol-orange: #cb4b16;
+  --sol-red: #dc322f;
+  --sol-magenta: #d33682;
+  --sol-violet: #6c71c4;
+  --sol-blue: #268bd2;
+  --sol-cyan: #2aa198;
+  --sol-green: #859900;
+
+  --accent: #268bd2;
+  --accent-soft: rgba(38,139,210,0.10);
+  --bg-primary: #fdf6e3;
+  --bg-secondary: #eee8d5;
+  --bg-tertiary: #e5dec4;
+  --text-primary: #586e75;
+  --text-secondary: #657b83;
+  --muted: #93a1a1;
+  --border: #d8d1bd;
+  --success: #859900; --warning: #b58900; --danger: #dc322f;
+  --font-sans: 'Source Sans Pro', 'Inter', system-ui, sans-serif;
+  --font-mono: 'Source Code Pro', 'JetBrains Mono', 'Fira Code', monospace;
+}
+.dark {
+  /* base03=#002b36 base02=#073642 base0=#839496 base1=#93a1a1 */
+  --accent: #268bd2;
+  --accent-soft: rgba(38,139,210,0.14);
+  --bg-primary: #002b36;
+  --bg-secondary: #073642;
+  --bg-tertiary: #0d4654;
+  --text-primary: #93a1a1;
+  --text-secondary: #839496;
+  --muted: #586e75;
+  --border: #0d4654;
+}
+
+body { font-family: var(--font-sans); }
+
+/* Signature Solarized stripe across the topbar */
+.topbar {
+  background: var(--bg-primary);
+  border-bottom: 3px solid var(--sol-yellow);
+  position: relative;
+}
+.topbar::after {
+  content: "";
+  position: absolute;
+  bottom: -3px;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg,
+    var(--sol-yellow) 0%, var(--sol-orange) 14%, var(--sol-red) 28%,
+    var(--sol-magenta) 42%, var(--sol-violet) 56%, var(--sol-blue) 70%,
+    var(--sol-cyan) 84%, var(--sol-green) 100%);
+}
+.brand {
+  font-family: var(--font-mono);
+  color: var(--sol-yellow);
+  font-weight: 700;
+  text-transform: lowercase;
+  letter-spacing: 0;
+}
+.brand::before { content: "☀ "; color: var(--sol-orange); font-weight: normal; }
+
+.topbar button {
+  font-family: var(--font-mono);
+  border-color: var(--sol-blue);
+  color: var(--sol-blue);
+}
+.topbar button:hover {
+  background: var(--sol-blue);
+  color: var(--bg-primary);
+  border-color: var(--sol-blue);
+}
+
+.sidebar { background: var(--bg-primary); border-right: 1px dashed var(--border); }
+
+/* Mono nav with cyan active marker */
+.nav-group-label {
+  font-family: var(--font-mono);
+  color: var(--sol-cyan);
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 4px;
+}
+.nav-item { font-family: var(--font-mono); font-size: 12.5px; }
+.nav-item:hover { color: var(--sol-blue); background: transparent; }
+.nav-item.active {
+  color: var(--sol-yellow);
+  background: transparent;
+  border-left: 3px solid var(--sol-yellow);
+  padding-left: 7px;
+  font-weight: 700;
+}
+.nav-item.active::before { content: "▸ "; color: var(--sol-orange); }
+
+/* Solarized-coded HTTP methods (the canonical mapping) */
+.api-method { font-family: var(--font-mono); font-weight: 700; }
+.api-method.get { color: var(--sol-green); background: rgba(133,153,0,0.12); }
+.api-method.post { color: var(--sol-yellow); background: rgba(181,137,0,0.12); }
+.api-method.put { color: var(--sol-orange); background: rgba(203,75,22,0.12); }
+.api-method.delete { color: var(--sol-red); background: rgba(220,50,47,0.12); }
+
+.api-endpoint {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--sol-blue);
+  border-radius: 0 4px 4px 0;
+}
+.api-endpoint:hover { border-left-color: var(--sol-yellow); background: var(--bg-tertiary); }
+.api-path { color: var(--sol-cyan); font-family: var(--font-mono); }
+
+/* Headings rotate through Solarized palette */
+.content h1 {
+  font-family: var(--font-mono);
+  color: var(--sol-yellow);
+  border-bottom: 2px solid var(--sol-yellow);
+  font-weight: 700;
+}
+.content h2 {
+  font-family: var(--font-mono);
+  color: var(--sol-orange);
+  border-bottom: 1px solid var(--border);
+}
+.content h3 { font-family: var(--font-mono); color: var(--sol-magenta); }
+.content h4 { color: var(--sol-violet); }
+
+.content a { color: var(--sol-blue); border-bottom: 1px dotted var(--sol-blue); text-decoration: none; }
+.content a:hover { color: var(--sol-cyan); border-bottom-color: var(--sol-cyan); }
+
+.content blockquote {
+  background: var(--bg-secondary);
+  border-left: 4px solid var(--sol-cyan);
+  color: var(--text-primary);
+  font-style: italic;
+}
+
+.content pre {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--sol-violet);
+  border-radius: 0 4px 4px 0;
+}
+.content code {
+  font-family: var(--font-mono);
+  color: var(--sol-magenta);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+}
+
+.toc-label { font-family: var(--font-mono); color: var(--sol-cyan); }
+.toc-item.active {
+  color: var(--sol-yellow);
+  border-left-color: var(--sol-yellow);
+  font-family: var(--font-mono);
+}
+
+.glossary-term { color: var(--sol-violet); font-family: var(--font-mono); }
+
+::selection { background: var(--sol-yellow); color: var(--bg-primary); }

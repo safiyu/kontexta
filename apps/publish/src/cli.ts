@@ -8,8 +8,8 @@ import { generateLlmsTxt } from "./render/llms.js";
 
 export interface ParsedCli { overrides: CliOverrides; configPath?: string; watch: boolean; }
 
-const VALID_THEMES = new Set(["default", "minimal", "api-ref"]);
-type Theme = "default" | "minimal" | "api-ref";
+const VALID_THEMES = new Set(["default", "minimal", "api-ref", "flat", "terminal", "paper", "solarized", "brutalist", "ocean"]);
+type Theme = "default" | "minimal" | "api-ref" | "flat" | "terminal" | "paper" | "solarized" | "brutalist" | "ocean";
 
 export function parseCliArgs(argv: string[]): ParsedCli {
   const { values } = parseArgs({
