@@ -65,6 +65,7 @@ import { initCapture, shutdownCapture, wrapHandler, startGitPoller } from "./jou
 import { registerJournalTools } from "./journal-tools.js";
 import { registerCommitUpgradesTool } from "./journal-commit-upgrades-tool.js";
 import { registerHousekeepTool } from "./journal-housekeep-tool.js";
+import { registerCalendarTools } from "./calendar-tools.js";
 import { handleGetProfile } from "./profile-tool.js";
 import { getDataDir } from "kxta-core";
 
@@ -2503,6 +2504,7 @@ async function main() {
   registerJournalTools(server);
   registerCommitUpgradesTool(server);
   registerHousekeepTool(server);
+  registerCalendarTools(server);
   await server.connect(transport);
   console.error("Kontexta MCP server running on stdio");
 }

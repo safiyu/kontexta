@@ -121,6 +121,9 @@ The matrix below is grouped by intent. For each tool: when to reach for it, the 
 | `journal_intent` | Record a user-initiated topic pivot | Auto-captured tool calls | `journal_note` |
 | `journal_append` | Append timestamped text to today's daily KB journal file | Structured notes | `journal_note` |
 | `distill_journal` | Summarize accumulated journal events | Individual events | `journal_note` |
+| `journal_status` | Check backlog size and high-water mark before distilling | Need the raw events themselves | `distill_journal` |
+| `distill_journal_commit_upgrades` | Mark journal entries upgraded after a subagent rewrites them | Running the initial distillation | `distill_journal` |
+| `housekeep_journal` | Prune old raw journal files and archive cold tasks | Need to distill new events first | `distill_journal` |
 | `clip_url` | Capture a web URL into the KB | Saving a local file | `create_file` |
 | `list_folders` | Enumerate folders in the project | Finding files | `list_files` |
 | `create_folder` | Create a new (possibly nested) folder | Files don't need explicit folders | |
@@ -146,6 +149,22 @@ The matrix below is grouped by intent. For each tool: when to reach for it, the 
 | `project_map` | Folder/file tree for a project | Flat file list | `list_files` |
 | `stats` | Counts and health for a project | Per-file detail | `describe_file` |
 | `whats_new` | Files added/changed since a cutoff | Full-text search | `search` |
+
+#### Calendar
+
+| Tool | When | Not when | Use instead |
+|---|---|---|---|
+| `calendar_add_entity` | Register a new thing to track (server, vehicle, location, etc.) | Entity already exists | `calendar_update_entity` |
+| `calendar_update_entity` | Rename, retag, or retire (`active:false`) an entity | Entity doesn't exist yet | `calendar_add_entity` |
+| `calendar_delete_entity` | Permanently remove an entity, cascading its events/links | Just want to stop scheduling against it | `calendar_update_entity` |
+| `calendar_list_entities` | Enumerate entities with their dependency links | Need conflict or event data | `calendar_conflicts` |
+| `calendar_link_entities` | Record or remove a dependency edge for conflict detection | Want to see existing links | `calendar_list_entities` |
+| `calendar_add_event` | Schedule a one-off event (downtime, maintenance, delivery, etc.) | Editing an existing event | `calendar_update_event` |
+| `calendar_update_event` | Move, retitle, or re-home an existing event | Event doesn't exist yet | `calendar_add_event` |
+| `calendar_delete_event` | Remove one event permanently | Want to just move it | `calendar_update_event` |
+| `calendar_list_events` | List/filter events in a time window | Only need the conflict report | `calendar_conflicts` |
+| `calendar_conflicts` | Find overlapping or too-close-together events in a window | Just need the raw event list | `calendar_list_events` |
+| `calendar_export_ics` | Export a window as an ICS file for calendar apps | Need machine-readable event data | `calendar_list_events` |
 
 #### Hands (project tools)
 

@@ -1,71 +1,85 @@
 # Changelog
 
+## 4.0.0 — Calendar: schedule anything, catch conflicts automatically
+
+A brand new module for scheduling and tracking events across whatever you manage — servers, delivery vehicles, store locations, equipment, rooms, anything you name. Works both through chat and as a full visual calendar in the dashboard.
+
+### Added
+
+- **Calendar module.** Add "entities" for anything you want to schedule against — a server, a vehicle, a location, a piece of equipment — draw dependency links between them, and log one-off events like downtime, maintenance, deliveries, or shifts.
+- **Automatic conflict detection.** Kontexta flags overlapping events on the same entity, overlapping events on linked entities, and events scheduled too close together — with a configurable minimum buffer — so scheduling clashes get caught before they happen.
+- **A full Calendar page in the dashboard.** Month, week, and agenda views in the same look and feel as the rest of the app. Add and edit events with a click, manage your entities and their dependencies, and see conflicts highlighted as you plan.
+- **Export to your everyday calendar.** Download any date range as a standard calendar file to import into Outlook, Google Calendar, or Apple Calendar.
+- **New chat tools for calendar management,** so an agent can add an event straight from a pasted email, check what's scheduled this week, or flag conflicts — no need to open the dashboard.
+
+### Updated
+
+- Agent rules guidance refreshed to cover the new calendar tools — re-run the onboarding step on your projects to pick it up.
+
 ## 3.3.0 — Publish theme expansion & journal auto-slug
 
 ### Added
 
-- **Six new publish themes.** `flat`, `terminal`, `paper`, `solarized`, `brutalist`, and `ocean` join the existing `default` / `minimal` / `api-ref` set. Each ships as its own CSS file under `apps/publish/src/template/`, is accepted by the CLI, `PublishConfig`, and the `/api/publish` request body.
-- **`tagline` in `SiteConfig`.** Optional subtitle rendered under the hero title; wired through the publish pipeline, HTML shell, `/api/publish`, and the web publish dialog.
-- **`hero` toggle on `/api/publish`.** Requests can now opt out of the hero block via `hero: false`; defaults to `true`.
-- **Publish `lastBuilt` / `sizeBytes` in status response.** `GET /api/publish` now returns the `index.html` mtime (ISO) and size, so the dialog can show a "built Xm ago" hint.
-- **Theme picker with swatches in publish dialog.** Nine themes surface as clickable tiles with a 4-swatch preview, plus a "last built" relative-time chip.
-- **Auto-resolved project slug in journal capture.** New `resolveProjectSlug()` in `apps/mcp/src/journal-capture.ts` picks the slug from (in order) the active MCP context, `KONTEXTA_DEFAULT_PROJECT_SLUG` env, an exact `projects.path` match against `cwd`, or the longest matching prefix. Result cached for 30s; `resetProjectSlugCache()` exposed for tests. Falls back to `"default"` if the DB is unavailable.
+- **Six new publish themes.** Choose from `flat`, `terminal`, `paper`, `solarized`, `brutalist`, and `ocean` in addition to the original three, each with a live preview in the publish dialog.
+- **Custom tagline for published sites.** Add an optional subtitle under your site's hero title.
+- **Option to hide the hero section** when publishing a site, if you'd rather start straight with content.
+- **"Last built" indicator.** The publish dialog now shows how long ago your site was generated and how big it is.
+- **Smarter project detection in the journal.** Kontexta now figures out which project you're working in automatically in more cases, instead of falling back to a generic bucket.
 
 ### Changed
 
-- **`pnpm install` now compiles `better-sqlite3`.** Added `onlyBuiltDependencies: [better-sqlite3]` to `pnpm-workspace.yaml` so pnpm 10's build-script allowlist runs the native rebuild automatically on fresh installs — no more `pnpm rebuild better-sqlite3` after every clone.
+- **Faster first-time setup.** Installing dependencies now compiles the database driver automatically, so there's no separate rebuild step after cloning the repo.
 
 ## 3.2.2
 
 ### Fixed
 
-- **MCP undici runtime dependency.** Added `undici` to `dependencies` in `apps/mcp/package.json` to fix `ERR_MODULE_NOT_FOUND` runtime crashes in strict package resolution environments (e.g. CI/CD runners).
+- **MCP server could crash on startup in some environments.** A missing dependency caused failures on certain CI/CD and other strict setups. Fixed.
 
 ## 3.2.1
 
 ### Fixed
 
-- **Docker native bindings rebuild.** Reverted the builder stage back to explicit `node-gyp rebuild` commands for `better-sqlite3` and `re2`. This bypasses the pnpm cache to force compilation from source for the correct target ABI.
-- **Bypass manifest generation in Docker builds.** Added a `KONTEXTA_SKIP_MANIFEST` flag to skip running the MCP server during the web app's prebuild phase inside the Docker builder, avoiding failures due to missing SQLite databases at build time.
-- **Dynamic package version reading in Publish.** Resolved version drift by changing the publish tool's `VERSION` variable to load dynamically from `package.json` at runtime.
-- **Externalized `undici` in MCP.** Prevented `esbuild` dynamic import/require errors of Node.js built-ins (like `assert`) by externalizing `undici` in the MCP server's tsup configuration.
+- **Docker builds could fail on some platforms.** Native components now always compile correctly for the target platform during a Docker build.
+- **Docker build could fail before a database existed yet.** Build steps that don't need a live database now skip that requirement.
+- **The publish tool sometimes showed the wrong version number.** It now always reflects the actual installed version.
+- **MCP server could hit import errors at startup.** Fixed a bundling issue affecting certain Node.js built-ins.
 
 ## 3.2.0 — Security hardening, journal reliability, and publish resilience
 
 ### Added
 
-- **`/api/reindex` endpoint.** Triggers a full index refresh across all projects and the KB. Only one run at a time (concurrent requests get 409).
-- **DB-backed cross-process journal locks.** Migration 006 adds `journal_locks`, replacing file-based cooldown locks with atomic SQLite WAL transactions. `acquireCooldown` now returns an ownership token.
-- **`closeAllFileWatchers()`.** Global watcher registry for clean process shutdown.
-- **`getClientIp()` in `auth.ts`.** Proxy-aware IP resolution, gated behind `auth_trust_proxy_headers` to prevent rate-limit bypass via spoofed headers.
-- **`safe-path.ts`.** `assertSafeUserPath` / `assertSafeOutputPath` resolve symlinks and block access to system and sensitive home directories.
-- **Configurable FTS result limit.** `SearchFilters.limit` (default 50, max 1000) lets large bundles include more than 50 files.
+- **One-click reindex in the dashboard.** Refresh the search index across every project and your knowledge base at once; only one refresh runs at a time.
+- **More reliable journal housekeeping.** Coordination across multiple running processes now happens through the database itself, preventing rare race conditions.
+- **Safer handling of requests behind a proxy.** Rate limiting can now correctly identify real visitor addresses behind a trusted proxy, without being spoofable by default.
+- **Stronger file-path safety checks** across the app, guarding against symlink tricks and access to sensitive system folders.
+- **Bigger search results on request,** for when you need more than the default 50 matches in one go.
 
 ### Fixed
 
-- **CSRF on logout.** `Origin` is now validated against `Host` / `X-Forwarded-Host` before the session cookie is cleared.
-- **Session token expiry.** Tokens older than 30 days are rejected; HMAC length is checked before timing-safe comparison.
-- **Publish endpoints gated behind auth.** `/api/publish` and `/api/publish/html` now return 401 for unauthenticated requests.
-- **Path traversal guards on project registration and publish output.** Paths are symlink-resolved and checked against system prefixes before use.
-- **Export ZIP scope enforcement.** `file_ids` mode requires an explicit `scope=kb|<id>` parameter; out-of-scope files are silently dropped.
-- **Project PATCH TOCTOU fix.** Missing-file pre-flight check now runs inside `withLock` so the filesystem can't change between check and DB rewrite.
-- **Journal distill boundary dedup.** Per-event keys stored in `HighWater` prevent events at the same millisecond from being lost or double-processed.
-- **Journal `started_at` preserved on re-distill.** `mergeFrontmatter` retains the original start date from the existing file.
-- **Housekeep EXDEV fallback.** Cross-device archive moves now fall back to copy + unlink instead of aborting.
-- **`JournalWriter` post-close safety.** Events written after `close()` are silently dropped instead of throwing `EBADF`.
-- **`resolveSince` rejects naive ISO timestamps.** Timestamps without a timezone suffix now throw a clear `RangeError`.
-- **Publish resilience.** Unreadable or bad-frontmatter docs are skipped with a warning instead of aborting the whole run.
-- **Publish nested folder routing.** `routeKey()` uses the last `/` as the boundary, fixing navigation for nested folder paths.
-- **Publish endpoint ID collisions.** Duplicate IDs across docs are uniquified with the doc-key prefix; rendered HTML is patched to match.
-- **Publish nav URI encoding.** `href` values are `encodeURI`-encoded; `data-key` attributes use raw values, fixing routing for special-character folder names.
-- **Publish dialog UX.** Folders auto-selected on open; success closes the dialog and bubbles up a toast instead of rendering silently at the bottom.
-- **Content pane stale fetch.** `AbortController` cancels in-flight requests on file switch; `onDirtyChange` stabilised via ref.
-- **`useProjects` stale response guard.** Monotonic sequence number prevents out-of-order responses from clobbering newer data.
+- **Logging out could be triggered from another site.** Closed this cross-site request vulnerability.
+- **Old session tokens no longer expired.** Sessions now correctly time out after 30 days.
+- **Publish pages were reachable without logging in.** Now require authentication.
+- **A path-traversal weakness in project registration and publishing.** Fixed with stricter checks.
+- **Exporting files as a ZIP could include files outside the intended scope.** Fixed.
+- **A rare timing issue when editing project settings** could let a missing file go undetected. Fixed.
+- **Occasional lost or duplicated journal entries** when two things happened in the exact same instant. Fixed.
+- **Journal entries could lose their original start date** when re-summarized. Fixed.
+- **Archiving old journal files could fail when moving across drives.** Now falls back to a copy instead of erroring.
+- **A rare crash right after the journal shut down.** Now handled gracefully.
+- **Ambiguous timestamps were silently misinterpreted.** A timestamp with no timezone is now rejected with a clear error instead of being guessed.
+- **One broken document could stop an entire publish run.** It's now skipped with a warning instead.
+- **Broken navigation for nested folders when publishing.** Fixed.
+- **Duplicate page elements when publishing docs with matching names.** Now kept unique.
+- **Broken links for folders with special characters when publishing.** Fixed.
+- **Rough edges in the publish dialog.** The folder is now auto-selected, and a successful publish closes the dialog with a clear confirmation instead of updating silently.
+- **Switching files quickly could briefly show stale content.** Fixed.
+- **The project list could occasionally show outdated data after fast changes.** Fixed.
 
 ### Changed
 
-- **Shell scripts hardened.** `build-all.sh` and `launch-ui.sh` use `#!/usr/bin/env bash` + `set -euo pipefail`; launch script checks `BUILD_ID` instead of `.next/` directory.
-- **Turbo `test` and `lint` declare `outputs: []`.** Prevents spurious cache replays.
+- **Sturdier startup and build scripts,** reducing the chance of partial failures.
+- **Test and lint runs no longer get cached incorrectly.**
 
 ---
 
@@ -73,8 +87,8 @@
 
 ### Fixed
 
-- **Mermaid syntax errors rendered after the footer.** Broken diagrams now silently hide their wrapper instead of displaying a large error block with a bomb icon. Added `logLevel: "fatal"` to the mermaid config, error handling in `app.js` to suppress failed renders, and a CSS fallback across all three themes.
-- **Web build failure (type error).** `targetAgent` in the onboard API route expected `AgentId` but received a plain `string`. Fixed by importing and casting to `AgentId`.
+- **Broken diagrams showed an ugly error block.** Invalid diagrams are now hidden gracefully instead of displaying a large error message.
+- **A build failure was blocking releases.** Fixed a type mismatch in the onboarding setup.
 
 ---
 
@@ -82,20 +96,20 @@
 
 ### Added
 
-- **User profile system.** A new `knowledge/profile.md` file with required sections (Name, Role, Vision, Roadmap, Preferences, Notes) helps AI agents understand user context. Auto-repaired on creation — missing sections are inserted automatically.
-- **`get_profile` MCP tool.** Returns the user profile content, lists missing required sections, and provides setup hints for new users. Agents can call it at session start to understand who they're working with.
-- **Profile banner in the web UI.** Surfaces profile status and missing sections directly in the file list, with a first-run wizard to guide new users through setup.
-- **Login rate limiting.** The login endpoint now tracks failed attempts per IP (10 attempts, 5-minute lockout) to prevent brute-force attacks.
+- **User profile.** Kontexta can now store a short profile about you — name, role, goals, and preferences — so agents understand your context from the start. Missing sections are filled in automatically.
+- **A tool for agents to read your profile,** so they can check it at the start of a session.
+- **Profile prompts in the dashboard,** with a first-run wizard to help new users fill theirs in.
+- **Login rate limiting.** Repeated failed login attempts from the same address are now temporarily locked out to block brute-force attempts.
 
 ### Fixed
 
-- **Git environment security hardening.** Additional dangerous environment variables are now stripped before git operations (`GIT_SSH`, `GIT_SSH_COMMAND`, `GIT_EXEC_PATH`, `GIT_CONFIG_COUNT`) to prevent SSH/command redirection and credential helper injection.
-- **Temp/test path detection on Windows.** Path segment matching now uses proper path separators instead of substring matching, avoiding false positives on Windows paths containing "temp" as part of a directory name.
-- **Journal meta typing.** Added explicit `RawJournalMetaRow` interface and injectable `now` parameter in `openTasksForProject` for better testability.
+- **Stronger protection against credential and command injection during git operations.**
+- **A Windows-specific bug** that could misidentify normal folders as temporary or test paths.
+- **Small reliability improvements to journal task tracking.**
 
 ### Changed
 
-- **Journal pattern loader improvements.** Enhanced extra-loader and pattern index for more robust journal entry parsing.
+- **More robust journal entry parsing.**
 
 ---
 
@@ -103,10 +117,10 @@
 
 ### Fixed
 
-- **Duplicate ID generation in documentation output.** The publish tool now ensures that API endpoints and glossary terms with the same names receive unique HTML IDs instead of causing page collisions.
-- **Robust HTML escaping.** Improved sanitization for endpoint data, HTTP methods, and glossary definitions to prevent malformed page structures.
-- **API badge sanitization.** The publish tool now restricts endpoint badge values to a set of valid options (`direct`, `remove`, `evolve`), falling back gracefully if invalid values are supplied.
-- **Target anchors for interactive blocks.** Added proper HTML `id` attributes to glossary items and API endpoint cards so they can be linked to directly.
+- **Duplicate page elements in published docs** when two items shared the same name. Fixed.
+- **Stronger protection against malformed content** breaking published pages.
+- **Invalid values in API documentation badges** are now handled gracefully instead of breaking the page.
+- **Glossary and API entries can now be linked to directly** with their own web addresses.
 
 ---
 
@@ -114,19 +128,16 @@
 
 ### Added
 
-- **Publish module — generate documentation from your knowledge base.** A new `publish` package provides a CLI and pipeline for generating documentation sites, API references, and LLM-readable docs from your kontexta vault. Includes render blocks for endpoints, glossary, mermaid diagrams, navigation, and more.
-- **`setDataDir()` export in journal-capture.** Added to allow tests to override the data directory for isolation.
-- **`listProjectFoldersWithFiles()` in core.** Lists folders containing `.md`/`.mmd` files for project-aware file discovery.
-- **Auto-discover on project registration.** `registerProject()` now returns `{ newlyIndexed: number }` and automatically discovers files on registration.
+- **Publish your knowledge base as a documentation site.** A brand new publishing tool turns your vault into a browsable site, complete with API references, a glossary, and diagrams.
+- **Projects now scan for files automatically the moment you register them,** instead of requiring a manual step.
 
 ### Fixed
 
-- **resolveArgv test expectation.** Fixed test that expected empty substituted values to be kept when the code intentionally drops them (matching the test name "drops empty resolved elements").
-- **Strict mode awareness.** MCP server now returns `JOURNAL_BACKLOG` error on read tools when undistilled events exist and strict mode is enabled.
+- **Minor internal test and strict-mode reliability fixes.**
 
 ### Changed
 
-- **Version bump to 3.0.0.** Major release with new publish module and improved developer experience.
+- **Version bump to 3.0.0** for this major release.
 
 ---
 

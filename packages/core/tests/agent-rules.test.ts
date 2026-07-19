@@ -354,20 +354,29 @@ describe("rules-block.md structural integrity", () => {
   });
 
   it("every MCP tool registered in apps/mcp has a routing row", () => {
-    const mcpIndexPath = join(
-      __dirnameLocal,
-      "..", "..", "..",
-      "apps", "mcp", "src", "index.ts"
-    );
-    const mcpSrc = readFileSync(mcpIndexPath, "utf8");
+    // Tool registrations live in apps/mcp/src/index.ts AND in extracted
+    // per-feature files (journal-tools.ts, calendar-tools.ts, etc.) that
+    // index.ts wires up via register*Tools(server) calls. Scan all of them
+    // so this check reflects every tool actually exposed by the server.
+    const mcpSrcDir = join(__dirnameLocal, "..", "..", "..", "apps", "mcp", "src");
+    const toolFiles = [
+      "index.ts",
+      "journal-tools.ts",
+      "journal-commit-upgrades-tool.ts",
+      "journal-housekeep-tool.ts",
+      "calendar-tools.ts",
+    ];
 
     const toolNameRe = /server\.tool\(\s*"([a-z_][a-z0-9_]*)"/g;
     const registeredTools = new Set<string>();
-    let m: RegExpExecArray | null;
-    while ((m = toolNameRe.exec(mcpSrc)) !== null) {
-      registeredTools.add(m[1]);
+    for (const file of toolFiles) {
+      const src = readFileSync(join(mcpSrcDir, file), "utf8");
+      let m: RegExpExecArray | null;
+      while ((m = toolNameRe.exec(src)) !== null) {
+        registeredTools.add(m[1]);
+      }
     }
-    expect(registeredTools.size, "should find registered tools in apps/mcp/src/index.ts").toBeGreaterThan(0);
+    expect(registeredTools.size, "should find registered tools in apps/mcp/src").toBeGreaterThan(0);
 
     const documentedTools = new Set<string>();
     const docRowRe = /^\|\s*`([a-z_][a-z0-9_]*)`\s*\|/gm;
@@ -377,10 +386,7 @@ describe("rules-block.md structural integrity", () => {
     }
 
     const missing = [...registeredTools].filter((t) => !documentedTools.has(t)).sort();
-
-    // TODO(Task 18-20): Remove this allowlist once journal_note, journal_intent, distill_journal are implemented
-    const pendingImplementation = new Set(["journal_note", "journal_intent", "distill_journal"]);
-    const extra = [...documentedTools].filter((t) => !registeredTools.has(t) && !pendingImplementation.has(t)).sort();
+    const extra = [...documentedTools].filter((t) => !registeredTools.has(t)).sort();
 
     expect(missing, `Tools registered in MCP but missing routing rows: ${missing.join(", ")}`).toEqual([]);
     expect(extra, `Routing rows present for tools not registered in MCP: ${extra.join(", ")}`).toEqual([]);

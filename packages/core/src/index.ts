@@ -47,3 +47,4 @@ export {
 } from "./project-map/index.js";
 export * from "./journal/index.js";
 export * from "./profile/index.js";
+export * from "./calendar/index.js";

@@ -6,6 +6,7 @@ export type ToolCategory =
   | "Folders & Projects"
   | "Versioning"
   | "Discovery"
+  | "Calendar"
   | "Hands";
 
 export const CATEGORY_ORDER: ToolCategory[] = [
@@ -16,6 +17,7 @@ export const CATEGORY_ORDER: ToolCategory[] = [
   "Folders & Projects",
   "Versioning",
   "Discovery",
+  "Calendar",
   "Hands",
 ];
 
@@ -77,6 +79,18 @@ export const TOOL_CATEGORIES: Record<string, ToolCategory> = {
   project_map: "Discovery",
   diff_against_disk: "Discovery",
   refresh_index: "Discovery",
+  // Calendar
+  calendar_add_entity: "Calendar",
+  calendar_update_entity: "Calendar",
+  calendar_delete_entity: "Calendar",
+  calendar_list_entities: "Calendar",
+  calendar_link_entities: "Calendar",
+  calendar_add_event: "Calendar",
+  calendar_update_event: "Calendar",
+  calendar_delete_event: "Calendar",
+  calendar_list_events: "Calendar",
+  calendar_conflicts: "Calendar",
+  calendar_export_ics: "Calendar",
   // Hands
   list_hands: "Hands",
   reload_hands: "Hands",
