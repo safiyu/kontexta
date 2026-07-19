@@ -122,6 +122,15 @@ export function TopBar({
 
       <div className="flex items-center gap-2">
         <button
+          onClick={() => router.push("/calendar")}
+          className="btn btn-md !font-mono font-bold uppercase tracking-wider text-[var(--accent)]"
+          aria-label="Open Calendar"
+          title="Open Calendar"
+        >
+          Calendar
+        </button>
+
+        <button
           onClick={() => setSyncOpen((o) => !o)}
           className="btn btn-md !font-mono font-bold uppercase tracking-wider text-[var(--accent)]"
           aria-label="Sync menu"

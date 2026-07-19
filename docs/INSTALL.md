@@ -305,6 +305,7 @@ With `pnpm dev` running:
 1. **UI loads:** open `http://localhost:3000` — the three-pane layout (folder tree / file list / content) renders.
 2. **Health endpoint:** `curl http://localhost:3000/api/health` returns `{"status":"ok"}`.
 3. **WebSocket connected:** open browser DevTools → Network → WS — a connection to `ws://localhost:3000/_kontexta_ws` (status 101) is open. Footer status bar shows `synced` or `idle` (not red).
+4. **Calendar loads:** open `http://localhost:3000/calendar` — the month view renders with the toolbar. No entities exist yet, so the grid will be empty until you add one via the **Entities** button or the `calendar_add_entity` MCP tool.
 
 ### Run in production (standalone, without Docker)
 

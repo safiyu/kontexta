@@ -219,7 +219,7 @@ What's deliberately deferred and what triggers will pull it forward lives in [`d
 
 ### Brain
 - Global vault with two-way git sync.
-- 52 MCP tools tuned for context economy.
+- 66 MCP tools tuned for context economy.
 - Batch operations (up to 500 files/call), grep, and regex support.
 - Web clipping with auth-wall detection.
 - Full git-backed versioning: `get_history`, `get_diff`, `restore_file`.
@@ -232,9 +232,16 @@ What's deliberately deferred and what triggers will pull it forward lives in [`d
 - CSPRNG-bound confirmation tokens for high-risk commands.
 
 ### Dashboard
-- Built-in `/docs` page with a searchable catalogue of all 52 core tools.
+- Built-in `/docs` page with a searchable catalogue of all 66 core tools.
 - Form-based `kontexta.json` editor with live validation.
 - Real-time status bar streaming git activity over WebSockets.
+
+### Calendar
+- Generic, dependency-aware calendar for tracking events across anything you name — a server, a delivery van, a store location, a piece of equipment, a room, or anything else you schedule against.
+- Automatic conflict detection: overlapping windows on the same entity, overlapping windows on linked entities, and events scheduled too close together (configurable buffer).
+- Month, week, and agenda views in the dashboard, matching the rest of the UI; click to add or edit events, manage entities and their dependency links.
+- Export any date range as a standard `.ics` file for Outlook, Google Calendar, or Apple Calendar.
+- 11 MCP tools so agents can schedule, link, and check conflicts straight from chat.
 
 ### Publish
 - **CLI-driven documentation generation.** Turn your knowledge base into polished documentation sites, API references, and LLM-readable docs.

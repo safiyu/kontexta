@@ -639,6 +639,96 @@ function assert(cond, msg) {
     rmSync(root, { recursive: true, force: true });
   });
 
+  // ---- Calendar ----
+  let calEntityA, calEntityB;
+  await test("calendar_add_entity", async () => {
+    calEntityA = await call("calendar_add_entity", { name: "smoke-cal-a", kind: "server" });
+    calEntityB = await call("calendar_add_entity", { name: "smoke-cal-b", kind: "server" });
+    assert(calEntityA.entity.id, "missing entity id");
+    assert(calEntityA.entity.name === "smoke-cal-a", "wrong entity name");
+  });
+
+  await test("calendar_add_entity rejects duplicate name", async () => {
+    try {
+      await call("calendar_add_entity", { name: "smoke-cal-a" });
+      throw new Error("should have errored");
+    } catch (e) {
+      assert(e.message.includes("already exists"), `wrong error: ${e.message}`);
+    }
+  });
+
+  await test("calendar_link_entities + calendar_list_entities shows the link", async () => {
+    await call("calendar_link_entities", { from: "smoke-cal-a", to: "smoke-cal-b", label: "feeds" });
+    const r = await call("calendar_list_entities", {});
+    const a = r.entities.find((e) => e.name === "smoke-cal-a");
+    assert(a.links_out.some((l) => l.to_entity_id === calEntityB.entity.id), "link not attached to entity");
+  });
+
+  let calEventA, calEventB;
+  await test("calendar_add_event on each entity (overlapping)", async () => {
+    calEventA = await call("calendar_add_event", {
+      entity: "smoke-cal-a", type: "downtime", title: "smoke event A",
+      starts_at: "2026-09-01T10:00:00Z", ends_at: "2026-09-01T12:00:00Z",
+    });
+    calEventB = await call("calendar_add_event", {
+      entity: "smoke-cal-b", type: "downtime", title: "smoke event B",
+      starts_at: "2026-09-01T11:00:00Z", ends_at: "2026-09-01T13:00:00Z",
+    });
+    assert(calEventA.event.id, "missing event id");
+  });
+
+  await test("calendar_add_event rejects naive timestamp", async () => {
+    try {
+      await call("calendar_add_event", {
+        entity: "smoke-cal-a", type: "downtime", title: "bad",
+        starts_at: "2026-09-01T10:00:00", ends_at: "2026-09-01T12:00:00",
+      });
+      throw new Error("should have errored");
+    } catch (e) {
+      assert(e.message.includes("naive ISO timestamp"), `wrong error: ${e.message}`);
+    }
+  });
+
+  await test("calendar_list_events returns both events in range", async () => {
+    const r = await call("calendar_list_events", { from: "2026-09-01T00:00:00Z", to: "2026-09-02T00:00:00Z" });
+    assert(r.count === 2, `expected 2 events, got ${r.count}`);
+  });
+
+  await test("calendar_conflicts reports a linked_overlap", async () => {
+    const r = await call("calendar_conflicts", { from: "2026-09-01T00:00:00Z", to: "2026-09-02T00:00:00Z" });
+    assert(r.conflicts.some((c) => c.kind === "linked_overlap"), `expected linked_overlap, got ${JSON.stringify(r.conflicts)}`);
+  });
+
+  await test("calendar_update_event moves event out of overlap, then buffer_minutes re-introduces a conflict", async () => {
+    await call("calendar_update_event", {
+      id: calEventB.event.id,
+      starts_at: "2026-09-01T14:00:00Z",
+      ends_at: "2026-09-01T15:00:00Z",
+    });
+    const noConflict = await call("calendar_conflicts", { from: "2026-09-01T00:00:00Z", to: "2026-09-02T00:00:00Z" });
+    assert(noConflict.conflicts.length === 0, `expected 0 conflicts, got ${JSON.stringify(noConflict.conflicts)}`);
+
+    const withBuffer = await call("calendar_conflicts", {
+      from: "2026-09-01T00:00:00Z", to: "2026-09-02T00:00:00Z", buffer_minutes: 600,
+    });
+    assert(withBuffer.conflicts.some((c) => c.kind === "insufficient_buffer"), `expected insufficient_buffer, got ${JSON.stringify(withBuffer.conflicts)}`);
+  });
+
+  await test("calendar_export_ics contains event title", async () => {
+    const r = await call("calendar_export_ics", { from: "2026-09-01T00:00:00Z", to: "2026-09-02T00:00:00Z" });
+    assert(r.ics.includes("BEGIN:VCALENDAR"), "missing VCALENDAR wrapper");
+    assert(r.ics.includes("smoke event A"), "missing event title in ICS");
+  });
+
+  await test("calendar cleanup: delete events + entities (cascade counts)", async () => {
+    await call("calendar_delete_event", { id: calEventA.event.id });
+    await call("calendar_delete_event", { id: calEventB.event.id });
+    const delA = await call("calendar_delete_entity", { id: calEntityA.entity.id });
+    assert(delA.success === true, "expected success");
+    const delB = await call("calendar_delete_entity", { id: calEntityB.entity.id });
+    assert(typeof delB.deleted_links === "number", "missing deleted_links");
+  });
+
   // ---- Cleanup ----
   child.kill();
   await new Promise((r) => setTimeout(r, 200));
