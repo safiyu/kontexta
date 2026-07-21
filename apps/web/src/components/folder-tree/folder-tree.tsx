@@ -143,7 +143,7 @@ export function FolderTree({
   return (
     <div className="p-2 space-y-3 text-[var(--text-primary)]">
       <div>
-        <div className="px-2 pt-2 pb-1 text-[12px] uppercase tracking-wider text-[var(--text-secondary)]">
+        <div className="bp-annotation px-2 pt-2 pb-1 text-[12px] uppercase tracking-wider text-[var(--text-secondary)]">
           Projects
         </div>
         <div className="space-y-0.5">

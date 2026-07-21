@@ -39,6 +39,50 @@
   --danger: #C05656;
 }
 
+/* Blueprint theme — opt-in port of the kontexta.dev Blueprint × Ember system.
+   See docs/superpowers/2026-07-21-blueprint-app-theme-design.md */
+.blueprint {
+  --bg-primary: #060A12;
+  --bg-secondary: #0D1119;
+  --bg-tertiary: #10141F;
+  --text-primary: #E8EDF5;
+  --text-secondary: #C4B49A;
+  --muted: #A89880;
+  --border: rgba(224, 144, 48, 0.3);
+
+  --accent: #E09030;
+  --accent-soft: rgba(224, 144, 48, 0.14);
+  --success: #2F855A;
+  --warning: #C0841A;
+  --danger: #C05656;
+
+  --font-title: var(--font-saira);
+}
+
+/* Square corners under Blueprint; bp-keep-round is the escape hatch. */
+.blueprint [class*="rounded"] { border-radius: 0 !important; }
+.blueprint .bp-keep-round { border-radius: 9999px !important; }
+
+/* Chrome utilities — no rules outside .blueprint, so the classes are inert
+   in light/dark and components may carry them unconditionally. */
+.blueprint .bp-annotation {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+.blueprint .bp-dashed { border-style: dashed; }
+.blueprint .bp-grid {
+  background-image:
+    linear-gradient(rgba(224, 144, 48, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(224, 144, 48, 0.05) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+/* Title-block annotation: hidden except under Blueprint. */
+.bp-title-block { display: none; }
+.blueprint .bp-title-block { display: inline; }
+
 /* Light theme specific adjustments for icons/emojis.
    Tuned for the warm-cream (#F4F3EF) → muted amber (#B4781E) pairing
    introduced in the 2026-05-12 rebrand. Less saturation than the prior

@@ -57,8 +57,8 @@ export function LoginClient({ isSetupRequired }: { isSetupRequired: boolean }) {
   };
 
   return (
-    <div className="min-h-screen bg-[var(--bg-primary)] flex flex-col items-center justify-center p-4">
-      <div className="w-full max-w-md bg-[var(--bg-secondary)] border border-[var(--border)] rounded-2xl shadow-2xl overflow-hidden">
+    <div className="bp-grid min-h-screen bg-[var(--bg-primary)] flex flex-col items-center justify-center p-4">
+      <div className="bp-dashed w-full max-w-md bg-[var(--bg-secondary)] border border-[var(--border)] rounded-2xl shadow-2xl overflow-hidden">
         
         <div className="p-8 pb-6 text-center border-b border-[var(--border)] bg-gradient-to-b from-[var(--bg-tertiary)] to-transparent">
           <div className="flex justify-center mb-6">

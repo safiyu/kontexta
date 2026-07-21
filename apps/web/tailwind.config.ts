@@ -2,7 +2,7 @@ import type { Config } from "tailwindcss";
 import typography from "@tailwindcss/typography";
 
 const config: Config = {
-  darkMode: "class",
+  darkMode: ["class", ":is(.dark, .blueprint)"],
   content: ["./src/**/*.{ts,tsx}"],
   theme: {
     extend: {

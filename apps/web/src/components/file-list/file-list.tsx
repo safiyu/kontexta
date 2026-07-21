@@ -304,7 +304,7 @@ export function FileList({
           {refreshing ? "..." : "↻"}
         </button>
       </div>
-      <div className="px-3 py-2 flex items-center justify-between text-[11px] uppercase tracking-wider text-[var(--text-secondary)] border-b border-[var(--border)]">
+      <div className="bp-annotation bp-dashed px-3 py-2 flex items-center justify-between text-[11px] uppercase tracking-wider text-[var(--text-secondary)] border-b border-[var(--border)]">
         <span>
           {filteredAndSorted.length} {filteredAndSorted.length === 1 ? "file" : "files"}
           {(() => {

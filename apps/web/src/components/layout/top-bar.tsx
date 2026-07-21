@@ -6,6 +6,9 @@ import { useRouter } from "next/navigation";
 import { AnimatedLogo } from "./animated-logo";
 import { SyncPopover, type SyncLogEntry } from "@/components/sync/sync-popover";
 
+// Shown in the Blueprint theme's title-block annotation; bump on releases.
+const KONTEXTA_REV = "4.0.0";
+
 interface TopBarProps {
   onSearch: () => void;
   onAbout: () => void;
@@ -237,19 +240,18 @@ export function TopBar({
           </svg>
         </button>
 
+        <span className="bp-title-block bp-annotation">DWG NO. KX-66 · REV {KONTEXTA_REV}</span>
+
         {mounted && (
           <button
-            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-            className="relative w-8 h-4 bg-[var(--accent)] border border-black/10 rounded-full flex items-center justify-between px-1 text-[8px]"
-            aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
-            title={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
+            onClick={() =>
+              setTheme(theme === "light" ? "dark" : theme === "dark" ? "blueprint" : "light")
+            }
+            className="px-2 h-5 rounded-md border border-[var(--border)] font-mono text-[10px] uppercase tracking-wider text-[var(--text-secondary)] hover:text-[var(--accent)] hover:border-[var(--accent)] transition-colors"
+            aria-label="Cycle theme (light / dark / blueprint)"
+            title={`Theme: ${theme} — click to cycle`}
           >
-            <span aria-hidden className={`transition-opacity ${theme === "dark" ? "opacity-60" : "opacity-100"} text-white text-[9px] leading-none`}>☀</span>
-            <span aria-hidden className={`transition-opacity ${theme === "light" ? "opacity-60" : "opacity-100"} text-black text-[9px] leading-none`}>☽</span>
-            <span
-              aria-hidden
-              className={`absolute top-0.5 left-0.5 w-3 h-3 bg-white border border-black/10 rounded-full shadow transition-transform ${theme === "dark" ? "translate-x-4" : ""}`}
-            />
+            {theme === "light" ? "☀ light" : theme === "dark" ? "☽ dark" : "▦ blueprint"}
           </button>
         )}
       </div>
