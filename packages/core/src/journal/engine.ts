@@ -2,6 +2,7 @@
 import { readdirSync, statSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { getDatabase } from "../db/index.js";
+import { distillJournal } from "./distill.js";
 
 const REL_BASE = ["knowledge", "journal"];
 
@@ -96,4 +97,114 @@ export function ensureProjectRowForSlug(slug: string): number {
   });
 
   return txn();
+}
+
+export interface StartEngineOpts {
+  dataDir: string;
+  tickMs?: number;
+  drainOnStart?: boolean;
+  maxEventsPerSlug?: number;
+  onError?: (err: unknown, slug: string) => void;
+  now?: () => Date;
+}
+
+export interface TickResult {
+  slugs_considered: number;
+  slugs_distilled: number;
+  slugs_skipped_clean: number;
+  slugs_failed: number;
+  duration_ms: number;
+}
+
+export interface EngineHandle {
+  stop(opts?: { flush?: boolean }): Promise<void>;
+  tickNow(): Promise<TickResult>;
+}
+
+/**
+ * Start the background distillation engine: drains any existing backlog
+ * (if drainOnStart), then ticks every tickMs, distilling every slug with
+ * pending raw events regardless of whether it's a registered project.
+ */
+export function startDistillEngine(opts: StartEngineOpts): EngineHandle {
+  const dataDir = opts.dataDir;
+  const tickMs = opts.tickMs ?? 5 * 60_000;
+  const drainOnStart = opts.drainOnStart ?? true;
+  const maxEventsPerSlug = opts.maxEventsPerSlug ?? 500;
+  const onError = opts.onError ?? ((err: unknown, slug: string) => console.warn(`[distill-engine] slug=${slug}`, err));
+  const now = opts.now ?? (() => new Date());
+
+  let running: Promise<TickResult> | null = null;
+  let stopped = false;
+
+  async function runTick(): Promise<TickResult> {
+    const start = Date.now();
+    const result: TickResult = {
+      slugs_considered: 0,
+      slugs_distilled: 0,
+      slugs_skipped_clean: 0,
+      slugs_failed: 0,
+      duration_ms: 0,
+    };
+    try {
+      const dirtySlugs = listSlugsWithBacklog(dataDir);
+      result.slugs_considered = dirtySlugs.length;
+      for (const slug of dirtySlugs) {
+        try {
+          const projectId = ensureProjectRowForSlug(slug);
+          const distillResult = await distillJournal({
+            projectSlug: slug,
+            projectId,
+            dataDir,
+            maxEvents: maxEventsPerSlug,
+            ticketRegex: /[A-Z]+-\d+/,
+            openTaskWindowDays: 90,
+            inFlightWindowSeconds: 300,
+            now: now(),
+          });
+          if (distillResult.events_processed > 0) {
+            result.slugs_distilled++;
+          } else {
+            result.slugs_skipped_clean++;
+          }
+        } catch (err) {
+          result.slugs_failed++;
+          onError(err, slug);
+        }
+      }
+    } catch (err) {
+      onError(err, "*enumeration*");
+    }
+    result.duration_ms = Date.now() - start;
+    return result;
+  }
+
+  function tickNow(): Promise<TickResult> {
+    if (running) return running;
+    const p = runTick().finally(() => { running = null; });
+    running = p;
+    return p;
+  }
+
+  let timer: NodeJS.Timeout | null = setInterval(() => { void tickNow(); }, tickMs);
+  timer.unref();
+
+  if (drainOnStart) {
+    setImmediate(() => { void tickNow(); });
+  }
+
+  return {
+    tickNow,
+    async stop(stopOpts?: { flush?: boolean }): Promise<void> {
+      if (stopped) return;
+      stopped = true;
+      if (timer) {
+        clearInterval(timer);
+        timer = null;
+      }
+      if (stopOpts?.flush) {
+        await tickNow();
+      }
+    },
+  };
 }

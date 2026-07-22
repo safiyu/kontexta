@@ -25,3 +25,5 @@ export { isMcpActive } from "./presence.js";
 export { housekeepJournal } from "./housekeep.js";
 export type { HousekeepConfig, HousekeepResult } from "./housekeep.js";
 export { isReadOnlyTool, shouldBlock, backlogErrorPayload } from "./strict-mode.js";
+export { listSlugsWithBacklog, ensureProjectRowForSlug, startDistillEngine } from "./engine.js";
+export type { StartEngineOpts, TickResult, EngineHandle } from "./engine.js";

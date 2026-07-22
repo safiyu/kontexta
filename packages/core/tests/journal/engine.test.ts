@@ -1,10 +1,10 @@
 // packages/core/tests/journal/engine.test.ts
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync, utimesSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync, utimesSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createDatabase, closeDatabase, getDatabase } from "../../src/db/index.js";
-import { listSlugsWithBacklog, ensureProjectRowForSlug } from "../../src/journal/engine.js";
+import { listSlugsWithBacklog, ensureProjectRowForSlug, startDistillEngine } from "../../src/journal/engine.js";
 
 describe("listSlugsWithBacklog", () => {
   let testDir: string;
@@ -123,5 +123,211 @@ describe("ensureProjectRowForSlug", () => {
     const existingId = Number(result.lastInsertRowid);
     const id = ensureProjectRowForSlug("demo");
     expect(id).toBe(existingId);
+  });
+});
+
+function waitFor(predicate: () => boolean, timeoutMs = 2000, intervalMs = 10): Promise<void> {
+  return new Promise((resolvePromise, rejectPromise) => {
+    const start = Date.now();
+    const check = () => {
+      if (predicate()) return resolvePromise();
+      if (Date.now() - start > timeoutMs) return rejectPromise(new Error("waitFor: timed out"));
+      setTimeout(check, intervalMs);
+    };
+    check();
+  });
+}
+
+describe("startDistillEngine — tick behavior", () => {
+  let testDir: string;
+
+  beforeEach(() => {
+    testDir = mkdtempSync(join(tmpdir(), "kontexta-engine-tick-test-"));
+    createDatabase(join(testDir, "test.db"));
+  });
+
+  afterEach(() => {
+    closeDatabase();
+    rmSync(testDir, { recursive: true, force: true });
+  });
+
+  function writeRawEvent(slug: string, ts: string) {
+    const dir = join(testDir, "knowledge", "journal", slug, "raw");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      join(dir, `${ts.slice(0, 10)}.jsonl`),
+      JSON.stringify({ ts, agent: "claude-code", sid: "s", event: "tool_call", tool: "search", status: "ok", ms: 5 }) + "\n",
+    );
+  }
+
+  it("distills a dirty slug and provisions a synthetic project", async () => {
+    writeRawEvent("default", "2026-07-22T10:00:00Z");
+
+    const engine = startDistillEngine({
+      dataDir: testDir,
+      drainOnStart: false,
+      now: () => new Date("2026-07-22T10:10:00Z"),
+    });
+    try {
+      const result = await engine.tickNow();
+      expect(result.slugs_considered).toBe(1);
+      expect(result.slugs_distilled).toBe(1);
+      expect(result.slugs_failed).toBe(0);
+
+      const db = getDatabase();
+      const project = db.prepare("SELECT * FROM projects WHERE slug = ?").get("default") as any;
+      expect(project).toBeDefined();
+      expect(project.path).toBeNull();
+
+      const distilledRoot = join(testDir, "knowledge", "journal", "default", "2026", "07", "22");
+      expect(existsSync(distilledRoot)).toBe(true);
+    } finally {
+      await engine.stop();
+    }
+  });
+
+  it("skips a slug with no backlog", async () => {
+    const engine = startDistillEngine({ dataDir: testDir, drainOnStart: false });
+    try {
+      const result = await engine.tickNow();
+      expect(result.slugs_considered).toBe(0);
+      expect(result.slugs_distilled).toBe(0);
+    } finally {
+      await engine.stop();
+    }
+  });
+
+  it("does not let one failing slug block the next", async () => {
+    writeRawEvent("default", "2026-07-22T10:00:00Z");
+    writeRawEvent("also-dirty", "2026-07-22T10:00:00Z");
+
+    // Force distillJournal to throw for "default" only: pre-create a regular
+    // file where it needs to mkdir a YYYY directory, so mkdirSync(recursive)
+    // fails with ENOTDIR. "also-dirty" is untouched and should still succeed.
+    const sabotagedPath = join(testDir, "knowledge", "journal", "default", "2026");
+    writeFileSync(sabotagedPath, "not a directory");
+
+    const errors: Array<{ slug: string }> = [];
+    const engine = startDistillEngine({
+      dataDir: testDir,
+      drainOnStart: false,
+      now: () => new Date("2026-07-22T10:10:00Z"),
+      onError: (_err, slug) => errors.push({ slug }),
+    });
+    try {
+      const result = await engine.tickNow();
+      expect(result.slugs_considered).toBe(2);
+      expect(result.slugs_distilled).toBe(1);
+      expect(result.slugs_failed).toBe(1);
+      expect(errors.map((e) => e.slug)).toEqual(["default"]);
+    } finally {
+      await engine.stop();
+    }
+  });
+});
+
+describe("startDistillEngine — lifecycle", () => {
+  let testDir: string;
+
+  beforeEach(() => {
+    testDir = mkdtempSync(join(tmpdir(), "kontexta-engine-lifecycle-test-"));
+    createDatabase(join(testDir, "test.db"));
+  });
+
+  afterEach(() => {
+    closeDatabase();
+    rmSync(testDir, { recursive: true, force: true });
+  });
+
+  it("drains on start when drainOnStart is true (default)", async () => {
+    const dir = join(testDir, "knowledge", "journal", "default", "raw");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      join(dir, "2026-07-22.jsonl"),
+      JSON.stringify({ ts: "2026-07-22T10:00:00Z", agent: "claude-code", sid: "s", event: "tool_call", tool: "search", status: "ok", ms: 5 }) + "\n",
+    );
+
+    const engine = startDistillEngine({
+      dataDir: testDir,
+      tickMs: 60_000,
+      now: () => new Date("2026-07-22T10:10:00Z"),
+    });
+    try {
+      const distilledRoot = join(testDir, "knowledge", "journal", "default", "2026", "07", "22");
+      await waitFor(() => existsSync(distilledRoot));
+      expect(existsSync(distilledRoot)).toBe(true);
+    } finally {
+      await engine.stop();
+    }
+  });
+
+  it("does not drain on start when drainOnStart is false", async () => {
+    const dir = join(testDir, "knowledge", "journal", "default", "raw");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      join(dir, "2026-07-22.jsonl"),
+      JSON.stringify({ ts: "2026-07-22T10:00:00Z", agent: "claude-code", sid: "s", event: "tool_call" }) + "\n",
+    );
+
+    const engine = startDistillEngine({
+      dataDir: testDir,
+      tickMs: 60_000,
+      drainOnStart: false,
+      now: () => new Date("2026-07-22T10:10:00Z"),
+    });
+    try {
+      await new Promise((r) => setTimeout(r, 50));
+      const distilledRoot = join(testDir, "knowledge", "journal", "default", "2026", "07", "22");
+      expect(existsSync(distilledRoot)).toBe(false);
+    } finally {
+      await engine.stop();
+    }
+  });
+
+  it("stop({flush:true}) awaits one final tick", async () => {
+    const dir = join(testDir, "knowledge", "journal", "default", "raw");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      join(dir, "2026-07-22.jsonl"),
+      JSON.stringify({ ts: "2026-07-22T10:00:00Z", agent: "claude-code", sid: "s", event: "tool_call" }) + "\n",
+    );
+
+    const engine = startDistillEngine({
+      dataDir: testDir,
+      tickMs: 60_000,
+      drainOnStart: false,
+      now: () => new Date("2026-07-22T10:10:00Z"),
+    });
+    await engine.stop({ flush: true });
+    const distilledRoot = join(testDir, "knowledge", "journal", "default", "2026", "07", "22");
+    expect(existsSync(distilledRoot)).toBe(true);
+  });
+
+  it("stop() is idempotent", async () => {
+    const engine = startDistillEngine({ dataDir: testDir, drainOnStart: false, tickMs: 60_000 });
+    await engine.stop();
+    await expect(engine.stop()).resolves.toBeUndefined();
+  });
+
+  it("tickNow() collapses overlapping calls into one in-flight promise", async () => {
+    const dir = join(testDir, "knowledge", "journal", "default", "raw");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      join(dir, "2026-07-22.jsonl"),
+      JSON.stringify({ ts: "2026-07-22T10:00:00Z", agent: "claude-code", sid: "s", event: "tool_call" }) + "\n",
+    );
+
+    const engine = startDistillEngine({
+      dataDir: testDir,
+      drainOnStart: false,
+      tickMs: 60_000,
+      now: () => new Date("2026-07-22T10:10:00Z"),
+    });
+    try {
+      const [a, b] = await Promise.all([engine.tickNow(), engine.tickNow()]);
+      expect(a).toBe(b);
+    } finally {
+      await engine.stop();
+    }
   });
 });
