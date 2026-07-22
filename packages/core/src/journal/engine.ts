@@ -1,6 +1,7 @@
 // packages/core/src/journal/engine.ts
 import { readdirSync, statSync, existsSync } from "node:fs";
 import { join } from "node:path";
+import { getDatabase } from "../db/index.js";
 
 const REL_BASE = ["knowledge", "journal"];
 
@@ -39,4 +40,60 @@ export function listSlugsWithBacklog(dataDir: string): string[] {
   }
 
   return dirty.sort((a, b) => b.newestMtime - a.newestMtime).map((d) => d.slug);
+}
+
+function deriveProjectName(slug: string): string {
+  if (slug === "default") return "Default (unregistered work)";
+  return slug
+    .split(/[-_]+/)
+    .filter(Boolean)
+    .map((w) => w[0].toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
+/**
+ * Return the project id for `slug`, auto-provisioning a synthetic row
+ * (path: NULL) if none exists yet. Synthetic rows are how orphan journal
+ * slugs (unregistered directories) become distillable without requiring
+ * `register_project` first. Safe under concurrent callers, including
+ * across processes — the insert is re-checked inside a transaction, and a
+ * losing UNIQUE-constraint insert falls back to re-reading the winner's row.
+ */
+export function ensureProjectRowForSlug(slug: string): number {
+  const db = getDatabase();
+
+  const existing = db.prepare("SELECT id FROM projects WHERE slug = ?").get(slug) as { id: number } | undefined;
+  if (existing) return existing.id;
+
+  const baseName = deriveProjectName(slug);
+  const description = `Auto-provisioned by distillation engine for orphan slug '${slug}'.`;
+
+  const txn = db.transaction((): number => {
+    const recheck = db.prepare("SELECT id FROM projects WHERE slug = ?").get(slug) as { id: number } | undefined;
+    if (recheck) return recheck.id;
+
+    let name = baseName;
+    let suffix = 0;
+    for (;;) {
+      const nameTaken = db.prepare("SELECT 1 FROM projects WHERE name = ?").get(name);
+      if (!nameTaken) break;
+      suffix += 1;
+      name = suffix === 1 ? `${baseName} (auto)` : `${baseName} (auto ${suffix})`;
+    }
+
+    try {
+      const result = db
+        .prepare(`INSERT INTO projects (name, slug, description, path) VALUES (?, ?, ?, NULL)`)
+        .run(name, slug, description);
+      return Number(result.lastInsertRowid);
+    } catch (err: any) {
+      if (String(err?.code) === "SQLITE_CONSTRAINT_UNIQUE" || /UNIQUE constraint failed/.test(String(err?.message))) {
+        const winner = db.prepare("SELECT id FROM projects WHERE slug = ?").get(slug) as { id: number } | undefined;
+        if (winner) return winner.id;
+      }
+      throw err;
+    }
+  });
+
+  return txn();
 }

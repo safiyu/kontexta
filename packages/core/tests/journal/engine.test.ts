@@ -3,7 +3,8 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, rmSync, writeFileSync, mkdirSync, utimesSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { listSlugsWithBacklog } from "../../src/journal/engine.js";
+import { createDatabase, closeDatabase, getDatabase } from "../../src/db/index.js";
+import { listSlugsWithBacklog, ensureProjectRowForSlug } from "../../src/journal/engine.js";
 
 describe("listSlugsWithBacklog", () => {
   let testDir: string;
@@ -66,5 +67,61 @@ describe("listSlugsWithBacklog", () => {
     writeRaw("older", "a.jsonl", new Date("2026-07-20T10:00:00Z"));
     writeRaw("newer", "a.jsonl", new Date("2026-07-22T10:00:00Z"));
     expect(listSlugsWithBacklog(testDir)).toEqual(["newer", "older"]);
+  });
+});
+
+describe("ensureProjectRowForSlug", () => {
+  let testDir: string;
+
+  beforeEach(() => {
+    testDir = mkdtempSync(join(tmpdir(), "kontexta-engine-provision-test-"));
+    createDatabase(join(testDir, "test.db"));
+  });
+
+  afterEach(() => {
+    closeDatabase();
+    rmSync(testDir, { recursive: true, force: true });
+  });
+
+  it("creates a synthetic project row with path NULL for an unknown slug", () => {
+    const id = ensureProjectRowForSlug("default");
+    const db = getDatabase();
+    const row = db.prepare("SELECT * FROM projects WHERE id = ?").get(id) as any;
+    expect(row.slug).toBe("default");
+    expect(row.path).toBeNull();
+    expect(row.name).toBe("Default (unregistered work)");
+    expect(row.description).toMatch(/orphan slug 'default'/);
+  });
+
+  it("derives a titlecased name for non-default slugs", () => {
+    const id = ensureProjectRowForSlug("scratch-notes");
+    const db = getDatabase();
+    const row = db.prepare("SELECT name FROM projects WHERE id = ?").get(id) as any;
+    expect(row.name).toBe("Scratch Notes");
+  });
+
+  it("is idempotent — calling twice returns the same id", () => {
+    const first = ensureProjectRowForSlug("default");
+    const second = ensureProjectRowForSlug("default");
+    expect(second).toBe(first);
+    const db = getDatabase();
+    const count = db.prepare("SELECT COUNT(*) AS c FROM projects WHERE slug = ?").get("default") as any;
+    expect(count.c).toBe(1);
+  });
+
+  it("suffixes the name when it collides with an existing registered project", () => {
+    const db = getDatabase();
+    db.prepare(`INSERT INTO projects (name, slug, path) VALUES (?, ?, ?)`).run("Scratch", "some-other-slug", "/tmp/scratch");
+    const id = ensureProjectRowForSlug("scratch");
+    const row = db.prepare("SELECT name FROM projects WHERE id = ?").get(id) as any;
+    expect(row.name).toBe("Scratch (auto)");
+  });
+
+  it("returns the existing id when a project is already registered for that slug", () => {
+    const db = getDatabase();
+    const result = db.prepare(`INSERT INTO projects (name, slug, path) VALUES (?, ?, ?)`).run("Demo", "demo", "/tmp/demo");
+    const existingId = Number(result.lastInsertRowid);
+    const id = ensureProjectRowForSlug("demo");
+    expect(id).toBe(existingId);
   });
 });
