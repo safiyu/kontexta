@@ -108,11 +108,13 @@ VALUES (?, ?, ?, NULL)
 
 Wrapped in a SQLite transaction. If two MCP instances race the insert, the UNIQUE constraint on `slug` will fail one of them; catch the constraint error and re-`SELECT`.
 
+`ensureProjectRowForSlug` is exported from core and used in **two** places: the engine's tick, and the `distill_journal` MCP tool (`apps/mcp/src/journal-tools.ts:62`), which today returns `unknown project_slug` for orphan slugs. The tool switches from erroring to provisioning — so a manual `distill_journal` call on `default` works even before the engine's first tick, and both paths share one behavior.
+
 ### 5. `register_project` upsert-on-synthetic
 
 `registerProject()` lives at `packages/core/src/metadata/index.ts:195`. Today it does `INSERT OR IGNORE`, then on `changes === 0` looks the row up by name/slug and throws `PROJECT_CONFLICT` when `existing.path !== absolutePath`. A synthetic row has `path IS NULL`, so promoting it to a real project currently throws.
 
-Change: in the "insert was ignored" branch, when the existing row's `path IS NULL`, `UPDATE` it in place — populate `path`, `description`, `remote_url` from the call — and return the existing `id` (do not throw). The existing name/slug conflict paths (rows with non-null path) stay unchanged.
+Change: in the "insert was ignored" branch, when the existing row's `path IS NULL`, `UPDATE` it in place — populate `path`, `name`, `description`, `remote_url` from the call — and return the existing `id` (do not throw). If the new `name` would violate the UNIQUE constraint (some other project already uses it), keep the synthetic name, update the rest, and surface a warning in the tool response. The existing name/slug conflict paths (rows with non-null path) stay unchanged.
 
 This makes the promotion path clean: a synthetic slug becomes a fully-registered project without losing the distilled entries already keyed to its `project_id`.
 
@@ -134,8 +136,13 @@ const engine = engineEnabled ? startDistillEngine({
 
 Inside `handleShutdownSignal(...)`, before `shutdownCapture()`:
 ```ts
-if (engine) await engine.stop({ flush: true });
+if (engine) await Promise.race([
+  engine.stop({ flush: true }),
+  new Promise((r) => setTimeout(r, 10_000)),
+]);
 ```
+
+The timeout guard keeps shutdown snappy: a flush tick is normally sub-second, but a cold 500-event backlog across several slugs shouldn't be able to hold the process hostage. An interrupted flush is safe — `distillJournal` is idempotent and the next start's drain recovers.
 
 Numeric env parsing is defensive but simple: `Number(undefined) → NaN`, `NaN || fallback → fallback`. Same trick works for typos and empty strings.
 
@@ -190,7 +197,8 @@ All optional; read once at `startDistillEngine` call time (no hot reload).
 **Modified:**
 - `packages/core/src/journal/index.ts` — export `startDistillEngine`, `EngineHandle`, `StartEngineOpts`.
 - `packages/core/src/metadata/index.ts:195` (`registerProject`) — upsert-on-synthetic.
-- `apps/mcp/src/index.ts` — start engine after DB init; call `engine.stop({ flush: true })` inside the existing `handleShutdownSignal(...)` before `shutdownCapture()`.
+- `apps/mcp/src/index.ts` — start engine after DB init; call `engine.stop({ flush: true })` (with 10 s timeout race) inside the existing `handleShutdownSignal(...)` before `shutdownCapture()`.
+- `apps/mcp/src/journal-tools.ts` (~line 62) — `distill_journal` tool provisions orphan slugs via `ensureProjectRowForSlug` instead of erroring.
 - `apps/mcp/src/journal-capture.ts` (~line 124) — tighten envelope-suggestion threshold to 50 events / 1 h.
 
 ## Tests
@@ -198,7 +206,8 @@ All optional; read once at `startDistillEngine` call time (no hot reload).
 **Unit — `engine.test.ts`:**
 - Enumeration returns dirty slugs only, mtime-desc.
 - `ensureProjectRowForSlug`: fresh DB → creates row with `path IS NULL`, correct derived name; idempotent; race-safe under `Promise.all`.
-- `register_project` upsert-on-synthetic: pre-insert synthetic → `register_project` populates path in place, returns same id.
+- `register_project` upsert-on-synthetic: pre-insert synthetic → `register_project` populates path and name in place, returns same id; name-collision case keeps synthetic name and warns.
+- `distill_journal` tool on orphan slug: provisions the row and distills instead of returning `unknown project_slug`.
 - Tick behavior: distills dirty slug, skips clean slug, one failing slug doesn't block others.
 - Lifecycle: interval scheduled, `.unref()`'d; `stop({ flush: true })` awaits final tick; `stop()` idempotent.
 
