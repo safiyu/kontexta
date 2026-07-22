@@ -500,6 +500,8 @@ git add packages/core/src/metadata/index.ts packages/core/tests/metadata.test.ts
 git commit -m "feat(metadata): registerProject promotes synthetic (path=NULL) projects in place"
 ```
 
+**Post-implementation note (final whole-branch review):** the `promotion_warning` field specified above was implemented as written, but the final review proved its only trigger — a name collision surfacing during the synthetic-row `UPDATE` — is structurally unreachable given `registerProject`'s own `byName ?? bySlug` resolution order (if another row already held the target `name`, `byName` would resolve `existing` to that row instead, before the promotion branch is ever reached). It was never wired into any MCP tool response. Removed as dead code in commit `dca3498`, along with the two `promotion_warning` test assertions above; the promotion branch is now a plain `UPDATE` with a comment explaining the unreachability. Treat every `promotion_warning` reference in this task's text as historical — it does not exist in the shipped code.
+
 ---
 
 ### Task 4: `startDistillEngine` — tick logic, lifecycle, barrel export
