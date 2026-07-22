@@ -160,9 +160,11 @@ function readRawEvents(
   max: number,
   seenKeys: Set<string>,
 ): RawEvent[] {
-  const dirs = [rawDir(opts)];
+  const primaryDir = rawDir(opts);
+  const dirs = [primaryDir];
   const defaultDir = join(opts.dataDir, ...REL_BASE, "default", "raw");
-  if (defaultDir !== dirs[0] && existsSync(defaultDir)) {
+  const isMergedDefaultDir = defaultDir !== primaryDir;
+  if (isMergedDefaultDir && existsSync(defaultDir)) {
     dirs.push(defaultDir);
   }
 
@@ -187,8 +189,10 @@ function readRawEvents(
           // previous run already processed.
           if (ev.ts < sinceTs || ev.ts >= untilTs) continue;
           if (seenKeys.has(eventKey(ev))) continue;
-          // If it's from the default dir, check project affinity.
-          if (dir === defaultDir) {
+          // If it's from the merged-in default dir (not the primary dir,
+          // which happens to also be "default" when opts.projectSlug is
+          // itself "default"), check project affinity.
+          if (isMergedDefaultDir && dir === defaultDir) {
             const matchesProject = (ev.args?.project_id === opts.projectId) ||
                                  (ev.touched?.some(p => p.startsWith(opts.projectSlug)));
             if (!matchesProject) continue;

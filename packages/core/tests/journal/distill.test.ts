@@ -75,3 +75,52 @@ describe("distillJournal — integration", () => {
     expect(second.events_processed).toBe(0);
   });
 });
+
+describe("distillJournal — processing the 'default' slug itself", () => {
+  // Regression test for a bug found while implementing the journal
+  // distillation engine (Task 4): when opts.projectSlug is itself "default",
+  // rawDir(opts) and the "merged-in default dir" fallback path are the exact
+  // same string, so the project-affinity filter meant only for events
+  // merged in FROM "default" while distilling some OTHER slug was also
+  // (incorrectly) applied to "default"'s own primary raw events. Any event
+  // lacking `touched` or `args.project_id` — the common case for plain
+  // tool_call events — was silently dropped, so distillJournal always
+  // reported events_processed: 0 for the "default" slug even with a real
+  // backlog. Fixed by only applying the affinity filter when the default
+  // dir was merged in as a secondary source (i.e. projectSlug !== "default").
+  let testDir: string;
+
+  beforeEach(() => {
+    testDir = mkdtempSync(join(tmpdir(), "kontexta-distill-default-test-"));
+    createDatabase(join(testDir, "test.db"));
+    const db = getDatabase();
+    db.prepare(`INSERT INTO projects (id, name, slug, path) VALUES (1, 'Default (unregistered work)', 'default', NULL)`).run();
+  });
+
+  afterEach(() => {
+    closeDatabase();
+    rmSync(testDir, { recursive: true, force: true });
+  });
+
+  it("processes a plain event with no touched/args when the slug itself is 'default'", async () => {
+    const dir = join(testDir, "knowledge", "journal", "default", "raw");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      join(dir, "2026-07-22.jsonl"),
+      JSON.stringify({ ts: "2026-07-22T10:00:00Z", agent: "claude-code", sid: "s", event: "tool_call", tool: "search", status: "ok", ms: 5 }) + "\n",
+    );
+
+    const result = await distillJournal({
+      projectSlug: "default",
+      projectId: 1,
+      dataDir: testDir,
+      maxEvents: 200,
+      ticketRegex: /[A-Z]+-\d+/,
+      openTaskWindowDays: 90,
+      inFlightWindowSeconds: 0,
+      now: new Date("2026-07-22T11:00:00Z"),
+    });
+
+    expect(result.events_processed).toBe(1);
+  });
+});
