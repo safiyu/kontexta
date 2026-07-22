@@ -121,7 +121,10 @@ export function wrapHandler<TArgs extends Record<string, unknown>, TResult exten
     // Lenient-mode envelope + mechanical fallback (Task 16)
     try {
       const status = getBacklogStatus(getCurrentProjectSlug());
-      if (status.backlog_events >= 1) {
+      const NUDGE_THRESHOLD_EVENTS = 50;
+      const NUDGE_THRESHOLD_HOURS = 1;
+      if (status.backlog_events >= NUDGE_THRESHOLD_EVENTS ||
+          (status.backlog_oldest_age_hours ?? 0) >= NUDGE_THRESHOLD_HOURS) {
         const orig = (result as any).content?.[0]?.text;
         if (typeof orig === "string") {
           let parsed: any;
