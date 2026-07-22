@@ -375,18 +375,23 @@ In `packages/core/tests/metadata.test.ts`, add these three tests immediately aft
     expect(project.promotion_warning).toBeUndefined();
   });
 
-  it("registerProject: keeps the synthetic name on a name collision but still promotes path", () => {
+  it("registerProject: promotes a synthetic project found via its own generated name", () => {
+    // Distinct from the previous test: here `existing` is resolved via the
+    // byName lookup (the caller's name argument exactly matches the
+    // synthetic row's auto-generated name), not via the bySlug fallback.
     const db = getDatabase();
-    db.prepare(`INSERT INTO projects (name, slug, path) VALUES (?, ?, ?)`).run("Taken Name", "taken-name-slug", "/tmp/taken");
-    const synthetic = db.prepare(`INSERT INTO projects (name, slug, path) VALUES (?, ?, NULL)`).run("Scratch (auto)", "scratch");
-    const syntheticId = Number(synthetic.lastInsertRowid);
+    const result = db.prepare(
+      `INSERT INTO projects (name, slug, description, path) VALUES (?, ?, ?, NULL)`
+    ).run("Scratch (auto)", "scratch", "Auto-provisioned by distillation engine for orphan slug 'scratch'.");
+    const syntheticId = Number(result.lastInsertRowid);
 
-    const project = registerProject("Taken Name", "/home/user/projects/scratch");
+    const project = registerProject("Scratch (auto)", "/home/user/projects/scratch", "My real scratch project");
 
     expect(project.id).toBe(syntheticId);
-    expect(project.name).toBe("Scratch (auto)");
     expect(project.path).toBe("/home/user/projects/scratch");
-    expect(project.promotion_warning).toMatch(/already taken/);
+    expect(project.name).toBe("Scratch (auto)");
+    expect(project.description).toBe("My real scratch project");
+    expect(project.promotion_warning).toBeUndefined();
   });
 
   it("registerProject: still throws PROJECT_CONFLICT for a real (non-null path) conflict", () => {
