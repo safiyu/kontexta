@@ -112,6 +112,17 @@ function assert(cond, msg) {
   console.log("       " + toolNames.join(", "));
   console.log("");
 
+  await test("distill_journal on unregistered slug auto-provisions a project", async () => {
+    const r = await call("distill_journal", { project_slug: "orphan-smoke-test" });
+    assert(typeof r.events_processed === "number", "missing events_processed");
+    assert(Array.isArray(r.warnings), "missing warnings array");
+
+    const projects = await call("list_projects", {});
+    const provisioned = projects.find((p) => p.slug === "orphan-smoke-test");
+    assert(provisioned, "expected an auto-provisioned project for orphan-smoke-test");
+    assert(provisioned.path === null, `expected path to be null, got ${provisioned.path}`);
+  });
+
   let seedFile1, seedFile2;
 
   // ---- Seed via the indexed write path so files actually land in the DB ----

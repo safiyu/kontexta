@@ -1,6 +1,6 @@
 // apps/mcp/src/journal-tools.ts
 import { z } from "zod";
-import { distillJournal, readHighWater, getDatabase, getDataDir } from "kxta-core";
+import { distillJournal, ensureProjectRowForSlug, readHighWater, getDataDir } from "kxta-core";
 import type { RawEvent } from "kxta-core";
 import {
   appendVoluntaryEvent,
@@ -50,21 +50,17 @@ export function registerJournalTools(server: any): void {
 
   server.tool(
     "distill_journal",
-    "Run the distillation pipeline: read raw events since the high-water mark, group by topic, write mechanical markdown entries, advance high-water. Idempotent.",
+    "Run the distillation pipeline: read raw events since the high-water mark, group by topic, write mechanical markdown entries, advance high-water. Idempotent. Auto-provisions a project row for orphan slugs (e.g. `default`) that have no registered project yet.",
     {
       project_slug: z.string().optional(),
       max_events: z.number().int().positive().max(2000).optional(),
     },
     async ({ project_slug, max_events }: { project_slug?: string; max_events?: number }) => {
       const slug = project_slug ?? getCurrentProjectSlug();
-      const db = getDatabase();
-      const row = db.prepare(`SELECT id FROM projects WHERE slug = ?`).get(slug) as { id: number } | undefined;
-      if (!row) {
-        return { isError: true, content: [{ type: "text", text: JSON.stringify({ error: `unknown project_slug: ${slug}` }) }] };
-      }
+      const projectId = ensureProjectRowForSlug(slug);
       const result = await distillJournal({
         projectSlug: slug,
-        projectId: row.id,
+        projectId,
         dataDir: getDataDir(),
         maxEvents: max_events ?? 200,
         ticketRegex: /[A-Z]+-\d+/,
