@@ -58,12 +58,40 @@ test("envelope IS injected once backlog_events crosses the event threshold", asy
   }
 });
 
+test("envelope is NOT injected at exactly 49 events (just below the event threshold)", async () => {
+  const testDir = mkdtempSync(join(tmpdir(), "kontexta-envelope-test-"));
+  try {
+    setDataDir(testDir);
+    initCapture({ projectSlug: "demo", baseDir: join(testDir, "knowledge", "journal"), agent: "claude-code", sid: "abc" });
+    seedRawEvents(testDir, "demo", 48, 0.1); // seed 48; tool_call adds 1 → 49 total
+    const body = await callWrapped();
+    assert.equal(body.journal, undefined, "expected no journal envelope at 49 events (below the 50-event threshold)");
+  } finally {
+    shutdownCapture();
+    rmSync(testDir, { recursive: true, force: true });
+  }
+});
+
+test("envelope IS injected at exactly 50 events (the event threshold)", async () => {
+  const testDir = mkdtempSync(join(tmpdir(), "kontexta-envelope-test-"));
+  try {
+    setDataDir(testDir);
+    initCapture({ projectSlug: "demo", baseDir: join(testDir, "knowledge", "journal"), agent: "claude-code", sid: "abc" });
+    seedRawEvents(testDir, "demo", 49, 0.1); // seed 49; tool_call adds 1 → 50 total
+    const body = await callWrapped();
+    assert.ok(body.journal, "expected a journal envelope at exactly 50 events (the >= 50 threshold)");
+  } finally {
+    shutdownCapture();
+    rmSync(testDir, { recursive: true, force: true });
+  }
+});
+
 test("envelope IS injected once the oldest event crosses the age threshold", async () => {
   const testDir = mkdtempSync(join(tmpdir(), "kontexta-envelope-test-"));
   try {
     setDataDir(testDir);
     initCapture({ projectSlug: "demo", baseDir: join(testDir, "knowledge", "journal"), agent: "claude-code", sid: "abc" });
-    seedRawEvents(testDir, "demo", 1, 2); // 1 event, 2 hours old
+    seedRawEvents(testDir, "demo", 1, 1.01); // 1 event, 1.01 hours old (just over the 1-hour threshold)
     const body = await callWrapped();
     assert.ok(body.journal, "expected a journal envelope");
   } finally {
