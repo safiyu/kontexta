@@ -48,6 +48,7 @@ import {
   checkAgentRulesStatus,
   RULE_BLOCK_VERSION,
   gracefulShutdown,
+  startDistillEngine,
   type AgentId,
 } from "kxta-core";
 import RE2Class from "./re2-compat.js";
@@ -197,6 +198,16 @@ const agent = process.env.KONTEXTA_AGENT ?? "unknown";
 const sid = `${process.pid}-${Date.now().toString(36)}`;
 initCapture({ projectSlug, baseDir: baseJournalDir, agent, sid });
 
+const distillEngineEnabled = process.env.KONTEXTA_DISTILL_ENGINE !== "off";
+const distillEngine = distillEngineEnabled
+  ? startDistillEngine({
+      dataDir,
+      tickMs: Number(process.env.KONTEXTA_DISTILL_TICK_MS) || 5 * 60_000,
+      drainOnStart: process.env.KONTEXTA_DISTILL_DRAIN_ON_START !== "false",
+      maxEventsPerSlug: Number(process.env.KONTEXTA_DISTILL_MAX_EVENTS) || 500,
+    })
+  : null;
+
 startGitPoller(process.env.KONTEXTA_PROJECT_PATH ?? process.cwd(), 30);
 process.on("exit", shutdownCapture);
 // Signal-handler ordering: kill detached Hands children FIRST so their
@@ -205,6 +216,12 @@ process.on("exit", shutdownCapture);
 async function handleShutdownSignal(signal: string) {
   console.warn(`[kontexta-mcp] received ${signal}; draining…`);
   killAllActiveChildren("SIGTERM");
+  if (distillEngine) {
+    await Promise.race([
+      distillEngine.stop({ flush: true }),
+      new Promise((r) => setTimeout(r, 10_000)),
+    ]);
+  }
   shutdownCapture();
   try {
     const remaining = await gracefulShutdown(10_000);
