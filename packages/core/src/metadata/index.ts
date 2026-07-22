@@ -197,7 +197,7 @@ export function registerProject(
   path: string,
   description?: string,
   remoteUrl?: string
-): ProjectRecord & { newlyIndexed: number; promotion_warning?: string } {
+): ProjectRecord & { newlyIndexed: number } {
   const db = getDatabase();
 
   const slug = slugify(name);
@@ -210,7 +210,6 @@ export function registerProject(
   const result = insertStmt.run(name, slug, absolutePath, description || null, remoteUrl || null);
 
   let projectId: number;
-  let promotionWarning: string | undefined;
 
   if (result.changes > 0) {
     projectId = Number(result.lastInsertRowid);
@@ -229,20 +228,15 @@ export function registerProject(
       // Synthetic project (auto-provisioned by the journal distillation
       // engine for an orphan slug) — promote it in place instead of
       // throwing, so journal entries already keyed to this project_id
-      // stay linked to the same row.
-      try {
-        db.prepare(
-          `UPDATE projects SET name = ?, path = ?, description = ?, remote_url = ? WHERE id = ?`
-        ).run(name, absolutePath, description || null, remoteUrl || null, existing.id);
-      } catch (err: any) {
-        if (!/UNIQUE constraint failed: projects\.name/.test(String(err?.message))) throw err;
-        // The requested name collides with a different project — keep the
-        // synthetic name, still promote path/description/remote_url.
-        db.prepare(
-          `UPDATE projects SET path = ?, description = ?, remote_url = ? WHERE id = ?`
-        ).run(absolutePath, description || null, remoteUrl || null, existing.id);
-        promotionWarning = `Project name '${name}' is already taken; kept auto-generated name '${existing.name}' and updated path/description only.`;
-      }
+      // stay linked to the same row. A name collision here is structurally
+      // unreachable: if another row already held `name`, the byName lookup
+      // above would have resolved `existing` to THAT row instead (and, if
+      // its path is non-null, we'd already be in the PROJECT_CONFLICT
+      // branch below) — so this UPDATE can never violate the name UNIQUE
+      // constraint.
+      db.prepare(
+        `UPDATE projects SET name = ?, path = ?, description = ?, remote_url = ? WHERE id = ?`
+      ).run(name, absolutePath, description || null, remoteUrl || null, existing.id);
       projectId = existing.id;
     } else if (existing.path !== absolutePath) {
       const conflicts: string[] = [];
@@ -265,7 +259,6 @@ export function registerProject(
   return {
     ...(db.prepare("SELECT * FROM projects WHERE id = ?").get(projectId) as ProjectRecord),
     newlyIndexed,
-    ...(promotionWarning ? { promotion_warning: promotionWarning } : {}),
   };
 }
 

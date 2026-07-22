@@ -215,7 +215,6 @@ describe("Metadata Module", () => {
     expect(project.path).toBe("/home/user/projects/default");
     expect(project.name).toBe("Default");
     expect(project.description).toBe("My real project");
-    expect(project.promotion_warning).toBeUndefined();
   });
 
   it("registerProject: promotes a synthetic project found via its own generated name", () => {
@@ -234,7 +233,6 @@ describe("Metadata Module", () => {
     expect(project.path).toBe("/home/user/projects/scratch");
     expect(project.name).toBe("Scratch (auto)");
     expect(project.description).toBe("My real scratch project");
-    expect(project.promotion_warning).toBeUndefined();
   });
 
   it("registerProject: still throws PROJECT_CONFLICT for a real (non-null path) conflict", () => {

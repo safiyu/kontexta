@@ -6,6 +6,18 @@ import { distillJournal } from "./distill.js";
 
 const REL_BASE = ["knowledge", "journal"];
 
+// Must match the inFlightWindowSeconds passed to distillJournal in
+// startDistillEngine's tick below. Without this buffer, an event that
+// arrives during a distill run (and is deferred by distillJournal's own
+// in-flight window) can be missed forever: the just-finished run's
+// high-water file write gets a disk mtime AFTER the deferred event's
+// raw-file mtime, so a naive `raw > hw` comparison falsely reports the
+// slug as clean on every later tick, even though the deferred event was
+// never processed. Subtracting this buffer keeps the slug "dirty" until
+// enough real time has passed that distillJournal's own in-flight window
+// would also have cleared.
+const IN_FLIGHT_BUFFER_MS = 300_000;
+
 /**
  * Enumerate journal slugs that have raw events not yet reflected in their
  * high-water mark. Uses file mtimes only (no JSONL parsing) so it's cheap
@@ -27,6 +39,7 @@ export function listSlugsWithBacklog(dataDir: string): string[] {
 
     const hwPath = join(journalRoot, slug, ".distilled-up-to.json");
     const hwMtime = existsSync(hwPath) ? statSync(hwPath).mtimeMs : null;
+    const dirtyCutoff = hwMtime === null ? null : hwMtime - IN_FLIGHT_BUFFER_MS;
 
     let newestRawMtime = 0;
     let isDirty = hwMtime === null;
@@ -34,7 +47,7 @@ export function listSlugsWithBacklog(dataDir: string): string[] {
       if (!file.endsWith(".jsonl")) continue;
       const mtime = statSync(join(rawDir, file)).mtimeMs;
       if (mtime > newestRawMtime) newestRawMtime = mtime;
-      if (hwMtime !== null && mtime > hwMtime) isDirty = true;
+      if (dirtyCutoff !== null && mtime > dirtyCutoff) isDirty = true;
     }
     if (newestRawMtime === 0) continue; // no raw events at all
     if (isDirty) dirty.push({ slug, newestMtime: newestRawMtime });
@@ -159,7 +172,7 @@ export function startDistillEngine(opts: StartEngineOpts): EngineHandle {
             maxEvents: maxEventsPerSlug,
             ticketRegex: /[A-Z]+-\d+/,
             openTaskWindowDays: 90,
-            inFlightWindowSeconds: 300,
+            inFlightWindowSeconds: IN_FLIGHT_BUFFER_MS / 1000,
             now: now(),
           });
           if (distillResult.events_processed > 0) {

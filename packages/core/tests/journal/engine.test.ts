@@ -68,6 +68,26 @@ describe("listSlugsWithBacklog", () => {
     writeRaw("newer", "a.jsonl", new Date("2026-07-22T10:00:00Z"));
     expect(listSlugsWithBacklog(testDir)).toEqual(["newer", "older"]);
   });
+
+  it("stays dirty when the raw file's mtime is only slightly older than the high-water file (in-flight race)", () => {
+    // Simulates: distillJournal finishes a run (writing the hw file "now"),
+    // but an event that arrived moments earlier was deferred by distillJournal's
+    // own in-flight window and never got processed. A naive `raw > hw`
+    // comparison would wrongly call this slug clean.
+    const hwTime = new Date("2026-07-22T10:05:00Z");
+    const rawTime = new Date("2026-07-22T10:04:58Z"); // 2s before hw, well within the 300s buffer
+    writeRaw("race-slug", "2026-07-22.jsonl", rawTime);
+    writeHighWater("race-slug", hwTime);
+    expect(listSlugsWithBacklog(testDir)).toEqual(["race-slug"]);
+  });
+
+  it("goes clean once the raw file is older than the high-water file by more than the in-flight buffer", () => {
+    const hwTime = new Date("2026-07-22T10:05:00Z");
+    const rawTime = new Date("2026-07-22T09:55:00Z"); // 10 minutes before hw, outside the 300s buffer
+    writeRaw("old-slug", "2026-07-22.jsonl", rawTime);
+    writeHighWater("old-slug", hwTime);
+    expect(listSlugsWithBacklog(testDir)).toEqual([]);
+  });
 });
 
 describe("ensureProjectRowForSlug", () => {
