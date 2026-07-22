@@ -202,6 +202,46 @@ describe("Metadata Module", () => {
     expect(project.created_at).toBeDefined();
   });
 
+  it("registerProject: promotes a synthetic (path=NULL) project in place", () => {
+    const db = getDatabase();
+    const result = db.prepare(
+      `INSERT INTO projects (name, slug, description, path) VALUES (?, ?, ?, NULL)`
+    ).run("Default (unregistered work)", "default", "Auto-provisioned by distillation engine for orphan slug 'default'.");
+    const syntheticId = Number(result.lastInsertRowid);
+
+    const project = registerProject("Default", "/home/user/projects/default", "My real project");
+
+    expect(project.id).toBe(syntheticId);
+    expect(project.path).toBe("/home/user/projects/default");
+    expect(project.name).toBe("Default");
+    expect(project.description).toBe("My real project");
+    expect(project.promotion_warning).toBeUndefined();
+  });
+
+  it("registerProject: promotes a synthetic project found via its own generated name", () => {
+    // Distinct from the previous test: here `existing` is resolved via the
+    // byName lookup (the caller's name argument exactly matches the
+    // synthetic row's auto-generated name), not via the bySlug fallback.
+    const db = getDatabase();
+    const result = db.prepare(
+      `INSERT INTO projects (name, slug, description, path) VALUES (?, ?, ?, NULL)`
+    ).run("Scratch (auto)", "scratch", "Auto-provisioned by distillation engine for orphan slug 'scratch'.");
+    const syntheticId = Number(result.lastInsertRowid);
+
+    const project = registerProject("Scratch (auto)", "/home/user/projects/scratch", "My real scratch project");
+
+    expect(project.id).toBe(syntheticId);
+    expect(project.path).toBe("/home/user/projects/scratch");
+    expect(project.name).toBe("Scratch (auto)");
+    expect(project.description).toBe("My real scratch project");
+    expect(project.promotion_warning).toBeUndefined();
+  });
+
+  it("registerProject: still throws PROJECT_CONFLICT for a real (non-null path) conflict", () => {
+    registerProject("Existing Real Project", "/tmp/existing-real");
+    expect(() => registerProject("Existing Real Project", "/tmp/different-path")).toThrow(/Cannot register/);
+  });
+
   it("unregisterProject: removes project and associated files", async () => {
     // 1. Create a project and some files
     const project = registerProject("Unregister Test", "/tmp/unregister-test");

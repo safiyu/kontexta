@@ -197,7 +197,7 @@ export function registerProject(
   path: string,
   description?: string,
   remoteUrl?: string
-): ProjectRecord & { newlyIndexed: number } {
+): ProjectRecord & { newlyIndexed: number; promotion_warning?: string } {
   const db = getDatabase();
 
   const slug = slugify(name);
@@ -210,6 +210,7 @@ export function registerProject(
   const result = insertStmt.run(name, slug, absolutePath, description || null, remoteUrl || null);
 
   let projectId: number;
+  let promotionWarning: string | undefined;
 
   if (result.changes > 0) {
     projectId = Number(result.lastInsertRowid);
@@ -224,7 +225,26 @@ export function registerProject(
       // Should be unreachable: INSERT was ignored but neither name nor slug matches.
       throw new Error(`registerProject: insert ignored but no matching project found for name='${name}'`);
     }
-    if (existing.path !== absolutePath) {
+    if (existing.path === null) {
+      // Synthetic project (auto-provisioned by the journal distillation
+      // engine for an orphan slug) — promote it in place instead of
+      // throwing, so journal entries already keyed to this project_id
+      // stay linked to the same row.
+      try {
+        db.prepare(
+          `UPDATE projects SET name = ?, path = ?, description = ?, remote_url = ? WHERE id = ?`
+        ).run(name, absolutePath, description || null, remoteUrl || null, existing.id);
+      } catch (err: any) {
+        if (!/UNIQUE constraint failed: projects\.name/.test(String(err?.message))) throw err;
+        // The requested name collides with a different project — keep the
+        // synthetic name, still promote path/description/remote_url.
+        db.prepare(
+          `UPDATE projects SET path = ?, description = ?, remote_url = ? WHERE id = ?`
+        ).run(absolutePath, description || null, remoteUrl || null, existing.id);
+        promotionWarning = `Project name '${name}' is already taken; kept auto-generated name '${existing.name}' and updated path/description only.`;
+      }
+      projectId = existing.id;
+    } else if (existing.path !== absolutePath) {
       const conflicts: string[] = [];
       if (byName) conflicts.push(`name conflicts with '${byName.name}' at '${byName.path}'`);
       if (bySlug && bySlug.id !== byName?.id) conflicts.push(`slug '${slug}' conflicts with '${bySlug.name}' at '${bySlug.path}'`);
@@ -234,8 +254,9 @@ export function registerProject(
       );
       (err as any).code = "PROJECT_CONFLICT";
       throw err;
+    } else {
+      projectId = existing.id;
     }
-    projectId = existing.id;
   }
 
   // Auto-discover and index files in the project directory.
@@ -244,6 +265,7 @@ export function registerProject(
   return {
     ...(db.prepare("SELECT * FROM projects WHERE id = ?").get(projectId) as ProjectRecord),
     newlyIndexed,
+    ...(promotionWarning ? { promotion_warning: promotionWarning } : {}),
   };
 }
 
