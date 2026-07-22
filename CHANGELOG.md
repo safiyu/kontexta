@@ -1,5 +1,20 @@
 # Changelog
 
+## 4.1.0 — Journal notes now write themselves, everywhere
+
+Kontexta's journal turns your day-to-day work into readable notes automatically — but until now, only for projects it already knew about. Work done anywhere else (your home folder, a quick script, a repo you hadn't registered yet) just piled up as raw activity, waiting.
+
+### Added
+
+- **Journal notes now generate everywhere, automatically.** A background process periodically turns accumulated activity into readable notes for every project it sees — including folders you haven't formally registered yet. That work lands in a shared "unregistered work" bucket so nothing is lost while you decide whether to register the project properly.
+- **Register a project later without losing its history.** If you eventually register a project that already has notes sitting in the shared bucket, Kontexta links your existing notes to the new project instead of starting over.
+- **Fewer unnecessary reminders.** Kontexta now only nudges you to catch up the journal when there's a meaningful backlog, not after every single action.
+
+### Fixed
+
+- **Some journal activity from unregistered folders was silently never turned into notes.** It just accumulated forever without anyone noticing. It's now caught and processed automatically.
+- **A rare timing gap could permanently skip a few journal entries** written right as notes were being generated for that same project. Fixed.
+
 ## 4.0.0 — Calendar: schedule anything, catch conflicts automatically
 
 A brand new module for scheduling and tracking events across whatever you manage — servers, delivery vehicles, store locations, equipment, rooms, anything you name. Works both through chat and as a full visual calendar in the dashboard.
