@@ -73,15 +73,27 @@
   color: var(--text-secondary);
 }
 .blueprint .bp-dashed { border-style: dashed; }
+/* Toolbar buttons (Calendar/Sync/Reindex/Configure/About/Publish) match
+   the title-block annotation's muted tone under Blueprint instead of the
+   amber accent they use in light/dark. */
+.blueprint .bp-toolbar-btn { color: var(--text-secondary); }
 .blueprint .bp-grid {
   background-image:
     linear-gradient(rgba(224, 144, 48, 0.05) 1px, transparent 1px),
     linear-gradient(90deg, rgba(224, 144, 48, 0.05) 1px, transparent 1px);
   background-size: 22px 22px;
 }
-/* Title-block annotation: hidden except under Blueprint. */
-.bp-title-block { display: none; }
-.blueprint .bp-title-block { display: inline; }
+/* Title-block annotation: visible in every theme. Blueprint layers its
+   own font/letter-spacing/uppercase via .bp-annotation above. */
+.bp-title-block {
+  display: inline;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+  opacity: 0.7;
+}
+.blueprint .bp-title-block { opacity: 1; }
 
 /* Light theme specific adjustments for icons/emojis.
    Tuned for the warm-cream (#F4F3EF) → muted amber (#B4781E) pairing
@@ -332,6 +344,10 @@ option {
 
 .dark .btn {
   color: #E5C079;
+}
+
+.blueprint .btn {
+  color: var(--text-secondary);
 }
 
 .btn:hover,

@@ -162,7 +162,7 @@ export function FirstRunWizard({ open, onClose, initialStep = 1, projects, onSav
               <button
                 onClick={handleSaveProfile}
                 disabled={saving}
-                className="rounded-md bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
+                className="rounded-md bg-blue-200 px-4 py-2 text-sm text-blue-900 hover:bg-blue-300 disabled:opacity-50"
               >
                 {saving ? "Saving..." : "Continue"}
               </button>
@@ -199,7 +199,7 @@ export function FirstRunWizard({ open, onClose, initialStep = 1, projects, onSav
                   onClick={() => setSelectedAgent(agent.id)}
                   className={`rounded-lg border p-3 text-left text-sm transition-colors ${
                     selectedAgent === agent.id
-                      ? "border-blue-500 bg-blue-50 text-blue-700"
+                      ? "border-blue-300 bg-blue-100 text-blue-800"
                       : "hover:bg-gray-50"
                   }`}
                 >
@@ -217,7 +217,7 @@ export function FirstRunWizard({ open, onClose, initialStep = 1, projects, onSav
               <button
                 onClick={handleOnboardAgent}
                 disabled={saving || !selectedAgent}
-                className="rounded-md bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
+                className="rounded-md bg-blue-200 px-4 py-2 text-sm text-blue-900 hover:bg-blue-300 disabled:opacity-50"
               >
                 {saving ? "Onboarding..." : "Onboard Agent"}
               </button>

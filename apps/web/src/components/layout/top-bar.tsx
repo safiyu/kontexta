@@ -7,7 +7,7 @@ import { AnimatedLogo } from "./animated-logo";
 import { SyncPopover, type SyncLogEntry } from "@/components/sync/sync-popover";
 
 // Shown in the Blueprint theme's title-block annotation; bump on releases.
-const KONTEXTA_REV = "4.0.0";
+const KONTEXTA_REV = "4.1.0";
 
 interface TopBarProps {
   onSearch: () => void;
@@ -118,7 +118,7 @@ export function TopBar({
             <circle cx="11" cy="11" r="7" />
             <line x1="21" y1="21" x2="16.65" y2="16.65" />
           </svg>
-          <span className="flex-1 text-left opacity-60 group-hover:opacity-100">Search anything in your context...</span>
+          <span className="flex-1 text-left opacity-60 group-hover:opacity-100">Search context...</span>
           <kbd className="text-[10px] font-mono text-[#5C3D24] dark:text-[#F5C97A] bg-[var(--bg-secondary)] px-2 py-1 rounded-md border border-[var(--border)] shadow-sm opacity-50">{modifier}K</kbd>
         </button>
       </div>
@@ -126,7 +126,7 @@ export function TopBar({
       <div className="flex items-center gap-2">
         <button
           onClick={() => router.push("/calendar")}
-          className="btn btn-md !font-mono font-bold uppercase tracking-wider text-[var(--accent)]"
+          className="btn btn-md !font-mono font-bold uppercase tracking-wider text-[var(--accent)] bp-toolbar-btn"
           aria-label="Open Calendar"
           title="Open Calendar"
         >
@@ -135,7 +135,7 @@ export function TopBar({
 
         <button
           onClick={() => setSyncOpen((o) => !o)}
-          className="btn btn-md !font-mono font-bold uppercase tracking-wider text-[var(--accent)]"
+          className="btn btn-md !font-mono font-bold uppercase tracking-wider text-[var(--accent)] bp-toolbar-btn"
           aria-label="Sync menu"
           title="Open sync menu"
         >
@@ -145,7 +145,7 @@ export function TopBar({
         <button
           onClick={handleReindex}
           disabled={reindexing}
-          className={`btn btn-md !font-mono font-bold uppercase tracking-wider text-[var(--accent)] ${reindexing ? "opacity-50" : ""}`}
+          className={`btn btn-md !font-mono font-bold uppercase tracking-wider text-[var(--accent)] bp-toolbar-btn ${reindexing ? "opacity-50" : ""}`}
           aria-label="Reindex — scan disk to add new files and remove orphan rows"
           title="Reindex Knowledge Base + all projects: add new files and drop orphan rows"
         >
@@ -154,7 +154,7 @@ export function TopBar({
 
         <button
           onClick={onConfigure}
-          className="btn btn-md !font-mono font-bold uppercase tracking-wider text-[var(--accent)]"
+          className="btn btn-md !font-mono font-bold uppercase tracking-wider text-[var(--accent)] bp-toolbar-btn"
           aria-label="Configure Kontexta"
         >
           Configure
@@ -162,7 +162,7 @@ export function TopBar({
 
         <button
           onClick={onAbout}
-          className="btn btn-md !font-mono font-bold uppercase tracking-wider text-[var(--accent)]"
+          className="btn btn-md !font-mono font-bold uppercase tracking-wider text-[var(--accent)] bp-toolbar-btn"
           aria-label="About Kontexta"
         >
           About
@@ -174,7 +174,7 @@ export function TopBar({
               e.stopPropagation();
               setPublishMenuOpen((o) => !o);
             }}
-            className="btn btn-md !font-mono font-bold uppercase tracking-wider text-[var(--accent)]"
+            className="btn btn-md !font-mono font-bold uppercase tracking-wider text-[var(--accent)] bp-toolbar-btn"
             aria-label="Publish menu"
             title="Publish documentation"
           >
@@ -240,7 +240,7 @@ export function TopBar({
           </svg>
         </button>
 
-        <span className="bp-title-block bp-annotation">DWG NO. KX-66 · REV {KONTEXTA_REV}</span>
+        <span className="bp-title-block bp-annotation">REV {KONTEXTA_REV}</span>
 
         {mounted && (
           <button
