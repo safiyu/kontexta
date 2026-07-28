@@ -194,17 +194,17 @@ export function ToolForm({ initial, projectName, onSave, onCancel, inline }: Too
 
       <div className={`flex justify-end gap-3 pt-6 border-t border-[var(--border)] ${inline ? "sticky bottom-0 bg-[var(--bg-primary)] py-4 mt-8 z-10" : ""}`}>
         {onCancel && (
-          <button 
-            onClick={onCancel} 
-            className="px-4 py-2 text-sm font-bold border border-[var(--border)] rounded-lg hover:bg-[var(--danger-soft)] hover:text-[var(--danger)] hover:border-[var(--danger)]/50 transition-all"
+          <button
+            onClick={onCancel}
+            className="btn btn-md"
           >
             Cancel
           </button>
         )}
-        <button 
-          disabled={!isValid} 
-          onClick={() => onSave(name, def)} 
-          className="px-6 py-2 text-sm font-bold bg-[var(--accent)] text-black rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-[0_0_15px_rgba(229,192,121,0.3)] transition-all"
+        <button
+          disabled={!isValid}
+          onClick={() => onSave(name, def)}
+          className="btn btn-md btn-primary"
         >
           {initial?.name ? "Update Tool" : "Create Tool"}
         </button>

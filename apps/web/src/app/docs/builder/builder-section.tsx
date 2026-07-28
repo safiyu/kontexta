@@ -226,7 +226,7 @@ export function BuilderSection() {
           {mtimeMs !== null && (
             <button
               onClick={() => setConfirmingDeleteFile(true)}
-              className="text-[10px] font-bold uppercase tracking-widest text-[var(--danger)]/70 hover:text-[var(--danger)] transition-colors"
+              className="btn btn-md btn-destructive"
               title="Remove kontexta.json from this project"
             >
               Delete Config

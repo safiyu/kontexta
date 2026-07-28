@@ -123,7 +123,7 @@ export function CalendarToolbar({
 
       <button className="btn btn-sm" onClick={onManageEntities}>Entities</button>
       <button className="btn btn-sm" onClick={onExportIcs}>Export ICS</button>
-      <button className="btn btn-sm !text-amber-accent font-bold" onClick={onNewEvent}>+ New event</button>
+      <button className="btn btn-sm btn-primary" onClick={onNewEvent}>+ New event</button>
     </div>
   );
 }

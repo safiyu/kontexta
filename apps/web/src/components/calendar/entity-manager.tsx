@@ -125,7 +125,7 @@ export function EntityManager({ open, onClose, entities, links, onChanged }: Ent
               <input placeholder="Name" value={newName} onChange={(e) => setNewName(e.target.value)} className={`${inputClass} flex-1`} />
               <input placeholder="Kind" value={newKind} onChange={(e) => setNewKind(e.target.value)} className={`${inputClass} w-28`} />
               <input placeholder="Timezone" value={newTimezone} onChange={(e) => setNewTimezone(e.target.value)} className={`${inputClass} w-36`} />
-              <button onClick={addEntity} className="btn btn-sm !text-amber-accent font-bold">Add</button>
+              <button onClick={addEntity} className="btn btn-sm btn-primary">Add</button>
             </div>
             <div className="space-y-1.5">
               {entities.map((entity) => (
@@ -158,7 +158,7 @@ export function EntityManager({ open, onClose, entities, links, onChanged }: Ent
                 {entities.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
               </select>
               <input placeholder="Label" value={linkLabel} onChange={(e) => setLinkLabel(e.target.value)} className={`${inputClass} w-32`} />
-              <button onClick={addLink} className="btn btn-sm !text-amber-accent font-bold">Add</button>
+              <button onClick={addLink} className="btn btn-sm btn-primary">Add</button>
             </div>
             <div className="space-y-1.5">
               {links.map((link) => (

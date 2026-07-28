@@ -176,7 +176,7 @@ export function EventDialog({ state, entities, knownTypes, onClose, onSaved }: E
         )}
         <div className="flex gap-3">
           <button onClick={onClose} disabled={saving} className="btn btn-sm">Cancel</button>
-          <button onClick={handleSave} disabled={saving} className="btn btn-sm !text-amber-accent font-bold">
+          <button onClick={handleSave} disabled={saving} className="btn btn-sm btn-primary">
             {saving ? "Saving…" : "Save"}
           </button>
         </div>

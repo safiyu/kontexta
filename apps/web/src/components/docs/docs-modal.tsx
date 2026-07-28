@@ -37,7 +37,7 @@ export function DocsModal({ open, onClose }: DocsModalProps) {
                 className={`px-4 py-3 transition font-mono font-bold uppercase tracking-wider whitespace-nowrap border-b-2 ${
                   tab === t.id
                     ? "bg-[var(--accent)] text-black border-transparent"
-                    : "border-transparent text-[var(--text-secondary)] hover:bg-[var(--accent)] hover:text-black focus:bg-[var(--accent)] focus:text-black"
+                    : "border-transparent text-[var(--text-secondary)] hover:bg-[var(--accent-soft)] hover:text-[var(--text-primary)] focus:bg-[var(--accent-soft)] focus:text-[var(--text-primary)]"
                 }`}
               >
                 {t.label}

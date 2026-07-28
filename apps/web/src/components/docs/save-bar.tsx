@@ -89,7 +89,7 @@ export function SaveBar({ count, errorCount, onDiscard, onSave, inline }: Props)
             <button
               onClick={handleDiscardClick}
               disabled={status !== "idle" || count === 0}
-              className="text-[10px] font-bold uppercase tracking-widest text-[var(--text-secondary)] hover:text-[var(--danger)] transition-colors disabled:opacity-30"
+              className="btn btn-sm btn-destructive"
             >
               Discard
             </button>
@@ -99,11 +99,7 @@ export function SaveBar({ count, errorCount, onDiscard, onSave, inline }: Props)
         <button
           onClick={handleSave}
           disabled={saveDisabled}
-          className={`px-4 py-1.5 text-[11px] font-bold uppercase tracking-widest rounded-lg transition-all ${
-            saveDisabled
-              ? "bg-[var(--bg-primary)] border border-[var(--border)] text-[var(--text-secondary)] cursor-not-allowed"
-              : "bg-[var(--accent)] text-black shadow-lg shadow-[var(--accent)]/20 hover:scale-105 active:scale-95"
-          }`}
+          className="btn btn-sm btn-primary"
         >
           {saveLabel}
         </button>
@@ -129,14 +125,14 @@ export function SaveBar({ count, errorCount, onDiscard, onSave, inline }: Props)
       <button
         onClick={handleDiscardClick}
         disabled={status !== "idle" || count === 0}
-        className="px-3 py-1 text-sm border border-[var(--border)] rounded hover:bg-[var(--accent)] hover:text-black transition disabled:opacity-50 disabled:cursor-not-allowed"
+        className="btn btn-sm btn-destructive"
       >
         Discard
       </button>
       <button
         onClick={handleSave}
         disabled={saveDisabled}
-        className="px-3 py-1 text-sm border border-[var(--border)] rounded text-[var(--success)] transition hover:bg-[var(--accent)] hover:text-black focus:bg-[var(--accent)] focus:text-black disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-[var(--success)]"
+        className="btn btn-sm btn-primary"
       >
         {saveLabel}
       </button>
