@@ -270,7 +270,9 @@ export function FileList({
           </select>
         </div>
       </div>
-      {files.length > 10 && <FileListFilter value={filter} onChange={setFilter} />}
+      {(files.length > 10 || filter.trim() !== "") && (
+        <FileListFilter value={filter} onChange={setFilter} />
+      )}
 
       {(() => {
         // Intersect selection with the visible set so the badge count and

@@ -7,9 +7,11 @@ import { toast } from "sonner";
 import { AnimatedLogo } from "./animated-logo";
 import { SyncPopover, type SyncLogEntry } from "@/components/sync/sync-popover";
 import { DropdownMenu } from "@/components/ui/dropdown-menu";
+import pkg from "../../../package.json";
 
-// Shown in the Blueprint theme's title-block annotation; bump on releases.
-const KONTEXTA_REV = "4.1.0";
+// Shown in the Blueprint theme's title-block annotation; sourced from
+// package.json so it can't drift from the actual released version.
+const KONTEXTA_REV = pkg.version;
 
 interface TopBarProps {
   onSearch: () => void;

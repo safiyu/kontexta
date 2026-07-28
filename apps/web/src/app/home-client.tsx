@@ -155,6 +155,12 @@ export default function HomePage() {
 
   const isPhone = useMediaQuery("(max-width: 767px)");
 
+  // Gate the first client paint: SSR markup can't know the real viewport,
+  // so without this the desktop layout flashes before snapping to the
+  // tablet/phone layout once useMediaQuery's lazy initializer kicks in.
+  const [hydrated, setHydrated] = useState(false);
+  useEffect(() => setHydrated(true), []);
+
   // ContentPane reports unsaved-edit state up via onDirtyChange. Selection
   // handlers below check this before discarding the active file so an
   // unintended click can't silently throw away in-progress edits.
@@ -544,6 +550,10 @@ export default function HomePage() {
     active: selectedSection === "knowledge",
     onClick: handleSelectKnowledge,
   };
+
+  if (!hydrated) {
+    return <div className="h-screen bg-[var(--bg-primary)]" />;
+  }
 
   if (isPhone) {
     return (
