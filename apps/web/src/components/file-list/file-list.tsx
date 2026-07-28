@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 import { FileListFilter } from "./file-list-filter";
 import { FileItem } from "./file-item";
 import { UploadFilesDialog } from "./upload-files-dialog";
@@ -357,14 +358,17 @@ export function FileList({
           setSelectedIds(new Set());
           // Refresh the list either way; the user can see what's left.
           onRefresh();
+          const okCount = visibleSelected.length - failures.length;
           if (failures.length > 0) {
             console.error("[bulk-delete] failures:", failures);
-            alert(
-              `Deleted ${visibleSelected.length - failures.length}/${visibleSelected.length} files.\n` +
-              `${failures.length} failed:\n` +
-              failures.slice(0, 5).map((f) => `  #${f.id}: ${f.error}`).join("\n") +
-              (failures.length > 5 ? `\n  …and ${failures.length - 5} more (see console)` : ""),
+            if (okCount > 0) toast.success(`Deleted ${okCount} file(s)`);
+            toast.error(
+              `${failures.length} file(s) failed to delete: ` +
+              failures.slice(0, 5).map((f) => `#${f.id} (${f.error})`).join(", ") +
+              (failures.length > 5 ? `, …and ${failures.length - 5} more (see console)` : ""),
             );
+          } else {
+            toast.success(`Deleted ${okCount} file(s)`);
           }
         };
         return (

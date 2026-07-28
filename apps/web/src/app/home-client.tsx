@@ -103,12 +103,13 @@ export default function HomePage() {
         sessionStorage.removeItem("selectedSection");
         sessionStorage.removeItem("selectedProjectId");
         refreshProjects();
+        toast.success("Project unregistered");
       } else {
-        const data = await response.json();
-        alert(data.error || "Failed to unregister project");
+        const data = await response.json().catch(() => ({}));
+        toast.error(data.error || "Failed to unregister project");
       }
-    } catch (error) {
-      console.error("Failed to unregister project:", error);
+    } catch (error: any) {
+      toast.error(`Failed to unregister project: ${error?.message ?? "Network error"}`);
     }
   };
 
@@ -280,7 +281,6 @@ export default function HomePage() {
   };
 
   const handleRefresh = async () => {
-    console.log("Refreshing index...", { selectedProjectId });
     setIsRefreshing(true);
     try {
       const response = await fetch("/api/refresh", {
@@ -292,12 +292,13 @@ export default function HomePage() {
         refreshFiles();
         refreshAllFiles();
         setFolderRefreshKey((k) => k + 1);
+        toast.success("Index refreshed");
       } else {
-        const data = await response.json();
-        alert(data.error || "Refresh failed");
+        const data = await response.json().catch(() => ({}));
+        toast.error(data.error || "Refresh failed");
       }
-    } catch (error) {
-      console.error("Failed to refresh:", error);
+    } catch (error: any) {
+      toast.error(`Failed to refresh: ${error?.message ?? "Network error"}`);
     } finally {
       setIsRefreshing(false);
     }
@@ -388,12 +389,17 @@ export default function HomePage() {
           folder,
         }),
       });
+      const data = await response.json().catch(() => ({}));
       if (response.ok) {
-        refreshAllFiles();
         setNewFileOpen(false);
+        toast.success(`Created "${title}"`);
+        await refreshAllFiles();
+        if (typeof data.id === "number") setSelectedFileId(data.id);
+      } else {
+        toast.error(data.error || "Failed to create file");
       }
-    } catch (error) {
-      console.error("Failed to create file:", error);
+    } catch (error: any) {
+      toast.error(`Failed to create file: ${error?.message ?? "Network error"}`);
     }
   };
 
@@ -406,9 +412,13 @@ export default function HomePage() {
         refreshAllFiles();
         setFolderRefreshKey((k) => k + 1);
         setSelectedFileId(null);
+        toast.success("File deleted");
+      } else {
+        const data = await response.json().catch(() => ({}));
+        toast.error(data.error || "Failed to delete file");
       }
-    } catch (error) {
-      console.error("Failed to delete file:", error);
+    } catch (error: any) {
+      toast.error(`Failed to delete file: ${error?.message ?? "Network error"}`);
     }
   };
 
@@ -417,9 +427,9 @@ export default function HomePage() {
       const response = await fetch("/api/folders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          projectId: targetProjectId && targetProjectId > 0 ? targetProjectId : null, 
-          name 
+        body: JSON.stringify({
+          projectId: targetProjectId && targetProjectId > 0 ? targetProjectId : null,
+          name
         }),
       });
       if (response.ok) {
@@ -437,9 +447,13 @@ export default function HomePage() {
         }
         // Bump the key to trigger folder re-fetch without full page reload
         setFolderRefreshKey((k) => k + 1);
+        toast.success(`Folder "${name}" created`);
+      } else {
+        const data = await response.json().catch(() => ({}));
+        toast.error(data.error || "Failed to create folder");
       }
-    } catch (error) {
-      console.error("Failed to create folder:", error);
+    } catch (error: any) {
+      toast.error(`Failed to create folder: ${error?.message ?? "Network error"}`);
     }
   };
 
@@ -460,12 +474,13 @@ export default function HomePage() {
         setSelectedFolder(null);
         setFolderRefreshKey((k) => k + 1);
         setDeleteFolderConfirmOpen(false);
+        toast.success("Folder deleted");
       } else {
-        const data = await response.json();
-        alert(data.error || "Failed to delete folder");
+        const data = await response.json().catch(() => ({}));
+        toast.error(data.error || "Failed to delete folder");
       }
-    } catch (error) {
-      console.error("Failed to delete folder:", error);
+    } catch (error: any) {
+      toast.error(`Failed to delete folder: ${error?.message ?? "Network error"}`);
     } finally {
       setDeletingFolder(false);
     }

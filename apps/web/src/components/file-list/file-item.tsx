@@ -1,5 +1,7 @@
 "use client";
 
+import { toast } from "sonner";
+
 interface FileItemProps {
   id: number;
   title: string;
@@ -131,7 +133,7 @@ export function FileItem({ id, title, updatedAt, active, onClick, estTokens, sel
                     const body = await res.json();
                     if (body?.error) msg = body.error;
                   } catch {}
-                  alert(`Download failed: ${msg}`);
+                  toast.error(`Download failed: ${msg}`);
                   return;
                 }
                 const disposition = res.headers.get("content-disposition") || "";
@@ -147,7 +149,7 @@ export function FileItem({ id, title, updatedAt, active, onClick, estTokens, sel
                 a.remove();
                 URL.revokeObjectURL(url);
               } catch (err: any) {
-                alert(`Download failed: ${err?.message ?? String(err)}`);
+                toast.error(`Download failed: ${err?.message ?? String(err)}`);
               }
             }}
             title="Download .md"

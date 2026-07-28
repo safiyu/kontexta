@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { toast } from "sonner";
 
 interface OnboardModalProps {
   isOpen: boolean;
@@ -34,14 +35,15 @@ export function OnboardModal({ isOpen, onClose, projectId, projectName, onOnboar
         body: JSON.stringify({ targetAgent }),
       });
       if (res.ok) {
+        toast.success(`Onboarded ${projectName}`);
         onOnboarded();
         onClose();
       } else {
         const data = await res.json().catch(() => ({}));
-        alert(data.error || `Onboarding failed: HTTP ${res.status}`);
+        toast.error(data.error || `Onboarding failed: HTTP ${res.status}`);
       }
     } catch (e) {
-      alert("Failed to connect to server");
+      toast.error("Failed to connect to server");
     } finally {
       setLoading(false);
     }

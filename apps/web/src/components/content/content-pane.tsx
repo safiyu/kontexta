@@ -1,6 +1,12 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { toast } from "sonner";
+import { unified } from "unified";
+import remarkParse from "remark-parse";
+import remarkGfm from "remark-gfm";
+import remarkStringify from "remark-stringify";
+import stripMarkdown from "strip-markdown";
 import { MarkdownViewer } from "./markdown-viewer";
 import { MermaidViewer } from "./mermaid-viewer";
 import { MarkdownEditor } from "./markdown-editor";
@@ -14,6 +20,26 @@ const TrashIcon = ({ className }: { className?: string }) => (
     <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
   </svg>
 );
+
+const DownloadIcon = ({ className }: { className?: string }) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+    <polyline points="7 10 12 15 17 10" />
+    <line x1="12" y1="15" x2="12" y2="3" />
+  </svg>
+);
+
+function downloadBlob(content: string, filename: string, mimeType: string) {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
 
 interface File {
   id: number;
@@ -71,6 +97,83 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
   const [gitErrorMessage, setGitErrorMessage] = useState("");
   const [refreshing, setRefreshing] = useState(false);
   const [removingOrphan, setRemovingOrphan] = useState(false);
+  const [exportMenuOpen, setExportMenuOpen] = useState(false);
+
+  // Close the export dropdown on any click outside it, matching the
+  // existing Sync/Publish dropdown pattern in top-bar.tsx.
+  useEffect(() => {
+    if (!exportMenuOpen) return;
+    const close = () => setExportMenuOpen(false);
+    window.addEventListener("click", close);
+    return () => window.removeEventListener("click", close);
+  }, [exportMenuOpen]);
+
+  const baseFilename = () => (file?.title || "untitled").replace(/\.(md|mmd)$/i, "");
+
+  const handleExportMarkdown = () => {
+    if (!file) return;
+    downloadBlob(file.content, `${baseFilename()}.md`, "text/markdown");
+    toast.success("Exported Markdown");
+  };
+
+  const handleExportText = async () => {
+    if (!file) return;
+    // strip-markdown's defaults delete code blocks and tables entirely
+    // (not just their syntax) — `keep` preserves the underlying content;
+    // `tableCell` needs its own entry since it has a separate default
+    // handler independent of `table`. remark-gfm is required for both
+    // parsing and re-stringifying GFM tables correctly.
+    const result = await unified()
+      .use(remarkParse)
+      .use(remarkGfm)
+      .use(stripMarkdown, { keep: ["code", "inlineCode", "table", "tableCell"] })
+      .use(remarkStringify)
+      .process(file.content);
+    downloadBlob(String(result), `${baseFilename()}.txt`, "text/plain");
+    toast.success("Exported text");
+  };
+
+  const [exportingPdf, setExportingPdf] = useState(false);
+
+  const handleExportPdf = async () => {
+    if (!file) return;
+    setExportingPdf(true);
+    try {
+      const res = await fetch(`/api/files/${file.id}/export-pdf`);
+      if (!res.ok) {
+        const text = await res.text();
+        let message = `Failed to export PDF (HTTP ${res.status})`;
+        try {
+          const parsed = JSON.parse(text);
+          if (parsed?.error) message = parsed.error;
+        } catch {
+          // Response wasn't JSON (e.g. a framework error page) — log the
+          // raw body so it's still visible for debugging.
+          console.error("[export-pdf] non-JSON error response:", text);
+        }
+        toast.error(message);
+        return;
+      }
+      const disposition = res.headers.get("content-disposition") || "";
+      const match = /filename="([^"]+)"/.exec(disposition);
+      const filename = match?.[1] ?? `${baseFilename()}.pdf`;
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast.success("Exported PDF");
+    } catch (err) {
+      console.error("[export-pdf] request failed:", err);
+      toast.error("Failed to export PDF — check the browser console for details.");
+    } finally {
+      setExportingPdf(false);
+    }
+  };
 
   const handleRefresh = async () => {
     if (!fileId) return;
@@ -228,9 +331,13 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
         setFile((prev) => (prev && prev.id === issuedFor ? { ...prev, content: data.content } : prev));
         setEditContent(data.content);
         setViewHistory(false);
+        toast.success("Restored from history");
+      } else {
+        const body = await response.json().catch(() => ({}));
+        toast.error(body?.error || "Failed to restore version");
       }
-    } catch (error) {
-      console.error("Failed to restore version:", error);
+    } catch (error: any) {
+      toast.error(`Failed to restore version: ${error?.message ?? "Network error"}`);
     }
   };
 
@@ -278,6 +385,7 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
         }
         setFile(updatedFile);
         setEditing(false);
+        toast.success("Saved");
         if (updatedFile.git_warning) {
           setGitErrorMessage(updatedFile.git_warning);
           setGitErrorOpen(true);
@@ -523,6 +631,54 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
                   className={`w-4 h-4 ${file?.favorite ? "text-amber-accent" : "opacity-60"}`}
                 />
               </button>
+              <div className="relative">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setExportMenuOpen((o) => !o);
+                  }}
+                  disabled={exportingPdf}
+                  className="btn btn-md"
+                  aria-label="Export file"
+                  title={exportingPdf ? "Generating PDF…" : "Export file"}
+                >
+                  <DownloadIcon className={`w-4 h-4 opacity-70 ${exportingPdf ? "animate-pulse" : ""}`} />
+                </button>
+                {exportMenuOpen && (
+                  <div className="absolute right-0 top-full mt-2 w-40 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-xl shadow-xl overflow-hidden z-[100]">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setExportMenuOpen(false);
+                        handleExportMarkdown();
+                      }}
+                      className="w-full px-4 py-2.5 text-left text-sm text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] transition-colors"
+                    >
+                      Markdown (.md)
+                    </button>
+                    <button
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        setExportMenuOpen(false);
+                        await handleExportText();
+                      }}
+                      className="w-full px-4 py-2.5 text-left text-sm text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] transition-colors"
+                    >
+                      Text (.txt)
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setExportMenuOpen(false);
+                        handleExportPdf();
+                      }}
+                      className="w-full px-4 py-2.5 text-left text-sm text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] transition-colors"
+                    >
+                      PDF
+                    </button>
+                  </div>
+                )}
+              </div>
               <button
                 onClick={() => setDeleteDialogOpen(true)}
                 className="btn btn-md btn-destructive"
@@ -530,7 +686,6 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
                 title="Delete file"
               >
                 <TrashIcon className="w-4 h-4 opacity-70" />
-                <span className="font-bold uppercase tracking-tighter text-[11px]">Delete</span>
               </button>
             </>
           )}
