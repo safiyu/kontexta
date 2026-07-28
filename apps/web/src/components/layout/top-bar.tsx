@@ -83,7 +83,7 @@ export function TopBar({
       <div className="flex items-center gap-0 group cursor-pointer" onClick={() => router.push("/")}>
         <AnimatedLogo size="sm" />
         <span
-          className="-ml-3 font-extrabold text-xl tracking-[4px] font-title text-[#0F274F] dark:text-white drop-shadow-[0_0_15px_rgba(180,120,30,0.1)] dark:drop-shadow-[0_0_15px_rgba(180,120,30,0.3)] transition-all group-hover:drop-shadow-[0_0_20px_rgba(180,120,30,0.5)]"
+          className="-ml-3 font-extrabold text-xl tracking-[4px] font-title text-[var(--text-primary)] drop-shadow-[0_0_15px_rgba(180,120,30,0.1)] dark:drop-shadow-[0_0_15px_rgba(180,120,30,0.3)] transition-all group-hover:drop-shadow-[0_0_20px_rgba(180,120,30,0.5)]"
         >
           ONTEXTA
         </span>
@@ -92,7 +92,7 @@ export function TopBar({
       <div className="flex-1 flex justify-center px-4">
         <button
           onClick={onSearch}
-          className="w-full max-w-[440px] h-10 px-4 bg-[var(--bg-tertiary)]/50 text-[13px] text-[#5C3D24] dark:text-[#F5C97A] rounded-xl hover:bg-[var(--bg-secondary)] transition-all flex items-center gap-3 border border-[var(--border)] group focus-glow"
+          className="w-full max-w-[440px] h-10 px-4 bg-[var(--bg-tertiary)]/50 text-[13px] text-[var(--text-secondary)] rounded-xl hover:bg-[var(--bg-secondary)] transition-all flex items-center gap-3 border border-[var(--border)] group focus-glow"
         >
           <svg
             viewBox="0 0 24 24"
@@ -107,7 +107,7 @@ export function TopBar({
             <line x1="21" y1="21" x2="16.65" y2="16.65" />
           </svg>
           <span className="flex-1 text-left opacity-60 group-hover:opacity-100">Search context...</span>
-          <kbd className="text-[10px] font-mono text-[#5C3D24] dark:text-[#F5C97A] bg-[var(--bg-secondary)] px-2 py-1 rounded-md border border-[var(--border)] shadow-sm opacity-50">{modifier}K</kbd>
+          <kbd className="text-[10px] font-mono text-[var(--text-secondary)] bg-[var(--bg-secondary)] px-2 py-1 rounded-md border border-[var(--border)] shadow-sm opacity-50">{modifier}K</kbd>
         </button>
       </div>
 
@@ -197,7 +197,7 @@ export function TopBar({
             // navigating — prevents a spurious 1008 WS reconnect error.
             router.push("/login");
           }}
-          className="p-2 rounded-md text-[var(--text-secondary)] hover:text-red-400 hover:bg-[var(--bg-tertiary)] transition-colors"
+          className="p-2 rounded-md text-[var(--text-secondary)] hover:text-[var(--danger)] hover:bg-[var(--bg-tertiary)] transition-colors"
           aria-label="Lock Kontexta"
           title="Lock Kontexta"
         >

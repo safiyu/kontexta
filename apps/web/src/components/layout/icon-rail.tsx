@@ -23,7 +23,7 @@ export function IconRail({ items, footer }: IconRailProps) {
 
   return (
     <>
-      <div className="w-14 shrink-0 bg-[#0A0F1A] border-r border-amber-accent/10 flex flex-col items-center py-4 gap-4 z-50">
+      <div className="w-14 shrink-0 bg-[var(--bg-secondary)] border-r border-[var(--border)] flex flex-col items-center py-4 gap-4 z-50">
         <div className="flex flex-col items-center gap-3 w-full">
           {items.map((it) => (
             <RailButton key={it.id} item={it} onPeek={() => setPeekId(it.id)} />
@@ -31,7 +31,7 @@ export function IconRail({ items, footer }: IconRailProps) {
         </div>
         <div className="flex-1" />
         {footer && (
-          <div className="pt-4 border-t border-amber-accent/10 w-full flex flex-col items-center">
+          <div className="pt-4 border-t border-[var(--border)] w-full flex flex-col items-center">
             <RailButton item={footer} onPeek={() => setPeekId(footer.id)} />
           </div>
         )}
@@ -65,15 +65,15 @@ function RailButton({ item, onPeek }: { item: IconRailItem; onPeek: () => void }
       }}
       className={`
         w-10 h-10 flex items-center justify-center relative rounded-xl transition-all duration-300 group hover-lift
-        ${item.active 
-          ? "bg-amber-accent text-white shadow-[0_0_20px_rgba(180,120,30,0.4)]" 
-          : "bg-white/5 text-white/50 hover:bg-white/10 hover:text-white active:scale-95"
+        ${item.active
+          ? "bg-amber-accent text-white shadow-[0_0_20px_rgba(180,120,30,0.4)]"
+          : "bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:bg-[var(--accent-soft)] hover:text-[var(--text-primary)] active:scale-95"
         }
       `}
       aria-label={item.label}
     >
       {item.active && (
-        <span className="absolute -left-3 top-1/2 -translate-y-1/2 w-1.5 h-6 bg-amber-accent rounded-r-full shadow-[4px_0_15px_rgba(180,120,30,0.6)]" />
+        <span className="absolute -left-3 top-1/2 -translate-y-1/2 w-1.5 h-6 bg-amber-accent rounded-r-full shadow-[4px_0_15px_rgba(180,120,30,0.6)] bp-keep-round" />
       )}
       
       {isKB ? (
