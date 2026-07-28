@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { FileListFilter } from "./file-list-filter";
 import { FileItem } from "./file-item";
@@ -8,6 +8,7 @@ import { UploadFilesDialog } from "./upload-files-dialog";
 import { ClipUrlDialog } from "./clip-url-dialog";
 import { OnboardModal } from "./onboard-modal";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { DropdownMenu } from "@/components/ui/dropdown-menu";
 
 interface Project {
   id: number;
@@ -80,25 +81,8 @@ export function FileList({
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [clipDialogOpen, setClipDialogOpen] = useState(false);
   const [onboardOpen, setOnboardOpen] = useState(false);
-  const [newMenuOpen, setNewMenuOpen] = useState(false);
-  const [projectMenuOpen, setProjectMenuOpen] = useState(false);
-  const newMenuRef = useRef<HTMLDivElement>(null);
-  const projectMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { setSelectedIds(new Set()); }, [selectedFolder, selectedProject?.id, selectedSection, filter, sortBy]);
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (newMenuOpen && newMenuRef.current && !newMenuRef.current.contains(e.target as Node)) {
-        setNewMenuOpen(false);
-      }
-      if (projectMenuOpen && projectMenuRef.current && !projectMenuRef.current.contains(e.target as Node)) {
-        setProjectMenuOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [newMenuOpen, projectMenuOpen]);
 
   const filteredAndSorted = useMemo(() => {
     let result = [...files];
@@ -197,95 +181,54 @@ export function FileList({
   return (
     <div className="flex flex-col h-full">
       <div className="flex items-center gap-1.5 px-1.5 py-1.5 border-b border-[var(--border)]">
-        <div className="relative flex-1" ref={newMenuRef}>
-          <button
-            type="button"
-            onClick={() => setNewMenuOpen((v) => !v)}
-            className="btn btn-sm w-full"
-            title="Add content to the knowledge base"
-          >
-            New <span className="opacity-60 text-xs">▾</span>
-          </button>
-          {newMenuOpen && (
-            <div className="dropdown-menu left-0 w-full">
-              <button
-                type="button"
-                onClick={() => { setNewMenuOpen(false); onNewFile(); }}
-                className="dropdown-item"
-              >
-                <span>+</span> New File
+        <div className="flex-1">
+          <DropdownMenu
+            align="start"
+            trigger={
+              <button type="button" className="btn btn-sm w-full" title="Add content to the knowledge base">
+                New <span className="opacity-60 text-xs">▾</span>
               </button>
-              <button
-                type="button"
-                onClick={() => { setNewMenuOpen(false); setUploadOpen(true); }}
-                className="dropdown-item"
-              >
-                <span>↑</span> Upload Files
-              </button>
-              <button
-                type="button"
-                onClick={() => { setNewMenuOpen(false); setClipDialogOpen(true); }}
-                className="dropdown-item"
-              >
-                <span>↗</span> Clip URL
-              </button>
-            </div>
-          )}
+            }
+            items={[
+              { label: "New File", icon: <span>+</span>, onSelect: onNewFile },
+              { label: "Upload Files", icon: <span>↑</span>, onSelect: () => setUploadOpen(true) },
+              { label: "Clip URL", icon: <span>↗</span>, onSelect: () => setClipDialogOpen(true) },
+            ]}
+          />
         </div>
         {selectedSection === "projects" && selectedProject && (
-          <div className="relative flex-1" ref={projectMenuRef}>
-            <button
-              type="button"
-              onClick={() => setProjectMenuOpen((v) => !v)}
-              className="btn btn-sm w-full"
-              title="Project actions"
-            >
-              Project <span className="opacity-60 text-xs">▾</span>
-            </button>
-            {projectMenuOpen && (
-              <div className="dropdown-menu left-0 w-full">
-                <a
-                  href={selectedFolder 
-                    ? `/api/export/zip?project_id=${selectedProject.id}&folder=${encodeURIComponent(selectedFolder)}`
-                    : `/api/export/zip?project_id=${selectedProject.id}`}
-                  download
-                  onClick={() => setProjectMenuOpen(false)}
-                  className="dropdown-item"
-                >
-                  <span>↓</span> Export ZIP
-                </a>
-                <button
-                  type="button"
-                  onClick={() => { setProjectMenuOpen(false); onSync(); }}
-                  className="dropdown-item"
-                >
-                  <span>↻</span> Sync Project
+          <div className="flex-1">
+            <DropdownMenu
+              align="start"
+              trigger={
+                <button type="button" className="btn btn-sm w-full" title="Project actions">
+                  Project <span className="opacity-60 text-xs">▾</span>
                 </button>
-                <button
-                  type="button"
-                  onClick={() => { setProjectMenuOpen(false); onRefresh(); }}
-                  className="dropdown-item"
-                >
-                  <span>🔍</span> Scan for New Files
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { setProjectMenuOpen(false); setOnboardOpen(true); }}
-                  className="dropdown-item"
-                >
-                  <span>✨</span> Onboard Agent
-                </button>
-                {!selectedFolder && onUnregisterProject && (
-                  <button
-                    type="button"
-                    onClick={() => { setProjectMenuOpen(false); onUnregisterProject(); }}
-                    className="dropdown-item text-red-500 hover:text-red-600 hover:bg-red-500/10"
-                  >
-                    <span>✕</span> Unregister
-                  </button>
-                )}
-              </div>
-            )}
+              }
+              items={[
+                {
+                  label: "Export ZIP",
+                  icon: <span>↓</span>,
+                  onSelect: () => {
+                    const url = selectedFolder
+                      ? `/api/export/zip?project_id=${selectedProject.id}&folder=${encodeURIComponent(selectedFolder)}`
+                      : `/api/export/zip?project_id=${selectedProject.id}`;
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = "";
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                  },
+                },
+                { label: "Sync Project", icon: <span>↻</span>, onSelect: onSync },
+                { label: "Scan for New Files", icon: <span>🔍</span>, onSelect: onRefresh },
+                { label: "Onboard Agent", icon: <span>✨</span>, onSelect: () => setOnboardOpen(true) },
+                ...(!selectedFolder && onUnregisterProject
+                  ? [{ label: "Unregister", icon: <span>✕</span>, onSelect: onUnregisterProject, destructive: true }]
+                  : []),
+              ]}
+            />
           </div>
         )}
         <button

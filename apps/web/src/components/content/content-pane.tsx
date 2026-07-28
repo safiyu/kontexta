@@ -12,6 +12,7 @@ import { MermaidViewer } from "./mermaid-viewer";
 import { MarkdownEditor } from "./markdown-editor";
 import { DeleteConfirmDialog } from "./delete-confirm-dialog";
 import { GitErrorDialog } from "./git-error-dialog";
+import { DropdownMenu } from "@/components/ui/dropdown-menu";
 
 const TrashIcon = ({ className }: { className?: string }) => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
@@ -97,16 +98,6 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
   const [gitErrorMessage, setGitErrorMessage] = useState("");
   const [refreshing, setRefreshing] = useState(false);
   const [removingOrphan, setRemovingOrphan] = useState(false);
-  const [exportMenuOpen, setExportMenuOpen] = useState(false);
-
-  // Close the export dropdown on any click outside it, matching the
-  // existing Sync/Publish dropdown pattern in top-bar.tsx.
-  useEffect(() => {
-    if (!exportMenuOpen) return;
-    const close = () => setExportMenuOpen(false);
-    window.addEventListener("click", close);
-    return () => window.removeEventListener("click", close);
-  }, [exportMenuOpen]);
 
   const baseFilename = () => (file?.title || "untitled").replace(/\.(md|mmd)$/i, "");
 
@@ -633,54 +624,23 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
                   className={`w-4 h-4 ${file?.favorite ? "text-amber-accent" : "opacity-60"}`}
                 />
               </button>
-              <div className="relative">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setExportMenuOpen((o) => !o);
-                  }}
-                  disabled={exportingPdf}
-                  className="btn btn-md"
-                  aria-label="Export file"
-                  title={exportingPdf ? "Generating PDF…" : "Export file"}
-                >
-                  <DownloadIcon className={`w-4 h-4 opacity-70 ${exportingPdf ? "animate-pulse" : ""}`} />
-                </button>
-                {exportMenuOpen && (
-                  <div className="absolute right-0 top-full mt-2 w-40 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-xl shadow-xl overflow-hidden z-[100]">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setExportMenuOpen(false);
-                        handleExportMarkdown();
-                      }}
-                      className="w-full px-4 py-2.5 text-left text-sm text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] transition-colors"
-                    >
-                      Markdown (.md)
-                    </button>
-                    <button
-                      onClick={async (e) => {
-                        e.stopPropagation();
-                        setExportMenuOpen(false);
-                        await handleExportText();
-                      }}
-                      className="w-full px-4 py-2.5 text-left text-sm text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] transition-colors"
-                    >
-                      Text (.txt)
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setExportMenuOpen(false);
-                        handleExportPdf();
-                      }}
-                      className="w-full px-4 py-2.5 text-left text-sm text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] transition-colors"
-                    >
-                      PDF
-                    </button>
-                  </div>
-                )}
-              </div>
+              <DropdownMenu
+                trigger={
+                  <button
+                    disabled={exportingPdf}
+                    className="btn btn-md"
+                    aria-label="Export file"
+                    title={exportingPdf ? "Generating PDF…" : "Export file"}
+                  >
+                    <DownloadIcon className={`w-4 h-4 opacity-70 ${exportingPdf ? "animate-pulse" : ""}`} />
+                  </button>
+                }
+                items={[
+                  { label: "Markdown (.md)", onSelect: handleExportMarkdown },
+                  { label: "Text (.txt)", onSelect: () => { handleExportText(); } },
+                  { label: "PDF", onSelect: handleExportPdf },
+                ]}
+              />
               <button
                 onClick={() => setDeleteDialogOpen(true)}
                 className="btn btn-md btn-destructive"
