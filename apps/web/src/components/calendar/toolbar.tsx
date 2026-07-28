@@ -40,95 +40,105 @@ export function CalendarToolbar({
   onExportIcs, onManageEntities, onNewEvent,
 }: CalendarToolbarProps) {
   return (
-    <div className="px-4 py-3 border-b border-[var(--border)] flex items-center gap-2 flex-wrap">
-      <div className="flex items-center gap-1">
-        <button className="btn btn-sm" onClick={() => onNavigate(-1)} aria-label="Previous">
-          <ChevronLeft className="w-4 h-4" aria-hidden />
-        </button>
-        <button className="btn btn-sm" onClick={() => onNavigate(0)}>Today</button>
-        <button className="btn btn-sm" onClick={() => onNavigate(1)} aria-label="Next">
-          <ChevronRight className="w-4 h-4" aria-hidden />
-        </button>
-      </div>
-
-      <h2 className="font-title text-lg font-bold text-[var(--text-primary)] mx-2 whitespace-nowrap">
-        {rangeLabel}
-      </h2>
-
-      <div className="flex rounded-lg border border-[var(--border)] overflow-hidden">
-        {VIEWS.map((v) => (
-          <button
-            key={v.id}
-            onClick={() => onViewChange(v.id)}
-            className={`px-3 py-1.5 text-xs font-bold tracking-widest uppercase transition-colors ${
-              view === v.id
-                ? "bg-amber-accent/10 text-amber-accent"
-                : "text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)]/40"
-            }`}
-          >
-            {v.label}
+    <div className="border-b border-[var(--border)]">
+      {/* Row 1: navigation + range + view switcher — never competes with filters/actions for space. */}
+      <div className="px-4 pt-3 pb-2 flex items-center gap-2">
+        <div className="flex items-center gap-1">
+          <button className="btn btn-sm" onClick={() => onNavigate(-1)} aria-label="Previous">
+            <ChevronLeft className="w-4 h-4" aria-hidden />
           </button>
-        ))}
-      </div>
-
-      <select
-        value={entityFilter ?? ""}
-        onChange={(e) => onEntityFilter(e.target.value ? Number(e.target.value) : undefined)}
-        className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded px-2 py-1.5 text-xs text-[var(--text-primary)] outline-none focus:border-amber-accent/50 cursor-pointer"
-      >
-        <option value="">All entities</option>
-        {entities.map((e) => (
-          <option key={e.id} value={e.id}>{e.name}</option>
-        ))}
-      </select>
-
-      <select
-        value={typeFilter ?? ""}
-        onChange={(e) => onTypeFilter(e.target.value || undefined)}
-        className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded px-2 py-1.5 text-xs text-[var(--text-primary)] outline-none focus:border-amber-accent/50 cursor-pointer"
-      >
-        <option value="">All types</option>
-        {types.map((t) => (
-          <option key={t} value={t}>{t}</option>
-        ))}
-      </select>
-
-      <div className="relative">
-        <input
-          type="text"
-          value={query}
-          onChange={(e) => onQueryChange(e.target.value)}
-          placeholder="Filter: entity, title, type…"
-          className="w-48 bg-[var(--bg-secondary)] border border-[var(--border)] rounded px-2 py-1.5 pr-6 text-xs text-[var(--text-primary)] outline-none focus:border-amber-accent/50 placeholder:text-[var(--muted)]"
-        />
-        {query && (
-          <button
-            onClick={() => onQueryChange("")}
-            className="absolute right-1 top-1/2 -translate-y-1/2 text-[var(--muted)] hover:text-amber-accent text-xs px-1"
-            aria-label="Clear filter"
-          >
-            <X className="w-3.5 h-3.5" aria-hidden />
+          <button className="btn btn-sm" onClick={() => onNavigate(0)}>Today</button>
+          <button className="btn btn-sm" onClick={() => onNavigate(1)} aria-label="Next">
+            <ChevronRight className="w-4 h-4" aria-hidden />
           </button>
-        )}
+        </div>
+
+        <h2 className="font-title text-lg font-bold text-[var(--text-primary)] mx-2 whitespace-nowrap truncate">
+          {rangeLabel}
+        </h2>
+
+        <div className="flex-1" />
+
+        <div className="flex rounded-lg border border-[var(--border)] overflow-hidden shrink-0">
+          {VIEWS.map((v) => (
+            <button
+              key={v.id}
+              onClick={() => onViewChange(v.id)}
+              className={`px-3 py-1.5 text-xs font-bold tracking-widest uppercase transition-colors ${
+                view === v.id
+                  ? "bg-amber-accent/10 text-amber-accent"
+                  : "text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)]/40"
+              }`}
+            >
+              {v.label}
+            </button>
+          ))}
+        </div>
       </div>
 
-      <div className="flex-1" />
+      {/* Row 2: filters + actions — has the full width to itself, so it only wraps at genuinely narrow widths. */}
+      <div className="px-4 pb-3 flex items-center gap-2 flex-wrap">
+        <select
+          value={entityFilter ?? ""}
+          onChange={(e) => onEntityFilter(e.target.value ? Number(e.target.value) : undefined)}
+          className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded px-2 py-1.5 text-xs text-[var(--text-primary)] outline-none focus:border-amber-accent/50 cursor-pointer min-w-0"
+        >
+          <option value="">All entities</option>
+          {entities.map((e) => (
+            <option key={e.id} value={e.id}>{e.name}</option>
+          ))}
+        </select>
 
-      <button
-        onClick={onToggleConflicts}
-        className={`btn btn-sm flex items-center gap-1.5 ${conflictsOpen ? "bg-amber-accent/10 text-amber-accent" : ""}`}
-      >
-        Conflicts
-        {conflictCount > 0 && (
-          <span className="px-1.5 rounded-full bg-[var(--danger-soft)] text-[var(--danger)] text-[10px] font-bold">
-            {conflictCount}
-          </span>
-        )}
-      </button>
+        <select
+          value={typeFilter ?? ""}
+          onChange={(e) => onTypeFilter(e.target.value || undefined)}
+          className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded px-2 py-1.5 text-xs text-[var(--text-primary)] outline-none focus:border-amber-accent/50 cursor-pointer min-w-0"
+        >
+          <option value="">All types</option>
+          {types.map((t) => (
+            <option key={t} value={t}>{t}</option>
+          ))}
+        </select>
 
-      <button className="btn btn-sm" onClick={onManageEntities}>Entities</button>
-      <button className="btn btn-sm" onClick={onExportIcs}>Export ICS</button>
-      <button className="btn btn-sm btn-primary" onClick={onNewEvent}>+ New event</button>
+        <div className="relative min-w-[8rem] flex-1 max-w-48">
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => onQueryChange(e.target.value)}
+            placeholder="Filter: entity, title, type…"
+            className="w-full bg-[var(--bg-secondary)] border border-[var(--border)] rounded px-2 py-1.5 pr-6 text-xs text-[var(--text-primary)] outline-none focus:border-amber-accent/50 placeholder:text-[var(--muted)]"
+          />
+          {query && (
+            <button
+              onClick={() => onQueryChange("")}
+              className="absolute right-1 top-1/2 -translate-y-1/2 text-[var(--muted)] hover:text-amber-accent text-xs px-1"
+              aria-label="Clear filter"
+            >
+              <X className="w-3.5 h-3.5" aria-hidden />
+            </button>
+          )}
+        </div>
+
+        <div className="flex-1" />
+
+        <div className="flex items-center gap-2 flex-wrap justify-end">
+          <button
+            onClick={onToggleConflicts}
+            className={`btn btn-sm flex items-center gap-1.5 ${conflictsOpen ? "bg-amber-accent/10 text-amber-accent" : ""}`}
+          >
+            Conflicts
+            {conflictCount > 0 && (
+              <span className="px-1.5 rounded-full bg-[var(--danger-soft)] text-[var(--danger)] text-[10px] font-bold">
+                {conflictCount}
+              </span>
+            )}
+          </button>
+
+          <button className="btn btn-sm" onClick={onManageEntities}>Entities</button>
+          <button className="btn btn-sm" onClick={onExportIcs}>Export ICS</button>
+          <button className="btn btn-sm btn-primary" onClick={onNewEvent}>+ New event</button>
+        </div>
+      </div>
     </div>
   );
 }
