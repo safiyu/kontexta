@@ -76,7 +76,7 @@ export function LoginClient({ isSetupRequired }: { isSetupRequired: boolean }) {
 
         <form onSubmit={handleSubmit} className="p-8 space-y-6">
           {error && (
-            <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-500 text-sm text-center">
+            <div className="p-3 rounded-lg bg-[var(--danger-soft)] border border-[var(--danger)]/20 text-[var(--danger)] text-sm text-center">
               {error}
             </div>
           )}
@@ -133,7 +133,7 @@ export function LoginClient({ isSetupRequired }: { isSetupRequired: boolean }) {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-[var(--accent)] text-black font-bold rounded-lg px-4 py-3 hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(180,120,30,0.3)]"
+            className="w-full bg-[var(--accent)] text-black font-bold rounded-lg px-4 py-3 hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center justify-center gap-2 shadow-[0_0_15px_color-mix(in_srgb,var(--accent)_30%,transparent)]"
           >
             {loading ? (
               <svg className="animate-spin h-5 w-5 text-black" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">

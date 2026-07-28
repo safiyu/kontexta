@@ -12,7 +12,7 @@ interface Props {
 
 const DANGER_STRIPE: Record<string, string> = {
   moderate: "bg-amber-500",
-  high: "bg-red-500",
+  high: "bg-[var(--danger)]",
 };
 
 export function ToolListRow({ name, def, onEdit, onDelete, errorBadge }: Props) {
@@ -55,7 +55,7 @@ export function ToolListRow({ name, def, onEdit, onDelete, errorBadge }: Props) 
           <div className="text-xs text-[var(--text-secondary)] truncate font-mono">{cmd}</div>
           <div className="text-xs text-[var(--text-secondary)]">{meta}</div>
           {errorBadge && (
-            <div className="text-xs text-red-500 mt-0.5">⚠ {errorBadge}</div>
+            <div className="text-xs text-[var(--danger)] mt-0.5">⚠ {errorBadge}</div>
           )}
         </div>
         <button onClick={onEdit} className="px-2 py-1 text-xs border border-[var(--border)] rounded transition hover:bg-[var(--accent)] hover:text-black focus:bg-[var(--accent)] focus:text-black">Edit</button>

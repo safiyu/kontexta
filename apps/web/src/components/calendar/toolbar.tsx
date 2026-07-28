@@ -115,7 +115,7 @@ export function CalendarToolbar({
       >
         Conflicts
         {conflictCount > 0 && (
-          <span className="px-1.5 rounded-full bg-red-500/15 text-red-400 text-[10px] font-bold">
+          <span className="px-1.5 rounded-full bg-[var(--danger-soft)] text-[var(--danger)] text-[10px] font-bold">
             {conflictCount}
           </span>
         )}

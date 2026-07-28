@@ -58,7 +58,7 @@ export function OnboardModal({ isOpen, onClose, projectId, projectName, onOnboar
         </div>
 
         <div className="space-y-2">
-          <label className="block text-[10px] font-bold text-[#475569] dark:text-[#94A3B8] tracking-widest uppercase">Target agent</label>
+          <label className="block text-[10px] font-bold text-[var(--text-secondary)] tracking-widest uppercase">Target agent</label>
           <select
             value={targetAgent}
             onChange={(e) => setTargetAgent(e.target.value)}

@@ -41,11 +41,11 @@ export function LiveStatus({ projectId }: { projectId: number }) {
     };
   }, [projectId]);
 
-  if (error) return <div className="text-sm text-red-500">Status error: {error}</div>;
-  if (!status) return <div className="text-sm text-gray-400">Loading status…</div>;
+  if (error) return <div className="text-sm text-[var(--danger)]">Status error: {error}</div>;
+  if (!status) return <div className="text-sm text-[var(--muted)]">Loading status…</div>;
 
   return (
-    <section className="border rounded p-3 bg-gray-50 dark:bg-gray-900/40 text-sm">
+    <section className="border border-[var(--border)] rounded p-3 bg-[var(--bg-secondary)] text-sm">
       <h3 className="font-medium mb-2">Journal status</h3>
       <div className="space-y-1">
         <div>Project: <span className="font-mono">{status.slug}</span></div>
@@ -60,7 +60,7 @@ export function LiveStatus({ projectId }: { projectId: number }) {
             {status.open_tasks.map((t) => (
               <li key={t.task_slug}>
                 <span className="font-mono">{t.task_slug}</span> — {t.status_latest ?? "(no status)"} —{" "}
-                <span className="text-gray-500">{t.last_active_at}</span>
+                <span className="text-[var(--text-secondary)]">{t.last_active_at}</span>
               </li>
             ))}
           </ul>

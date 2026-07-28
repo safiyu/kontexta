@@ -27,7 +27,7 @@ export function InstallSnippetView({ body, configPath, notes }: { body: string; 
   return (
     <div className="flex flex-col gap-3">
       {configPath && (
-        <div className="p-3 bg-[var(--bg-secondary)] border border-[var(--accent-opacity)] rounded text-xs">
+        <div className="p-3 bg-[var(--bg-secondary)] border border-[var(--accent-soft)] rounded text-xs">
           <div className="text-[var(--text-secondary)] mb-1 uppercase tracking-wider font-bold">Configuration Path</div>
           <div className="font-mono break-all">{configPath}</div>
         </div>

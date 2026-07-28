@@ -19,6 +19,7 @@
   --success: #2F855A;
   --warning: #C0841A;
   --danger: #C05656;
+  --danger-soft: rgba(192, 86, 86, 0.15);
   --text-tertiary: #6B7A99;
 
   /* Layering scale — use z-[var(--z-*)] in components. */
@@ -43,6 +44,7 @@
   --success: #2F855A;
   --warning: #C0841A;
   --danger: #C05656;
+  --danger-soft: rgba(192, 86, 86, 0.15);
   --text-tertiary: #A08662;
 }
 
@@ -62,6 +64,7 @@
   --success: #2F855A;
   --warning: #C0841A;
   --danger: #C05656;
+  --danger-soft: rgba(192, 86, 86, 0.15);
   --text-tertiary: #8E8270;
 
   --font-title: var(--font-saira);

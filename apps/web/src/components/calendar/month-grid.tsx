@@ -52,7 +52,7 @@ export function MonthGrid({ anchor, events, entitiesById, conflictEventIds, high
         <div className="grid grid-cols-7 grid-rows-6 flex-1">
           {Array.from({ length: 42 }, (_, i) => (
             <div key={i} className="border-b border-r border-[var(--border)] p-1.5">
-              <div className="skeleton h-4 w-4 rounded-full" />
+              <div className="skeleton h-4 w-4 rounded-full bp-keep-round" />
             </div>
           ))}
         </div>
@@ -74,7 +74,7 @@ export function MonthGrid({ anchor, events, entitiesById, conflictEventIds, high
                 }`}
               >
                 {isToday ? (
-                  <span className="w-6 h-6 rounded-full bg-amber-accent text-[#0A0F1A] flex items-center justify-center font-bold text-xs">
+                  <span className="w-6 h-6 rounded-full bp-keep-round bg-amber-accent text-black flex items-center justify-center font-bold text-xs">
                     {day.getDate()}
                   </span>
                 ) : (

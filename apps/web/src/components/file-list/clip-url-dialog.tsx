@@ -61,7 +61,7 @@ export function ClipUrlDialog({ open, onClose, onClipped }: ClipUrlDialogProps) 
 
           <div className="p-6 space-y-4">
             <div>
-              <label className="block text-[10px] font-bold text-[#475569] dark:text-[#94A3B8] tracking-widest mb-1.5">URL</label>
+              <label className="block text-[10px] font-bold text-[var(--text-secondary)] tracking-widest mb-1.5">URL</label>
               <input
                 type="url"
                 required
@@ -74,7 +74,7 @@ export function ClipUrlDialog({ open, onClose, onClipped }: ClipUrlDialogProps) 
             </div>
 
             <div>
-              <label className="block text-[10px] font-bold text-[#475569] dark:text-[#94A3B8] tracking-widest mb-1.5">TITLE (OPTIONAL)</label>
+              <label className="block text-[10px] font-bold text-[var(--text-secondary)] tracking-widest mb-1.5">TITLE (OPTIONAL)</label>
               <input
                 type="text"
                 value={title}
@@ -85,7 +85,7 @@ export function ClipUrlDialog({ open, onClose, onClipped }: ClipUrlDialogProps) 
               />
             </div>
 
-            {error && <div className="text-sm text-red-500">{error}</div>}
+            {error && <div className="text-sm text-[var(--danger)]">{error}</div>}
           </div>
 
           <div className="px-6 py-4 border-t border-[var(--border-color)] flex justify-end gap-2">

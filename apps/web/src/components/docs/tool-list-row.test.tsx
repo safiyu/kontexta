@@ -29,7 +29,7 @@ describe("ToolListRow", () => {
       <ToolListRow name="t" def={{ ...baseDef, danger: "high" }} onEdit={() => {}} onDelete={() => {}} />
     );
     const stripe = container.querySelector('[data-testid="danger-stripe"]');
-    expect(stripe?.className).toMatch(/bg-red-500/);
+    expect(stripe?.className).toMatch(/bg-\[var\(--danger\)\]/);
   });
 
   it("renders confirm lock icon when confirm is true", () => {

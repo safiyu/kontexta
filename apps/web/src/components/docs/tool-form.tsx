@@ -79,7 +79,7 @@ export function ToolForm({ initial, projectName, onSave, onCancel, inline }: Too
                 {(projectName ?? "<project>")}__{name || "<name>"}
               </code>
             </span>
-            {name && !NAME_RE.test(name) && <span className="text-red-500 text-[10px]">must match ^[a-z][a-z0-9-]*$</span>}
+            {name && !NAME_RE.test(name) && <span className="text-[var(--danger)] text-[10px]">must match ^[a-z][a-z0-9-]*$</span>}
           </label>
 
           <label className="block text-xs">
@@ -196,7 +196,7 @@ export function ToolForm({ initial, projectName, onSave, onCancel, inline }: Too
         {onCancel && (
           <button 
             onClick={onCancel} 
-            className="px-4 py-2 text-sm font-bold border border-[var(--border)] rounded-lg hover:bg-red-500/10 hover:text-red-500 hover:border-red-500/50 transition-all"
+            className="px-4 py-2 text-sm font-bold border border-[var(--border)] rounded-lg hover:bg-[var(--danger-soft)] hover:text-[var(--danger)] hover:border-[var(--danger)]/50 transition-all"
           >
             Cancel
           </button>

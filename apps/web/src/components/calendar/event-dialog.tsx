@@ -163,7 +163,7 @@ export function EventDialog({ state, entities, knownTypes, onClose, onSaved }: E
           <textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} className={inputClass} />
         </div>
 
-        {error && <div className="text-xs text-red-400">{error}</div>}
+        {error && <div className="text-xs text-[var(--danger)]">{error}</div>}
       </div>
 
       <div className="pt-4 mt-4 border-t border-[var(--border)] flex items-center justify-between gap-3">

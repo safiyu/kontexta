@@ -9,6 +9,7 @@ import { ClipUrlDialog } from "./clip-url-dialog";
 import { OnboardModal } from "./onboard-modal";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { DropdownMenu } from "@/components/ui/dropdown-menu";
+import { EmptyState } from "@/components/ui/empty-state";
 
 interface Project {
   id: number;
@@ -333,7 +334,7 @@ export function FileList({
                 type="button"
                 onClick={() => setBulkConfirmOpen(true)}
                 disabled={bulkDeleting}
-                className={`px-2 py-1 bg-red-600 text-white font-bold rounded whitespace-nowrap leading-none ${bulkDeleting ? "opacity-50" : "hover:bg-red-700"}`}
+                className={`px-2 py-1 bg-[var(--danger)] text-white font-bold rounded whitespace-nowrap leading-none ${bulkDeleting ? "opacity-50" : "hover:bg-[color-mix(in_srgb,var(--danger)_85%,black)]"}`}
                 title={`Delete ${visibleSelected.length} selected file(s)`}
               >
                 {bulkDeleting ? "…" : "Delete"}
@@ -393,38 +394,31 @@ export function FileList({
             ))}
           </div>
         ) : !selectedSection ? (
-          <div className="flex flex-col items-center justify-center py-16 text-[#475569] dark:text-[#94A3B8] gap-4">
-            <span className="text-6xl opacity-30 dark-icon">📂</span>
-            <div className="text-center px-6">
-              <p className="text-lg font-bold text-[var(--text-primary)]">No Selection</p>
-              <p className="text-sm text-[var(--text-secondary)] mt-2">
-                Please select a project or the Knowledge Base from the sidebar to view files.
-              </p>
-            </div>
-          </div>
+          <EmptyState
+            icon={<span className="text-6xl opacity-30 dark-icon">📂</span>}
+            title="No Selection"
+            hint="Please select a project or the Knowledge Base from the sidebar to view files."
+          />
         ) : (
-          <div className="flex flex-col items-center justify-center py-16 text-[#475569] dark:text-[#94A3B8] gap-4">
-            <span className="text-6xl opacity-30 dark-icon">📂</span>
-            <div className="text-center px-6">
-              <p className="text-lg font-bold text-[var(--text-primary)]">Folder is empty</p>
-              <p className="text-sm text-[var(--text-secondary)] mt-2">
-                This folder doesn't contain any indexed context files.
-              </p>
-            </div>
-
-            {selectedSection === "knowledge" && selectedFolder && onDeleteFolder && (
-              <div className="mt-6 flex flex-col items-center gap-3">
-                <div className="h-px w-16 bg-[var(--border)]" />
-                <button
-                  onClick={onDeleteFolder}
-                  className="px-6 py-2.5 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-500/20 rounded-lg text-sm font-bold hover:bg-red-200 dark:hover:bg-red-900/50 transition-all btn-press shadow-sm"
-                >
-                  DELETE THIS FOLDER
-                </button>
-                <p className="text-[11px] text-gray-500 uppercase tracking-widest font-bold">Permanent Action</p>
-              </div>
-            )}
-          </div>
+          <EmptyState
+            icon={<span className="text-6xl opacity-30 dark-icon">📂</span>}
+            title="Folder is empty"
+            hint="This folder doesn't contain any indexed context files."
+            action={
+              selectedSection === "knowledge" && selectedFolder && onDeleteFolder ? (
+                <div className="flex flex-col items-center gap-3">
+                  <div className="h-px w-16 bg-[var(--border)]" />
+                  <button
+                    onClick={onDeleteFolder}
+                    className="px-6 py-2.5 bg-[var(--danger-soft)] text-[var(--danger)] border border-[var(--danger)]/30 rounded-lg text-sm font-bold hover:bg-[var(--danger)]/20 transition-all btn-press shadow-sm"
+                  >
+                    DELETE THIS FOLDER
+                  </button>
+                  <p className="text-[11px] text-[var(--muted)] uppercase tracking-widest font-bold">Permanent Action</p>
+                </div>
+              ) : undefined
+            }
+          />
         )}
       </div>
         );

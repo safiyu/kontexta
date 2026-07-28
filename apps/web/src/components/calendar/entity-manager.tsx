@@ -117,7 +117,7 @@ export function EntityManager({ open, onClose, entities, links, onChanged }: Ent
   return (
     <Dialog open={open} onClose={onClose} title="Manage entities & links" widthClass="max-w-3xl">
       <div className="space-y-6">
-        {error && <div className="text-xs text-red-400">{error}</div>}
+        {error && <div className="text-xs text-[var(--danger)]">{error}</div>}
 
         <section>
             <h4 className="text-xs font-bold tracking-widest uppercase text-[var(--text-secondary)] mb-3">Entities</h4>
@@ -130,7 +130,7 @@ export function EntityManager({ open, onClose, entities, links, onChanged }: Ent
             <div className="space-y-1.5">
               {entities.map((entity) => (
                 <div key={entity.id} className="flex items-center gap-3 px-2 py-1.5 rounded hover:bg-amber-accent/5">
-                  <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${entity.active ? "bg-[var(--success)]" : "bg-[var(--muted)]"}`} />
+                  <span className={`w-1.5 h-1.5 rounded-full bp-keep-round shrink-0 ${entity.active ? "bg-[var(--success)]" : "bg-[var(--muted)]"}`} />
                   <span className="text-sm text-[var(--text-primary)] flex-1 truncate">{entity.name}</span>
                   {entity.kind && <span className="text-xs text-[var(--muted)] shrink-0">{entity.kind}</span>}
                   {entity.timezone && <span className="text-xs text-[var(--muted)] shrink-0 font-mono">{entity.timezone}</span>}

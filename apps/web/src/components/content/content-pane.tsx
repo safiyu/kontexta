@@ -13,6 +13,7 @@ import { MarkdownEditor } from "./markdown-editor";
 import { DeleteConfirmDialog } from "./delete-confirm-dialog";
 import { GitErrorDialog } from "./git-error-dialog";
 import { DropdownMenu } from "@/components/ui/dropdown-menu";
+import { EmptyState } from "@/components/ui/empty-state";
 
 const TrashIcon = ({ className }: { className?: string }) => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
@@ -436,12 +437,12 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
 
   if (!fileId) {
     return (
-      <div className="h-full flex flex-col items-center justify-center text-[#475569] dark:text-[#94A3B8] gap-3 animate-fade-in">
-        <span className="text-6xl opacity-40 dark-icon">📂</span>
-        <div className="text-center">
-          <p className="text-lg font-bold text-[#0F172A] dark:text-[#F1F5F9]">Select a file to preview</p>
-          <p className="text-sm font-medium text-[#475569] dark:text-[#94A3B8] mt-2">Choose a file from the list on the left</p>
-        </div>
+      <div className="h-full flex flex-col items-center justify-center animate-fade-in">
+        <EmptyState
+          icon={<span className="text-6xl opacity-40 dark-icon">📂</span>}
+          title="Select a file to preview"
+          hint="Choose a file from the list on the left"
+        />
       </div>
     );
   }
@@ -471,16 +472,16 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
     //  - Live with it (row truly missing — likely a stale selection)
     if (loadError?.kind === "disk_missing") {
       return (
-        <div className="h-full flex flex-col items-center justify-center text-[#475569] dark:text-[#94A3B8] gap-4 animate-fade-in p-8">
+        <div className="h-full flex flex-col items-center justify-center text-[var(--text-secondary)] gap-4 animate-fade-in p-8">
           <span className="text-6xl opacity-40 dark-icon">⚠️</span>
           <div className="text-center max-w-lg">
-            <p className="text-lg font-bold text-[#0F172A] dark:text-[#F1F5F9]">File is missing on disk</p>
-            <p className="text-sm font-medium text-[#475569] dark:text-[#94A3B8] mt-2">
+            <p className="text-lg font-bold text-[var(--text-primary)]">File is missing on disk</p>
+            <p className="text-sm font-medium text-[var(--text-secondary)] mt-2">
               The index still has a row for this file, but the file at the path below no longer exists.
               This usually happens when the file was deleted while the watcher wasn't running.
             </p>
             {loadError.path && (
-              <pre className="mt-3 p-2 bg-zinc-900 text-zinc-100 text-xs overflow-x-auto rounded">
+              <pre className="mt-3 p-2 bg-[var(--bg-tertiary)] text-[var(--text-primary)] text-xs overflow-x-auto rounded">
                 {loadError.path}
               </pre>
             )}
@@ -498,13 +499,13 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
     }
     if (loadError) {
       return (
-        <div className="h-full flex flex-col items-center justify-center text-[#475569] dark:text-[#94A3B8] gap-3 animate-fade-in p-8">
+        <div className="h-full flex flex-col items-center justify-center text-[var(--text-secondary)] gap-3 animate-fade-in p-8">
           <span className="text-6xl opacity-40 dark-icon">⚠️</span>
           <div className="text-center max-w-lg">
-            <p className="text-lg font-bold text-[#0F172A] dark:text-[#F1F5F9]">
+            <p className="text-lg font-bold text-[var(--text-primary)]">
               Failed to load file{loadError.status ? ` (HTTP ${loadError.status})` : ""}
             </p>
-            <p className="text-sm font-medium text-[#475569] dark:text-[#94A3B8] mt-2 break-words">
+            <p className="text-sm font-medium text-[var(--text-secondary)] mt-2 break-words">
               {loadError.message}
             </p>
           </div>
@@ -512,12 +513,12 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
       );
     }
     return (
-      <div className="h-full flex flex-col items-center justify-center text-[#475569] dark:text-[#94A3B8] gap-3 animate-fade-in">
-        <span className="text-6xl opacity-40 dark-icon">🔍</span>
-        <div className="text-center">
-          <p className="text-lg font-bold text-[#0F172A] dark:text-[#F1F5F9]">File not found</p>
-          <p className="text-sm font-medium text-[#475569] dark:text-[#94A3B8] mt-2">This file may have been moved or deleted</p>
-        </div>
+      <div className="h-full flex flex-col items-center justify-center animate-fade-in">
+        <EmptyState
+          icon={<span className="text-6xl opacity-40 dark-icon">🔍</span>}
+          title="File not found"
+          hint="This file may have been moved or deleted"
+        />
       </div>
     );
   }
@@ -685,7 +686,7 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
                     toast.error(`Failed to remove tag: ${e?.message ?? "Network error"}`);
                   }
                 }}
-                className="text-[var(--text-secondary)] hover:text-red-500"
+                className="text-[var(--text-secondary)] hover:text-[var(--danger)]"
               >
                 ×
               </button>
@@ -730,7 +731,7 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
         {editing ? (
           <MarkdownEditor content={editContent} onChange={setEditContent} />
         ) : viewHistory ? (
-          <div className="h-full overflow-auto bg-gray-50 dark:bg-[#0a0a0a] p-6">
+          <div className="h-full overflow-auto bg-[var(--bg-secondary)] p-6">
             <div className="max-w-2xl mx-auto space-y-4">
               <h3 className="text-sm font-bold text-[var(--text-secondary)] uppercase tracking-widest mb-6">
                 Version History (Time Travel)
@@ -743,7 +744,7 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
                 </div>
               ) : history.length === 0 ? (
                 <div className="text-center py-12">
-                  <p className="text-gray-500">No version history found for this file.</p>
+                  <p className="text-[var(--muted)]">No version history found for this file.</p>
                 </div>
               ) : (
                 <div className="space-y-3">

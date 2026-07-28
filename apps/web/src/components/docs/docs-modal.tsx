@@ -25,7 +25,7 @@ export function DocsModal({ open, onClose }: DocsModalProps) {
 
   return (
     <Dialog open={open} onClose={onClose} title="Kontexta configuration" widthClass="max-w-6xl" hideHeader>
-      <div className="-m-5 flex flex-col h-[85vh] overflow-hidden text-[#5C3D24] dark:text-[#F5C97A]">
+      <div className="-m-5 flex flex-col h-[85vh] overflow-hidden text-[var(--text-secondary)]">
         <div className="flex items-center border-b border-[var(--border)] pl-4 pr-12 bg-[var(--bg-secondary)] flex-shrink-0">
           <div role="tablist" className="flex gap-1 flex-1 overflow-x-auto hide-scrollbar">
             {TABS.map((t) => (
@@ -37,7 +37,7 @@ export function DocsModal({ open, onClose }: DocsModalProps) {
                 className={`px-4 py-3 transition font-mono font-bold uppercase tracking-wider whitespace-nowrap border-b-2 ${
                   tab === t.id
                     ? "bg-[var(--accent)] text-black border-transparent"
-                    : "border-transparent text-[#5C3D24] dark:text-[#F5C97A] hover:bg-[var(--accent)] hover:text-black focus:bg-[var(--accent)] focus:text-black"
+                    : "border-transparent text-[var(--text-secondary)] hover:bg-[var(--accent)] hover:text-black focus:bg-[var(--accent)] focus:text-black"
                 }`}
               >
                 {t.label}

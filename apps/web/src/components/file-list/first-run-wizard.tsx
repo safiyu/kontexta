@@ -104,10 +104,10 @@ export function FirstRunWizard({ open, onClose, initialStep = 1, projects, onSav
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="relative w-full max-w-2xl rounded-xl border bg-white p-6 shadow-xl">
+      <div className="relative w-full max-w-2xl rounded-xl border border-[var(--border)] bg-[var(--bg-secondary)] p-6 shadow-xl">
         <button
           onClick={onClose}
-          className="absolute right-4 top-4 rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+          className="absolute right-4 top-4 rounded-md p-1 text-[var(--muted)] hover:bg-[var(--bg-tertiary)] hover:text-[var(--text-primary)]"
         >
           <X className="h-5 w-5" />
         </button>
@@ -117,7 +117,7 @@ export function FirstRunWizard({ open, onClose, initialStep = 1, projects, onSav
         </h2>
 
         {error && (
-          <div className="mb-4 flex items-start gap-2 rounded-md bg-red-50 p-3 text-sm text-red-700" role="alert">
+          <div className="mb-4 flex items-start gap-2 rounded-md bg-[var(--danger-soft)] p-3 text-sm text-[var(--danger)]" role="alert">
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
             <span>{error}</span>
           </div>
@@ -125,12 +125,12 @@ export function FirstRunWizard({ open, onClose, initialStep = 1, projects, onSav
 
         {step === 1 ? (
           <div className="space-y-4">
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-[var(--text-secondary)]">
               Help AI agents understand you better by filling in your profile.
             </p>
             {(["name", "role", "vision", "roadmap", "preferences", "notes"] as const).map((field) => (
               <div key={field}>
-                <label className="mb-1 block text-sm font-medium capitalize text-gray-700">
+                <label className="mb-1 block text-sm font-medium capitalize text-[var(--text-secondary)]">
                   {field}
                 </label>
                 {field === "notes" ? (
@@ -155,7 +155,7 @@ export function FirstRunWizard({ open, onClose, initialStep = 1, projects, onSav
             <div className="flex justify-end gap-2 pt-4">
               <button
                 onClick={onClose}
-                className="rounded-md border px-4 py-2 text-sm hover:bg-gray-50"
+                className="rounded-md border border-[var(--border)] px-4 py-2 text-sm hover:bg-[var(--bg-tertiary)]"
               >
                 Skip
               </button>
@@ -170,12 +170,12 @@ export function FirstRunWizard({ open, onClose, initialStep = 1, projects, onSav
           </div>
         ) : (
           <div className="space-y-4">
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-[var(--text-secondary)]">
               Select an AI coding agent to onboard with your kontexta setup.
             </p>
             {projects.length > 1 && (
               <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">
+                <label className="mb-1 block text-sm font-medium text-[var(--text-secondary)]">
                   Target project
                 </label>
                 <select
@@ -200,7 +200,7 @@ export function FirstRunWizard({ open, onClose, initialStep = 1, projects, onSav
                   className={`rounded-lg border p-3 text-left text-sm transition-colors ${
                     selectedAgent === agent.id
                       ? "border-blue-300 bg-blue-100 text-blue-800"
-                      : "hover:bg-gray-50"
+                      : "hover:bg-[var(--bg-tertiary)]"
                   }`}
                 >
                   <div className="font-medium">{agent.name}</div>
@@ -210,7 +210,7 @@ export function FirstRunWizard({ open, onClose, initialStep = 1, projects, onSav
             <div className="flex justify-end gap-2 pt-4">
               <button
                 onClick={() => setStep(1)}
-                className="rounded-md border px-4 py-2 text-sm hover:bg-gray-50"
+                className="rounded-md border border-[var(--border)] px-4 py-2 text-sm hover:bg-[var(--bg-tertiary)]"
               >
                 Back
               </button>

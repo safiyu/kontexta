@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import { TreeNode } from "./tree-node";
 import { buildFolderTree, FolderTreeNode } from "@/lib/build-folder-tree";
+import { EmptyState } from "@/components/ui/empty-state";
 
 interface Project {
   id: number;
@@ -174,10 +175,7 @@ export function FolderTree({
             );
           })}
           {projects.length === 0 && (
-            <div className="flex flex-col items-center py-6 text-[var(--muted)] gap-2">
-              <span className="text-3xl opacity-30">📁</span>
-              <p className="text-xs font-medium">No projects yet</p>
-            </div>
+            <EmptyState icon={<span className="text-3xl">📁</span>} title="No projects yet" />
           )}
         </div>
       </div>
@@ -228,10 +226,7 @@ export function FolderTree({
               onSelectFile={onSelectFile}
             />
           ) : (
-            <div className="flex flex-col items-center py-6 text-[var(--muted)] gap-2">
-              <span className="text-3xl opacity-30">📂</span>
-              <p className="text-xs font-medium">No folders yet</p>
-            </div>
+            <EmptyState icon={<span className="text-3xl">📂</span>} title="No folders yet" />
           )}
         </div>
       </div>

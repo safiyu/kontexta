@@ -24,8 +24,8 @@ export function PatternTester({ pattern }: { pattern: string }) {
         placeholder="sample value"
         className="px-2 py-0.5 text-xs bg-[var(--bg-primary)] border border-[var(--border)] rounded font-mono"
       />
-      {result?.error && <span className="text-xs text-red-500">invalid pattern</span>}
-      {result?.matches === true && <span className="text-xs text-green-500">✓ matches</span>}
+      {result?.error && <span className="text-xs text-[var(--danger)]">invalid pattern</span>}
+      {result?.matches === true && <span className="text-xs text-[var(--success)]">✓ matches</span>}
       {result?.matches === false && <span className="text-xs text-[var(--text-secondary)]">no match</span>}
     </div>
   );

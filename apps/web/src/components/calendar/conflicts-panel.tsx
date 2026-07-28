@@ -16,7 +16,7 @@ interface ConflictsPanelProps {
 
 function kindClasses(kind: Conflict["kind"]): string {
   if (kind === "insufficient_buffer") return "bg-amber-500/10 border-amber-500/30 text-amber-400";
-  return "bg-red-500/10 border-red-500/30 text-red-400";
+  return "bg-[var(--danger-soft)] border-[var(--danger)]/30 text-[var(--danger)]";
 }
 
 function kindLabel(kind: Conflict["kind"]): string {
@@ -51,7 +51,7 @@ export function ConflictsPanel({ conflicts, bufferMinutes, loading, entitiesById
         <span className="text-xs font-bold tracking-widest uppercase text-amber-accent">Conflicts</span>
         <div className="flex items-center gap-2">
           {conflicts.length > 0 && (
-            <span className="px-1.5 rounded-full bg-red-500/15 text-red-400 text-[10px] font-bold">{conflicts.length}</span>
+            <span className="px-1.5 rounded-full bg-[var(--danger-soft)] text-[var(--danger)] text-[10px] font-bold">{conflicts.length}</span>
           )}
           <button onClick={onClose} className="btn btn-icon-sm" aria-label="Close conflicts panel">✕</button>
         </div>

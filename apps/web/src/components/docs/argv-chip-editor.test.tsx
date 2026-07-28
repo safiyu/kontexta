@@ -17,7 +17,7 @@ describe("ArgvChipEditor", () => {
   it("flags placeholders without a matching param", () => {
     render(<ArgvChipEditor value={["echo", "{{undeclared}}"]} onChange={() => {}} declaredParams={[]} />);
     const bad = screen.getByText("{{undeclared}}");
-    expect(bad.className).toMatch(/text-red/);
+    expect(bad.className).toMatch(/text-\[var\(--danger\)\]/);
   });
   it("calls onChange when a chip is removed", () => {
     const onChange = vi.fn();

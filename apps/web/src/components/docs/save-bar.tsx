@@ -80,7 +80,7 @@ export function SaveBar({ count, errorCount, onDiscard, onSave, inline }: Props)
         {hasChanges && (
           <div className="flex items-center gap-3 animate-fade-in">
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[var(--accent)]/10 border border-[var(--accent)]/20">
-              <span className={`w-1.5 h-1.5 rounded-full ${status === "saved" ? "bg-green-500" : "bg-[var(--accent)] animate-pulse"}`} />
+              <span className={`w-1.5 h-1.5 rounded-full bp-keep-round ${status === "saved" ? "bg-[var(--success)]" : "bg-[var(--accent)] animate-pulse"}`} />
               <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-primary)]">
                 {countLabel}
               </span>
@@ -89,7 +89,7 @@ export function SaveBar({ count, errorCount, onDiscard, onSave, inline }: Props)
             <button
               onClick={handleDiscardClick}
               disabled={status !== "idle" || count === 0}
-              className="text-[10px] font-bold uppercase tracking-widest text-[var(--text-secondary)] hover:text-red-500 transition-colors disabled:opacity-30"
+              className="text-[10px] font-bold uppercase tracking-widest text-[var(--text-secondary)] hover:text-[var(--danger)] transition-colors disabled:opacity-30"
             >
               Discard
             </button>
@@ -121,7 +121,7 @@ export function SaveBar({ count, errorCount, onDiscard, onSave, inline }: Props)
         hidden ? "translate-y-full" : "translate-y-0"
       }`}
     >
-      <span aria-hidden className={status === "saved" ? "text-green-500" : "text-[var(--accent)]"}>
+      <span aria-hidden className={status === "saved" ? "text-[var(--success)]" : "text-[var(--accent)]"}>
         {status === "saved" ? "✓" : "⚠"}
       </span>
       <span className="text-sm" aria-live="polite">{countLabel}</span>
@@ -136,7 +136,7 @@ export function SaveBar({ count, errorCount, onDiscard, onSave, inline }: Props)
       <button
         onClick={handleSave}
         disabled={saveDisabled}
-        className="px-3 py-1 text-sm border border-[var(--border)] rounded text-green-500 transition hover:bg-[var(--accent)] hover:text-black focus:bg-[var(--accent)] focus:text-black disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-green-500"
+        className="px-3 py-1 text-sm border border-[var(--border)] rounded text-[var(--success)] transition hover:bg-[var(--accent)] hover:text-black focus:bg-[var(--accent)] focus:text-black disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-[var(--success)]"
       >
         {saveLabel}
       </button>

@@ -53,7 +53,7 @@ export function AnimatedLogo({ size }: { size: "sm" | "lg" }) {
       {particles.map((p, i) => (
         <span
           key={i}
-          className="absolute rounded-full pointer-events-none"
+          className="absolute rounded-full bp-keep-round pointer-events-none"
           style={{
             width: p.size,
             height: p.size,

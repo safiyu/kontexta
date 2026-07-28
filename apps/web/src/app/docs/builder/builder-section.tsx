@@ -226,7 +226,7 @@ export function BuilderSection() {
           {mtimeMs !== null && (
             <button
               onClick={() => setConfirmingDeleteFile(true)}
-              className="text-[10px] font-bold uppercase tracking-widest text-red-500/70 hover:text-red-500 transition-colors"
+              className="text-[10px] font-bold uppercase tracking-widest text-[var(--danger)]/70 hover:text-[var(--danger)] transition-colors"
               title="Remove kontexta.json from this project"
             >
               Delete Config
@@ -280,17 +280,17 @@ export function BuilderSection() {
                 }`}
               >
                 <div className="flex items-center gap-3 overflow-hidden">
-                  <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${editing?.name === name ? "bg-black" : "bg-[var(--accent)]"}`} />
+                  <div className={`w-1.5 h-1.5 rounded-full bp-keep-round flex-shrink-0 ${editing?.name === name ? "bg-black" : "bg-[var(--accent)]"}`} />
                   <span className="font-mono text-[13px] truncate">{name}</span>
                 </div>
                 
                 <div className="flex items-center gap-2">
                   {errorByTool.has(name) && (
-                    <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" title={errorByTool.get(name)} />
+                    <span className="w-2 h-2 rounded-full bp-keep-round bg-[var(--danger)] animate-pulse" title={errorByTool.get(name)} />
                   )}
                   <button
                     onClick={(e) => { e.stopPropagation(); onDelete(name); }}
-                    className={`opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-red-500 hover:text-white transition-all ${editing?.name === name ? "text-black hover:bg-black/20" : ""}`}
+                    className={`opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-[var(--danger)] hover:text-white transition-all ${editing?.name === name ? "text-black hover:bg-black/20" : ""}`}
                     title="Delete tool"
                   >
                     <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -312,15 +312,15 @@ export function BuilderSection() {
         {/* Middle Pane: Tool Editor */}
         <div className="flex-1 overflow-y-auto bg-[var(--bg-primary)] custom-scrollbar relative border-r border-[var(--border)]">
           {parseError && (
-            <div className="m-6 p-4 bg-red-500/10 border border-red-500/50 rounded-xl text-sm text-red-500 animate-fade-in">
+            <div className="m-6 p-4 bg-[var(--danger-soft)] border border-[var(--danger)]/50 rounded-xl text-sm text-[var(--danger)] animate-fade-in">
               <span className="font-bold block mb-1">Configuration Error</span>
               kontexta.json failed to parse: {parseError}. Fix the file manually before continuing.
             </div>
           )}
           {saveError && (
-            <div className="m-6 p-4 bg-red-500/10 border border-red-500/50 rounded-xl text-sm text-red-500 animate-fade-in">
+            <div className="m-6 p-4 bg-[var(--danger-soft)] border border-[var(--danger)]/50 rounded-xl text-sm text-[var(--danger)] animate-fade-in">
               {saveError}
-              <button onClick={() => setSaveError(null)} className="ml-2 text-red-500 hover:text-red-400">✕</button>
+              <button onClick={() => setSaveError(null)} className="ml-2 text-[var(--danger)] hover:opacity-80">✕</button>
             </div>
           )}
 
@@ -345,7 +345,7 @@ export function BuilderSection() {
               </div>
             ) : (
               <div className="h-full flex flex-col items-center justify-center text-center py-20 animate-fade-in">
-                <div className="w-16 h-16 rounded-full bg-[var(--bg-secondary)] flex items-center justify-center mb-6 border border-[var(--border)]">
+                <div className="w-16 h-16 rounded-full bp-keep-round bg-[var(--bg-secondary)] flex items-center justify-center mb-6 border border-[var(--border)]">
                   <svg className="w-8 h-8 text-[var(--text-secondary)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z" />
                   </svg>

@@ -96,7 +96,7 @@ export function UploadFilesDialog({ open, onClose, projects, defaultProjectId, d
 
           <div className="p-6 space-y-4">
             <div>
-              <label className="block text-[10px] font-bold text-[#475569] dark:text-[#94A3B8] tracking-widest mb-1.5">FILES</label>
+              <label className="block text-[10px] font-bold text-[var(--text-secondary)] tracking-widest mb-1.5">FILES</label>
               <input
                 type="file"
                 multiple
@@ -118,7 +118,7 @@ export function UploadFilesDialog({ open, onClose, projects, defaultProjectId, d
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-[10px] font-bold text-[#475569] dark:text-[#94A3B8] tracking-widest mb-1.5">PROJECT</label>
+                <label className="block text-[10px] font-bold text-[var(--text-secondary)] tracking-widest mb-1.5">PROJECT</label>
                 <select
                   value={projectId === "" ? "" : String(projectId)}
                   onChange={(e) => setProjectId(e.target.value === "" ? "" : Number(e.target.value))}
@@ -131,7 +131,7 @@ export function UploadFilesDialog({ open, onClose, projects, defaultProjectId, d
                 </select>
               </div>
               <div>
-                <label className="block text-[10px] font-bold text-[#475569] dark:text-[#94A3B8] tracking-widest mb-1.5">FOLDER</label>
+                <label className="block text-[10px] font-bold text-[var(--text-secondary)] tracking-widest mb-1.5">FOLDER</label>
                 <select
                   value={folder}
                   onChange={(e) => setFolder(e.target.value)}
@@ -146,7 +146,7 @@ export function UploadFilesDialog({ open, onClose, projects, defaultProjectId, d
             </div>
 
             <div>
-              <label className="block text-[10px] font-bold text-[#475569] dark:text-[#94A3B8] tracking-widest mb-1.5">TAGS</label>
+              <label className="block text-[10px] font-bold text-[var(--text-secondary)] tracking-widest mb-1.5">TAGS</label>
               <input
                 type="text"
                 value={tagsText}
@@ -156,7 +156,7 @@ export function UploadFilesDialog({ open, onClose, projects, defaultProjectId, d
               />
             </div>
 
-            {error && <div className="text-sm text-red-500">{error}</div>}
+            {error && <div className="text-sm text-[var(--danger)]">{error}</div>}
 
             {result && (
               <div className="text-sm text-[var(--text-secondary)]">

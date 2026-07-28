@@ -138,7 +138,7 @@ export function JournalPanel() {
   return (
     <div className="space-y-8 max-w-3xl mx-auto">
       {loadError && (
-        <div className="border border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-300 rounded p-2 text-sm">
+        <div className="border border-[var(--danger)]/30 bg-[var(--danger-soft)] text-[var(--danger)] rounded p-2 text-sm">
           {loadError}
         </div>
       )}
@@ -192,7 +192,7 @@ export function JournalPanel() {
                 <label key={k} className="flex flex-col text-xs">
                   <span className="text-[var(--text-secondary)] flex items-center gap-1 mb-0.5">
                     {k}
-                    <span title={RETENTION_HINTS[k]} className="cursor-help text-[9px] font-bold text-gray-400 border border-gray-400 rounded-full w-3.5 h-3.5 inline-flex items-center justify-center opacity-60 hover:opacity-100 transition-opacity">
+                    <span title={RETENTION_HINTS[k]} className="cursor-help text-[9px] font-bold text-[var(--muted)] border border-[var(--muted)] rounded-full bp-keep-round w-3.5 h-3.5 inline-flex items-center justify-center opacity-60 hover:opacity-100 transition-opacity">
                       ?
                     </span>
                   </span>

@@ -42,7 +42,7 @@ export function TreeNode({
             : "text-[var(--text-secondary)] hover:bg-[var(--accent-soft)] hover:text-[var(--text-primary)]"
         }`}
       >
-        {active && <span className="absolute -left-1 top-1 bottom-1 w-0.5 bg-[var(--accent)] rounded-full" />}
+        {active && <span className="absolute -left-1 top-1 bottom-1 w-0.5 bg-[var(--accent)] rounded-full bp-keep-round" />}
         {hasChildren && (
           <span className={`text-[10px] inline-block transition-transform duration-200 ${expanded ? "rotate-90" : ""}`}>▶</span>
         )}
