@@ -16,6 +16,7 @@ export function EventChip({ event, entityName, conflicted, highlighted, onClick 
   const color = colorForType(event.type);
   return (
     <button
+      id={`cal-ev-${event.id}`}
       onClick={(e) => {
         e.stopPropagation();
         onClick(e);

@@ -28,7 +28,7 @@ function CurrentTimeIndicator({ day }: { day: Date }) {
   const top = (now.getHours() * 60 + now.getMinutes()) * (PX_PER_HOUR / 60);
   return (
     <div className="absolute left-0 right-0 pointer-events-none z-10" style={{ top }}>
-      <div className="h-px bg-amber-accent shadow-[0_0_6px_rgba(180,120,30,0.8)]" />
+      <div className="h-px bg-amber-accent shadow-[0_0_6px_var(--accent-soft)]" />
       <div className="w-2 h-2 rounded-full bp-keep-round bg-amber-accent -ml-1 -mt-1" />
     </div>
   );
@@ -104,6 +104,7 @@ export function WeekView({ anchor, events, entitiesById, conflictEventIds, highl
                   return (
                     <button
                       key={event.id}
+                      id={`cal-ev-${event.id}`}
                       onClick={(e) => {
                         e.stopPropagation();
                         onEventClick(event);

@@ -74,7 +74,7 @@ export function MonthGrid({ anchor, events, entitiesById, conflictEventIds, high
                 }`}
               >
                 {isToday ? (
-                  <span className="w-6 h-6 rounded-full bp-keep-round bg-amber-accent text-black flex items-center justify-center font-bold text-xs">
+                  <span className="w-6 h-6 rounded-full bp-keep-round bg-amber-accent text-white flex items-center justify-center font-bold text-xs">
                     {day.getDate()}
                   </span>
                 ) : (

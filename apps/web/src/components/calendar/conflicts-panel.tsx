@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { CalendarEntity, Conflict } from "kxta-core";
 import { fmtTime } from "./date-utils";
 
@@ -28,6 +28,12 @@ function kindLabel(kind: Conflict["kind"]): string {
 export function ConflictsPanel({ conflicts, bufferMinutes, loading, entitiesById, onFocusConflict, onBufferSaved, onClose }: ConflictsPanelProps) {
   const [bufferInput, setBufferInput] = useState(String(bufferMinutes));
   const [saving, setSaving] = useState(false);
+
+  // bufferMinutes arrives asynchronously (fetched setting); re-sync the local
+  // input string once the real value loads instead of showing a stale default.
+  useEffect(() => {
+    setBufferInput(String(bufferMinutes));
+  }, [bufferMinutes]);
 
   async function saveBuffer() {
     const n = Number(bufferInput);
