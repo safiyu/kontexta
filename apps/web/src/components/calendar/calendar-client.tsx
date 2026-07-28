@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type { CalendarEntity, CalendarEvent, Conflict } from "kxta-core";
 import { useEntities, useCalendarData } from "@/hooks/use-calendar";
@@ -143,6 +143,15 @@ export function CalendarClient() {
           <ChevronRight className="w-4 h-4 text-[var(--muted)] opacity-40" aria-hidden />
           <span className="text-sm font-bold text-amber-accent">Calendar</span>
         </div>
+        <button
+          type="button"
+          onClick={() => router.push("/")}
+          className="btn btn-icon-md ml-auto"
+          aria-label="Close calendar and return to home"
+          title="Close"
+        >
+          <X className="w-4 h-4" aria-hidden />
+        </button>
       </header>
 
       <div className="flex-1 p-3 lg:p-4 flex gap-3 overflow-hidden">
