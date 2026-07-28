@@ -184,9 +184,11 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
         const data = await response.json();
         setFile(data);
         setEditContent(data.content);
+      } else {
+        toast.error(`Failed to refresh file (HTTP ${response.status})`);
       }
-    } catch (error) {
-      console.error("Failed to refresh file:", error);
+    } catch (error: any) {
+      toast.error(`Failed to refresh file: ${error?.message ?? "Network error"}`);
     } finally {
       setRefreshing(false);
     }
@@ -616,10 +618,10 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
                     });
                     if (!res.ok) throw new Error("PATCH failed");
                     onChanged?.();
-                  } catch (e) {
+                  } catch (e: any) {
                     // Roll back optimistic toggle.
                     setFile({ ...file, favorite: !next });
-                    console.error("Failed to toggle favorite:", e);
+                    toast.error(`Failed to update favorite: ${e?.message ?? "Network error"}`);
                   }
                 }}
                 className="btn btn-md"
@@ -718,9 +720,9 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
                     });
                     if (!res.ok) throw new Error("PATCH failed");
                     onChanged?.();
-                  } catch (e) {
+                  } catch (e: any) {
                     setFile((prev) => (prev && prev.id === fileId ? { ...prev, tags: original } : prev));
-                    console.error("Failed to remove tag:", e);
+                    toast.error(`Failed to remove tag: ${e?.message ?? "Network error"}`);
                   }
                 }}
                 className="text-[var(--text-secondary)] hover:text-red-500"
@@ -755,9 +757,9 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
                 });
                 if (!res.ok) throw new Error("PATCH failed");
                 onChanged?.();
-              } catch (err) {
+              } catch (err: any) {
                 setFile((prev) => (prev && prev.id === fileId ? { ...prev, tags: original } : prev));
-                console.error("Failed to add tag:", err);
+                toast.error(`Failed to add tag: ${err?.message ?? "Network error"}`);
               }
             }}
           />
