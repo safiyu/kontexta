@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { SaveBar } from "../../../components/docs/save-bar";
 import { LiveStatus } from "./live-status";
 
@@ -46,6 +46,13 @@ interface Project {
   slug: string;
 }
 
+function countDiffs(a: JournalConfig, b: JournalConfig): number {
+  return (Object.keys(a) as (keyof JournalConfig)[]).reduce(
+    (n, k) => n + (JSON.stringify(a[k]) !== JSON.stringify(b[k]) ? 1 : 0),
+    0,
+  );
+}
+
 const RETENTION_HINTS: Record<string, string> = {
   raw_days: "How long to keep raw JSONL events. Cost of high retention: Increased disk space usage. Low retention saves space but prevents deep auditing of past agent decisions.",
   mechanical_only_days: "How long to keep basic markdown summaries. Cost of high retention: Increased agent token usage and slower search times as the active index grows. Low retention keeps the index fast but risks losing older context.",
@@ -58,8 +65,16 @@ export function JournalPanel() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectId, setProjectId] = useState<number | null>(null);
   const [config, setConfig] = useState<JournalConfig>(DEFAULTS);
-  const [unsaved, setUnsaved] = useState(0);
   const [loadError, setLoadError] = useState<string | null>(null);
+  // Snapshot of the last config successfully loaded from (or saved to) the server.
+  // Discard restores this (falling back to DEFAULTS only if nothing was ever loaded);
+  // the unsaved-changes count is a diff against this, not a keystroke tally.
+  const loadedRef = useRef<JournalConfig | null>(null);
+
+  const unsaved = useMemo(
+    () => countDiffs(config, loadedRef.current ?? DEFAULTS),
+    [config],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -97,8 +112,11 @@ export function JournalPanel() {
       })
       .then((d) => {
         if (cancelled) return;
-        if (d.journal) setConfig({ ...DEFAULTS, ...d.journal });
-        setUnsaved(0);
+        if (d.journal) {
+          const loaded = { ...DEFAULTS, ...d.journal };
+          loadedRef.current = loaded;
+          setConfig(loaded);
+        }
       })
       .catch((e) => { 
         if (cancelled || e.name === "AbortError") return;
@@ -112,7 +130,6 @@ export function JournalPanel() {
 
   function update<K extends keyof JournalConfig>(k: K, v: JournalConfig[K]) {
     setConfig({ ...config, [k]: v });
-    setUnsaved((n) => n + 1);
   }
 
   async function save() {
@@ -124,15 +141,17 @@ export function JournalPanel() {
         body: JSON.stringify({ journal: config }),
       });
       if (!res.ok) throw new Error(`save failed: ${res.status}`);
-      setUnsaved(0);
+      loadedRef.current = config;
+      // Force a re-render so the diff-based unsaved count recomputes against the
+      // new snapshot (mutating the ref alone does not trigger one).
+      setConfig({ ...config });
     } catch (e: unknown) {
       setLoadError(e instanceof Error ? e.message : String(e));
     }
   }
 
   function discard() {
-    setConfig(DEFAULTS);
-    setUnsaved(0);
+    setConfig(loadedRef.current ?? DEFAULTS);
   }
 
   return (
