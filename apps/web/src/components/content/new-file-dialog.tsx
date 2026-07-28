@@ -6,7 +6,7 @@ import { Dialog } from "../ui/dialog";
 interface NewFileDialogProps {
   open: boolean;
   onClose: () => void;
-  onCreate: (title: string, content: string, destination: "knowledge" | "project" | "kontexta", folder?: string) => Promise<void>;
+  onCreate: (title: string, content: string, destination: "knowledge" | "project" | "kontexta", folder?: string) => Promise<boolean>;
   currentProjectId: number | null;
   availableFolders: string[];
 }
@@ -34,11 +34,16 @@ export function NewFileDialog({ open, onClose, onCreate, currentProjectId, avail
     if (!title.trim()) return;
     setLoading(true);
     try {
-      await onCreate(title, content, destination, folder || undefined);
-      setTitle("");
-      setContent("");
-      setFolder("");
-      onClose();
+      const created = await onCreate(title, content, destination, folder || undefined);
+      // Only clear the form and close on success — onCreate already shows a
+      // toast on failure, and the user's typed content must survive so they
+      // can fix and retry rather than losing it silently.
+      if (created) {
+        setTitle("");
+        setContent("");
+        setFolder("");
+        onClose();
+      }
     } catch (error) {
       console.error("Failed to create file:", error);
     } finally {

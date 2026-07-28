@@ -6,7 +6,7 @@ import { Dialog } from "../ui/dialog";
 interface NewFolderDialogProps {
   open: boolean;
   onClose: () => void;
-  onCreate: (name: string) => Promise<void>;
+  onCreate: (name: string) => Promise<boolean>;
 }
 
 export function NewFolderDialog({ open, onClose, onCreate }: NewFolderDialogProps) {
@@ -25,9 +25,14 @@ export function NewFolderDialog({ open, onClose, onCreate }: NewFolderDialogProp
 
     setLoading(true);
     try {
-      await onCreate(name);
-      setName("");
-      onClose();
+      const created = await onCreate(name);
+      // Only clear the form and close on success — onCreate already shows a
+      // toast on failure, and the typed name must survive so the user can
+      // fix and retry rather than losing it silently.
+      if (created) {
+        setName("");
+        onClose();
+      }
     } catch (error) {
       console.error("Failed to create folder:", error);
     } finally {

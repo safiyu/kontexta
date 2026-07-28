@@ -97,7 +97,9 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [gitErrorOpen, setGitErrorOpen] = useState(false);
-  const [gitErrorMessage, setGitErrorMessage] = useState("");
+  const [gitErrorTitle, setGitErrorTitle] = useState("");
+  const [gitErrorBody, setGitErrorBody] = useState("");
+  const [gitErrorDetail, setGitErrorDetail] = useState<string | undefined>(undefined);
   const [refreshing, setRefreshing] = useState(false);
   const [removingOrphan, setRemovingOrphan] = useState(false);
 
@@ -382,7 +384,9 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
         setEditing(false);
         toast.success("Saved");
         if (updatedFile.git_warning) {
-          setGitErrorMessage(updatedFile.git_warning);
+          setGitErrorTitle("Git commit failed");
+          setGitErrorBody("Your changes were saved to the database, but Kontexta could not create a Git history entry for this file.");
+          setGitErrorDetail(updatedFile.git_warning);
           setGitErrorOpen(true);
         }
       } else if (response.status === 409) {
@@ -400,23 +404,29 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
           if (serverContent !== undefined && serverUpdatedAt !== undefined) {
             setFile((prev) => prev ? { ...prev, content: serverContent!, updated_at: serverUpdatedAt! } : prev);
           }
-          setGitErrorMessage(
-            "This file was modified elsewhere since you opened it. Disk content has been reloaded; click Save again to overwrite with your edits."
+          setGitErrorTitle("File changed on disk");
+          setGitErrorBody(
+            "This file was NOT saved — it was modified elsewhere since you opened it. Disk content has been reloaded below; your edits are still in the editor. Click Save again to overwrite with your edits."
           );
+          setGitErrorDetail(undefined);
           setGitErrorOpen(true);
         }
       } else {
         let msg = `Save failed (${response.status})`;
         try { const data = await response.json(); if (data?.error) msg = data.error; } catch {}
         if (fileIdRef.current === savingFileId) {
-          setGitErrorMessage(msg);
+          setGitErrorTitle("Save failed");
+          setGitErrorBody("Your changes were NOT saved.");
+          setGitErrorDetail(msg);
           setGitErrorOpen(true);
         }
       }
     } catch (error: any) {
       console.error("Failed to save file:", error);
       if (fileIdRef.current === savingFileId) {
-        setGitErrorMessage(error?.message ?? "Network error while saving");
+        setGitErrorTitle("Save failed");
+        setGitErrorBody("Your changes were NOT saved — a network error occurred.");
+        setGitErrorDetail(error?.message ?? "Network error while saving");
         setGitErrorOpen(true);
       }
     } finally {
@@ -798,7 +808,9 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
       <GitErrorDialog
         open={gitErrorOpen}
         onClose={() => setGitErrorOpen(false)}
-        error={gitErrorMessage}
+        title={gitErrorTitle}
+        body={gitErrorBody}
+        detail={gitErrorDetail}
       />
     </div>
   );

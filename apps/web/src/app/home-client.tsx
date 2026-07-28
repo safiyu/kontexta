@@ -401,11 +401,14 @@ export default function HomePage() {
         toast.success(`Created "${title}"`);
         await refreshAllFiles();
         if (typeof data.id === "number") setSelectedFileId(data.id);
+        return true;
       } else {
         toast.error(data.error || "Failed to create file");
+        return false;
       }
     } catch (error: any) {
       toast.error(`Failed to create file: ${error?.message ?? "Network error"}`);
+      return false;
     }
   };
 
@@ -454,12 +457,15 @@ export default function HomePage() {
         // Bump the key to trigger folder re-fetch without full page reload
         setFolderRefreshKey((k) => k + 1);
         toast.success(`Folder "${name}" created`);
+        return true;
       } else {
         const data = await response.json().catch(() => ({}));
         toast.error(data.error || "Failed to create folder");
+        return false;
       }
     } catch (error: any) {
       toast.error(`Failed to create folder: ${error?.message ?? "Network error"}`);
+      return false;
     }
   };
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { toast } from "sonner";
 import type { CalendarEntity, CalendarLink } from "kxta-core";
 import { Dialog } from "../ui/dialog";
 import { ConfirmDialog } from "../ui/confirm-dialog";
@@ -65,16 +66,19 @@ export function EntityManager({ open, onClose, entities, links, onChanged }: Ent
   async function performDeleteEntity() {
     const entity = confirmDeleteEntity;
     if (!entity) return;
-    setError(null);
     setDeleting(true);
     try {
       const res = await fetch(`/api/calendar/entities/${entity.id}`, { method: "DELETE" });
       if (!res.ok) {
+        // The ConfirmDialog stays open (rendered above this component's own
+        // Dialog), so an inline `error` state here would be invisible behind
+        // it — use a toast, which floats above every open modal.
         const body = await res.json().catch(() => ({}));
-        setError(body.error ?? "Failed to delete entity.");
+        toast.error(body.error ?? "Failed to delete entity.");
         return;
       }
       setConfirmDeleteEntity(null);
+      toast.success(`Deleted "${entity.name}"`);
       onChanged();
     } finally {
       setDeleting(false);
