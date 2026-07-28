@@ -83,7 +83,7 @@ function FolderNodes({
         <TreeNode
           key={child.path}
           label={child.name}
-          icon={<FolderIcon className="w-3.5 h-3.5 text-[#FF7F50] group-hover:text-white transition-colors" />}
+          icon={<FolderIcon className="w-3.5 h-3.5 text-[#FF7F50] group-hover:text-[var(--accent)] transition-colors" />}
           active={selectedFolder === child.path}
           onClick={() => onSelectFolder(child.path)}
         >
@@ -99,7 +99,7 @@ function FolderNodes({
         <TreeNode
           key={file.id}
           label={file.title}
-          icon={<FileIcon className="w-3.5 h-3.5 text-amber-accent group-hover:text-white transition-colors" />}
+          icon={<FileIcon className="w-3.5 h-3.5 text-amber-accent group-hover:text-[var(--accent)] transition-colors" />}
           onClick={() => onSelectFile(file.id)}
         />
       ))}
@@ -153,7 +153,7 @@ export function FolderTree({
               <TreeNode
                 key={project.id}
                 label={project.name}
-                icon={<FolderIcon className="w-3.5 h-3.5 text-[#FF7F50] group-hover:text-white transition-colors" />}
+                icon={<FolderIcon className="w-3.5 h-3.5 text-[#FF7F50] group-hover:text-[var(--accent)] transition-colors" />}
                 active={isSelected && selectedFolder === null}
                 initialExpanded={isSelected}
                 hasHands={project.has_hands}
@@ -174,7 +174,7 @@ export function FolderTree({
             );
           })}
           {projects.length === 0 && (
-            <div className="flex flex-col items-center py-6 text-gray-400 gap-2">
+            <div className="flex flex-col items-center py-6 text-[var(--muted)] gap-2">
               <span className="text-3xl opacity-30">📁</span>
               <p className="text-xs font-medium">No projects yet</p>
             </div>
@@ -228,7 +228,7 @@ export function FolderTree({
               onSelectFile={onSelectFile}
             />
           ) : (
-            <div className="flex flex-col items-center py-6 text-gray-400 gap-2">
+            <div className="flex flex-col items-center py-6 text-[var(--muted)] gap-2">
               <span className="text-3xl opacity-30">📂</span>
               <p className="text-xs font-medium">No folders yet</p>
             </div>

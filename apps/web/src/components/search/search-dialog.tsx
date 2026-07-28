@@ -146,16 +146,16 @@ export function SearchDialog({ open, onClose, onSelectFile }: SearchDialogProps)
                   key={result.id}
                   onClick={() => handleSelectResult(result)}
                   onMouseEnter={() => setSelectedIdx(idx)}
-                  className={`w-full px-5 py-4 text-left rounded-lg transition-all duration-200 group flex flex-col gap-1 ${
+                  className={`w-full px-5 py-4 text-left rounded-lg transition-all duration-200 flex flex-col gap-1 ${
                     idx === selectedIdx
-                      ? "bg-amber-accent/15 text-white shadow-[inset_0_0_12px_rgba(180,120,30,0.1)]"
-                      : "text-[var(--text-secondary)] hover:bg-amber-accent/5 hover:text-white"
+                      ? "bg-[var(--accent-soft)]"
+                      : "hover:bg-[var(--accent-soft)]/60"
                   }`}
                 >
-                  <div className={`text-sm font-semibold transition-colors ${idx === selectedIdx ? "text-white" : "text-[var(--text-primary)] group-hover:text-white"}`}>
+                  <div className="text-sm font-semibold transition-colors text-[var(--text-primary)]">
                     {result.title}
                   </div>
-                  <div className={`text-xs transition-colors ${idx === selectedIdx ? "text-white/60" : "text-[var(--text-secondary)] group-hover:text-white/40"}`}>
+                  <div className="text-xs transition-colors text-[var(--text-secondary)]">
                     {result.storage_type} · {result.path}
                   </div>
                 </button>

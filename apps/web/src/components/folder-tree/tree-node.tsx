@@ -38,8 +38,8 @@ export function TreeNode({
         onClick={handleClick}
         className={`relative flex items-center gap-1.5 py-1.5 px-2 rounded-lg text-sm cursor-pointer transition-all duration-200 group ${
           active
-            ? "bg-amber-accent/10 text-white shadow-[inset_0_0_12px_rgba(180,120,30,0.05)]"
-            : "text-[var(--text-secondary)] hover:bg-amber-accent/5 hover:text-white"
+            ? "bg-[var(--accent-soft)] text-[var(--text-primary)] font-semibold"
+            : "text-[var(--text-secondary)] hover:bg-[var(--accent-soft)] hover:text-[var(--text-primary)]"
         }`}
       >
         {active && <span className="absolute -left-1 top-1 bottom-1 w-0.5 bg-[var(--accent)] rounded-full" />}
