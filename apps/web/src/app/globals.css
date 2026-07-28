@@ -259,14 +259,14 @@ html {
   animation: fade-in 0.4s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* Uses the standalone `scale`/`translate` CSS properties (not the `transform`
-   shorthand) so this animation composes with whatever already positions the
-   element — Tailwind's translate-based centering on Dialog, Radix's inline
-   positioning transform on DropdownMenu — instead of clobbering it for the
-   animation's duration and snapping into place once it ends. */
+/* Applied only to elements with no positioning responsibility of their own
+   (Dialog/DropdownMenu wrap this in an inner div, separate from the element
+   that carries the actual position) — a `transform`-based animation on a
+   positioned element would override that position for the animation's
+   duration and snap into place once it ends. */
 @keyframes scale-in {
-  from { opacity: 0; scale: 0.96; translate: 0 4px; }
-  to { opacity: 1; scale: 1; translate: 0 0; }
+  from { opacity: 0; transform: scale(0.96) translateY(4px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
 }
 
 .animate-scale-in {
