@@ -1,5 +1,7 @@
 "use client";
 
+import { ChevronRight } from "lucide-react";
+
 export interface BreadcrumbSegment {
   label: string;
   onClick?: () => void;
@@ -25,7 +27,7 @@ export function Breadcrumb({ segments }: BreadcrumbProps) {
         const isLast = i === segments.length - 1;
         return (
           <span key={`${i}-${seg.label}`} className="flex items-center gap-1.5">
-            {i > 0 && <span className="opacity-40">›</span>}
+            {i > 0 && <ChevronRight className="w-3.5 h-3.5 opacity-40" aria-hidden />}
             {isLast || !seg.onClick ? (
               <span className={isLast ? "font-bold text-[var(--text-primary)]" : ""}>{seg.label}</span>
             ) : (

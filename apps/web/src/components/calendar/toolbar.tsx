@@ -1,5 +1,6 @@
 "use client";
 
+import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import type { CalendarEntity } from "kxta-core";
 import type { ViewMode } from "./date-utils";
 
@@ -41,9 +42,13 @@ export function CalendarToolbar({
   return (
     <div className="px-4 py-3 border-b border-[var(--border)] flex items-center gap-2 flex-wrap">
       <div className="flex items-center gap-1">
-        <button className="btn btn-sm" onClick={() => onNavigate(-1)} aria-label="Previous">‹</button>
+        <button className="btn btn-sm" onClick={() => onNavigate(-1)} aria-label="Previous">
+          <ChevronLeft className="w-4 h-4" aria-hidden />
+        </button>
         <button className="btn btn-sm" onClick={() => onNavigate(0)}>Today</button>
-        <button className="btn btn-sm" onClick={() => onNavigate(1)} aria-label="Next">›</button>
+        <button className="btn btn-sm" onClick={() => onNavigate(1)} aria-label="Next">
+          <ChevronRight className="w-4 h-4" aria-hidden />
+        </button>
       </div>
 
       <h2 className="font-title text-lg font-bold text-[var(--text-primary)] mx-2 whitespace-nowrap">
@@ -102,7 +107,7 @@ export function CalendarToolbar({
             className="absolute right-1 top-1/2 -translate-y-1/2 text-[var(--muted)] hover:text-amber-accent text-xs px-1"
             aria-label="Clear filter"
           >
-            ✕
+            <X className="w-3.5 h-3.5" aria-hidden />
           </button>
         )}
       </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Folder } from "lucide-react";
 import { InstallSnippetView } from "@/components/docs/install-snippet-view";
 
 const CLIENTS = [
@@ -58,7 +59,7 @@ export function InstallSection() {
       </div>
       {dataDirInfo && (
         <div className="mb-3 text-xs text-[var(--text-secondary)] flex items-center gap-1.5">
-          <span className="opacity-60">📁</span>
+          <Folder className="w-3.5 h-3.5 opacity-60" aria-hidden />
           <span>
             Data directory:{" "}
             <code className="text-[var(--text-primary)] font-mono">

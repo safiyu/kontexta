@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { X } from "lucide-react";
 
 interface GitWizardModalProps {
   isOpen: boolean;
@@ -90,7 +91,9 @@ export function GitWizardModal({ isOpen, onClose, onSave, currentUrl }: GitWizar
               Choose how Kontexta connects to your remote Git repository.
             </p>
           </div>
-          <button type="button" onClick={onClose} className="btn btn-icon-md" aria-label="Close dialog">✕</button>
+          <button type="button" onClick={onClose} className="btn btn-icon-md" aria-label="Close dialog">
+            <X className="w-4 h-4" aria-hidden />
+          </button>
         </div>
 
         <div className="p-6 flex flex-col gap-6">

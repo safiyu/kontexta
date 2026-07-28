@@ -1,5 +1,6 @@
 "use client";
 
+import { Star } from "lucide-react";
 import { toast } from "sonner";
 
 interface FileItemProps {
@@ -97,7 +98,9 @@ export function FileItem({ id, title, updatedAt, active, onClick, estTokens, sel
             active ? "text-[var(--text-primary)]" : "text-[var(--text-primary)] group-hover:text-[var(--accent)]"
           }`}>
             {favorite && (
-              <span className="text-amber-accent shrink-0" title="Favorite" aria-label="Favorite">★</span>
+              <span className="text-amber-accent shrink-0" title="Favorite" aria-label="Favorite">
+                <Star className="w-3.5 h-3.5 fill-current" aria-hidden />
+              </span>
             )}
             <span className="truncate">{title}</span>
           </div>

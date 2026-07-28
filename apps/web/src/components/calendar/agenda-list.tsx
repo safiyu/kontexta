@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import { CalendarDays } from "lucide-react";
 import type { CalendarEntity, CalendarEvent, Conflict } from "kxta-core";
 import { fmtTime, isSameDay, startOfDay } from "./date-utils";
 import { colorForType } from "./event-colors";
@@ -59,7 +60,7 @@ export function AgendaList({ events, entitiesById, conflicts, loading, highlight
   if (groups.length === 0) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center py-16 gap-3">
-        <div className="text-4xl opacity-30 dark-icon">🗓️</div>
+        <CalendarDays className="w-9 h-9 opacity-30 dark-icon" aria-hidden />
         <div className="text-sm text-[var(--muted)]">No events in the next 30 days</div>
       </div>
     );

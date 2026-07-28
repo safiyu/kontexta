@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { X, CheckCircle2 } from "lucide-react";
 import type { CalendarEntity, Conflict } from "kxta-core";
 import { fmtTime } from "./date-utils";
 
@@ -59,7 +60,9 @@ export function ConflictsPanel({ conflicts, bufferMinutes, loading, entitiesById
           {conflicts.length > 0 && (
             <span className="px-1.5 rounded-full bg-[var(--danger-soft)] text-[var(--danger)] text-[10px] font-bold">{conflicts.length}</span>
           )}
-          <button onClick={onClose} className="btn btn-icon-sm" aria-label="Close conflicts panel">✕</button>
+          <button onClick={onClose} className="btn btn-icon-sm" aria-label="Close conflicts panel">
+            <X className="w-4 h-4" aria-hidden />
+          </button>
         </div>
       </div>
 
@@ -84,7 +87,7 @@ export function ConflictsPanel({ conflicts, bufferMinutes, loading, entitiesById
           </div>
         ) : conflicts.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 gap-2">
-            <div className="text-3xl opacity-30 dark-icon">✅</div>
+            <CheckCircle2 className="w-7 h-7 opacity-30 dark-icon" aria-hidden />
             <div className="text-xs text-[var(--muted)]">No conflicts in view</div>
           </div>
         ) : (

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import { Folder, FolderOpen } from "lucide-react";
 import { TreeNode } from "./tree-node";
 import { buildFolderTree, FolderTreeNode } from "@/lib/build-folder-tree";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -175,7 +176,7 @@ export function FolderTree({
             );
           })}
           {projects.length === 0 && (
-            <EmptyState icon={<span className="text-3xl">📁</span>} title="No projects yet" />
+            <EmptyState icon={<Folder className="w-8 h-8 opacity-40" aria-hidden />} title="No projects yet" />
           )}
         </div>
       </div>
@@ -226,7 +227,7 @@ export function FolderTree({
               onSelectFile={onSelectFile}
             />
           ) : (
-            <EmptyState icon={<span className="text-3xl">📂</span>} title="No folders yet" />
+            <EmptyState icon={<FolderOpen className="w-8 h-8 opacity-40" aria-hidden />} title="No folders yet" />
           )}
         </div>
       </div>

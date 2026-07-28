@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, useRef } from "react";
+import { X } from "lucide-react";
 import { ToolForm, type ToolDef } from "@/components/docs/tool-form";
 import { TemplateGallery } from "@/components/docs/template-gallery";
 import { SaveBar } from "@/components/docs/save-bar";
@@ -320,7 +321,9 @@ export function BuilderSection() {
           {saveError && (
             <div className="m-6 p-4 bg-[var(--danger-soft)] border border-[var(--danger)]/50 rounded-xl text-sm text-[var(--danger)] animate-fade-in">
               {saveError}
-              <button onClick={() => setSaveError(null)} className="ml-2 text-[var(--danger)] hover:opacity-80">✕</button>
+              <button onClick={() => setSaveError(null)} className="ml-2 text-[var(--danger)] hover:opacity-80" aria-label="Dismiss error">
+                <X className="w-4 h-4" aria-hidden />
+              </button>
             </div>
           )}
 

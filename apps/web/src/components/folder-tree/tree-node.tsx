@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, ReactNode } from "react";
+import { ChevronRight } from "lucide-react";
 
 interface TreeNodeProps {
   label: string;
@@ -44,7 +45,10 @@ export function TreeNode({
       >
         {active && <span className="absolute -left-1 top-1 bottom-1 w-0.5 bg-[var(--accent)] rounded-full bp-keep-round" />}
         {hasChildren && (
-          <span className={`text-[10px] inline-block transition-transform duration-200 ${expanded ? "rotate-90" : ""}`}>▶</span>
+          <ChevronRight
+            className={`w-3 h-3 shrink-0 transition-transform duration-200 ${expanded ? "rotate-90" : ""}`}
+            aria-hidden
+          />
         )}
         {icon && <span className="dark-icon">{icon}</span>}
         <span className="truncate lowercase first-letter:uppercase flex-1">{label}</span>

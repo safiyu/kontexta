@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
+import { ChevronRight } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type { CalendarEntity, CalendarEvent, Conflict } from "kxta-core";
 import { useEntities, useCalendarData } from "@/hooks/use-calendar";
@@ -139,7 +140,7 @@ export function CalendarClient() {
       <header className="sticky top-0 z-30 h-16 bg-[var(--bg-secondary)]/80 backdrop-blur-xl border-b border-[var(--border)] flex items-center px-6 gap-2">
         <div className="flex items-center gap-1.5 cursor-pointer" onClick={() => router.push("/")}>
           <span className="text-sm text-[var(--text-secondary)] hover:text-amber-accent transition-colors">Home</span>
-          <span className="text-[var(--muted)] opacity-40">›</span>
+          <ChevronRight className="w-4 h-4 text-[var(--muted)] opacity-40" aria-hidden />
           <span className="text-sm font-bold text-amber-accent">Calendar</span>
         </div>
       </header>

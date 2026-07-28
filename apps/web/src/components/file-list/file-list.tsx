@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { ArrowUpRight, RotateCw, Search, X, FolderOpen } from "lucide-react";
 import { toast } from "sonner";
 import { FileListFilter } from "./file-list-filter";
 import { FileItem } from "./file-item";
@@ -193,7 +194,7 @@ export function FileList({
             items={[
               { label: "New File", icon: <span>+</span>, onSelect: onNewFile },
               { label: "Upload Files", icon: <span>↑</span>, onSelect: () => setUploadOpen(true) },
-              { label: "Clip URL", icon: <span>↗</span>, onSelect: () => setClipDialogOpen(true) },
+              { label: "Clip URL", icon: <ArrowUpRight className="w-3.5 h-3.5" aria-hidden />, onSelect: () => setClipDialogOpen(true) },
             ]}
           />
         </div>
@@ -222,11 +223,11 @@ export function FileList({
                     a.remove();
                   },
                 },
-                { label: "Sync Project", icon: <span>↻</span>, onSelect: onSync },
-                { label: "Scan for New Files", icon: <span>🔍</span>, onSelect: onRefresh },
+                { label: "Sync Project", icon: <RotateCw className="w-3.5 h-3.5" aria-hidden />, onSelect: onSync },
+                { label: "Scan for New Files", icon: <Search className="w-3.5 h-3.5" aria-hidden />, onSelect: onRefresh },
                 { label: "Onboard Agent", icon: <span>✨</span>, onSelect: () => setOnboardOpen(true) },
                 ...(!selectedFolder && onUnregisterProject
-                  ? [{ label: "Unregister", icon: <span>✕</span>, onSelect: onUnregisterProject, destructive: true }]
+                  ? [{ label: "Unregister", icon: <X className="w-3.5 h-3.5" aria-hidden />, onSelect: onUnregisterProject, destructive: true }]
                   : []),
               ]}
             />
@@ -246,8 +247,9 @@ export function FileList({
           disabled={refreshing}
           className={`btn btn-sm ${refreshing ? "opacity-50" : ""}`}
           title="Refresh (scan disk for changes)"
+          aria-label="Refresh"
         >
-          {refreshing ? "..." : "↻"}
+          {refreshing ? "..." : <RotateCw className="w-4 h-4" aria-hidden />}
         </button>
       </div>
       <div className="bp-annotation bp-dashed px-3 py-2 flex items-center justify-between text-[11px] uppercase tracking-wider text-[var(--text-secondary)] border-b border-[var(--border)]">
@@ -397,13 +399,13 @@ export function FileList({
           </div>
         ) : !selectedSection ? (
           <EmptyState
-            icon={<span className="text-6xl opacity-30 dark-icon">📂</span>}
+            icon={<FolderOpen className="w-16 h-16 opacity-30 dark-icon" aria-hidden />}
             title="No Selection"
             hint="Please select a project or the Knowledge Base from the sidebar to view files."
           />
         ) : (
           <EmptyState
-            icon={<span className="text-6xl opacity-30 dark-icon">📂</span>}
+            icon={<FolderOpen className="w-16 h-16 opacity-30 dark-icon" aria-hidden />}
             title="Folder is empty"
             hint="This folder doesn't contain any indexed context files."
             action={

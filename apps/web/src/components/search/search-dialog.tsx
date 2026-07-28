@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
+import { Search } from "lucide-react";
 import { Dialog } from "@/components/ui/dialog";
 
 interface SearchDialogProps {
@@ -133,7 +134,7 @@ export function SearchDialog({ open, onClose, onSelectFile }: SearchDialogProps)
 
           {!loading && query && results.length === 0 && (
             <div className="flex flex-col items-center py-12 text-[var(--text-secondary)] gap-3">
-              <span className="text-4xl opacity-30">🔍</span>
+              <Search className="w-8 h-8 opacity-30" aria-hidden />
               <p className="text-sm font-medium">No results found</p>
               <p className="text-xs opacity-60 italic">Try a different search term</p>
             </div>

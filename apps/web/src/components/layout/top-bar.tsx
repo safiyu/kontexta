@@ -2,6 +2,7 @@
 
 import { useTheme } from "next-themes";
 import { useEffect, useState } from "react";
+import { Sun, Moon, LayoutGrid } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { AnimatedLogo } from "./animated-logo";
@@ -225,11 +226,18 @@ export function TopBar({
             onClick={() =>
               setTheme(theme === "light" ? "dark" : theme === "dark" ? "blueprint" : "light")
             }
-            className="px-2 h-5 rounded-md border border-[var(--border)] font-mono text-[10px] uppercase tracking-wider text-[var(--text-secondary)] hover:text-[var(--accent)] hover:border-[var(--accent)] transition-colors"
+            className="px-2 h-5 rounded-md border border-[var(--border)] font-mono text-[10px] uppercase tracking-wider text-[var(--text-secondary)] hover:text-[var(--accent)] hover:border-[var(--accent)] transition-colors inline-flex items-center gap-1"
             aria-label="Cycle theme (light / dark / blueprint)"
             title={`Theme: ${theme} — click to cycle`}
           >
-            {theme === "light" ? "☀ light" : theme === "dark" ? "☽ dark" : "▦ blueprint"}
+            {theme === "light" ? (
+              <Sun className="w-3 h-3" aria-hidden />
+            ) : theme === "dark" ? (
+              <Moon className="w-3 h-3" aria-hidden />
+            ) : (
+              <LayoutGrid className="w-3 h-3" aria-hidden />
+            )}
+            {theme === "light" ? "light" : theme === "dark" ? "dark" : "blueprint"}
           </button>
         )}
       </div>

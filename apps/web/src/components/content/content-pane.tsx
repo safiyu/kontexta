@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { FolderOpen, AlertTriangle, Search } from "lucide-react";
 import { toast } from "sonner";
 import { unified } from "unified";
 import remarkParse from "remark-parse";
@@ -439,7 +440,7 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
     return (
       <div className="h-full flex flex-col items-center justify-center animate-fade-in">
         <EmptyState
-          icon={<span className="text-6xl opacity-40 dark-icon">📂</span>}
+          icon={<FolderOpen className="w-16 h-16 opacity-40 dark-icon" aria-hidden />}
           title="Select a file to preview"
           hint="Choose a file from the list on the left"
         />
@@ -473,7 +474,7 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
     if (loadError?.kind === "disk_missing") {
       return (
         <div className="h-full flex flex-col items-center justify-center text-[var(--text-secondary)] gap-4 animate-fade-in p-8">
-          <span className="text-6xl opacity-40 dark-icon">⚠️</span>
+          <AlertTriangle className="w-16 h-16 opacity-40 dark-icon" aria-hidden />
           <div className="text-center max-w-lg">
             <p className="text-lg font-bold text-[var(--text-primary)]">File is missing on disk</p>
             <p className="text-sm font-medium text-[var(--text-secondary)] mt-2">
@@ -500,7 +501,7 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
     if (loadError) {
       return (
         <div className="h-full flex flex-col items-center justify-center text-[var(--text-secondary)] gap-3 animate-fade-in p-8">
-          <span className="text-6xl opacity-40 dark-icon">⚠️</span>
+          <AlertTriangle className="w-16 h-16 opacity-40 dark-icon" aria-hidden />
           <div className="text-center max-w-lg">
             <p className="text-lg font-bold text-[var(--text-primary)]">
               Failed to load file{loadError.status ? ` (HTTP ${loadError.status})` : ""}
@@ -515,7 +516,7 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
     return (
       <div className="h-full flex flex-col items-center justify-center animate-fade-in">
         <EmptyState
-          icon={<span className="text-6xl opacity-40 dark-icon">🔍</span>}
+          icon={<Search className="w-16 h-16 opacity-40 dark-icon" aria-hidden />}
           title="File not found"
           hint="This file may have been moved or deleted"
         />

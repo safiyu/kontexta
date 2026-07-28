@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { X } from "lucide-react";
 
 interface Project { id: number; name: string }
 
@@ -91,7 +92,9 @@ export function UploadFilesDialog({ open, onClose, projects, defaultProjectId, d
         <form onSubmit={handleSubmit}>
           <div className="px-6 py-4 border-b border-[var(--border-color)] flex items-center justify-between">
             <h3 className="text-lg font-bold text-amber-accent">UPLOAD MARKDOWN FILES</h3>
-            <button type="button" onClick={onClose} className="btn btn-icon-md" aria-label="Close dialog">✕</button>
+            <button type="button" onClick={onClose} className="btn btn-icon-md" aria-label="Close dialog">
+              <X className="w-4 h-4" aria-hidden />
+            </button>
           </div>
 
           <div className="p-6 space-y-4">
@@ -109,7 +112,9 @@ export function UploadFilesDialog({ open, onClose, projects, defaultProjectId, d
                   {files.map((f, i) => (
                     <li key={i} className="flex items-center justify-between py-0.5">
                       <span className="truncate">{f.name}</span>
-                      <button type="button" className="btn btn-icon-sm btn-destructive" aria-label={`Remove ${f.name}`} onClick={() => setFiles((arr) => arr.filter((_, j) => j !== i))}>✕</button>
+                      <button type="button" className="btn btn-icon-sm btn-destructive" aria-label={`Remove ${f.name}`} onClick={() => setFiles((arr) => arr.filter((_, j) => j !== i))}>
+                        <X className="w-3.5 h-3.5" aria-hidden />
+                      </button>
                     </li>
                   ))}
                 </ul>
