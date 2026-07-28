@@ -7,6 +7,7 @@ import { FileItem } from "./file-item";
 import { UploadFilesDialog } from "./upload-files-dialog";
 import { ClipUrlDialog } from "./clip-url-dialog";
 import { OnboardModal } from "./onboard-modal";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 interface Project {
   id: number;
@@ -405,38 +406,16 @@ export function FileList({
             </div>
           </div>
         )}
-        {bulkConfirmOpen && (
-          <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50">
-            <div className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-xl p-5 max-w-md w-full shadow-2xl">
-              <h2 className="text-base font-bold text-[var(--text-primary)] mb-2">
-                Delete {visibleSelected.length} file{visibleSelected.length === 1 ? "" : "s"}?
-              </h2>
-              <p className="text-sm text-[var(--text-secondary)] mb-4">
-                Knowledge Base files will be removed from disk and the deletion will be
-                committed to git (recoverable via Time Travel). Project files are only
-                un-indexed; the source file on disk is left intact.
-              </p>
-              <div className="flex justify-end gap-2">
-                <button
-                  type="button"
-                  className="btn btn-sm"
-                  onClick={() => setBulkConfirmOpen(false)}
-                  disabled={bulkDeleting}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  className={`px-3 py-1.5 bg-red-600 text-white font-bold rounded ${bulkDeleting ? "opacity-50" : "hover:bg-red-700"}`}
-                  onClick={handleBulkDelete}
-                  disabled={bulkDeleting}
-                >
-                  {bulkDeleting ? "Deleting…" : "Delete"}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        <ConfirmDialog
+          open={bulkConfirmOpen}
+          onClose={() => setBulkConfirmOpen(false)}
+          onConfirm={handleBulkDelete}
+          title={`Delete ${visibleSelected.length} file${visibleSelected.length === 1 ? "" : "s"}?`}
+          message="Knowledge Base files will be removed from disk and the deletion will be committed to git (recoverable via Time Travel). Project files are only un-indexed; the source file on disk is left intact."
+          confirmLabel={`Delete ${visibleSelected.length} file${visibleSelected.length === 1 ? "" : "s"}`}
+          destructive
+          loading={bulkDeleting}
+        />
         {filteredAndSorted.length > 0 ? (
           filteredAndSorted.map((file) => (
             <FileItem

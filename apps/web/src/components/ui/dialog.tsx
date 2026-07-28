@@ -14,8 +14,12 @@ interface DialogProps {
   widthClass?: string;
   /** Hide the standard header row (title still announced to screen readers). */
   hideHeader?: boolean;
+  /** Tailwind positioning classes for the panel. Defaults to centered. */
+  positionClass?: string;
   children: ReactNode;
 }
+
+const DEFAULT_POSITION_CLASS = "left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2";
 
 /**
  * The one modal scaffold. Focus trap, Escape, overlay click, focus restore,
@@ -28,6 +32,7 @@ export function Dialog({
   description,
   widthClass = "max-w-md",
   hideHeader = false,
+  positionClass = DEFAULT_POSITION_CLASS,
   children,
 }: DialogProps) {
   return (
@@ -35,7 +40,7 @@ export function Dialog({
       <DialogPrimitive.Portal>
         <DialogPrimitive.Overlay className="fixed inset-0 z-[var(--z-modal)] bg-black/60 backdrop-blur-sm animate-fade-in" />
         <DialogPrimitive.Content
-          className={`fixed left-1/2 top-1/2 z-[var(--z-modal)] w-[92vw] ${widthClass} -translate-x-1/2 -translate-y-1/2 rounded-xl border border-[var(--border)] bg-[var(--bg-primary)] shadow-2xl animate-scale-in focus:outline-none max-h-[85vh] flex flex-col`}
+          className={`fixed ${positionClass} z-[var(--z-modal)] w-[92vw] ${widthClass} rounded-xl border border-[var(--border)] bg-[var(--bg-primary)] shadow-2xl animate-scale-in focus:outline-none max-h-[85vh] flex flex-col`}
         >
           {hideHeader ? (
             <>

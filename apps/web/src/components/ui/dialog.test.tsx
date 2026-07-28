@@ -36,6 +36,18 @@ describe("Dialog", () => {
     fireEvent.click(screen.getByRole("button", { name: /close/i }));
     expect(onClose).toHaveBeenCalled();
   });
+
+  it("defaults to centered positioning", () => {
+    render(<Dialog open onClose={() => {}} title="T"><p>b</p></Dialog>);
+    expect(screen.getByRole("dialog").className).toMatch(/top-1\/2 -translate-x-1\/2 -translate-y-1\/2/);
+  });
+
+  it("applies a custom positionClass when provided", () => {
+    render(
+      <Dialog open onClose={() => {}} title="T" positionClass="left-1/2 top-[20vh] -translate-x-1/2"><p>b</p></Dialog>
+    );
+    expect(screen.getByRole("dialog").className).toMatch(/top-\[20vh\]/);
+  });
 });
 
 describe("ConfirmDialog", () => {

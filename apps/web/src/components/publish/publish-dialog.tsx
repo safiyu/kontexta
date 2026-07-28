@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { Dialog } from "@/components/ui/dialog";
 
 interface PublishConfig {
   folders: string[];
@@ -236,21 +237,21 @@ export function PublishDialog({ isOpen, onClose, mode = "publish", onSwitchToPub
     }
   };
 
-  if (!isOpen) return null;
-
   const isProjectScope = selectedProjectId !== null;
   const activeProject = projects.find((p) => p.id === selectedProjectId);
   const isViewMode = mode === "view";
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center">
-      {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-
-      {/* Dialog */}
-      <div className="relative bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border)] shadow-2xl w-full max-w-2xl max-h-[80vh] overflow-hidden flex flex-col" style={isViewMode ? { maxWidth: "90vw", maxHeight: "85vh" } : undefined}>
+    <Dialog
+      open={isOpen}
+      onClose={onClose}
+      title={isViewMode ? "View published site" : "Publish documentation"}
+      widthClass={isViewMode ? "max-w-[1400px]" : "max-w-2xl"}
+      hideHeader
+    >
+      <div className="-m-5 flex flex-col max-h-[80vh] overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border)]">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border)] shrink-0">
           <div className="flex items-center gap-3">
             <svg className="w-5 h-5 text-[#B4781E]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M4 4h16v16H4z" />
@@ -258,17 +259,9 @@ export function PublishDialog({ isOpen, onClose, mode = "publish", onSwitchToPub
               <path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3" />
             </svg>
             <h2 className="text-lg font-semibold text-[var(--text-primary)]">
-              {isViewMode ? "View Published Site" : "Publish Documentation"}
+              {isViewMode ? "View published site" : "Publish documentation"}
             </h2>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 rounded-lg hover:bg-[var(--bg-tertiary)] transition-colors"
-          >
-            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M18 6L6 18M6 6l12 12" />
-            </svg>
-          </button>
         </div>
 
         {/* Content */}
@@ -591,6 +584,6 @@ export function PublishDialog({ isOpen, onClose, mode = "publish", onSwitchToPub
           )}
         </div>
       </div>
-    </div>
+    </Dialog>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
+import { Dialog } from "@/components/ui/dialog";
 
 interface SearchDialogProps {
   open: boolean;
@@ -96,20 +97,16 @@ export function SearchDialog({ open, onClose, onSelectFile }: SearchDialogProps)
     onSelectFile(result);
   };
 
-  const handleOverlayClick = (e: React.MouseEvent) => {
-    if (e.target === e.currentTarget) {
-      onClose();
-    }
-  };
-
-  if (!open) return null;
-
   return (
-    <div
-      className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm pt-[20vh] animate-fade-in"
-      onClick={handleOverlayClick}
+    <Dialog
+      open={open}
+      onClose={onClose}
+      title="Search"
+      hideHeader
+      widthClass="max-w-[560px]"
+      positionClass="left-1/2 top-[20vh] -translate-x-1/2"
     >
-      <div className="w-[560px] mx-auto bg-[var(--bg-primary)] border border-[var(--border)] rounded-xl shadow-2xl overflow-hidden animate-scale-in">
+      <div className="-m-5 overflow-hidden rounded-xl">
         <div className="relative">
           <input
             ref={inputRef}
@@ -148,6 +145,7 @@ export function SearchDialog({ open, onClose, onSelectFile }: SearchDialogProps)
                 <button
                   key={result.id}
                   onClick={() => handleSelectResult(result)}
+                  onMouseEnter={() => setSelectedIdx(idx)}
                   className={`w-full px-5 py-4 text-left rounded-lg transition-all duration-200 group flex flex-col gap-1 ${
                     idx === selectedIdx
                       ? "bg-amber-accent/15 text-white shadow-[inset_0_0_12px_rgba(180,120,30,0.1)]"
@@ -166,6 +164,6 @@ export function SearchDialog({ open, onClose, onSelectFile }: SearchDialogProps)
           )}
         </div>
       </div>
-    </div>
+    </Dialog>
   );
 }
