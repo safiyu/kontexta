@@ -15,7 +15,7 @@ import { NewFolderDialog } from "@/components/folder-tree/new-folder-dialog";
 import { DeleteFolderDialog } from "@/components/folder-tree/delete-folder-dialog";
 import { UnregisterModal } from "@/components/file-list/unregister-modal";
 import { DocsModal } from "@/components/docs/docs-modal";
-import { PublishDialog, type PublishResult } from "@/components/publish/publish-dialog";
+import { PublishDialog } from "@/components/publish/publish-dialog";
 import { useProjects } from "@/hooks/use-projects";
 import { useFiles } from "@/hooks/use-files";
 import { useFolders } from "@/hooks/use-folders";
