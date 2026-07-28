@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { createPortal } from "react-dom";
 import type { CalendarEntity, CalendarLink } from "kxta-core";
+import { Dialog } from "../ui/dialog";
+import { ConfirmDialog } from "../ui/confirm-dialog";
 
 interface EntityManagerProps {
   open: boolean;
@@ -20,13 +21,12 @@ export function EntityManager({ open, onClose, entities, links, onChanged }: Ent
   const [newKind, setNewKind] = useState("");
   const [newTimezone, setNewTimezone] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
+  const [confirmDeleteEntity, setConfirmDeleteEntity] = useState<CalendarEntity | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const [linkFrom, setLinkFrom] = useState<number | "">("");
   const [linkTo, setLinkTo] = useState<number | "">("");
   const [linkLabel, setLinkLabel] = useState("");
-
-  if (!open || typeof document === "undefined") return null;
 
   async function addEntity() {
     setError(null);
@@ -62,20 +62,23 @@ export function EntityManager({ open, onClose, entities, links, onChanged }: Ent
     onChanged();
   }
 
-  async function deleteEntity(entity: CalendarEntity) {
-    if (pendingDeleteId !== entity.id) {
-      setPendingDeleteId(entity.id);
-      setTimeout(() => setPendingDeleteId((cur) => (cur === entity.id ? null : cur)), 3000);
-      return;
-    }
+  async function performDeleteEntity() {
+    const entity = confirmDeleteEntity;
+    if (!entity) return;
     setError(null);
-    const res = await fetch(`/api/calendar/entities/${entity.id}`, { method: "DELETE" });
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      setError(body.error ?? "Failed to delete entity.");
-      return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/calendar/entities/${entity.id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setError(body.error ?? "Failed to delete entity.");
+        return;
+      }
+      setConfirmDeleteEntity(null);
+      onChanged();
+    } finally {
+      setDeleting(false);
     }
-    onChanged();
   }
 
   async function addLink() {
@@ -111,23 +114,12 @@ export function EntityManager({ open, onClose, entities, links, onChanged }: Ent
     return entities.find((e) => e.id === id)?.name ?? `#${id}`;
   }
 
-  return createPortal(
-    <div
-      role="dialog"
-      aria-label="Manage calendar entities"
-      className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"
-      onClick={(e) => e.target === e.currentTarget && onClose()}
-    >
-      <div className="w-[720px] max-h-[80vh] bg-[var(--bg-primary)] border border-[var(--border)] rounded-xl shadow-2xl overflow-hidden animate-scale-in flex flex-col">
-        <div className="px-6 py-4 border-b border-[var(--border)] flex items-center justify-between shrink-0">
-          <h3 className="text-lg font-bold text-amber-accent">MANAGE ENTITIES &amp; LINKS</h3>
-          <button onClick={onClose} className="btn btn-icon-md" aria-label="Close">✕</button>
-        </div>
+  return (
+    <Dialog open={open} onClose={onClose} title="Manage entities & links" widthClass="max-w-3xl">
+      <div className="space-y-6">
+        {error && <div className="text-xs text-red-400">{error}</div>}
 
-        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-6">
-          {error && <div className="text-xs text-red-400">{error}</div>}
-
-          <section>
+        <section>
             <h4 className="text-xs font-bold tracking-widest uppercase text-[var(--text-secondary)] mb-3">Entities</h4>
             <div className="flex gap-2 mb-3">
               <input placeholder="Name" value={newName} onChange={(e) => setNewName(e.target.value)} className={`${inputClass} flex-1`} />
@@ -145,16 +137,16 @@ export function EntityManager({ open, onClose, entities, links, onChanged }: Ent
                   <button onClick={() => toggleActive(entity)} className="btn btn-sm shrink-0">
                     {entity.active ? "Retire" : "Reactivate"}
                   </button>
-                  <button onClick={() => deleteEntity(entity)} className="btn btn-sm btn-destructive shrink-0">
-                    {pendingDeleteId === entity.id ? "Confirm" : "Delete"}
+                  <button onClick={() => setConfirmDeleteEntity(entity)} className="btn btn-sm btn-destructive shrink-0">
+                    Delete
                   </button>
                 </div>
               ))}
               {entities.length === 0 && <div className="text-xs text-[var(--muted)] py-2">No entities yet.</div>}
             </div>
-          </section>
+        </section>
 
-          <section>
+        <section>
             <h4 className="text-xs font-bold tracking-widest uppercase text-[var(--text-secondary)] mb-3">Links</h4>
             <div className="flex gap-2 mb-3">
               <select value={linkFrom} onChange={(e) => setLinkFrom(e.target.value ? Number(e.target.value) : "")} className={`${inputClass} flex-1 cursor-pointer`}>
@@ -184,10 +176,24 @@ export function EntityManager({ open, onClose, entities, links, onChanged }: Ent
               ))}
               {links.length === 0 && <div className="text-xs text-[var(--muted)] py-2">No links yet.</div>}
             </div>
-          </section>
-        </div>
+        </section>
       </div>
-    </div>,
-    document.body
+
+      <ConfirmDialog
+        open={confirmDeleteEntity !== null}
+        onClose={() => setConfirmDeleteEntity(null)}
+        onConfirm={performDeleteEntity}
+        title="Delete entity?"
+        message={
+          <>
+            Deleting {confirmDeleteEntity ? <strong className="text-[var(--text-primary)]">&quot;{confirmDeleteEntity.name}&quot;</strong> : "this entity"} also
+            deletes all of its events and links. This cannot be undone.
+          </>
+        }
+        confirmLabel="Delete"
+        destructive
+        loading={deleting}
+      />
+    </Dialog>
   );
 }

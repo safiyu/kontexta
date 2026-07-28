@@ -41,7 +41,7 @@ describe("SaveBar", () => {
     // Initial click opens the modal — onDiscard NOT yet called.
     fireEvent.click(screen.getByRole("button", { name: /^discard$/i }));
     expect(onDiscard).not.toHaveBeenCalled();
-    expect(screen.getByRole("dialog", { name: /confirm discard/i })).toBeTruthy();
+    expect(screen.getByRole("dialog", { name: /discard unsaved changes\?/i })).toBeTruthy();
     // Click the modal's Discard button (now there are TWO; the modal one is the 2nd).
     const buttons = screen.getAllByRole("button", { name: /^discard$/i });
     fireEvent.click(buttons[buttons.length - 1]);
@@ -54,6 +54,6 @@ describe("SaveBar", () => {
     fireEvent.click(screen.getByRole("button", { name: /^discard$/i }));
     fireEvent.click(screen.getByRole("button", { name: /cancel/i }));
     expect(onDiscard).not.toHaveBeenCalled();
-    expect(screen.queryByRole("dialog", { name: /confirm discard/i })).toBeNull();
+    expect(screen.queryByRole("dialog", { name: /discard unsaved changes\?/i })).toBeNull();
   });
 });

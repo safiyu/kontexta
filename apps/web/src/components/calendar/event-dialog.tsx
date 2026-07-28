@@ -3,6 +3,8 @@
 import { useState } from "react";
 import type { CalendarEntity, CalendarEvent } from "kxta-core";
 import { fromDatetimeLocalValue } from "./date-utils";
+import { Dialog } from "../ui/dialog";
+import { ConfirmDialog } from "../ui/confirm-dialog";
 
 export type EventDialogState =
   | { mode: "create"; entityId?: number; startsAt: string; endsAt: string }
@@ -34,7 +36,7 @@ export function EventDialog({ state, entities, knownTypes, onClose, onSaved }: E
   const [notes, setNotes] = useState(isEdit ? event!.notes ?? "" : "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
 
   function toLocal(iso: string): string {
     const d = new Date(iso);
@@ -91,11 +93,7 @@ export function EventDialog({ state, entities, knownTypes, onClose, onSaved }: E
   }
 
   async function handleDelete() {
-    if (!confirmDelete) {
-      setConfirmDelete(true);
-      setTimeout(() => setConfirmDelete(false), 3000);
-      return;
-    }
+    setConfirmDeleteOpen(false);
     setSaving(true);
     try {
       const res = await fetch(`/api/calendar/events/${event!.id}`, { method: "DELETE" });
@@ -112,87 +110,88 @@ export function EventDialog({ state, entities, knownTypes, onClose, onSaved }: E
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"
-      onClick={(e) => e.target === e.currentTarget && onClose()}
-    >
-      <div className="w-[560px] bg-[var(--bg-primary)] border border-[var(--border)] rounded-xl shadow-2xl overflow-hidden animate-scale-in">
-        <div className="px-6 py-4 border-b border-[var(--border)] flex items-center justify-between">
-          <h3 className="text-lg font-bold text-amber-accent">{isEdit ? "EDIT EVENT" : "NEW EVENT"}</h3>
-          <button onClick={onClose} className="btn btn-icon-md" aria-label="Close">✕</button>
+    <Dialog open onClose={onClose} title={isEdit ? "Edit event" : "New event"} widthClass="max-w-lg">
+      <div className="space-y-4">
+        <div>
+          <label className={labelClass}>Entity</label>
+          <select
+            value={entityId}
+            onChange={(e) => setEntityId(e.target.value ? Number(e.target.value) : "")}
+            className={`${inputClass} cursor-pointer`}
+          >
+            <option value="">Select an entity…</option>
+            {entities.map((e) => (
+              <option key={e.id} value={e.id}>{e.name}</option>
+            ))}
+          </select>
         </div>
 
-        <div className="px-6 py-4 space-y-4 max-h-[60vh] overflow-y-auto">
+        <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className={labelClass}>Entity</label>
-            <select
-              value={entityId}
-              onChange={(e) => setEntityId(e.target.value ? Number(e.target.value) : "")}
-              className={`${inputClass} cursor-pointer`}
-            >
-              <option value="">Select an entity…</option>
-              {entities.map((e) => (
-                <option key={e.id} value={e.id}>{e.name}</option>
-              ))}
-            </select>
+            <label className={labelClass}>Type</label>
+            <input
+              type="text"
+              list="calendar-event-types"
+              value={type}
+              onChange={(e) => setType(e.target.value)}
+              placeholder="Freeform — any label you like"
+              className={inputClass}
+            />
+            <datalist id="calendar-event-types">
+              {knownTypes.map((t) => <option key={t} value={t} />)}
+            </datalist>
           </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className={labelClass}>Type</label>
-              <input
-                type="text"
-                list="calendar-event-types"
-                value={type}
-                onChange={(e) => setType(e.target.value)}
-                placeholder="Freeform — any label you like"
-                className={inputClass}
-              />
-              <datalist id="calendar-event-types">
-                {knownTypes.map((t) => <option key={t} value={t} />)}
-              </datalist>
-            </div>
-            <div>
-              <label className={labelClass}>Title</label>
-              <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} className={inputClass} />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className={labelClass}>Starts</label>
-              <input type="datetime-local" value={startsAt} onChange={(e) => setStartsAt(e.target.value)} className={inputClass} />
-            </div>
-            <div>
-              <label className={labelClass}>Ends</label>
-              <input type="datetime-local" value={endsAt} onChange={(e) => setEndsAt(e.target.value)} className={inputClass} />
-            </div>
-          </div>
-
           <div>
-            <label className={labelClass}>Notes</label>
-            <textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} className={inputClass} />
+            <label className={labelClass}>Title</label>
+            <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} className={inputClass} />
           </div>
-
-          {error && <div className="text-xs text-red-400">{error}</div>}
         </div>
 
-        <div className="px-6 py-4 bg-[var(--bg-secondary)]/50 border-t border-[var(--border)] flex items-center justify-between gap-3">
-          {isEdit ? (
-            <button onClick={handleDelete} disabled={saving} className="btn btn-sm btn-destructive">
-              {confirmDelete ? "Confirm delete" : "Delete"}
-            </button>
-          ) : (
-            <div />
-          )}
-          <div className="flex gap-3">
-            <button onClick={onClose} disabled={saving} className="btn btn-sm">Cancel</button>
-            <button onClick={handleSave} disabled={saving} className="btn btn-sm !text-amber-accent font-bold">
-              {saving ? "Saving…" : "Save"}
-            </button>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className={labelClass}>Starts</label>
+            <input type="datetime-local" value={startsAt} onChange={(e) => setStartsAt(e.target.value)} className={inputClass} />
           </div>
+          <div>
+            <label className={labelClass}>Ends</label>
+            <input type="datetime-local" value={endsAt} onChange={(e) => setEndsAt(e.target.value)} className={inputClass} />
+          </div>
+        </div>
+
+        <div>
+          <label className={labelClass}>Notes</label>
+          <textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} className={inputClass} />
+        </div>
+
+        {error && <div className="text-xs text-red-400">{error}</div>}
+      </div>
+
+      <div className="pt-4 mt-4 border-t border-[var(--border)] flex items-center justify-between gap-3">
+        {isEdit ? (
+          <button onClick={() => setConfirmDeleteOpen(true)} disabled={saving} className="btn btn-sm btn-destructive">
+            Delete
+          </button>
+        ) : (
+          <div />
+        )}
+        <div className="flex gap-3">
+          <button onClick={onClose} disabled={saving} className="btn btn-sm">Cancel</button>
+          <button onClick={handleSave} disabled={saving} className="btn btn-sm !text-amber-accent font-bold">
+            {saving ? "Saving…" : "Save"}
+          </button>
         </div>
       </div>
-    </div>
+
+      <ConfirmDialog
+        open={confirmDeleteOpen}
+        onClose={() => setConfirmDeleteOpen(false)}
+        onConfirm={handleDelete}
+        title="Delete event?"
+        message="This cannot be undone."
+        confirmLabel="Delete"
+        destructive
+        loading={saving}
+      />
+    </Dialog>
   );
 }

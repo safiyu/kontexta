@@ -62,7 +62,7 @@ describe("BuilderSection", () => {
     fireEvent.click(screen.getAllByTitle("Delete tool")[0]);
     
     // Confirm via the modal dialog — modal's confirm button is the last one named /delete tool/
-    await waitFor(() => expect(screen.getByRole("dialog", { name: /confirm delete tool/i })).toBeTruthy());
+    await waitFor(() => expect(screen.getByRole("dialog", { name: /delete tool/i })).toBeTruthy());
     const deleteToolBtns = screen.getAllByRole("button", { name: /delete tool/i });
     fireEvent.click(deleteToolBtns[deleteToolBtns.length - 1]);
     
@@ -93,7 +93,7 @@ describe("BuilderSection", () => {
     // Wait for registry delete icon, then click it
     await waitFor(() => expect(screen.getAllByTitle("Delete tool").length).toBeGreaterThan(0));
     fireEvent.click(screen.getAllByTitle("Delete tool")[0]);
-    await waitFor(() => expect(screen.getByRole("dialog", { name: /confirm delete tool/i })).toBeTruthy());
+    await waitFor(() => expect(screen.getByRole("dialog", { name: /delete tool/i })).toBeTruthy());
     const deleteToolBtns = screen.getAllByRole("button", { name: /delete tool/i });
     fireEvent.click(deleteToolBtns[deleteToolBtns.length - 1]);
     
@@ -184,7 +184,7 @@ describe("BuilderSection", () => {
 
     // First click opens the confirm modal
     fireEvent.click(screen.getByTitle("Remove kontexta.json from this project"));
-    await waitFor(() => expect(screen.getByRole("dialog", { name: /confirm delete kontexta\.json/i })).toBeTruthy());
+    await waitFor(() => expect(screen.getByRole("dialog", { name: /delete kontexta\.json/i })).toBeTruthy());
     
     // Click the modal's confirm button
     fireEvent.click(screen.getByRole("button", { name: /delete file/i }));

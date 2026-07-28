@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState, useRef } from "react";
-import { createPortal } from "react-dom";
 import { ToolForm, type ToolDef } from "@/components/docs/tool-form";
 import { TemplateGallery } from "@/components/docs/template-gallery";
 import { SaveBar } from "@/components/docs/save-bar";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useSearchParams } from "next/navigation";
 
 interface Project { id: number; name: string; path: string; }
@@ -24,6 +24,8 @@ export function BuilderSection() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [confirmingDeleteFile, setConfirmingDeleteFile] = useState(false);
   const [confirmingDeleteTool, setConfirmingDeleteTool] = useState<string | null>(null);
+  const [saveConflict, setSaveConflict] = useState<{ currentMtimeMs: number } | null>(null);
+  const [overwriting, setOverwriting] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [templatesCollapsed, setTemplatesCollapsed] = useState(true);
   const [initialSnapshot, setInitialSnapshot] = useState<Record<string, ToolDef>>({});
@@ -160,20 +162,7 @@ export function BuilderSection() {
     });
     if (res.status === 409) {
       const body = await res.json();
-      if (window.confirm("kontexta.json changed on disk. Overwrite?")) {
-        const retry = await fetch(`/api/projects/${projectId}/hands-config`, {
-          method: "PUT",
-          body: JSON.stringify({ config: { version: "1", tools }, ifMtimeMs: body.currentMtimeMs }),
-        });
-        if (retry.ok) {
-          const j = await retry.json();
-          setMtimeMs(j.mtimeMs);
-          setInitialSnapshot({ ...tools });
-        } else {
-          const j = await retry.json().catch(() => ({}));
-          setSaveError(`Retry failed: ${j.error || (j.errors ?? []).join("; ") || `HTTP ${retry.status}`}`);
-        }
-      }
+      setSaveConflict({ currentMtimeMs: body.currentMtimeMs });
       return;
     }
     if (res.ok) {
@@ -184,6 +173,28 @@ export function BuilderSection() {
     }
     const j = await res.json().catch(() => ({}));
     setSaveError(j.error || (j.errors ?? []).join("; ") || `Save failed: HTTP ${res.status}`);
+  };
+
+  const performOverwrite = async () => {
+    if (projectId === null || !saveConflict) return;
+    setOverwriting(true);
+    try {
+      const retry = await fetch(`/api/projects/${projectId}/hands-config`, {
+        method: "PUT",
+        body: JSON.stringify({ config: { version: "1", tools }, ifMtimeMs: saveConflict.currentMtimeMs }),
+      });
+      if (retry.ok) {
+        const j = await retry.json();
+        setMtimeMs(j.mtimeMs);
+        setInitialSnapshot({ ...tools });
+      } else {
+        const j = await retry.json().catch(() => ({}));
+        setSaveError(`Retry failed: ${j.error || (j.errors ?? []).join("; ") || `HTTP ${retry.status}`}`);
+      }
+    } finally {
+      setOverwriting(false);
+      setSaveConflict(null);
+    }
   };
 
   if (projects.length === 0) {
@@ -386,71 +397,36 @@ export function BuilderSection() {
       </div>
 
 
-      {confirmingDeleteTool !== null && typeof document !== "undefined" && createPortal(
-        <div
-          role="dialog"
-          aria-label={`Confirm delete tool ${confirmingDeleteTool}`}
-          className="fixed inset-0 z-[100] bg-black/60 flex items-center justify-center p-4 animate-fade-in"
-          onClick={(e) => e.target === e.currentTarget && setConfirmingDeleteTool(null)}
-        >
-          <div className="w-full max-w-md bg-[var(--bg-primary)] border border-[var(--border)] rounded-2xl p-6 shadow-2xl space-y-6">
-            <div>
-              <h2 className="text-xl font-bold mb-2 text-[var(--text-primary)]">Delete tool &ldquo;{confirmingDeleteTool}&rdquo;?</h2>
-              <p className="text-sm text-[var(--text-secondary)] leading-relaxed">
-                This removes the tool definition from your <code>kontexta.json</code>. The change is staged — click **Save** in the top bar to persist.
-              </p>
-            </div>
-            <div className="flex justify-end gap-3 pt-4 border-t border-[var(--border)]">
-              <button
-                onClick={() => setConfirmingDeleteTool(null)}
-                className="px-4 py-2 text-sm font-bold border border-[var(--border)] rounded-lg hover:bg-[var(--bg-secondary)] transition-all"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={performDeleteTool}
-                className="px-4 py-2 text-sm font-bold bg-red-500 text-white rounded-lg hover:bg-red-600 shadow-lg shadow-red-500/20 transition-all"
-              >
-                Delete Tool
-              </button>
-            </div>
-          </div>
-        </div>,
-        document.body,
-      )}
+      <ConfirmDialog
+        open={confirmingDeleteTool !== null}
+        onClose={() => setConfirmingDeleteTool(null)}
+        onConfirm={performDeleteTool}
+        title={`Delete tool "${confirmingDeleteTool}"?`}
+        message="This removes the tool from the draft. Click Save in the top bar to apply."
+        confirmLabel="Delete tool"
+        destructive
+      />
 
-      {confirmingDeleteFile && typeof document !== "undefined" && createPortal(
-        <div
-          role="dialog"
-          aria-label="Confirm delete kontexta.json"
-          className="fixed inset-0 z-[100] bg-black/60 flex items-center justify-center p-4 animate-fade-in"
-          onClick={(e) => e.target === e.currentTarget && setConfirmingDeleteFile(false)}
-        >
-          <div className="w-full max-w-md bg-[var(--bg-primary)] border border-[var(--border)] rounded-2xl p-6 shadow-2xl space-y-6">
-            <div>
-              <h2 className="text-xl font-bold mb-2 text-[var(--text-primary)]">Delete kontexta.json?</h2>
-              <p className="text-sm text-[var(--text-secondary)] leading-relaxed">
-                This removes the configuration file from this project. All Hands tools will be unregistered immediately.
-              </p>
-            </div>
-            <div className="flex justify-end gap-3 pt-4 border-t border-[var(--border)]">
-              <button
-                onClick={() => setConfirmingDeleteFile(false)}
-                className="px-4 py-2 text-sm font-bold border border-[var(--border)] rounded-lg hover:bg-[var(--bg-secondary)] transition-all"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={performDeleteFile}
-                className="px-4 py-2 text-sm font-bold bg-red-500 text-white rounded-lg hover:bg-red-600 shadow-lg shadow-red-500/20 transition-all"
-              >
-                Delete File
-              </button>
-            </div>
-          </div>
-        </div>,
-        document.body,
-      )}
+      <ConfirmDialog
+        open={confirmingDeleteFile}
+        onClose={() => setConfirmingDeleteFile(false)}
+        onConfirm={performDeleteFile}
+        title="Delete kontexta.json?"
+        message="This removes the configuration file from this project. All Hands tools will be unregistered immediately."
+        confirmLabel="Delete file"
+        destructive
+      />
+
+      <ConfirmDialog
+        open={saveConflict !== null}
+        onClose={() => setSaveConflict(null)}
+        onConfirm={performOverwrite}
+        title="Config changed on disk"
+        message="kontexta.json changed on disk since you loaded it. Overwriting will replace those changes with the version you're editing here."
+        confirmLabel="Overwrite"
+        destructive
+        loading={overwriting}
+      />
     </div>
   );
 }
