@@ -3,6 +3,7 @@
 import { useTheme } from "next-themes";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { AnimatedLogo } from "./animated-logo";
 import { SyncPopover, type SyncLogEntry } from "@/components/sync/sync-popover";
 
@@ -44,34 +45,29 @@ export function TopBar({
   const [syncOpen, setSyncOpen] = useState(false);
   const [publishMenuOpen, setPublishMenuOpen] = useState(false);
   const [reindexing, setReindexing] = useState(false);
-  // null = no toast, otherwise the success/error line shown briefly below.
-  const [reindexToast, setReindexToast] = useState<string | null>(null);
 
   const handleReindex = async () => {
     if (reindexing) return;
     setReindexing(true);
-    setReindexToast(null);
     try {
       const res = await fetch("/api/reindex", { method: "POST" });
       const body = await res.json().catch(() => ({}));
       if (res.ok && body?.success) {
         const t = body.totals ?? { newly_indexed: 0, refreshed: 0, pruned: 0, errors: 0 };
-        setReindexToast(
+        toast.success(
           `Reindexed ${body.scopes?.length ?? 0} scope(s) in ${body.duration_ms ?? "?"}ms — ` +
           `+${t.newly_indexed} new, ${t.refreshed} updated, ${t.pruned} removed` +
           (t.errors ? `, ${t.errors} scope error(s)` : ""),
         );
       } else if (res.status === 409) {
-        setReindexToast("Reindex already in progress");
+        toast.error("Reindex already in progress");
       } else {
-        setReindexToast(`Reindex failed: ${body?.error ?? `HTTP ${res.status}`}`);
+        toast.error(`Reindex failed: ${body?.error ?? `HTTP ${res.status}`}`);
       }
     } catch (e: any) {
-      setReindexToast(`Reindex failed: ${e?.message ?? "Network error"}`);
+      toast.error(`Reindex failed: ${e?.message ?? "Network error"}`);
     } finally {
       setReindexing(false);
-      // Auto-clear after 8s so the toast doesn't sit forever.
-      setTimeout(() => setReindexToast(null), 8000);
     }
   };
 
@@ -266,14 +262,6 @@ export function TopBar({
         selectedProjectName={selectedProjectName ?? null}
         onSyncProject={onSyncProject}
       />
-      {reindexToast && (
-        <div
-          role="status"
-          className="fixed top-20 right-6 z-[100] max-w-md px-4 py-3 rounded-lg shadow-xl bg-[var(--bg-secondary)] border border-[var(--border)] text-sm text-[var(--text-primary)]"
-        >
-          {reindexToast}
-        </div>
-      )}
     </header>
   );
 }
