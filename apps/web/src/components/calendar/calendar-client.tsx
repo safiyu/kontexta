@@ -87,6 +87,11 @@ export function CalendarClient() {
     }
   }
 
+  function handleJumpToDate(date: Date) {
+    setHighlightIds(new Set());
+    setAnchor(date);
+  }
+
   function handleSlotClick(day: Date, hour?: number) {
     // Entities may have been added elsewhere (MCP, another tab) since this
     // page loaded — refetch so the dialog's dropdown is never stale.
@@ -161,7 +166,9 @@ export function CalendarClient() {
             view={view}
             onViewChange={setView}
             rangeLabel={rangeLabel}
+            anchor={anchor}
             onNavigate={handleNavigate}
+            onJumpToDate={handleJumpToDate}
             entities={entities}
             entityFilter={entityFilter}
             onEntityFilter={setEntityFilter}

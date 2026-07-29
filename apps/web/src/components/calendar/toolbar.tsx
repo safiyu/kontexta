@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+import * as Menu from "@radix-ui/react-dropdown-menu";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import type { CalendarEntity } from "kxta-core";
 import type { ViewMode } from "./date-utils";
@@ -8,7 +10,9 @@ interface CalendarToolbarProps {
   view: ViewMode;
   onViewChange: (v: ViewMode) => void;
   rangeLabel: string;
+  anchor: Date;
   onNavigate: (dir: -1 | 0 | 1) => void;
+  onJumpToDate: (date: Date) => void;
   entities: CalendarEntity[];
   entityFilter?: number;
   onEntityFilter: (id?: number) => void;
@@ -31,14 +35,29 @@ const VIEWS: { id: ViewMode; label: string }[] = [
   { id: "agenda", label: "Agenda" },
 ];
 
+const MONTH_LABELS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
 export function CalendarToolbar({
-  view, onViewChange, rangeLabel, onNavigate,
+  view, onViewChange, rangeLabel, anchor, onNavigate, onJumpToDate,
   entities, entityFilter, onEntityFilter,
   types, typeFilter, onTypeFilter,
   query, onQueryChange,
   conflictCount, conflictsOpen, onToggleConflicts,
   onExportIcs, onManageEntities, onNewEvent,
 }: CalendarToolbarProps) {
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerYear, setPickerYear] = useState(anchor.getFullYear());
+
+  function jumpToMonth(monthIndex: number) {
+    onJumpToDate(new Date(pickerYear, monthIndex, 1));
+    setPickerOpen(false);
+  }
+
+  function jumpToToday() {
+    onJumpToDate(new Date());
+    setPickerOpen(false);
+  }
+
   return (
     <div className="border-b border-[var(--border)]">
       {/* Row 1: navigation + range + view switcher — never competes with filters/actions for space. */}
@@ -53,9 +72,74 @@ export function CalendarToolbar({
           </button>
         </div>
 
-        <h2 className="font-title text-lg font-bold text-[var(--text-primary)] mx-2 whitespace-nowrap truncate">
-          {rangeLabel}
-        </h2>
+        <Menu.Root
+          open={pickerOpen}
+          onOpenChange={(open) => {
+            setPickerOpen(open);
+            if (open) setPickerYear(anchor.getFullYear());
+          }}
+        >
+          <Menu.Trigger asChild>
+            <button
+              type="button"
+              className="font-title text-lg font-bold text-[var(--text-primary)] mx-2 whitespace-nowrap truncate hover:text-amber-accent transition-colors"
+              aria-label="Jump to a different month"
+            >
+              {rangeLabel}
+            </button>
+          </Menu.Trigger>
+          <Menu.Portal>
+            <Menu.Content align="start" sideOffset={6} className="z-[var(--z-dropdown)]">
+              <div className="w-56 rounded-md border border-[var(--border)] bg-[var(--bg-primary)] p-3 shadow-xl animate-scale-in">
+                <div className="flex items-center justify-between mb-2">
+                  <button
+                    type="button"
+                    onClick={() => setPickerYear((y) => y - 1)}
+                    className="btn btn-icon-sm"
+                    aria-label="Previous year"
+                  >
+                    <ChevronLeft className="w-3.5 h-3.5" aria-hidden />
+                  </button>
+                  <span className="text-xs font-bold text-[var(--text-primary)]">{pickerYear}</span>
+                  <button
+                    type="button"
+                    onClick={() => setPickerYear((y) => y + 1)}
+                    className="btn btn-icon-sm"
+                    aria-label="Next year"
+                  >
+                    <ChevronRight className="w-3.5 h-3.5" aria-hidden />
+                  </button>
+                </div>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {MONTH_LABELS.map((label, i) => {
+                    const isTarget = pickerYear === anchor.getFullYear() && i === anchor.getMonth();
+                    return (
+                      <button
+                        key={label}
+                        type="button"
+                        onClick={() => jumpToMonth(i)}
+                        className={`rounded px-2 py-1.5 text-[11px] font-medium transition-colors ${
+                          isTarget
+                            ? "bg-amber-accent/15 text-amber-accent border border-amber-accent/40"
+                            : "text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)]/40"
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+                <button
+                  type="button"
+                  onClick={jumpToToday}
+                  className="mt-2 w-full text-center text-[10px] font-bold uppercase tracking-widest text-amber-accent hover:opacity-80"
+                >
+                  Today
+                </button>
+              </div>
+            </Menu.Content>
+          </Menu.Portal>
+        </Menu.Root>
 
         <div className="flex-1" />
 
