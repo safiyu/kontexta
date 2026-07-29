@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import type { CalendarEntity, CalendarEvent } from "kxta-core";
-import { monthGrid, eventTouchesDay, isSameDay, startOfDay } from "./date-utils";
+import { monthGrid, maxVisibleForWeeks, eventTouchesDay, isSameDay, startOfDay } from "./date-utils";
 import { EventChip } from "./event-chip";
 
 interface MonthGridProps {
@@ -18,7 +18,6 @@ interface MonthGridProps {
 }
 
 const WEEKDAY_LABELS = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
-const MAX_VISIBLE = 3;
 
 function dayKey(d: Date): string {
   return startOfDay(d).toISOString();
@@ -26,6 +25,9 @@ function dayKey(d: Date): string {
 
 export function MonthGrid({ anchor, events, entitiesById, conflictEventIds, highlightIds, loading, onSlotClick, onEventClick, onShowDay }: MonthGridProps) {
   const grid = useMemo(() => monthGrid(anchor), [anchor]);
+  const weeks = grid.length / 7;
+  const maxVisible = maxVisibleForWeeks(weeks);
+  const rowsStyle = { gridTemplateRows: `repeat(${weeks}, minmax(0, 1fr))` };
 
   const eventsByDay = useMemo(() => {
     const map = new Map<string, CalendarEvent[]>();
@@ -49,20 +51,20 @@ export function MonthGrid({ anchor, events, entitiesById, conflictEventIds, high
       </div>
 
       {loading ? (
-        <div className="grid grid-cols-7 grid-rows-6 flex-1">
-          {Array.from({ length: 42 }, (_, i) => (
-            <div key={i} className="border-b border-r border-[var(--border)] p-1.5">
+        <div className="grid grid-cols-7 flex-1" style={rowsStyle}>
+          {grid.map((day) => (
+            <div key={dayKey(day)} className="border-b border-r border-[var(--border)] p-1.5">
               <div className="skeleton h-4 w-4 rounded-full bp-keep-round" />
             </div>
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-7 grid-rows-6 flex-1 overflow-y-auto">
+        <div className="grid grid-cols-7 flex-1 overflow-y-auto" style={rowsStyle}>
           {grid.map((day) => {
             const inMonth = day.getMonth() === anchor.getMonth();
             const isToday = isSameDay(day, today);
             const dayEvents = eventsByDay.get(dayKey(day)) ?? [];
-            const visible = dayEvents.slice(0, MAX_VISIBLE);
+            const visible = dayEvents.slice(0, maxVisible);
             const overflow = dayEvents.length - visible.length;
 
             return (
