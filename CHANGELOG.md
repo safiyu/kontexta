@@ -1,5 +1,30 @@
 # Changelog
 
+## 4.2.0 — Export any file as Markdown, Text, or PDF
+
+You can now save any file straight from the viewer, in whatever format suits you.
+
+### Added
+
+- **Export button in the file viewer.** Open any file and download it as a plain Markdown file, a clean plain-text file (no `#`, `**`, or other markdown symbols cluttering it up — code snippets and tables are kept intact), or a ready-to-share PDF, all with one click.
+
+### Improved
+
+- **Every action now tells you what happened.** Creating, deleting, saving, syncing, and publishing all show a clear confirmation or error message on screen — no more silent failures, and no more jarring browser pop-ups for confirmations.
+- **Dialogs and menus across the app are more consistent and keyboard-friendly.** Escape closes them, clicking outside dismisses them, the same way everywhere.
+- **The calendar page has a close button** and its toolbar no longer crowds or overlaps when the Conflicts panel is open.
+- **Light mode is easier on the eyes.** Fixed several spots — the file browser, search results, and calendar event colors — where text could become hard to read against the light background.
+
+### Fixed
+
+- **A startup warning about a missing search component** that showed up in some setups. It's now installed correctly every time, automatically.
+- **Clicking a scheduling conflict in the calendar now actually jumps you to it**, in Month and Week view, not just Agenda view.
+- **The calendar's conflict-buffer setting now always shows the value you actually saved**, instead of a stale default.
+- **The file search box could disappear while still filtering**, making a folder look empty for no obvious reason. Fixed.
+- **A failed "New file" or "New folder" no longer discards what you typed.** You can fix the problem and try again without retyping.
+- **Fixed a brief flash of the wrong layout** on tablets and phones right after the page loads.
+- **Fixed dialogs and menus occasionally flashing in the wrong spot** before settling into place.
+
 ## 4.1.0 — Journal notes now write themselves, everywhere
 
 Kontexta's journal turns your day-to-day work into readable notes automatically — but until now, only for projects it already knew about. Work done anywhere else (your home folder, a quick script, a repo you hadn't registered yet) just piled up as raw activity, waiting.

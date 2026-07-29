@@ -151,7 +151,7 @@ export function CalendarClient() {
         <button
           type="button"
           onClick={() => router.push("/")}
-          className="btn btn-icon-md ml-auto"
+          className="btn btn-icon-md btn-outline ml-auto"
           aria-label="Close calendar and return to home"
           title="Close"
         >

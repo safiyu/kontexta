@@ -436,6 +436,14 @@ option {
   color: #FFFFFF;
 }
 
+/* Outline role — persistent subtle border/background at rest, so an
+   icon-only action (e.g. the calendar close button) reads as a button
+   instead of blending into the toolbar until hovered. */
+.btn-outline {
+  border-color: var(--border);
+  background: color-mix(in srgb, var(--bg-tertiary) 60%, transparent);
+}
+
 /* Destructive role */
 .btn-destructive { color: var(--danger); }
 
