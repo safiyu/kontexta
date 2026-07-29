@@ -136,7 +136,7 @@ export function CalendarClient() {
   const loading = entitiesLoading || dataLoading;
 
   return (
-    <div className="min-h-screen flex flex-col bg-[var(--bg-secondary)] dark:bg-[var(--bg-primary)]">
+    <div className="h-screen overflow-hidden flex flex-col bg-[var(--bg-secondary)] dark:bg-[var(--bg-primary)]">
       <header className="sticky top-0 z-30 h-16 bg-[var(--bg-secondary)]/80 backdrop-blur-xl border-b border-[var(--border)] flex items-center px-6 gap-2">
         <div className="flex items-center gap-1.5 cursor-pointer" onClick={() => router.push("/")}>
           <span className="text-sm text-[var(--text-secondary)] hover:text-amber-accent transition-colors">Home</span>
