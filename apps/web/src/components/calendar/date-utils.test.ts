@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   monthGrid, startOfWeek, toDatetimeLocalValue, fromDatetimeLocalValue,
   eventTouchesDay, layoutDayEvents, addDays, visibleRange, maxVisibleForWeeks,
+  isAllDayForDay,
 } from "./date-utils";
 import type { CalendarEvent } from "kxta-core";
 
@@ -108,6 +109,58 @@ describe("eventTouchesDay", () => {
     });
     expect(eventTouchesDay(e, day1)).toBe(true);
     expect(eventTouchesDay(e, day2)).toBe(false);
+  });
+});
+
+describe("isAllDayForDay", () => {
+  const day = new Date(2026, 6, 17); // Jul 17, 2026
+
+  it("is true for an exact midnight-to-midnight event", () => {
+    const e = ev({
+      starts_at: new Date(2026, 6, 17, 0, 0, 0).toISOString(),
+      ends_at: new Date(2026, 6, 18, 0, 0, 0).toISOString(),
+    });
+    expect(isAllDayForDay(e, day)).toBe(true);
+  });
+
+  it("is true for the existing 00:00-23:59 data convention", () => {
+    const e = ev({
+      starts_at: new Date(2026, 6, 17, 0, 0, 0).toISOString(),
+      ends_at: new Date(2026, 6, 17, 23, 59, 0).toISOString(),
+    });
+    expect(isAllDayForDay(e, day)).toBe(true);
+  });
+
+  it("is true at exactly the 23-hour threshold", () => {
+    const e = ev({
+      starts_at: new Date(2026, 6, 17, 0, 0, 0).toISOString(),
+      ends_at: new Date(2026, 6, 17, 23, 0, 0).toISOString(),
+    });
+    expect(isAllDayForDay(e, day)).toBe(true);
+  });
+
+  it("is false just under the 23-hour threshold", () => {
+    const e = ev({
+      starts_at: new Date(2026, 6, 17, 0, 1, 0).toISOString(),
+      ends_at: new Date(2026, 6, 17, 23, 0, 0).toISOString(),
+    });
+    expect(isAllDayForDay(e, day)).toBe(false);
+  });
+
+  it("is false for an ordinary multi-hour timed event", () => {
+    const e = ev({
+      starts_at: new Date(2026, 6, 17, 9, 0, 0).toISOString(),
+      ends_at: new Date(2026, 6, 17, 17, 0, 0).toISOString(),
+    });
+    expect(isAllDayForDay(e, day)).toBe(false);
+  });
+
+  it("is false for an event that doesn't touch the given day", () => {
+    const e = ev({
+      starts_at: new Date(2026, 6, 18, 0, 0, 0).toISOString(),
+      ends_at: new Date(2026, 6, 19, 0, 0, 0).toISOString(),
+    });
+    expect(isAllDayForDay(e, day)).toBe(false);
   });
 });
 

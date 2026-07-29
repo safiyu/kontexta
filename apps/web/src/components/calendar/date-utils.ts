@@ -92,6 +92,19 @@ export function eventTouchesDay(ev: { starts_at: string; ends_at: string }, day:
   return new Date(ev.starts_at).getTime() < dayEnd && new Date(ev.ends_at).getTime() > dayStart;
 }
 
+const ALL_DAY_THRESHOLD_MIN = 23 * 60; // 1380 minutes
+
+/** True if `ev`, clamped to `day`'s bounds, covers at least ALL_DAY_THRESHOLD_MIN
+ *  minutes of that day — i.e. effectively a full-day event for rendering purposes. */
+export function isAllDayForDay(ev: CalendarEvent, day: Date): boolean {
+  if (!eventTouchesDay(ev, day)) return false;
+  const dayStart = startOfDay(day).getTime();
+  const dayEnd = dayStart + 86_400_000;
+  const clampedStart = Math.max(new Date(ev.starts_at).getTime(), dayStart);
+  const clampedEnd = Math.min(new Date(ev.ends_at).getTime(), dayEnd);
+  return (clampedEnd - clampedStart) / 60_000 >= ALL_DAY_THRESHOLD_MIN;
+}
+
 // --- Week-view lane layout --------------------------------------------------
 
 export interface PositionedEvent {
