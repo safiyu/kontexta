@@ -44,11 +44,21 @@ export function startOfWeek(d: Date): Date {
   return startOfDay(addDays(d, -day));
 }
 
-/** Always 42 cells (6 weeks x 7 days), Monday-first, covering the full month plus leading/trailing days. */
+/** 28/35/42 cells (4-6 weeks x 7 days), Monday-first — exactly enough weeks to cover the month. */
 export function monthGrid(anchor: Date): Date[] {
   const first = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
+  const last = new Date(anchor.getFullYear(), anchor.getMonth() + 1, 0);
   const start = startOfWeek(first);
-  return Array.from({ length: 42 }, (_, i) => addDays(start, i));
+  const end = startOfWeek(last);
+  const weeks = Math.round((end.getTime() - start.getTime()) / (7 * 86_400_000)) + 1;
+  return Array.from({ length: weeks * 7 }, (_, i) => addDays(start, i));
+}
+
+const MAX_VISIBLE_BY_WEEKS: Record<number, number> = { 4: 5, 5: 4, 6: 3 };
+
+/** Coarse day-cell event cap: fewer week rows means taller cells, so more events fit before "+N more". */
+export function maxVisibleForWeeks(weeks: number): number {
+  return MAX_VISIBLE_BY_WEEKS[weeks] ?? 3;
 }
 
 /** The 7 days (Mon..Sun) of the week containing anchor. */
