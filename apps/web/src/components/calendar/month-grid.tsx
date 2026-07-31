@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import type { CalendarEntity, CalendarEvent } from "kxta-core";
-import { monthGrid, eventTouchesDay, isAllDayForDay, isSameDay, startOfDay } from "./date-utils";
+import { monthGrid, maxVisibleForWeeks, eventTouchesDay, isAllDayForDay, isSameDay, startOfDay } from "./date-utils";
 import { EventChip } from "./event-chip";
 
 interface MonthGridProps {
@@ -14,6 +14,7 @@ interface MonthGridProps {
   loading: boolean;
   onSlotClick: (day: Date) => void;
   onEventClick: (ev: CalendarEvent) => void;
+  onShowDay: (day: Date) => void;
 }
 
 const WEEKDAY_LABELS = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
@@ -22,9 +23,10 @@ function dayKey(d: Date): string {
   return startOfDay(d).toISOString();
 }
 
-export function MonthGrid({ anchor, events, entitiesById, conflictEventIds, highlightIds, loading, onSlotClick, onEventClick }: MonthGridProps) {
+export function MonthGrid({ anchor, events, entitiesById, conflictEventIds, highlightIds, loading, onSlotClick, onEventClick, onShowDay }: MonthGridProps) {
   const grid = useMemo(() => monthGrid(anchor), [anchor]);
   const weeks = grid.length / 7;
+  const maxVisible = maxVisibleForWeeks(weeks);
   const rowsStyle = { gridTemplateRows: `repeat(${weeks}, minmax(0, 1fr))` };
 
   const eventsByDay = useMemo(() => {
@@ -62,6 +64,8 @@ export function MonthGrid({ anchor, events, entitiesById, conflictEventIds, high
             const inMonth = day.getMonth() === anchor.getMonth();
             const isToday = isSameDay(day, today);
             const dayEvents = eventsByDay.get(dayKey(day)) ?? [];
+            const visible = dayEvents.slice(0, maxVisible);
+            const overflow = dayEvents.length - visible.length;
 
             return (
               <div
@@ -71,30 +75,37 @@ export function MonthGrid({ anchor, events, entitiesById, conflictEventIds, high
                   isToday ? "bg-amber-accent/5" : ""
                 }`}
               >
-                <div className="shrink-0">
-                  {isToday ? (
-                    <span className="w-6 h-6 rounded-full bp-keep-round bg-amber-accent text-white flex items-center justify-center font-bold text-xs">
-                      {day.getDate()}
-                    </span>
-                  ) : (
-                    <span className={`text-xs ${inMonth ? "text-[var(--text-primary)]" : "text-[var(--muted)] opacity-50"}`}>
-                      {day.getDate()}
-                    </span>
-                  )}
-                </div>
-                <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-1">
-                  {dayEvents.map((ev) => (
-                    <EventChip
-                      key={ev.id}
-                      event={ev}
-                      entityName={entitiesById.get(ev.entity_id)?.name ?? `#${ev.entity_id}`}
-                      allDay={isAllDayForDay(ev, day)}
-                      conflicted={conflictEventIds.has(ev.id)}
-                      highlighted={highlightIds.has(ev.id)}
-                      onClick={() => onEventClick(ev)}
-                    />
-                  ))}
-                </div>
+                {isToday ? (
+                  <span className="w-6 h-6 rounded-full bp-keep-round bg-amber-accent text-white flex items-center justify-center font-bold text-xs">
+                    {day.getDate()}
+                  </span>
+                ) : (
+                  <span className={`text-xs ${inMonth ? "text-[var(--text-primary)]" : "text-[var(--muted)] opacity-50"}`}>
+                    {day.getDate()}
+                  </span>
+                )}
+                {visible.map((ev) => (
+                  <EventChip
+                    key={ev.id}
+                    event={ev}
+                    entityName={entitiesById.get(ev.entity_id)?.name ?? `#${ev.entity_id}`}
+                    allDay={isAllDayForDay(ev, day)}
+                    conflicted={conflictEventIds.has(ev.id)}
+                    highlighted={highlightIds.has(ev.id)}
+                    onClick={() => onEventClick(ev)}
+                  />
+                ))}
+                {overflow > 0 && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onShowDay(day);
+                    }}
+                    className="text-[10px] text-[var(--text-secondary)] hover:text-amber-accent text-left"
+                  >
+                    +{overflow} more
+                  </button>
+                )}
               </div>
             );
           })}

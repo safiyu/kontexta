@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   monthGrid, startOfWeek, toDatetimeLocalValue, fromDatetimeLocalValue,
-  eventTouchesDay, layoutDayEvents, addDays, visibleRange,
+  eventTouchesDay, layoutDayEvents, addDays, visibleRange, maxVisibleForWeeks,
   isAllDayForDay,
 } from "./date-utils";
 import type { CalendarEvent } from "kxta-core";
@@ -66,6 +66,24 @@ describe("visibleRange", () => {
   it("widens the month window to match a 6-week month (August 2026)", () => {
     const { from, to } = visibleRange("month", new Date(2026, 7, 10));
     expect((to.getTime() - from.getTime()) / 86_400_000).toBe(42);
+  });
+});
+
+describe("maxVisibleForWeeks", () => {
+  it("caps at 3 for a 6-week month", () => {
+    expect(maxVisibleForWeeks(6)).toBe(3);
+  });
+
+  it("allows 4 for a 5-week month", () => {
+    expect(maxVisibleForWeeks(5)).toBe(4);
+  });
+
+  it("allows 5 for a 4-week month", () => {
+    expect(maxVisibleForWeeks(4)).toBe(5);
+  });
+
+  it("falls back to 3 for an unexpected week count", () => {
+    expect(maxVisibleForWeeks(7)).toBe(3);
   });
 });
 

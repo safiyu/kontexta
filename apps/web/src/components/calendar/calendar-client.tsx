@@ -113,6 +113,11 @@ export function CalendarClient() {
     setDialog({ mode: "edit", event: ev });
   }
 
+  function handleShowDay(day: Date) {
+    setAnchor(day);
+    setView("week");
+  }
+
   function handleConflictFocus(c: Conflict) {
     setAnchor(new Date(c.event_a.starts_at));
     setHighlightIds(new Set([c.event_a.id, c.event_b.id]));
@@ -190,6 +195,7 @@ export function CalendarClient() {
               loading={loading}
               onSlotClick={handleSlotClick}
               onEventClick={handleEventClick}
+              onShowDay={handleShowDay}
             />
           )}
           {view === "week" && (

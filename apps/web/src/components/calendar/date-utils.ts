@@ -54,6 +54,13 @@ export function monthGrid(anchor: Date): Date[] {
   return Array.from({ length: weeks * 7 }, (_, i) => addDays(start, i));
 }
 
+const MAX_VISIBLE_BY_WEEKS: Record<number, number> = { 4: 5, 5: 4, 6: 3 };
+
+/** Coarse day-cell event cap: fewer week rows means taller cells, so more events fit before "+N more". */
+export function maxVisibleForWeeks(weeks: number): number {
+  return MAX_VISIBLE_BY_WEEKS[weeks] ?? 3;
+}
+
 /** The 7 days (Mon..Sun) of the week containing anchor. */
 export function weekDays(anchor: Date): Date[] {
   const start = startOfWeek(anchor);
