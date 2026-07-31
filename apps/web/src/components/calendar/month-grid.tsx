@@ -67,7 +67,7 @@ export function MonthGrid({ anchor, events, entitiesById, conflictEventIds, high
               <div
                 key={dayKey(day)}
                 onClick={() => onSlotClick(day)}
-                className={`border-b border-r border-[var(--border)] p-1.5 min-h-[96px] cursor-pointer hover:bg-amber-accent/5 flex flex-col gap-1 overflow-hidden ${
+                className={`border-b border-r border-[var(--border)] p-1.5 h-full min-h-[96px] cursor-pointer hover:bg-amber-accent/5 flex flex-col gap-1 overflow-hidden ${
                   isToday ? "bg-amber-accent/5" : ""
                 }`}
               >
