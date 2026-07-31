@@ -100,6 +100,7 @@ export function WeekView({ anchor, events, entitiesById, conflictEventIds, highl
                     key={ev.id}
                     event={ev}
                     entityName={entitiesById.get(ev.entity_id)?.name ?? `#${ev.entity_id}`}
+                    allDay
                     conflicted={conflictEventIds.has(ev.id)}
                     highlighted={highlightIds.has(ev.id)}
                     onClick={() => onEventClick(ev)}

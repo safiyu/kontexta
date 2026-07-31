@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import type { CalendarEntity, CalendarEvent } from "kxta-core";
-import { monthGrid, maxVisibleForWeeks, eventTouchesDay, isSameDay, startOfDay } from "./date-utils";
+import { monthGrid, maxVisibleForWeeks, eventTouchesDay, isAllDayForDay, isSameDay, startOfDay } from "./date-utils";
 import { EventChip } from "./event-chip";
 
 interface MonthGridProps {
@@ -89,6 +89,7 @@ export function MonthGrid({ anchor, events, entitiesById, conflictEventIds, high
                     key={ev.id}
                     event={ev}
                     entityName={entitiesById.get(ev.entity_id)?.name ?? `#${ev.entity_id}`}
+                    allDay={isAllDayForDay(ev, day)}
                     conflicted={conflictEventIds.has(ev.id)}
                     highlighted={highlightIds.has(ev.id)}
                     onClick={() => onEventClick(ev)}

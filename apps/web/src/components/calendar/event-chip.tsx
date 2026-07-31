@@ -7,12 +7,13 @@ import { colorForType } from "./event-colors";
 interface EventChipProps {
   event: CalendarEvent;
   entityName: string;
+  allDay: boolean;
   conflicted: boolean;
   highlighted: boolean;
   onClick: (e: React.MouseEvent) => void;
 }
 
-export function EventChip({ event, entityName, conflicted, highlighted, onClick }: EventChipProps) {
+export function EventChip({ event, entityName, allDay, conflicted, highlighted, onClick }: EventChipProps) {
   const color = colorForType(event.type);
   return (
     <button
@@ -26,7 +27,11 @@ export function EventChip({ event, entityName, conflicted, highlighted, onClick 
       } ${highlighted ? "ring-2 ring-red-400" : ""}`}
       title={`${entityName} — ${event.title}`}
     >
-      <span className="font-mono opacity-70">{fmtTime(event.starts_at)}</span>{" "}
+      {!allDay && (
+        <>
+          <span className="font-mono opacity-70">{fmtTime(event.starts_at)}</span>{" "}
+        </>
+      )}
       <span className="font-bold">{entityName}</span> · {event.title}
     </button>
   );
