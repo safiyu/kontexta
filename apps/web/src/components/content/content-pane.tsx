@@ -133,6 +133,7 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
   const handleExportPdf = async () => {
     if (!file) return;
     setExportingPdf(true);
+    const toastId = toast.loading("Generating PDF…");
     try {
       const res = await fetch(`/api/files/${file.id}/export-pdf`);
       if (!res.ok) {
@@ -146,7 +147,7 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
           // raw body so it's still visible for debugging.
           console.error("[export-pdf] non-JSON error response:", text);
         }
-        toast.error(message);
+        toast.error(message, { id: toastId });
         return;
       }
       const disposition = res.headers.get("content-disposition") || "";
@@ -161,10 +162,10 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
-      toast.success("Exported PDF");
+      toast.success("Exported PDF", { id: toastId });
     } catch (err) {
       console.error("[export-pdf] request failed:", err);
-      toast.error("Failed to export PDF — check the browser console for details.");
+      toast.error("Failed to export PDF — check the browser console for details.", { id: toastId });
     } finally {
       setExportingPdf(false);
     }
