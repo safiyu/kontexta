@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
   monthGrid, startOfWeek, toDatetimeLocalValue, fromDatetimeLocalValue,
-  eventTouchesDay, layoutDayEvents, addDays,
+  eventTouchesDay, layoutDayEvents, addDays, visibleRange, maxVisibleForWeeks,
+  isAllDayForDay,
 } from "./date-utils";
 import type { CalendarEvent } from "kxta-core";
 
@@ -21,9 +22,8 @@ function ev(overrides: Partial<CalendarEvent> & { starts_at: string; ends_at: st
 }
 
 describe("monthGrid", () => {
-  it("returns 42 cells starting on a Monday", () => {
+  it("starts on a Monday", () => {
     const grid = monthGrid(new Date(2026, 6, 17)); // July 2026
-    expect(grid.length).toBe(42);
     expect(grid[0].getDay()).toBe(1); // Monday
   });
 
@@ -32,6 +32,18 @@ describe("monthGrid", () => {
     const grid = monthGrid(anchor);
     const julyDays = grid.filter((d) => d.getMonth() === 6 && d.getFullYear() === 2026);
     expect(julyDays.length).toBe(31);
+  });
+
+  it("returns exactly the weeks a month needs: 5 weeks for July 2026", () => {
+    expect(monthGrid(new Date(2026, 6, 17)).length).toBe(35);
+  });
+
+  it("returns 6 weeks for a month spanning 6 calendar weeks: August 2026", () => {
+    expect(monthGrid(new Date(2026, 7, 10)).length).toBe(42);
+  });
+
+  it("returns 4 weeks for a month spanning exactly 4 calendar weeks: February 2027", () => {
+    expect(monthGrid(new Date(2027, 1, 10)).length).toBe(28);
   });
 });
 
@@ -42,6 +54,36 @@ describe("startOfWeek", () => {
     const monday = startOfWeek(sunday);
     expect(monday.getDay()).toBe(1);
     expect(monday.getDate()).toBe(13);
+  });
+});
+
+describe("visibleRange", () => {
+  it("shrinks the month window to match a 5-week month (July 2026)", () => {
+    const { from, to } = visibleRange("month", new Date(2026, 6, 17));
+    expect((to.getTime() - from.getTime()) / 86_400_000).toBe(35);
+  });
+
+  it("widens the month window to match a 6-week month (August 2026)", () => {
+    const { from, to } = visibleRange("month", new Date(2026, 7, 10));
+    expect((to.getTime() - from.getTime()) / 86_400_000).toBe(42);
+  });
+});
+
+describe("maxVisibleForWeeks", () => {
+  it("caps at 3 for a 6-week month", () => {
+    expect(maxVisibleForWeeks(6)).toBe(3);
+  });
+
+  it("allows 4 for a 5-week month", () => {
+    expect(maxVisibleForWeeks(5)).toBe(4);
+  });
+
+  it("allows 5 for a 4-week month", () => {
+    expect(maxVisibleForWeeks(4)).toBe(5);
+  });
+
+  it("falls back to 3 for an unexpected week count", () => {
+    expect(maxVisibleForWeeks(7)).toBe(3);
   });
 });
 
@@ -67,6 +109,58 @@ describe("eventTouchesDay", () => {
     });
     expect(eventTouchesDay(e, day1)).toBe(true);
     expect(eventTouchesDay(e, day2)).toBe(false);
+  });
+});
+
+describe("isAllDayForDay", () => {
+  const day = new Date(2026, 6, 17); // Jul 17, 2026
+
+  it("is true for an exact midnight-to-midnight event", () => {
+    const e = ev({
+      starts_at: new Date(2026, 6, 17, 0, 0, 0).toISOString(),
+      ends_at: new Date(2026, 6, 18, 0, 0, 0).toISOString(),
+    });
+    expect(isAllDayForDay(e, day)).toBe(true);
+  });
+
+  it("is true for the existing 00:00-23:59 data convention", () => {
+    const e = ev({
+      starts_at: new Date(2026, 6, 17, 0, 0, 0).toISOString(),
+      ends_at: new Date(2026, 6, 17, 23, 59, 0).toISOString(),
+    });
+    expect(isAllDayForDay(e, day)).toBe(true);
+  });
+
+  it("is true at exactly the 23-hour threshold", () => {
+    const e = ev({
+      starts_at: new Date(2026, 6, 17, 0, 0, 0).toISOString(),
+      ends_at: new Date(2026, 6, 17, 23, 0, 0).toISOString(),
+    });
+    expect(isAllDayForDay(e, day)).toBe(true);
+  });
+
+  it("is false just under the 23-hour threshold", () => {
+    const e = ev({
+      starts_at: new Date(2026, 6, 17, 0, 1, 0).toISOString(),
+      ends_at: new Date(2026, 6, 17, 23, 0, 0).toISOString(),
+    });
+    expect(isAllDayForDay(e, day)).toBe(false);
+  });
+
+  it("is false for an ordinary multi-hour timed event", () => {
+    const e = ev({
+      starts_at: new Date(2026, 6, 17, 9, 0, 0).toISOString(),
+      ends_at: new Date(2026, 6, 17, 17, 0, 0).toISOString(),
+    });
+    expect(isAllDayForDay(e, day)).toBe(false);
+  });
+
+  it("is false for an event that doesn't touch the given day", () => {
+    const e = ev({
+      starts_at: new Date(2026, 6, 18, 0, 0, 0).toISOString(),
+      ends_at: new Date(2026, 6, 19, 0, 0, 0).toISOString(),
+    });
+    expect(isAllDayForDay(e, day)).toBe(false);
   });
 });
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, ReactNode } from "react";
+import { ChevronRight } from "lucide-react";
 
 interface TreeNodeProps {
   label: string;
@@ -38,13 +39,16 @@ export function TreeNode({
         onClick={handleClick}
         className={`relative flex items-center gap-1.5 py-1.5 px-2 rounded-lg text-sm cursor-pointer transition-all duration-200 group ${
           active
-            ? "bg-amber-accent/10 text-white shadow-[inset_0_0_12px_rgba(180,120,30,0.05)]"
-            : "text-[var(--text-secondary)] hover:bg-amber-accent/5 hover:text-white"
+            ? "bg-[var(--accent-soft)] text-[var(--text-primary)] font-semibold"
+            : "text-[var(--text-secondary)] hover:bg-[var(--accent-soft)] hover:text-[var(--text-primary)]"
         }`}
       >
-        {active && <span className="absolute -left-1 top-1 bottom-1 w-0.5 bg-[var(--accent)] rounded-full" />}
+        {active && <span className="absolute -left-1 top-1 bottom-1 w-0.5 bg-[var(--accent)] rounded-full bp-keep-round" />}
         {hasChildren && (
-          <span className={`text-[10px] inline-block transition-transform duration-200 ${expanded ? "rotate-90" : ""}`}>▶</span>
+          <ChevronRight
+            className={`w-3 h-3 shrink-0 transition-transform duration-200 ${expanded ? "rotate-90" : ""}`}
+            aria-hidden
+          />
         )}
         {icon && <span className="dark-icon">{icon}</span>}
         <span className="truncate lowercase first-letter:uppercase flex-1">{label}</span>

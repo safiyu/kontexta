@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { MarkdownViewer } from "../content/markdown-viewer";
 import { AnimatedLogo } from "../layout/animated-logo";
+import { Dialog } from "../ui/dialog";
 
 interface AboutDialogProps {
   open: boolean;
@@ -37,26 +38,15 @@ export function AboutDialog({ open, onClose }: AboutDialogProps) {
     }
   }, [open, data]);
 
-  const handleOverlayClick = (e: React.MouseEvent) => {
-    if (e.target === e.currentTarget) {
-      onClose();
-    }
-  };
-
-  if (!open) return null;
-
   return (
-    <div
-      className="fixed inset-0 z-50 bg-black/50 pt-[10vh]"
-      onClick={handleOverlayClick}
-    >
-      <div className="w-[480px] max-h-[80vh] mx-auto bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-lg shadow-2xl flex flex-col">
+    <Dialog open={open} onClose={onClose} title="About Kontexta" widthClass="max-w-xl" hideHeader>
+      <div className="-m-5 flex flex-col max-h-[75vh] overflow-hidden">
         {/* Header */}
-        <div className="p-6 text-center border-b border-[var(--border-color)]">
+        <div className="p-6 text-center border-b border-[var(--border)] shrink-0">
           <div className="flex justify-center -mb-3">
             <AnimatedLogo size="lg" />
           </div>
-          <h1 className="text-3xl font-extrabold tracking-[4px] font-[family-name:var(--font-title)] text-[var(--accent)] dark:text-[#F4F3EF] drop-shadow-[0_0_14px_rgba(180,120,30,0.55)] dark:drop-shadow-none">
+          <h1 className="text-3xl font-extrabold tracking-[4px] font-[family-name:var(--font-title)] text-[var(--accent)] dark:text-[var(--text-primary)] drop-shadow-[0_0_14px_color-mix(in_srgb,var(--accent)_55%,transparent)] dark:drop-shadow-none">
             KONTEXTA
           </h1>
           <p className="text-sm font-medium text-[var(--text-secondary)] mt-2">
@@ -68,7 +58,7 @@ export function AboutDialog({ open, onClose }: AboutDialogProps) {
         </div>
 
         {/* Changelog */}
-        <div className="flex-1 overflow-y-auto prose-sm">
+        <div className="flex-1 min-h-0 overflow-y-auto prose-sm">
           {loading && (
             <div className="p-6 space-y-3">
               <div className="skeleton h-4 w-full" />
@@ -77,7 +67,10 @@ export function AboutDialog({ open, onClose }: AboutDialogProps) {
             </div>
           )}
           {!loading && data?.changelog && (
-            <MarkdownViewer content={data.changelog} className="p-6 prose-sm text-[#5C3D24] marker:text-[#5C3D24] [&_*]:!text-[#5C3D24] dark:text-[#F5C97A] dark:marker:text-[#F5C97A] dark:[&_*]:!text-[#F5C97A]" />
+            <MarkdownViewer
+              content={data.changelog}
+              className="p-6 prose-sm text-[var(--accent)] marker:text-[var(--accent)] [&_*]:!text-[var(--accent)]"
+            />
           )}
           {!loading && !data?.changelog && (
             <div className="p-6 text-center text-[var(--text-secondary)]">
@@ -87,7 +80,7 @@ export function AboutDialog({ open, onClose }: AboutDialogProps) {
         </div>
 
         {/* Footer */}
-        <div className="p-3 border-t border-[var(--border-color)] text-center">
+        <div className="p-3 border-t border-[var(--border)] text-center shrink-0">
           <button
             onClick={onClose}
             className="btn btn-md"
@@ -96,6 +89,6 @@ export function AboutDialog({ open, onClose }: AboutDialogProps) {
           </button>
         </div>
       </div>
-    </div>
+    </Dialog>
   );
 }

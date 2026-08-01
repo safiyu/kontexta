@@ -32,7 +32,7 @@ export function ParamEditor({ name, def, onChange, onRename, onDelete }: Props) 
         <label className="flex items-center gap-1" title="If unchecked, default is used (or empty/0/false).">
           <input type="checkbox" checked={!!def.required} onChange={(e) => onChange(name, { ...def, required: e.target.checked })} /> required
         </label>
-        <button onClick={onDelete} className="ml-auto text-[var(--text-secondary)] hover:text-red-500" aria-label={`delete param ${name}`}>×</button>
+        <button onClick={onDelete} className="ml-auto text-[var(--text-secondary)] hover:text-[var(--danger)]" aria-label={`delete param ${name}`}>×</button>
       </div>
       {def.type === "string" && (
         <div>

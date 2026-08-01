@@ -21,35 +21,27 @@ export function LoginClient({ isSetupRequired }: { isSetupRequired: boolean }) {
       const endpoint = isSetupRequired ? "/api/auth/setup" : "/api/auth/login";
       const payload = isSetupRequired ? { password, bypassIps, trustProxyHeaders } : { password };
 
-      console.log(`[Login] Submitting to ${endpoint}`);
-
       const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
 
-      console.log(`[Login] Response status: ${res.status}`);
-
       let data: any;
       try {
         data = await res.json();
-      } catch (parseErr) {
-        console.error(`[Login] Failed to parse response as JSON:`, parseErr);
+      } catch {
         throw new Error(`Server returned invalid JSON (status ${res.status}). Check browser console for details.`);
       }
 
       if (!res.ok) {
-        console.log(`[Login] Auth failed:`, data);
         throw new Error(data.error || `Authentication failed (${res.status})`);
       }
 
-      console.log(`[Login] Auth successful, navigating...`);
       // Use router.push for clean navigation.
       // After first-time setup, include ?setup=1 so the Configure modal opens.
       router.push(isSetupRequired ? "/?setup=1" : "/");
     } catch (err: any) {
-      console.error(`[Login] Error:`, err);
       setError(err.message || "An unexpected error occurred. Check browser console.");
     } finally {
       setLoading(false);
@@ -76,7 +68,7 @@ export function LoginClient({ isSetupRequired }: { isSetupRequired: boolean }) {
 
         <form onSubmit={handleSubmit} className="p-8 space-y-6">
           {error && (
-            <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-500 text-sm text-center">
+            <div className="p-3 rounded-lg bg-[var(--danger-soft)] border border-[var(--danger)]/20 text-[var(--danger)] text-sm text-center">
               {error}
             </div>
           )}
@@ -133,10 +125,10 @@ export function LoginClient({ isSetupRequired }: { isSetupRequired: boolean }) {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-[var(--accent)] text-black font-bold rounded-lg px-4 py-3 hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(180,120,30,0.3)]"
+            className="btn btn-md btn-primary w-full"
           >
             {loading ? (
-              <svg className="animate-spin h-5 w-5 text-black" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
               </svg>

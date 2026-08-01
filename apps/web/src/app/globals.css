@@ -19,6 +19,13 @@
   --success: #2F855A;
   --warning: #C0841A;
   --danger: #C05656;
+  --danger-soft: rgba(192, 86, 86, 0.15);
+  --text-tertiary: #6B7A99;
+
+  /* Layering scale — use z-[var(--z-*)] in components. */
+  --z-dropdown: 60;
+  --z-modal: 100;
+  --z-toast: 150;
 
   /* --font-sans / --font-mono / --font-title come from next/font in layout.tsx */
 }
@@ -37,6 +44,8 @@
   --success: #2F855A;
   --warning: #C0841A;
   --danger: #C05656;
+  --danger-soft: rgba(192, 86, 86, 0.15);
+  --text-tertiary: #A08662;
 }
 
 /* Blueprint theme — opt-in port of the kontexta.dev Blueprint × Ember system.
@@ -55,6 +64,8 @@
   --success: #2F855A;
   --warning: #C0841A;
   --danger: #C05656;
+  --danger-soft: rgba(192, 86, 86, 0.15);
+  --text-tertiary: #8E8270;
 
   --font-title: var(--font-saira);
 }
@@ -164,6 +175,10 @@ h1, h2, h3, h4, h5, h6 {
   scrollbar-color: #24324A var(--bg-secondary);
 }
 
+/* Referenced by components; scrollbars are already thin globally, this
+   class exists so the reference is real and can be tuned later. */
+.scrollbar-thin { scrollbar-width: thin; }
+
 @keyframes logo-float-sm {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-6px); }
@@ -244,6 +259,11 @@ html {
   animation: fade-in 0.4s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+/* Applied only to elements with no positioning responsibility of their own
+   (Dialog/DropdownMenu wrap this in an inner div, separate from the element
+   that carries the actual position) — a `transform`-based animation on a
+   positioned element would override that position for the animation's
+   duration and snap into place once it ends. */
 @keyframes scale-in {
   from { opacity: 0; transform: scale(0.96) translateY(4px); }
   to { opacity: 1; transform: scale(1) translateY(0); }
@@ -254,10 +274,9 @@ html {
 }
 
 .glass {
-  background-color: var(--bg-secondary);
+  background-color: color-mix(in srgb, var(--bg-secondary) 80%, transparent);
   backdrop-filter: blur(12px) saturate(180%);
   -webkit-backdrop-filter: blur(12px) saturate(180%);
-  background-opacity: 0.8;
 }
 
 .floating-surface {
@@ -308,7 +327,7 @@ html {
  * mirroring how globals.css already keys theming.
  */
 
-/* Themed <select> — strip browser chrome, replace with coral chevron, theme options. */
+/* Themed <select> — strip browser chrome, replace with accent chevron, theme options. */
 select {
   appearance: none;
   -webkit-appearance: none;
@@ -324,6 +343,11 @@ select::-ms-expand { display: none; }
 option {
   background-color: var(--bg-primary);
   color: var(--text-primary);
+}
+
+/* Blueprint uses the ember-orange accent for the chevron. */
+.blueprint select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='%23E09030'%3E%3Cpath d='M2 4 L6 8 L10 4 Z'/%3E%3C/svg%3E");
 }
 
 .btn {
@@ -388,27 +412,59 @@ option {
 .btn-icon-sm { width: 28px; height: 28px; padding: 0; font-size: 14px; border-radius: 4px; }
 .btn-icon-md { width: 32px; height: 32px; padding: 0; font-size: 16px; border-radius: 6px; }
 
+/* Primary role — solid accent. Replaces ad-hoc `!text-amber-accent` and
+   docs-area solid-accent buttons. */
+.btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #FFFFFF;
+}
+.dark .btn-primary,
+.blueprint .btn-primary {
+  color: #FFFFFF;
+}
+.btn-primary:hover,
+.btn-primary:active,
+.btn-primary:focus {
+  background: color-mix(in srgb, var(--accent) 82%, black);
+  color: #FFFFFF;
+}
+.btn-primary:disabled:hover,
+.btn-primary:disabled:active,
+.btn-primary:disabled:focus {
+  background: var(--accent);
+  color: #FFFFFF;
+}
+
+/* Outline role — persistent subtle border/background at rest, so an
+   icon-only action (e.g. the calendar close button) reads as a button
+   instead of blending into the toolbar until hovered. */
+.btn-outline {
+  border-color: var(--border);
+  background: color-mix(in srgb, var(--bg-tertiary) 60%, transparent);
+}
+
 /* Destructive role */
-.btn-destructive { color: #C05656; }
+.btn-destructive { color: var(--danger); }
 
 .btn-destructive:hover,
 .btn-destructive:active,
 .btn-destructive:focus {
   color: #ffffff;
-  background: rgba(192, 86, 86, 0.85);
+  background: color-mix(in srgb, var(--danger) 85%, transparent);
 }
 
 .dark .btn-destructive:hover,
 .dark .btn-destructive:active,
 .dark .btn-destructive:focus {
   color: #ffffff;
-  background: rgba(192, 86, 86, 0.85);
+  background: color-mix(in srgb, var(--danger) 85%, transparent);
 }
 
 .btn-destructive:disabled:hover,
 .btn-destructive:disabled:active,
 .btn-destructive:disabled:focus {
-  color: #C05656;
+  color: var(--danger);
   background: transparent;
 }
 

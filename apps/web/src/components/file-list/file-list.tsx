@@ -1,11 +1,16 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { ArrowUpRight, RotateCw, Search, X, FolderOpen } from "lucide-react";
+import { toast } from "sonner";
 import { FileListFilter } from "./file-list-filter";
 import { FileItem } from "./file-item";
 import { UploadFilesDialog } from "./upload-files-dialog";
 import { ClipUrlDialog } from "./clip-url-dialog";
 import { OnboardModal } from "./onboard-modal";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { DropdownMenu } from "@/components/ui/dropdown-menu";
+import { EmptyState } from "@/components/ui/empty-state";
 
 interface Project {
   id: number;
@@ -78,25 +83,8 @@ export function FileList({
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [clipDialogOpen, setClipDialogOpen] = useState(false);
   const [onboardOpen, setOnboardOpen] = useState(false);
-  const [newMenuOpen, setNewMenuOpen] = useState(false);
-  const [projectMenuOpen, setProjectMenuOpen] = useState(false);
-  const newMenuRef = useRef<HTMLDivElement>(null);
-  const projectMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { setSelectedIds(new Set()); }, [selectedFolder, selectedProject?.id, selectedSection, filter, sortBy]);
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (newMenuOpen && newMenuRef.current && !newMenuRef.current.contains(e.target as Node)) {
-        setNewMenuOpen(false);
-      }
-      if (projectMenuOpen && projectMenuRef.current && !projectMenuRef.current.contains(e.target as Node)) {
-        setProjectMenuOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [newMenuOpen, projectMenuOpen]);
 
   const filteredAndSorted = useMemo(() => {
     let result = [...files];
@@ -195,95 +183,54 @@ export function FileList({
   return (
     <div className="flex flex-col h-full">
       <div className="flex items-center gap-1.5 px-1.5 py-1.5 border-b border-[var(--border)]">
-        <div className="relative flex-1" ref={newMenuRef}>
-          <button
-            type="button"
-            onClick={() => setNewMenuOpen((v) => !v)}
-            className="btn btn-sm w-full"
-            title="Add content to the knowledge base"
-          >
-            New <span className="opacity-60 text-xs">▾</span>
-          </button>
-          {newMenuOpen && (
-            <div className="dropdown-menu left-0 w-full">
-              <button
-                type="button"
-                onClick={() => { setNewMenuOpen(false); onNewFile(); }}
-                className="dropdown-item"
-              >
-                <span>+</span> New File
+        <div className="flex-1">
+          <DropdownMenu
+            align="start"
+            trigger={
+              <button type="button" className="btn btn-sm w-full" title="Add content to the knowledge base">
+                New <span className="opacity-60 text-xs">▾</span>
               </button>
-              <button
-                type="button"
-                onClick={() => { setNewMenuOpen(false); setUploadOpen(true); }}
-                className="dropdown-item"
-              >
-                <span>↑</span> Upload Files
-              </button>
-              <button
-                type="button"
-                onClick={() => { setNewMenuOpen(false); setClipDialogOpen(true); }}
-                className="dropdown-item"
-              >
-                <span>↗</span> Clip URL
-              </button>
-            </div>
-          )}
+            }
+            items={[
+              { label: "New File", icon: <span>+</span>, onSelect: onNewFile },
+              { label: "Upload Files", icon: <span>↑</span>, onSelect: () => setUploadOpen(true) },
+              { label: "Clip URL", icon: <ArrowUpRight className="w-3.5 h-3.5" aria-hidden />, onSelect: () => setClipDialogOpen(true) },
+            ]}
+          />
         </div>
         {selectedSection === "projects" && selectedProject && (
-          <div className="relative flex-1" ref={projectMenuRef}>
-            <button
-              type="button"
-              onClick={() => setProjectMenuOpen((v) => !v)}
-              className="btn btn-sm w-full"
-              title="Project actions"
-            >
-              Project <span className="opacity-60 text-xs">▾</span>
-            </button>
-            {projectMenuOpen && (
-              <div className="dropdown-menu left-0 w-full">
-                <a
-                  href={selectedFolder 
-                    ? `/api/export/zip?project_id=${selectedProject.id}&folder=${encodeURIComponent(selectedFolder)}`
-                    : `/api/export/zip?project_id=${selectedProject.id}`}
-                  download
-                  onClick={() => setProjectMenuOpen(false)}
-                  className="dropdown-item"
-                >
-                  <span>↓</span> Export ZIP
-                </a>
-                <button
-                  type="button"
-                  onClick={() => { setProjectMenuOpen(false); onSync(); }}
-                  className="dropdown-item"
-                >
-                  <span>↻</span> Sync Project
+          <div className="flex-1">
+            <DropdownMenu
+              align="start"
+              trigger={
+                <button type="button" className="btn btn-sm w-full" title="Project actions">
+                  Project <span className="opacity-60 text-xs">▾</span>
                 </button>
-                <button
-                  type="button"
-                  onClick={() => { setProjectMenuOpen(false); onRefresh(); }}
-                  className="dropdown-item"
-                >
-                  <span>🔍</span> Scan for New Files
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { setProjectMenuOpen(false); setOnboardOpen(true); }}
-                  className="dropdown-item"
-                >
-                  <span>✨</span> Onboard Agent
-                </button>
-                {!selectedFolder && onUnregisterProject && (
-                  <button
-                    type="button"
-                    onClick={() => { setProjectMenuOpen(false); onUnregisterProject(); }}
-                    className="dropdown-item text-red-500 hover:text-red-600 hover:bg-red-500/10"
-                  >
-                    <span>✕</span> Unregister
-                  </button>
-                )}
-              </div>
-            )}
+              }
+              items={[
+                {
+                  label: "Export ZIP",
+                  icon: <span>↓</span>,
+                  onSelect: () => {
+                    const url = selectedFolder
+                      ? `/api/export/zip?project_id=${selectedProject.id}&folder=${encodeURIComponent(selectedFolder)}`
+                      : `/api/export/zip?project_id=${selectedProject.id}`;
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = "";
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                  },
+                },
+                { label: "Sync Project", icon: <RotateCw className="w-3.5 h-3.5" aria-hidden />, onSelect: onSync },
+                { label: "Scan for New Files", icon: <Search className="w-3.5 h-3.5" aria-hidden />, onSelect: onRefresh },
+                { label: "Onboard Agent", icon: <span>✨</span>, onSelect: () => setOnboardOpen(true) },
+                ...(!selectedFolder && onUnregisterProject
+                  ? [{ label: "Unregister", icon: <X className="w-3.5 h-3.5" aria-hidden />, onSelect: onUnregisterProject, destructive: true }]
+                  : []),
+              ]}
+            />
           </div>
         )}
         <button
@@ -300,8 +247,9 @@ export function FileList({
           disabled={refreshing}
           className={`btn btn-sm ${refreshing ? "opacity-50" : ""}`}
           title="Refresh (scan disk for changes)"
+          aria-label="Refresh"
         >
-          {refreshing ? "..." : "↻"}
+          {refreshing ? "..." : <RotateCw className="w-4 h-4" aria-hidden />}
         </button>
       </div>
       <div className="bp-annotation bp-dashed px-3 py-2 flex items-center justify-between text-[11px] uppercase tracking-wider text-[var(--text-secondary)] border-b border-[var(--border)]">
@@ -324,7 +272,9 @@ export function FileList({
           </select>
         </div>
       </div>
-      {files.length > 10 && <FileListFilter value={filter} onChange={setFilter} />}
+      {(files.length > 10 || filter.trim() !== "") && (
+        <FileListFilter value={filter} onChange={setFilter} />
+      )}
 
       {(() => {
         // Intersect selection with the visible set so the badge count and
@@ -357,14 +307,17 @@ export function FileList({
           setSelectedIds(new Set());
           // Refresh the list either way; the user can see what's left.
           onRefresh();
+          const okCount = visibleSelected.length - failures.length;
           if (failures.length > 0) {
             console.error("[bulk-delete] failures:", failures);
-            alert(
-              `Deleted ${visibleSelected.length - failures.length}/${visibleSelected.length} files.\n` +
-              `${failures.length} failed:\n` +
-              failures.slice(0, 5).map((f) => `  #${f.id}: ${f.error}`).join("\n") +
-              (failures.length > 5 ? `\n  …and ${failures.length - 5} more (see console)` : ""),
+            if (okCount > 0) toast.success(`Deleted ${okCount} file(s)`);
+            toast.error(
+              `${failures.length} file(s) failed to delete: ` +
+              failures.slice(0, 5).map((f) => `#${f.id} (${f.error})`).join(", ") +
+              (failures.length > 5 ? `, …and ${failures.length - 5} more (see console)` : ""),
             );
+          } else {
+            toast.success(`Deleted ${okCount} file(s)`);
           }
         };
         return (
@@ -385,7 +338,7 @@ export function FileList({
                 type="button"
                 onClick={() => setBulkConfirmOpen(true)}
                 disabled={bulkDeleting}
-                className={`px-2 py-1 bg-red-600 text-white font-bold rounded whitespace-nowrap leading-none ${bulkDeleting ? "opacity-50" : "hover:bg-red-700"}`}
+                className={`px-2 py-1 bg-[var(--danger)] text-white font-bold rounded whitespace-nowrap leading-none ${bulkDeleting ? "opacity-50" : "hover:bg-[color-mix(in_srgb,var(--danger)_85%,black)]"}`}
                 title={`Delete ${visibleSelected.length} selected file(s)`}
               >
                 {bulkDeleting ? "…" : "Delete"}
@@ -401,38 +354,16 @@ export function FileList({
             </div>
           </div>
         )}
-        {bulkConfirmOpen && (
-          <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50">
-            <div className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-xl p-5 max-w-md w-full shadow-2xl">
-              <h2 className="text-base font-bold text-[var(--text-primary)] mb-2">
-                Delete {visibleSelected.length} file{visibleSelected.length === 1 ? "" : "s"}?
-              </h2>
-              <p className="text-sm text-[var(--text-secondary)] mb-4">
-                Knowledge Base files will be removed from disk and the deletion will be
-                committed to git (recoverable via Time Travel). Project files are only
-                un-indexed; the source file on disk is left intact.
-              </p>
-              <div className="flex justify-end gap-2">
-                <button
-                  type="button"
-                  className="btn btn-sm"
-                  onClick={() => setBulkConfirmOpen(false)}
-                  disabled={bulkDeleting}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  className={`px-3 py-1.5 bg-red-600 text-white font-bold rounded ${bulkDeleting ? "opacity-50" : "hover:bg-red-700"}`}
-                  onClick={handleBulkDelete}
-                  disabled={bulkDeleting}
-                >
-                  {bulkDeleting ? "Deleting…" : "Delete"}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        <ConfirmDialog
+          open={bulkConfirmOpen}
+          onClose={() => setBulkConfirmOpen(false)}
+          onConfirm={handleBulkDelete}
+          title={`Delete ${visibleSelected.length} file${visibleSelected.length === 1 ? "" : "s"}?`}
+          message="Knowledge Base files will be removed from disk and the deletion will be committed to git (recoverable via Time Travel). Project files are only un-indexed; the source file on disk is left intact."
+          confirmLabel={`Delete ${visibleSelected.length} file${visibleSelected.length === 1 ? "" : "s"}`}
+          destructive
+          loading={bulkDeleting}
+        />
         {filteredAndSorted.length > 0 ? (
           filteredAndSorted.map((file) => (
             <FileItem
@@ -467,38 +398,31 @@ export function FileList({
             ))}
           </div>
         ) : !selectedSection ? (
-          <div className="flex flex-col items-center justify-center py-16 text-[#475569] dark:text-[#94A3B8] gap-4">
-            <span className="text-6xl opacity-30 dark-icon">📂</span>
-            <div className="text-center px-6">
-              <p className="text-lg font-bold text-[var(--text-primary)]">No Selection</p>
-              <p className="text-sm text-[var(--text-secondary)] mt-2">
-                Please select a project or the Knowledge Base from the sidebar to view files.
-              </p>
-            </div>
-          </div>
+          <EmptyState
+            icon={<FolderOpen className="w-16 h-16 opacity-30 dark-icon" aria-hidden />}
+            title="No Selection"
+            hint="Please select a project or the Knowledge Base from the sidebar to view files."
+          />
         ) : (
-          <div className="flex flex-col items-center justify-center py-16 text-[#475569] dark:text-[#94A3B8] gap-4">
-            <span className="text-6xl opacity-30 dark-icon">📂</span>
-            <div className="text-center px-6">
-              <p className="text-lg font-bold text-[var(--text-primary)]">Folder is empty</p>
-              <p className="text-sm text-[var(--text-secondary)] mt-2">
-                This folder doesn't contain any indexed context files.
-              </p>
-            </div>
-
-            {selectedSection === "knowledge" && selectedFolder && onDeleteFolder && (
-              <div className="mt-6 flex flex-col items-center gap-3">
-                <div className="h-px w-16 bg-[var(--border)]" />
-                <button
-                  onClick={onDeleteFolder}
-                  className="px-6 py-2.5 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-500/20 rounded-lg text-sm font-bold hover:bg-red-200 dark:hover:bg-red-900/50 transition-all btn-press shadow-sm"
-                >
-                  DELETE THIS FOLDER
-                </button>
-                <p className="text-[11px] text-gray-500 uppercase tracking-widest font-bold">Permanent Action</p>
-              </div>
-            )}
-          </div>
+          <EmptyState
+            icon={<FolderOpen className="w-16 h-16 opacity-30 dark-icon" aria-hidden />}
+            title="Folder is empty"
+            hint="This folder doesn't contain any indexed context files."
+            action={
+              selectedSection === "knowledge" && selectedFolder && onDeleteFolder ? (
+                <div className="flex flex-col items-center gap-3">
+                  <div className="h-px w-16 bg-[var(--border)]" />
+                  <button
+                    onClick={onDeleteFolder}
+                    className="px-6 py-2.5 bg-[var(--danger-soft)] text-[var(--danger)] border border-[var(--danger)]/30 rounded-lg text-sm font-bold hover:bg-[var(--danger)]/20 transition-all btn-press shadow-sm"
+                  >
+                    DELETE THIS FOLDER
+                  </button>
+                  <p className="text-[11px] text-[var(--muted)] uppercase tracking-widest font-bold">Permanent Action</p>
+                </div>
+              ) : undefined
+            }
+          />
         )}
       </div>
         );

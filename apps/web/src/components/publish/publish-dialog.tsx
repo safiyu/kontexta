@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { Dialog } from "@/components/ui/dialog";
 
 interface PublishConfig {
   folders: string[];
@@ -236,39 +237,31 @@ export function PublishDialog({ isOpen, onClose, mode = "publish", onSwitchToPub
     }
   };
 
-  if (!isOpen) return null;
-
   const isProjectScope = selectedProjectId !== null;
   const activeProject = projects.find((p) => p.id === selectedProjectId);
   const isViewMode = mode === "view";
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center">
-      {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-
-      {/* Dialog */}
-      <div className="relative bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border)] shadow-2xl w-full max-w-2xl max-h-[80vh] overflow-hidden flex flex-col" style={isViewMode ? { maxWidth: "90vw", maxHeight: "85vh" } : undefined}>
+    <Dialog
+      open={isOpen}
+      onClose={onClose}
+      title={isViewMode ? "View published site" : "Publish documentation"}
+      widthClass={isViewMode ? "max-w-[1400px]" : "max-w-2xl"}
+      hideHeader
+    >
+      <div className="-m-5 flex flex-col max-h-[80vh] overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border)]">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border)] shrink-0">
           <div className="flex items-center gap-3">
-            <svg className="w-5 h-5 text-[#B4781E]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <svg className="w-5 h-5 text-[var(--accent)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M4 4h16v16H4z" />
               <path d="M9 9h6v6H9z" />
               <path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3" />
             </svg>
             <h2 className="text-lg font-semibold text-[var(--text-primary)]">
-              {isViewMode ? "View Published Site" : "Publish Documentation"}
+              {isViewMode ? "View published site" : "Publish documentation"}
             </h2>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 rounded-lg hover:bg-[var(--bg-tertiary)] transition-colors"
-          >
-            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M18 6L6 18M6 6l12 12" />
-            </svg>
-          </button>
         </div>
 
         {/* Content */}
@@ -279,7 +272,7 @@ export function PublishDialog({ isOpen, onClose, mode = "publish", onSwitchToPub
               {viewLoading ? (
                 <div className="flex items-center justify-center h-full p-8">
                   <div className="text-center space-y-3">
-                    <svg className="w-8 h-8 animate-spin mx-auto text-[#B4781E]" viewBox="0 0 24 24" fill="none">
+                    <svg className="w-8 h-8 animate-spin mx-auto text-[var(--accent)]" viewBox="0 0 24 24" fill="none">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                     </svg>
@@ -306,7 +299,7 @@ export function PublishDialog({ isOpen, onClose, mode = "publish", onSwitchToPub
                     </p>
                     <button
                       onClick={() => onSwitchToPublish?.()}
-                      className="px-4 py-2 rounded-xl text-sm font-medium bg-[#B4781E] text-white hover:bg-[#9A6818] transition-colors"
+                      className="px-4 py-2 rounded-xl text-sm font-medium bg-[var(--accent)] text-white hover:bg-[color-mix(in_srgb,var(--accent)_85%,black)] transition-colors"
                     >
                       Create a Publish
                     </button>
@@ -327,7 +320,7 @@ export function PublishDialog({ isOpen, onClose, mode = "publish", onSwitchToPub
                     onClick={() => setSelectedProjectId(null)}
                     className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
                       !isProjectScope
-                        ? "bg-[#B4781E]/10 text-[#B4781E] border border-[#B4781E]/30"
+                        ? "bg-[var(--accent)]/10 text-[var(--accent)] border border-[var(--accent)]/30"
                         : "bg-[var(--bg-tertiary)] text-[var(--text-secondary)] border border-[var(--border)] hover:border-[var(--border)]"
                     }`}
                   >
@@ -337,7 +330,7 @@ export function PublishDialog({ isOpen, onClose, mode = "publish", onSwitchToPub
                     onClick={() => setSelectedProjectId(projects[0]?.id ?? null)}
                     className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
                       isProjectScope
-                        ? "bg-[#B4781E]/10 text-[#B4781E] border border-[#B4781E]/30"
+                        ? "bg-[var(--accent)]/10 text-[var(--accent)] border border-[var(--accent)]/30"
                         : "bg-[var(--bg-tertiary)] text-[var(--text-secondary)] border border-[var(--border)] hover:border-[var(--border)]"
                     }`}
                   >
@@ -360,7 +353,7 @@ export function PublishDialog({ isOpen, onClose, mode = "publish", onSwitchToPub
                   <select
                     value={selectedProjectId ?? ""}
                     onChange={(e) => setSelectedProjectId(e.target.value ? Number(e.target.value) : null)}
-                    className="w-full px-3 py-2 rounded-xl bg-[var(--bg-tertiary)] border border-[var(--border)] text-[var(--text-primary)] text-sm focus:outline-none focus:ring-2 focus:ring-[#B4781E]/50"
+                    className="w-full px-3 py-2 rounded-xl bg-[var(--bg-tertiary)] border border-[var(--border)] text-[var(--text-primary)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/50"
                   >
                     {projects.map((p) => (
                       <option key={p.id} value={p.id}>
@@ -379,7 +372,7 @@ export function PublishDialog({ isOpen, onClose, mode = "publish", onSwitchToPub
                 <div className="flex items-center gap-2 mb-3">
                   <button
                     onClick={selectAllFolders}
-                    className="text-xs text-[#B4781E] hover:underline"
+                    className="text-xs text-[var(--accent)] hover:underline"
                   >
                     Select All
                   </button>
@@ -408,7 +401,7 @@ export function PublishDialog({ isOpen, onClose, mode = "publish", onSwitchToPub
                           type="checkbox"
                           checked={selectedFolders.includes(folder)}
                           onChange={() => toggleFolder(folder)}
-                          className="w-4 h-4 rounded border-[var(--border)] text-[#B4781E] focus:ring-[#B4781E] focus:ring-offset-0 bg-[var(--bg-tertiary)]"
+                          className="w-4 h-4 rounded border-[var(--border)] text-[var(--accent)] focus:ring-[var(--accent)] focus:ring-offset-0 bg-[var(--bg-tertiary)]"
                         />
                         <span className="text-sm text-[var(--text-primary)]">
                           {displayName(folder, isProjectScope ? activeProject?.slug ?? null : null)}
@@ -434,7 +427,7 @@ export function PublishDialog({ isOpen, onClose, mode = "publish", onSwitchToPub
                     type="text"
                     value={config.title}
                     onChange={(e) => setConfig((c) => ({ ...c, title: e.target.value }))}
-                    className="w-full px-3 py-2 rounded-xl bg-[var(--bg-tertiary)] border border-[var(--border)] text-[var(--text-primary)] text-sm focus:outline-none focus:ring-2 focus:ring-[#B4781E]/50"
+                    className="w-full px-3 py-2 rounded-xl bg-[var(--bg-tertiary)] border border-[var(--border)] text-[var(--text-primary)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/50"
                   />
                 </div>
                 <div>
@@ -445,7 +438,7 @@ export function PublishDialog({ isOpen, onClose, mode = "publish", onSwitchToPub
                     type="text"
                     value={config.brand}
                     onChange={(e) => setConfig((c) => ({ ...c, brand: e.target.value }))}
-                    className="w-full px-3 py-2 rounded-xl bg-[var(--bg-tertiary)] border border-[var(--border)] text-[var(--text-primary)] text-sm focus:outline-none focus:ring-2 focus:ring-[#B4781E]/50"
+                    className="w-full px-3 py-2 rounded-xl bg-[var(--bg-tertiary)] border border-[var(--border)] text-[var(--text-primary)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/50"
                   />
                 </div>
               </div>
@@ -457,7 +450,7 @@ export function PublishDialog({ isOpen, onClose, mode = "publish", onSwitchToPub
                     type="checkbox"
                     checked={config.hero}
                     onChange={(e) => setConfig((c) => ({ ...c, hero: e.target.checked }))}
-                    className="w-4 h-4 rounded border-[var(--border)] text-[#B4781E] focus:ring-[#B4781E] focus:ring-offset-0 bg-[var(--bg-tertiary)]"
+                    className="w-4 h-4 rounded border-[var(--border)] text-[var(--accent)] focus:ring-[var(--accent)] focus:ring-offset-0 bg-[var(--bg-tertiary)]"
                   />
                   <span className="text-sm font-medium text-[var(--text-secondary)]">
                     Show hero on landing page
@@ -469,7 +462,7 @@ export function PublishDialog({ isOpen, onClose, mode = "publish", onSwitchToPub
                     value={config.tagline}
                     onChange={(e) => setConfig((c) => ({ ...c, tagline: e.target.value }))}
                     placeholder="Optional tagline shown under the title"
-                    className="w-full px-3 py-2 rounded-xl bg-[var(--bg-tertiary)] border border-[var(--border)] text-[var(--text-primary)] text-sm focus:outline-none focus:ring-2 focus:ring-[#B4781E]/50"
+                    className="w-full px-3 py-2 rounded-xl bg-[var(--bg-tertiary)] border border-[var(--border)] text-[var(--text-primary)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/50"
                   />
                 )}
               </div>
@@ -486,7 +479,7 @@ export function PublishDialog({ isOpen, onClose, mode = "publish", onSwitchToPub
                       onClick={() => setConfig((c) => ({ ...c, theme: key }))}
                       className={`px-3 py-3 rounded-xl border-2 text-sm font-medium transition-all flex flex-col items-start gap-2 ${
                         config.theme === key
-                          ? "border-[#B4781E] bg-[#B4781E]/10 text-[#B4781E]"
+                          ? "border-[var(--accent)] bg-[var(--accent)]/10 text-[var(--accent)]"
                           : "border-[var(--border)] bg-[var(--bg-tertiary)]/30 text-[var(--text-secondary)] hover:border-[var(--border)]"
                       }`}
                     >
@@ -495,7 +488,7 @@ export function PublishDialog({ isOpen, onClose, mode = "publish", onSwitchToPub
                         {swatches.map((c, i) => (
                           <span
                             key={i}
-                            className="w-3 h-3 rounded-full border border-black/10"
+                            className="w-3 h-3 rounded-full bp-keep-round border border-black/10"
                             style={{ background: c }}
                           />
                         ))}
@@ -512,7 +505,7 @@ export function PublishDialog({ isOpen, onClose, mode = "publish", onSwitchToPub
                     type="checkbox"
                     checked={config.llmsTxt}
                     onChange={(e) => setConfig((c) => ({ ...c, llmsTxt: e.target.checked }))}
-                    className="w-4 h-4 rounded border-[var(--border)] text-[#B4781E] focus:ring-[#B4781E] focus:ring-offset-0 bg-[var(--bg-tertiary)]"
+                    className="w-4 h-4 rounded border-[var(--border)] text-[var(--accent)] focus:ring-[var(--accent)] focus:ring-offset-0 bg-[var(--bg-tertiary)]"
                   />
                   <span className="text-sm text-[var(--text-primary)]">Generate llms.txt</span>
                 </label>
@@ -521,7 +514,7 @@ export function PublishDialog({ isOpen, onClose, mode = "publish", onSwitchToPub
                     type="checkbox"
                     checked={config.seo}
                     onChange={(e) => setConfig((c) => ({ ...c, seo: e.target.checked }))}
-                    className="w-4 h-4 rounded border-[var(--border)] text-[#B4781E] focus:ring-[#B4781E] focus:ring-offset-0 bg-[var(--bg-tertiary)]"
+                    className="w-4 h-4 rounded border-[var(--border)] text-[var(--accent)] focus:ring-[var(--accent)] focus:ring-offset-0 bg-[var(--bg-tertiary)]"
                   />
                   <span className="text-sm text-[var(--text-primary)]">SEO Meta Tags</span>
                 </label>
@@ -529,8 +522,8 @@ export function PublishDialog({ isOpen, onClose, mode = "publish", onSwitchToPub
 
               {/* Error */}
               {error && (
-                <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20">
-                  <p className="text-sm text-red-500">{error}</p>
+                <div className="p-4 rounded-xl bg-[var(--danger-soft)] border border-[var(--danger)]/20">
+                  <p className="text-sm text-[var(--danger)]">{error}</p>
                 </div>
               )}
 
@@ -568,7 +561,7 @@ export function PublishDialog({ isOpen, onClose, mode = "publish", onSwitchToPub
             <button
               onClick={handlePublish}
               disabled={publishing || selectedFolders.length === 0}
-              className="px-6 py-2 rounded-xl text-sm font-medium bg-[#B4781E] text-white hover:bg-[#9A6818] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              className="px-6 py-2 rounded-xl text-sm font-medium bg-[var(--accent)] text-white hover:bg-[color-mix(in_srgb,var(--accent)_85%,black)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
               {publishing ? (
                 <>
@@ -591,6 +584,6 @@ export function PublishDialog({ isOpen, onClose, mode = "publish", onSwitchToPub
           )}
         </div>
       </div>
-    </div>
+    </Dialog>
   );
 }

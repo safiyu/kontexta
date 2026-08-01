@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { X } from "lucide-react";
 
 interface Project { id: number; name: string }
 
@@ -91,12 +92,14 @@ export function UploadFilesDialog({ open, onClose, projects, defaultProjectId, d
         <form onSubmit={handleSubmit}>
           <div className="px-6 py-4 border-b border-[var(--border-color)] flex items-center justify-between">
             <h3 className="text-lg font-bold text-amber-accent">UPLOAD MARKDOWN FILES</h3>
-            <button type="button" onClick={onClose} className="btn btn-icon-md" aria-label="Close dialog">✕</button>
+            <button type="button" onClick={onClose} className="btn btn-icon-md" aria-label="Close dialog">
+              <X className="w-4 h-4" aria-hidden />
+            </button>
           </div>
 
           <div className="p-6 space-y-4">
             <div>
-              <label className="block text-[10px] font-bold text-[#475569] dark:text-[#94A3B8] tracking-widest mb-1.5">FILES</label>
+              <label className="block text-[10px] font-bold text-[var(--text-secondary)] tracking-widest mb-1.5">FILES</label>
               <input
                 type="file"
                 multiple
@@ -109,7 +112,9 @@ export function UploadFilesDialog({ open, onClose, projects, defaultProjectId, d
                   {files.map((f, i) => (
                     <li key={i} className="flex items-center justify-between py-0.5">
                       <span className="truncate">{f.name}</span>
-                      <button type="button" className="btn btn-icon-sm btn-destructive" aria-label={`Remove ${f.name}`} onClick={() => setFiles((arr) => arr.filter((_, j) => j !== i))}>✕</button>
+                      <button type="button" className="btn btn-icon-sm btn-destructive" aria-label={`Remove ${f.name}`} onClick={() => setFiles((arr) => arr.filter((_, j) => j !== i))}>
+                        <X className="w-3.5 h-3.5" aria-hidden />
+                      </button>
                     </li>
                   ))}
                 </ul>
@@ -118,7 +123,7 @@ export function UploadFilesDialog({ open, onClose, projects, defaultProjectId, d
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-[10px] font-bold text-[#475569] dark:text-[#94A3B8] tracking-widest mb-1.5">PROJECT</label>
+                <label className="block text-[10px] font-bold text-[var(--text-secondary)] tracking-widest mb-1.5">PROJECT</label>
                 <select
                   value={projectId === "" ? "" : String(projectId)}
                   onChange={(e) => setProjectId(e.target.value === "" ? "" : Number(e.target.value))}
@@ -131,7 +136,7 @@ export function UploadFilesDialog({ open, onClose, projects, defaultProjectId, d
                 </select>
               </div>
               <div>
-                <label className="block text-[10px] font-bold text-[#475569] dark:text-[#94A3B8] tracking-widest mb-1.5">FOLDER</label>
+                <label className="block text-[10px] font-bold text-[var(--text-secondary)] tracking-widest mb-1.5">FOLDER</label>
                 <select
                   value={folder}
                   onChange={(e) => setFolder(e.target.value)}
@@ -146,7 +151,7 @@ export function UploadFilesDialog({ open, onClose, projects, defaultProjectId, d
             </div>
 
             <div>
-              <label className="block text-[10px] font-bold text-[#475569] dark:text-[#94A3B8] tracking-widest mb-1.5">TAGS</label>
+              <label className="block text-[10px] font-bold text-[var(--text-secondary)] tracking-widest mb-1.5">TAGS</label>
               <input
                 type="text"
                 value={tagsText}
@@ -156,7 +161,7 @@ export function UploadFilesDialog({ open, onClose, projects, defaultProjectId, d
               />
             </div>
 
-            {error && <div className="text-sm text-red-500">{error}</div>}
+            {error && <div className="text-sm text-[var(--danger)]">{error}</div>}
 
             {result && (
               <div className="text-sm text-[var(--text-secondary)]">

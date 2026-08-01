@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
+import { ChevronRight, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type { CalendarEntity, CalendarEvent, Conflict } from "kxta-core";
 import { useEntities, useCalendarData } from "@/hooks/use-calendar";
@@ -86,6 +87,11 @@ export function CalendarClient() {
     }
   }
 
+  function handleJumpToDate(date: Date) {
+    setHighlightIds(new Set());
+    setAnchor(date);
+  }
+
   function handleSlotClick(day: Date, hour?: number) {
     // Entities may have been added elsewhere (MCP, another tab) since this
     // page loaded — refetch so the dialog's dropdown is never stale.
@@ -135,13 +141,22 @@ export function CalendarClient() {
   const loading = entitiesLoading || dataLoading;
 
   return (
-    <div className="min-h-screen flex flex-col bg-[var(--bg-secondary)] dark:bg-[var(--bg-primary)]">
+    <div className="h-screen overflow-hidden flex flex-col bg-[var(--bg-secondary)] dark:bg-[var(--bg-primary)]">
       <header className="sticky top-0 z-30 h-16 bg-[var(--bg-secondary)]/80 backdrop-blur-xl border-b border-[var(--border)] flex items-center px-6 gap-2">
         <div className="flex items-center gap-1.5 cursor-pointer" onClick={() => router.push("/")}>
           <span className="text-sm text-[var(--text-secondary)] hover:text-amber-accent transition-colors">Home</span>
-          <span className="text-[var(--muted)] opacity-40">›</span>
+          <ChevronRight className="w-4 h-4 text-[var(--muted)] opacity-40" aria-hidden />
           <span className="text-sm font-bold text-amber-accent">Calendar</span>
         </div>
+        <button
+          type="button"
+          onClick={() => router.push("/")}
+          className="btn btn-icon-md btn-outline ml-auto"
+          aria-label="Close calendar and return to home"
+          title="Close"
+        >
+          <X className="w-4 h-4" aria-hidden />
+        </button>
       </header>
 
       <div className="flex-1 p-3 lg:p-4 flex gap-3 overflow-hidden">
@@ -151,7 +166,9 @@ export function CalendarClient() {
             view={view}
             onViewChange={setView}
             rangeLabel={rangeLabel}
+            anchor={anchor}
             onNavigate={handleNavigate}
+            onJumpToDate={handleJumpToDate}
             entities={entities}
             entityFilter={entityFilter}
             onEntityFilter={setEntityFilter}

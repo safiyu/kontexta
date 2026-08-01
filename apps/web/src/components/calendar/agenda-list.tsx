@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import { CalendarDays } from "lucide-react";
 import type { CalendarEntity, CalendarEvent, Conflict } from "kxta-core";
 import { fmtTime, isSameDay, startOfDay } from "./date-utils";
 import { colorForType } from "./event-colors";
@@ -59,7 +60,7 @@ export function AgendaList({ events, entitiesById, conflicts, loading, highlight
   if (groups.length === 0) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center py-16 gap-3">
-        <div className="text-4xl opacity-30 dark-icon">🗓️</div>
+        <CalendarDays className="w-9 h-9 opacity-30 dark-icon" aria-hidden />
         <div className="text-sm text-[var(--muted)]">No events in the next 30 days</div>
       </div>
     );
@@ -88,10 +89,10 @@ export function AgendaList({ events, entitiesById, conflicts, loading, highlight
                 id={`cal-ev-${ev.id}`}
                 onClick={() => onEventClick(ev)}
                 className={`px-4 py-3 border-b border-[var(--border)] flex items-center gap-3 hover:bg-amber-accent/5 cursor-pointer ${
-                  highlightIds.has(ev.id) ? "ring-2 ring-red-400" : ""
+                  highlightIds.has(ev.id) ? "ring-2 ring-[var(--danger)]" : ""
                 }`}
               >
-                <span className={`w-2 h-2 rounded-full shrink-0 ${color.dot}`} />
+                <span className={`w-2 h-2 rounded-full bp-keep-round shrink-0 ${color.dot}`} />
                 <span className="font-mono text-xs text-[var(--text-secondary)] w-28 shrink-0">
                   {fmtTime(ev.starts_at)}–{fmtTime(ev.ends_at)}
                 </span>
@@ -102,7 +103,7 @@ export function AgendaList({ events, entitiesById, conflicts, loading, highlight
                 </span>
                 {evConflicts.length > 0 && (
                   <span
-                    className="ml-auto px-2 py-0.5 rounded-full bg-red-500/10 border border-red-500/30 text-red-400 text-[10px] font-bold uppercase tracking-wider shrink-0"
+                    className="ml-auto px-2 py-0.5 rounded-full bg-[var(--danger-soft)] border border-[var(--danger)]/30 text-[var(--danger)] text-[10px] font-bold uppercase tracking-wider shrink-0"
                     title={evConflicts.map((c) => c.reason).join("\n")}
                   >
                     Conflict

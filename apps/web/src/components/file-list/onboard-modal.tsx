@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { toast } from "sonner";
+import { Dialog } from "@/components/ui/dialog";
 
 interface OnboardModalProps {
   isOpen: boolean;
@@ -34,62 +36,54 @@ export function OnboardModal({ isOpen, onClose, projectId, projectName, onOnboar
         body: JSON.stringify({ targetAgent }),
       });
       if (res.ok) {
+        toast.success(`Onboarded ${projectName}`);
         onOnboarded();
         onClose();
       } else {
         const data = await res.json().catch(() => ({}));
-        alert(data.error || `Onboarding failed: HTTP ${res.status}`);
+        toast.error(data.error || `Onboarding failed: HTTP ${res.status}`);
       }
     } catch (e) {
-      alert("Failed to connect to server");
+      toast.error("Failed to connect to server");
     } finally {
       setLoading(false);
     }
   };
 
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-      <div className="w-[500px] bg-[var(--bg-primary)] border border-[var(--border)] rounded-lg shadow-2xl overflow-hidden animate-fade-in">
-        <div className="px-6 py-4 border-b border-[var(--border)] flex items-center justify-between">
-          <h3 className="text-lg font-bold text-amber-accent uppercase tracking-wider">ONBOARD AGENT</h3>
-          <button type="button" onClick={onClose} className="btn btn-icon-md" aria-label="Close dialog">✕</button>
+    <Dialog open={isOpen} onClose={onClose} title="Onboard agent" widthClass="max-w-[500px]">
+      <div className="space-y-4">
+        <div className="text-sm text-[var(--text-secondary)] leading-relaxed">
+          Scaffold workflow rules for <strong>{projectName}</strong>. This writes a context file (like <code>.aider/kontexta.md</code>) to the project root.
         </div>
 
-        <div className="p-6 space-y-4">
-          <div className="text-sm text-[var(--text-secondary)] leading-relaxed">
-            Scaffold workflow rules for <strong>{projectName}</strong>. This writes a context file (like <code>.aider/kontexta.md</code>) to the project root.
-          </div>
-
-          <div className="space-y-2">
-            <label className="block text-[10px] font-bold text-[#475569] dark:text-[#94A3B8] tracking-widest uppercase">TARGET AGENT</label>
-            <select
-              value={targetAgent}
-              onChange={(e) => setTargetAgent(e.target.value)}
-              className="w-full bg-[var(--bg-secondary)] border border-[var(--border)] rounded px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-amber-accent/50 cursor-pointer"
-            >
-              {AGENTS.map((a) => (
-                <option key={a.id} value={a.id}>{a.label}</option>
-              ))}
-            </select>
-          </div>
-
-          {targetAgent === "aider" && (
-            <div className="p-3 bg-amber-500/5 border border-amber-500/20 rounded text-[11px] text-amber-600 dark:text-amber-400 leading-normal">
-              <strong>Aider Note:</strong> Integration is file-based. After onboarding, ensure your <code>.aider.conf.yml</code> reads the new file.
-            </div>
-          )}
+        <div className="space-y-2">
+          <label className="block text-[10px] font-bold text-[var(--text-secondary)] tracking-widest uppercase">Target agent</label>
+          <select
+            value={targetAgent}
+            onChange={(e) => setTargetAgent(e.target.value)}
+            className="w-full bg-[var(--bg-secondary)] border border-[var(--border)] rounded px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-amber-accent/50 cursor-pointer"
+          >
+            {AGENTS.map((a) => (
+              <option key={a.id} value={a.id}>{a.label}</option>
+            ))}
+          </select>
         </div>
 
-        <div className="px-6 py-4 bg-[var(--bg-secondary)]/50 border-t border-[var(--border)] flex justify-end gap-3">
+        {targetAgent === "aider" && (
+          <div className="p-3 bg-amber-500/5 border border-amber-500/20 rounded text-[11px] text-amber-600 dark:text-amber-400 leading-normal">
+            <strong>Aider note:</strong> Integration is file-based. After onboarding, ensure your <code>.aider.conf.yml</code> reads the new file.
+          </div>
+        )}
+
+        <div className="flex justify-end gap-3 pt-2">
           <button
             type="button"
             onClick={onClose}
             className="btn btn-md"
             disabled={loading}
           >
-            CANCEL
+            Cancel
           </button>
           <button
             type="button"
@@ -97,10 +91,10 @@ export function OnboardModal({ isOpen, onClose, projectId, projectName, onOnboar
             disabled={loading}
             className="btn btn-md min-w-[140px]"
           >
-            {loading ? "ONBOARDING..." : "ONBOARD AGENT"}
+            {loading ? "Onboarding…" : "Onboard agent"}
           </button>
         </div>
       </div>
-    </div>
+    </Dialog>
   );
 }

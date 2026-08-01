@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useSearchParams } from "next/navigation";
+import { toast } from "sonner";
 import { TopBar } from "@/components/layout/top-bar";
 import { ThreePane } from "@/components/layout/three-pane";
 import { FolderTree } from "@/components/folder-tree/folder-tree";
@@ -14,7 +15,7 @@ import { NewFolderDialog } from "@/components/folder-tree/new-folder-dialog";
 import { DeleteFolderDialog } from "@/components/folder-tree/delete-folder-dialog";
 import { UnregisterModal } from "@/components/file-list/unregister-modal";
 import { DocsModal } from "@/components/docs/docs-modal";
-import { PublishDialog, type PublishResult } from "@/components/publish/publish-dialog";
+import { PublishDialog } from "@/components/publish/publish-dialog";
 import { useProjects } from "@/hooks/use-projects";
 import { useFiles } from "@/hooks/use-files";
 import { useFolders } from "@/hooks/use-folders";
@@ -37,7 +38,6 @@ export default function HomePage() {
   const [unregisterConfirmOpen, setUnregisterConfirmOpen] = useState(false);
   const [publishOpen, setPublishOpen] = useState(false);
   const [publishMode, setPublishMode] = useState<"publish" | "view">("publish");
-  const [publishToast, setPublishToast] = useState<PublishResult | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [deletingFolder, setDeletingFolder] = useState(false);
   const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
@@ -103,12 +103,13 @@ export default function HomePage() {
         sessionStorage.removeItem("selectedSection");
         sessionStorage.removeItem("selectedProjectId");
         refreshProjects();
+        toast.success("Project unregistered");
       } else {
-        const data = await response.json();
-        alert(data.error || "Failed to unregister project");
+        const data = await response.json().catch(() => ({}));
+        toast.error(data.error || "Failed to unregister project");
       }
-    } catch (error) {
-      console.error("Failed to unregister project:", error);
+    } catch (error: any) {
+      toast.error(`Failed to unregister project: ${error?.message ?? "Network error"}`);
     }
   };
 
@@ -153,6 +154,12 @@ export default function HomePage() {
   useWebSocket(handleWebSocketEvent);
 
   const isPhone = useMediaQuery("(max-width: 767px)");
+
+  // Gate the first client paint: SSR markup can't know the real viewport,
+  // so without this the desktop layout flashes before snapping to the
+  // tablet/phone layout once useMediaQuery's lazy initializer kicks in.
+  const [hydrated, setHydrated] = useState(false);
+  useEffect(() => setHydrated(true), []);
 
   // ContentPane reports unsaved-edit state up via onDirtyChange. Selection
   // handlers below check this before discarding the active file so an
@@ -280,7 +287,6 @@ export default function HomePage() {
   };
 
   const handleRefresh = async () => {
-    console.log("Refreshing index...", { selectedProjectId });
     setIsRefreshing(true);
     try {
       const response = await fetch("/api/refresh", {
@@ -292,12 +298,13 @@ export default function HomePage() {
         refreshFiles();
         refreshAllFiles();
         setFolderRefreshKey((k) => k + 1);
+        toast.success("Index refreshed");
       } else {
-        const data = await response.json();
-        alert(data.error || "Refresh failed");
+        const data = await response.json().catch(() => ({}));
+        toast.error(data.error || "Refresh failed");
       }
-    } catch (error) {
-      console.error("Failed to refresh:", error);
+    } catch (error: any) {
+      toast.error(`Failed to refresh: ${error?.message ?? "Network error"}`);
     } finally {
       setIsRefreshing(false);
     }
@@ -388,12 +395,20 @@ export default function HomePage() {
           folder,
         }),
       });
+      const data = await response.json().catch(() => ({}));
       if (response.ok) {
-        refreshAllFiles();
         setNewFileOpen(false);
+        toast.success(`Created "${title}"`);
+        await refreshAllFiles();
+        if (typeof data.id === "number") setSelectedFileId(data.id);
+        return true;
+      } else {
+        toast.error(data.error || "Failed to create file");
+        return false;
       }
-    } catch (error) {
-      console.error("Failed to create file:", error);
+    } catch (error: any) {
+      toast.error(`Failed to create file: ${error?.message ?? "Network error"}`);
+      return false;
     }
   };
 
@@ -406,9 +421,13 @@ export default function HomePage() {
         refreshAllFiles();
         setFolderRefreshKey((k) => k + 1);
         setSelectedFileId(null);
+        toast.success("File deleted");
+      } else {
+        const data = await response.json().catch(() => ({}));
+        toast.error(data.error || "Failed to delete file");
       }
-    } catch (error) {
-      console.error("Failed to delete file:", error);
+    } catch (error: any) {
+      toast.error(`Failed to delete file: ${error?.message ?? "Network error"}`);
     }
   };
 
@@ -417,9 +436,9 @@ export default function HomePage() {
       const response = await fetch("/api/folders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          projectId: targetProjectId && targetProjectId > 0 ? targetProjectId : null, 
-          name 
+        body: JSON.stringify({
+          projectId: targetProjectId && targetProjectId > 0 ? targetProjectId : null,
+          name
         }),
       });
       if (response.ok) {
@@ -437,9 +456,16 @@ export default function HomePage() {
         }
         // Bump the key to trigger folder re-fetch without full page reload
         setFolderRefreshKey((k) => k + 1);
+        toast.success(`Folder "${name}" created`);
+        return true;
+      } else {
+        const data = await response.json().catch(() => ({}));
+        toast.error(data.error || "Failed to create folder");
+        return false;
       }
-    } catch (error) {
-      console.error("Failed to create folder:", error);
+    } catch (error: any) {
+      toast.error(`Failed to create folder: ${error?.message ?? "Network error"}`);
+      return false;
     }
   };
 
@@ -460,12 +486,13 @@ export default function HomePage() {
         setSelectedFolder(null);
         setFolderRefreshKey((k) => k + 1);
         setDeleteFolderConfirmOpen(false);
+        toast.success("Folder deleted");
       } else {
-        const data = await response.json();
-        alert(data.error || "Failed to delete folder");
+        const data = await response.json().catch(() => ({}));
+        toast.error(data.error || "Failed to delete folder");
       }
-    } catch (error) {
-      console.error("Failed to delete folder:", error);
+    } catch (error: any) {
+      toast.error(`Failed to delete folder: ${error?.message ?? "Network error"}`);
     } finally {
       setDeletingFolder(false);
     }
@@ -529,6 +556,10 @@ export default function HomePage() {
     active: selectedSection === "knowledge",
     onClick: handleSelectKnowledge,
   };
+
+  if (!hydrated) {
+    return <div className="h-screen bg-[var(--bg-primary)]" />;
+  }
 
   if (isPhone) {
     return (
@@ -668,57 +699,25 @@ export default function HomePage() {
         onClose={() => { setPublishOpen(false); setPublishMode("publish"); }}
         mode={publishMode}
         onSwitchToPublish={() => { setPublishMode("publish"); }}
-        onPublishSuccess={(r) => setPublishToast(r)}
+        onPublishSuccess={(r) =>
+          toast.success("Publish successful", {
+            duration: Infinity,
+            closeButton: true,
+            description: [
+              `${r.docCount ?? 0} docs`,
+              r.endpointCount ? `${r.endpointCount} endpoints` : null,
+              r.termCount ? `${r.termCount} terms` : null,
+              r.output ?? null,
+            ]
+              .filter(Boolean)
+              .join(" · "),
+            action: {
+              label: "View Published",
+              onClick: () => window.open("/api/publish/html", "_blank", "noopener,noreferrer"),
+            },
+          })
+        }
       />
-
-      {publishToast && (
-        // Persistent toast bottom-right with View Published + Dismiss. Stays
-        // until the user explicitly dismisses so they can't miss the ack.
-        <div
-          role="status"
-          className="fixed bottom-6 right-6 z-[150] max-w-md p-4 rounded-xl shadow-2xl bg-[var(--bg-secondary)] border border-green-500/40"
-        >
-          <div className="flex items-start gap-3">
-            <svg className="w-5 h-5 text-green-500 shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-              <circle cx="12" cy="12" r="10" />
-              <path d="M9 12l2 2 4-4" />
-            </svg>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-bold text-green-500">Publish successful</p>
-              <div className="text-xs text-[var(--text-secondary)] mt-1 space-y-0.5">
-                <p>
-                  📄 {publishToast.docCount ?? 0} docs
-                  {publishToast.endpointCount !== undefined && publishToast.endpointCount > 0 && (
-                    <> · 🔗 {publishToast.endpointCount} endpoints</>
-                  )}
-                  {publishToast.termCount !== undefined && publishToast.termCount > 0 && (
-                    <> · 📚 {publishToast.termCount} terms</>
-                  )}
-                </p>
-                {publishToast.output && (
-                  <p className="break-all font-mono text-[10px] opacity-70">{publishToast.output}</p>
-                )}
-              </div>
-              <div className="flex items-center gap-2 mt-3">
-                <button
-                  type="button"
-                  onClick={() => window.open("/api/publish/html", "_blank", "noopener,noreferrer")}
-                  className="px-3 py-1.5 rounded-lg bg-green-500 text-black text-xs font-bold hover:bg-green-400 transition-colors"
-                >
-                  View Published
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPublishToast(null)}
-                  className="px-3 py-1.5 rounded-lg text-xs font-medium text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] transition-colors"
-                >
-                  Dismiss
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

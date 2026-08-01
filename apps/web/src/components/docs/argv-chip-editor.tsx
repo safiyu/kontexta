@@ -27,9 +27,9 @@ export function ArgvChipEditor({ value, onChange, declaredParams }: Props) {
       {value.map((arg, i) => {
         const ok = placeholdersOk(arg);
         return (
-          <span key={i} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-mono border ${ok ? "border-[var(--border)] bg-[var(--bg-secondary)]" : "border-red-500 text-red-400"}`}>
+          <span key={i} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-mono border ${ok ? "border-[var(--border)] bg-[var(--bg-secondary)]" : "border-[var(--danger)] text-[var(--danger)]"}`}>
             {arg}
-            <button aria-label={`remove ${arg}`} onClick={() => onChange(value.filter((_, j) => j !== i))} className="text-[var(--text-secondary)] hover:text-red-500">×</button>
+            <button aria-label={`remove ${arg}`} onClick={() => onChange(value.filter((_, j) => j !== i))} className="text-[var(--text-secondary)] hover:text-[var(--danger)]">×</button>
           </span>
         );
       })}

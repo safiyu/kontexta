@@ -2,8 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CalendarEntity, CalendarEvent } from "kxta-core";
-import { weekDays, layoutDayEvents, isSameDay, HOURS, fmtTime, fmtDayLabel } from "./date-utils";
+import { weekDays, layoutDayEvents, isSameDay, startOfDay, isAllDayForDay, HOURS, fmtTime, fmtDayLabel } from "./date-utils";
 import { colorForType } from "./event-colors";
+import { EventChip } from "./event-chip";
 
 interface WeekViewProps {
   anchor: Date;
@@ -18,6 +19,10 @@ interface WeekViewProps {
 
 const PX_PER_HOUR = 48;
 
+function dayKey(d: Date): string {
+  return startOfDay(d).toISOString();
+}
+
 function CurrentTimeIndicator({ day }: { day: Date }) {
   const [now, setNow] = useState(new Date());
   useEffect(() => {
@@ -28,8 +33,8 @@ function CurrentTimeIndicator({ day }: { day: Date }) {
   const top = (now.getHours() * 60 + now.getMinutes()) * (PX_PER_HOUR / 60);
   return (
     <div className="absolute left-0 right-0 pointer-events-none z-10" style={{ top }}>
-      <div className="h-px bg-amber-accent shadow-[0_0_6px_rgba(180,120,30,0.8)]" />
-      <div className="w-2 h-2 rounded-full bg-amber-accent -ml-1 -mt-1" />
+      <div className="h-px bg-amber-accent shadow-[0_0_6px_var(--accent-soft)]" />
+      <div className="w-2 h-2 rounded-full bp-keep-round bg-amber-accent -ml-1 -mt-1" />
     </div>
   );
 }
@@ -38,6 +43,19 @@ export function WeekView({ anchor, events, entitiesById, conflictEventIds, highl
   const days = useMemo(() => weekDays(anchor), [anchor]);
   const bodyRef = useRef<HTMLDivElement>(null);
   const today = new Date();
+
+  const allDayEventsByDay = useMemo(() => {
+    const map = new Map<string, CalendarEvent[]>();
+    for (const day of days) {
+      map.set(dayKey(day), events.filter((ev) => isAllDayForDay(ev, day)));
+    }
+    return map;
+  }, [days, events]);
+
+  const hasAnyAllDay = useMemo(
+    () => [...allDayEventsByDay.values()].some((list) => list.length > 0),
+    [allDayEventsByDay],
+  );
 
   useEffect(() => {
     if (bodyRef.current) bodyRef.current.scrollTop = 8 * PX_PER_HOUR;
@@ -69,6 +87,31 @@ export function WeekView({ anchor, events, entitiesById, conflictEventIds, highl
         </div>
       </div>
 
+      {hasAnyAllDay && (
+        <div className="flex border-b border-[var(--border)] shrink-0">
+          <div className="w-14 shrink-0 flex items-start justify-end pr-2 pt-1.5">
+            <span className="text-[9px] uppercase tracking-widest text-[var(--muted)]">All-day</span>
+          </div>
+          <div className="grid grid-cols-7 flex-1">
+            {days.map((day) => (
+              <div key={day.toISOString()} className="border-l border-[var(--border)] p-1 flex flex-col gap-1">
+                {(allDayEventsByDay.get(dayKey(day)) ?? []).map((ev) => (
+                  <EventChip
+                    key={ev.id}
+                    event={ev}
+                    entityName={entitiesById.get(ev.entity_id)?.name ?? `#${ev.entity_id}`}
+                    allDay
+                    conflicted={conflictEventIds.has(ev.id)}
+                    highlighted={highlightIds.has(ev.id)}
+                    onClick={() => onEventClick(ev)}
+                  />
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div ref={bodyRef} className="flex-1 overflow-y-auto flex">
         <div className="w-14 shrink-0">
           {HOURS.map((h) => (
@@ -80,7 +123,7 @@ export function WeekView({ anchor, events, entitiesById, conflictEventIds, highl
 
         <div className="grid grid-cols-7 flex-1">
           {days.map((day) => {
-            const positioned = layoutDayEvents(events, day);
+            const positioned = layoutDayEvents(events.filter((ev) => !isAllDayForDay(ev, day)), day);
             return (
               <div
                 key={day.toISOString()}
@@ -104,6 +147,7 @@ export function WeekView({ anchor, events, entitiesById, conflictEventIds, highl
                   return (
                     <button
                       key={event.id}
+                      id={`cal-ev-${event.id}`}
                       onClick={(e) => {
                         e.stopPropagation();
                         onEventClick(event);

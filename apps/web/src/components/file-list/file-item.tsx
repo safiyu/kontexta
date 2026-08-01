@@ -1,5 +1,8 @@
 "use client";
 
+import { Star } from "lucide-react";
+import { toast } from "sonner";
+
 interface FileItemProps {
   id: number;
   title: string;
@@ -71,10 +74,10 @@ export function FileItem({ id, title, updatedAt, active, onClick, estTokens, sel
         group relative px-4 py-3 cursor-pointer border-l-[3px] transition-all duration-200
         ${
           active && !selectMode
-            ? "bg-amber-accent/10 text-white border-amber-accent shadow-[inset_0_0_12px_rgba(180,120,30,0.05)]"
+            ? "bg-[var(--accent-soft)] border-amber-accent"
             : selectMode && selected
-            ? "bg-amber-accent/20 text-white border-amber-accent shadow-[inset_0_0_12px_rgba(180,120,30,0.1)]"
-            : "border-transparent hover:bg-amber-accent/5 hover:translate-x-0.5"
+            ? "bg-[var(--accent-soft)] border-amber-accent"
+            : "border-transparent hover:bg-[var(--accent-soft)]/60 hover:translate-x-0.5"
         }
       `}
     >
@@ -92,16 +95,16 @@ export function FileItem({ id, title, updatedAt, active, onClick, estTokens, sel
         )}
         <div className="min-w-0 flex-1">
           <div className={`text-sm font-semibold truncate transition-colors flex items-center gap-1.5 ${
-            active ? "text-white" : "text-[#0F172A] dark:text-[var(--text-primary)] group-hover:text-white"
+            active ? "text-[var(--text-primary)]" : "text-[var(--text-primary)] group-hover:text-[var(--accent)]"
           }`}>
             {favorite && (
-              <span className="text-amber-accent shrink-0" title="Favorite" aria-label="Favorite">★</span>
+              <span className="text-amber-accent shrink-0" title="Favorite" aria-label="Favorite">
+                <Star className="w-3.5 h-3.5 fill-current" aria-hidden />
+              </span>
             )}
             <span className="truncate">{title}</span>
           </div>
-          <div className={`text-[11px] mt-1 flex flex-wrap items-center gap-1.5 transition-colors ${
-            active ? "text-white/70" : "text-[#475569] dark:text-[var(--text-secondary)] group-hover:text-white/60"
-          }`}>
+          <div className="text-[11px] mt-1 flex flex-wrap items-center gap-1.5 transition-colors text-[var(--text-secondary)]">
             <span>{formatTimeAgo(updatedAt)}</span>
             {typeof estTokens === "number" && estTokens > 0 && (
               <span>· ~{formatTokens(estTokens)} tok</span>
@@ -131,7 +134,7 @@ export function FileItem({ id, title, updatedAt, active, onClick, estTokens, sel
                     const body = await res.json();
                     if (body?.error) msg = body.error;
                   } catch {}
-                  alert(`Download failed: ${msg}`);
+                  toast.error(`Download failed: ${msg}`);
                   return;
                 }
                 const disposition = res.headers.get("content-disposition") || "";
@@ -147,7 +150,7 @@ export function FileItem({ id, title, updatedAt, active, onClick, estTokens, sel
                 a.remove();
                 URL.revokeObjectURL(url);
               } catch (err: any) {
-                alert(`Download failed: ${err?.message ?? String(err)}`);
+                toast.error(`Download failed: ${err?.message ?? String(err)}`);
               }
             }}
             title="Download .md"

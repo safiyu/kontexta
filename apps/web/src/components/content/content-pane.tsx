@@ -1,11 +1,20 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { FolderOpen, AlertTriangle, Search } from "lucide-react";
+import { toast } from "sonner";
+import { unified } from "unified";
+import remarkParse from "remark-parse";
+import remarkGfm from "remark-gfm";
+import remarkStringify from "remark-stringify";
+import stripMarkdown from "strip-markdown";
 import { MarkdownViewer } from "./markdown-viewer";
 import { MermaidViewer } from "./mermaid-viewer";
 import { MarkdownEditor } from "./markdown-editor";
 import { DeleteConfirmDialog } from "./delete-confirm-dialog";
 import { GitErrorDialog } from "./git-error-dialog";
+import { DropdownMenu } from "@/components/ui/dropdown-menu";
+import { EmptyState } from "@/components/ui/empty-state";
 
 const TrashIcon = ({ className }: { className?: string }) => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
@@ -14,6 +23,26 @@ const TrashIcon = ({ className }: { className?: string }) => (
     <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
   </svg>
 );
+
+const DownloadIcon = ({ className }: { className?: string }) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+    <polyline points="7 10 12 15 17 10" />
+    <line x1="12" y1="15" x2="12" y2="3" />
+  </svg>
+);
+
+function downloadBlob(content: string, filename: string, mimeType: string) {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
 
 interface File {
   id: number;
@@ -68,9 +97,79 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [gitErrorOpen, setGitErrorOpen] = useState(false);
-  const [gitErrorMessage, setGitErrorMessage] = useState("");
+  const [gitErrorTitle, setGitErrorTitle] = useState("");
+  const [gitErrorBody, setGitErrorBody] = useState("");
+  const [gitErrorDetail, setGitErrorDetail] = useState<string | undefined>(undefined);
   const [refreshing, setRefreshing] = useState(false);
   const [removingOrphan, setRemovingOrphan] = useState(false);
+
+  const baseFilename = () => (file?.title || "untitled").replace(/\.(md|mmd)$/i, "");
+
+  const handleExportMarkdown = () => {
+    if (!file) return;
+    downloadBlob(file.content, `${baseFilename()}.md`, "text/markdown");
+    toast.success("Exported Markdown");
+  };
+
+  const handleExportText = async () => {
+    if (!file) return;
+    // strip-markdown's defaults delete code blocks and tables entirely
+    // (not just their syntax) — `keep` preserves the underlying content;
+    // `tableCell` needs its own entry since it has a separate default
+    // handler independent of `table`. remark-gfm is required for both
+    // parsing and re-stringifying GFM tables correctly.
+    const result = await unified()
+      .use(remarkParse)
+      .use(remarkGfm)
+      .use(stripMarkdown, { keep: ["code", "inlineCode", "table", "tableCell"] })
+      .use(remarkStringify)
+      .process(file.content);
+    downloadBlob(String(result), `${baseFilename()}.txt`, "text/plain");
+    toast.success("Exported text");
+  };
+
+  const [exportingPdf, setExportingPdf] = useState(false);
+
+  const handleExportPdf = async () => {
+    if (!file) return;
+    setExportingPdf(true);
+    const toastId = toast.loading("Generating PDF…");
+    try {
+      const res = await fetch(`/api/files/${file.id}/export-pdf`);
+      if (!res.ok) {
+        const text = await res.text();
+        let message = `Failed to export PDF (HTTP ${res.status})`;
+        try {
+          const parsed = JSON.parse(text);
+          if (parsed?.error) message = parsed.error;
+        } catch {
+          // Response wasn't JSON (e.g. a framework error page) — log the
+          // raw body so it's still visible for debugging.
+          console.error("[export-pdf] non-JSON error response:", text);
+        }
+        toast.error(message, { id: toastId });
+        return;
+      }
+      const disposition = res.headers.get("content-disposition") || "";
+      const match = /filename="([^"]+)"/.exec(disposition);
+      const filename = match?.[1] ?? `${baseFilename()}.pdf`;
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast.success("Exported PDF", { id: toastId });
+    } catch (err) {
+      console.error("[export-pdf] request failed:", err);
+      toast.error("Failed to export PDF — check the browser console for details.", { id: toastId });
+    } finally {
+      setExportingPdf(false);
+    }
+  };
 
   const handleRefresh = async () => {
     if (!fileId) return;
@@ -81,9 +180,11 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
         const data = await response.json();
         setFile(data);
         setEditContent(data.content);
+      } else {
+        toast.error(`Failed to refresh file (HTTP ${response.status})`);
       }
-    } catch (error) {
-      console.error("Failed to refresh file:", error);
+    } catch (error: any) {
+      toast.error(`Failed to refresh file: ${error?.message ?? "Network error"}`);
     } finally {
       setRefreshing(false);
     }
@@ -228,9 +329,13 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
         setFile((prev) => (prev && prev.id === issuedFor ? { ...prev, content: data.content } : prev));
         setEditContent(data.content);
         setViewHistory(false);
+        toast.success("Restored from history");
+      } else {
+        const body = await response.json().catch(() => ({}));
+        toast.error(body?.error || "Failed to restore version");
       }
-    } catch (error) {
-      console.error("Failed to restore version:", error);
+    } catch (error: any) {
+      toast.error(`Failed to restore version: ${error?.message ?? "Network error"}`);
     }
   };
 
@@ -278,8 +383,11 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
         }
         setFile(updatedFile);
         setEditing(false);
+        toast.success("Saved");
         if (updatedFile.git_warning) {
-          setGitErrorMessage(updatedFile.git_warning);
+          setGitErrorTitle("Git commit failed");
+          setGitErrorBody("Your changes were saved to the database, but Kontexta could not create a Git history entry for this file.");
+          setGitErrorDetail(updatedFile.git_warning);
           setGitErrorOpen(true);
         }
       } else if (response.status === 409) {
@@ -297,23 +405,29 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
           if (serverContent !== undefined && serverUpdatedAt !== undefined) {
             setFile((prev) => prev ? { ...prev, content: serverContent!, updated_at: serverUpdatedAt! } : prev);
           }
-          setGitErrorMessage(
-            "This file was modified elsewhere since you opened it. Disk content has been reloaded; click Save again to overwrite with your edits."
+          setGitErrorTitle("File changed on disk");
+          setGitErrorBody(
+            "This file was NOT saved — it was modified elsewhere since you opened it. Disk content has been reloaded below; your edits are still in the editor. Click Save again to overwrite with your edits."
           );
+          setGitErrorDetail(undefined);
           setGitErrorOpen(true);
         }
       } else {
         let msg = `Save failed (${response.status})`;
         try { const data = await response.json(); if (data?.error) msg = data.error; } catch {}
         if (fileIdRef.current === savingFileId) {
-          setGitErrorMessage(msg);
+          setGitErrorTitle("Save failed");
+          setGitErrorBody("Your changes were NOT saved.");
+          setGitErrorDetail(msg);
           setGitErrorOpen(true);
         }
       }
     } catch (error: any) {
       console.error("Failed to save file:", error);
       if (fileIdRef.current === savingFileId) {
-        setGitErrorMessage(error?.message ?? "Network error while saving");
+        setGitErrorTitle("Save failed");
+        setGitErrorBody("Your changes were NOT saved — a network error occurred.");
+        setGitErrorDetail(error?.message ?? "Network error while saving");
         setGitErrorOpen(true);
       }
     } finally {
@@ -335,12 +449,12 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
 
   if (!fileId) {
     return (
-      <div className="h-full flex flex-col items-center justify-center text-[#475569] dark:text-[#94A3B8] gap-3 animate-fade-in">
-        <span className="text-6xl opacity-40 dark-icon">📂</span>
-        <div className="text-center">
-          <p className="text-lg font-bold text-[#0F172A] dark:text-[#F1F5F9]">Select a file to preview</p>
-          <p className="text-sm font-medium text-[#475569] dark:text-[#94A3B8] mt-2">Choose a file from the list on the left</p>
-        </div>
+      <div className="h-full flex flex-col items-center justify-center animate-fade-in">
+        <EmptyState
+          icon={<FolderOpen className="w-16 h-16 opacity-40 dark-icon" aria-hidden />}
+          title="Select a file to preview"
+          hint="Choose a file from the list on the left"
+        />
       </div>
     );
   }
@@ -370,16 +484,16 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
     //  - Live with it (row truly missing — likely a stale selection)
     if (loadError?.kind === "disk_missing") {
       return (
-        <div className="h-full flex flex-col items-center justify-center text-[#475569] dark:text-[#94A3B8] gap-4 animate-fade-in p-8">
-          <span className="text-6xl opacity-40 dark-icon">⚠️</span>
+        <div className="h-full flex flex-col items-center justify-center text-[var(--text-secondary)] gap-4 animate-fade-in p-8">
+          <AlertTriangle className="w-16 h-16 opacity-40 dark-icon" aria-hidden />
           <div className="text-center max-w-lg">
-            <p className="text-lg font-bold text-[#0F172A] dark:text-[#F1F5F9]">File is missing on disk</p>
-            <p className="text-sm font-medium text-[#475569] dark:text-[#94A3B8] mt-2">
+            <p className="text-lg font-bold text-[var(--text-primary)]">File is missing on disk</p>
+            <p className="text-sm font-medium text-[var(--text-secondary)] mt-2">
               The index still has a row for this file, but the file at the path below no longer exists.
               This usually happens when the file was deleted while the watcher wasn't running.
             </p>
             {loadError.path && (
-              <pre className="mt-3 p-2 bg-zinc-900 text-zinc-100 text-xs overflow-x-auto rounded">
+              <pre className="mt-3 p-2 bg-[var(--bg-tertiary)] text-[var(--text-primary)] text-xs overflow-x-auto rounded">
                 {loadError.path}
               </pre>
             )}
@@ -397,13 +511,13 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
     }
     if (loadError) {
       return (
-        <div className="h-full flex flex-col items-center justify-center text-[#475569] dark:text-[#94A3B8] gap-3 animate-fade-in p-8">
-          <span className="text-6xl opacity-40 dark-icon">⚠️</span>
+        <div className="h-full flex flex-col items-center justify-center text-[var(--text-secondary)] gap-3 animate-fade-in p-8">
+          <AlertTriangle className="w-16 h-16 opacity-40 dark-icon" aria-hidden />
           <div className="text-center max-w-lg">
-            <p className="text-lg font-bold text-[#0F172A] dark:text-[#F1F5F9]">
+            <p className="text-lg font-bold text-[var(--text-primary)]">
               Failed to load file{loadError.status ? ` (HTTP ${loadError.status})` : ""}
             </p>
-            <p className="text-sm font-medium text-[#475569] dark:text-[#94A3B8] mt-2 break-words">
+            <p className="text-sm font-medium text-[var(--text-secondary)] mt-2 break-words">
               {loadError.message}
             </p>
           </div>
@@ -411,12 +525,12 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
       );
     }
     return (
-      <div className="h-full flex flex-col items-center justify-center text-[#475569] dark:text-[#94A3B8] gap-3 animate-fade-in">
-        <span className="text-6xl opacity-40 dark-icon">🔍</span>
-        <div className="text-center">
-          <p className="text-lg font-bold text-[#0F172A] dark:text-[#F1F5F9]">File not found</p>
-          <p className="text-sm font-medium text-[#475569] dark:text-[#94A3B8] mt-2">This file may have been moved or deleted</p>
-        </div>
+      <div className="h-full flex flex-col items-center justify-center animate-fade-in">
+        <EmptyState
+          icon={<Search className="w-16 h-16 opacity-40 dark-icon" aria-hidden />}
+          title="File not found"
+          hint="This file may have been moved or deleted"
+        />
       </div>
     );
   }
@@ -508,10 +622,10 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
                     });
                     if (!res.ok) throw new Error("PATCH failed");
                     onChanged?.();
-                  } catch (e) {
+                  } catch (e: any) {
                     // Roll back optimistic toggle.
                     setFile({ ...file, favorite: !next });
-                    console.error("Failed to toggle favorite:", e);
+                    toast.error(`Failed to update favorite: ${e?.message ?? "Network error"}`);
                   }
                 }}
                 className="btn btn-md"
@@ -523,6 +637,23 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
                   className={`w-4 h-4 ${file?.favorite ? "text-amber-accent" : "opacity-60"}`}
                 />
               </button>
+              <DropdownMenu
+                trigger={
+                  <button
+                    disabled={exportingPdf}
+                    className="btn btn-md"
+                    aria-label="Export file"
+                    title={exportingPdf ? "Generating PDF…" : "Export file"}
+                  >
+                    <DownloadIcon className={`w-4 h-4 opacity-70 ${exportingPdf ? "animate-pulse" : ""}`} />
+                  </button>
+                }
+                items={[
+                  { label: "Markdown (.md)", onSelect: handleExportMarkdown },
+                  { label: "Text (.txt)", onSelect: () => { handleExportText(); } },
+                  { label: "PDF", onSelect: handleExportPdf },
+                ]}
+              />
               <button
                 onClick={() => setDeleteDialogOpen(true)}
                 className="btn btn-md btn-destructive"
@@ -530,7 +661,6 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
                 title="Delete file"
               >
                 <TrashIcon className="w-4 h-4 opacity-70" />
-                <span className="font-bold uppercase tracking-tighter text-[11px]">Delete</span>
               </button>
             </>
           )}
@@ -563,12 +693,12 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
                     });
                     if (!res.ok) throw new Error("PATCH failed");
                     onChanged?.();
-                  } catch (e) {
+                  } catch (e: any) {
                     setFile((prev) => (prev && prev.id === fileId ? { ...prev, tags: original } : prev));
-                    console.error("Failed to remove tag:", e);
+                    toast.error(`Failed to remove tag: ${e?.message ?? "Network error"}`);
                   }
                 }}
-                className="text-[var(--text-secondary)] hover:text-red-500"
+                className="text-[var(--text-secondary)] hover:text-[var(--danger)]"
               >
                 ×
               </button>
@@ -600,9 +730,9 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
                 });
                 if (!res.ok) throw new Error("PATCH failed");
                 onChanged?.();
-              } catch (err) {
+              } catch (err: any) {
                 setFile((prev) => (prev && prev.id === fileId ? { ...prev, tags: original } : prev));
-                console.error("Failed to add tag:", err);
+                toast.error(`Failed to add tag: ${err?.message ?? "Network error"}`);
               }
             }}
           />
@@ -613,7 +743,7 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
         {editing ? (
           <MarkdownEditor content={editContent} onChange={setEditContent} />
         ) : viewHistory ? (
-          <div className="h-full overflow-auto bg-gray-50 dark:bg-[#0a0a0a] p-6">
+          <div className="h-full overflow-auto bg-[var(--bg-secondary)] p-6">
             <div className="max-w-2xl mx-auto space-y-4">
               <h3 className="text-sm font-bold text-[var(--text-secondary)] uppercase tracking-widest mb-6">
                 Version History (Time Travel)
@@ -626,7 +756,7 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
                 </div>
               ) : history.length === 0 ? (
                 <div className="text-center py-12">
-                  <p className="text-gray-500">No version history found for this file.</p>
+                  <p className="text-[var(--muted)]">No version history found for this file.</p>
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -679,7 +809,9 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
       <GitErrorDialog
         open={gitErrorOpen}
         onClose={() => setGitErrorOpen(false)}
-        error={gitErrorMessage}
+        title={gitErrorTitle}
+        body={gitErrorBody}
+        detail={gitErrorDetail}
       />
     </div>
   );

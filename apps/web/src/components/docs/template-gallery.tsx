@@ -44,7 +44,7 @@ export function TemplateGallery({ onSelectTemplate, onBlank, heading }: Props) {
           <button
             key={t.name}
             onClick={() => onSelectTemplate(t.name, t.def)}
-            className="text-left p-4 border border-[var(--border)] rounded-xl bg-[var(--bg-secondary)]/50 hover:bg-[var(--accent)] hover:text-black hover:border-transparent transition-all group shadow-sm hover:shadow-lg active:scale-[0.98]"
+            className="text-left p-4 border border-[var(--border)] rounded-xl bg-[var(--bg-secondary)]/50 hover:bg-[var(--accent-soft)] hover:border-[var(--accent)] transition-all group shadow-sm hover:shadow-lg active:scale-[0.98]"
           >
             <div className="flex items-center justify-between mb-2">
               <div className="font-mono font-bold text-[13px] tracking-tight">{t.name}</div>
@@ -52,14 +52,14 @@ export function TemplateGallery({ onSelectTemplate, onBlank, heading }: Props) {
                 {badgesFor(t.def).slice(0, 2).map((b) => (
                   <span
                     key={b}
-                    className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-md bg-[var(--bg-primary)] group-hover:bg-black/10 text-[var(--text-secondary)] group-hover:text-black border border-[var(--border)] group-hover:border-transparent"
+                    className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-md bg-[var(--bg-primary)] text-[var(--text-secondary)] group-hover:text-[var(--text-primary)] border border-[var(--border)]"
                   >
                     {b}
                   </span>
                 ))}
               </div>
             </div>
-            <p className="text-xs text-[var(--text-secondary)] group-hover:text-black/80 leading-relaxed line-clamp-2">
+            <p className="text-xs text-[var(--text-secondary)] group-hover:text-[var(--text-primary)] leading-relaxed line-clamp-2">
               {t.oneLiner}
             </p>
           </button>

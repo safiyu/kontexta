@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState, useRef } from "react";
-import { createPortal } from "react-dom";
+import { X } from "lucide-react";
 import { ToolForm, type ToolDef } from "@/components/docs/tool-form";
 import { TemplateGallery } from "@/components/docs/template-gallery";
 import { SaveBar } from "@/components/docs/save-bar";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useSearchParams } from "next/navigation";
 
 interface Project { id: number; name: string; path: string; }
@@ -24,6 +25,8 @@ export function BuilderSection() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [confirmingDeleteFile, setConfirmingDeleteFile] = useState(false);
   const [confirmingDeleteTool, setConfirmingDeleteTool] = useState<string | null>(null);
+  const [saveConflict, setSaveConflict] = useState<{ currentMtimeMs: number } | null>(null);
+  const [overwriting, setOverwriting] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [templatesCollapsed, setTemplatesCollapsed] = useState(true);
   const [initialSnapshot, setInitialSnapshot] = useState<Record<string, ToolDef>>({});
@@ -160,20 +163,7 @@ export function BuilderSection() {
     });
     if (res.status === 409) {
       const body = await res.json();
-      if (window.confirm("kontexta.json changed on disk. Overwrite?")) {
-        const retry = await fetch(`/api/projects/${projectId}/hands-config`, {
-          method: "PUT",
-          body: JSON.stringify({ config: { version: "1", tools }, ifMtimeMs: body.currentMtimeMs }),
-        });
-        if (retry.ok) {
-          const j = await retry.json();
-          setMtimeMs(j.mtimeMs);
-          setInitialSnapshot({ ...tools });
-        } else {
-          const j = await retry.json().catch(() => ({}));
-          setSaveError(`Retry failed: ${j.error || (j.errors ?? []).join("; ") || `HTTP ${retry.status}`}`);
-        }
-      }
+      setSaveConflict({ currentMtimeMs: body.currentMtimeMs });
       return;
     }
     if (res.ok) {
@@ -184,6 +174,28 @@ export function BuilderSection() {
     }
     const j = await res.json().catch(() => ({}));
     setSaveError(j.error || (j.errors ?? []).join("; ") || `Save failed: HTTP ${res.status}`);
+  };
+
+  const performOverwrite = async () => {
+    if (projectId === null || !saveConflict) return;
+    setOverwriting(true);
+    try {
+      const retry = await fetch(`/api/projects/${projectId}/hands-config`, {
+        method: "PUT",
+        body: JSON.stringify({ config: { version: "1", tools }, ifMtimeMs: saveConflict.currentMtimeMs }),
+      });
+      if (retry.ok) {
+        const j = await retry.json();
+        setMtimeMs(j.mtimeMs);
+        setInitialSnapshot({ ...tools });
+      } else {
+        const j = await retry.json().catch(() => ({}));
+        setSaveError(`Retry failed: ${j.error || (j.errors ?? []).join("; ") || `HTTP ${retry.status}`}`);
+      }
+    } finally {
+      setOverwriting(false);
+      setSaveConflict(null);
+    }
   };
 
   if (projects.length === 0) {
@@ -215,7 +227,7 @@ export function BuilderSection() {
           {mtimeMs !== null && (
             <button
               onClick={() => setConfirmingDeleteFile(true)}
-              className="text-[10px] font-bold uppercase tracking-widest text-red-500/70 hover:text-red-500 transition-colors"
+              className="btn btn-md btn-destructive"
               title="Remove kontexta.json from this project"
             >
               Delete Config
@@ -269,17 +281,17 @@ export function BuilderSection() {
                 }`}
               >
                 <div className="flex items-center gap-3 overflow-hidden">
-                  <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${editing?.name === name ? "bg-black" : "bg-[var(--accent)]"}`} />
+                  <div className={`w-1.5 h-1.5 rounded-full bp-keep-round flex-shrink-0 ${editing?.name === name ? "bg-black" : "bg-[var(--accent)]"}`} />
                   <span className="font-mono text-[13px] truncate">{name}</span>
                 </div>
                 
                 <div className="flex items-center gap-2">
                   {errorByTool.has(name) && (
-                    <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" title={errorByTool.get(name)} />
+                    <span className="w-2 h-2 rounded-full bp-keep-round bg-[var(--danger)] animate-pulse" title={errorByTool.get(name)} />
                   )}
                   <button
                     onClick={(e) => { e.stopPropagation(); onDelete(name); }}
-                    className={`opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-red-500 hover:text-white transition-all ${editing?.name === name ? "text-black hover:bg-black/20" : ""}`}
+                    className={`opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-[var(--danger)] hover:text-white transition-all ${editing?.name === name ? "text-black hover:bg-black/20" : ""}`}
                     title="Delete tool"
                   >
                     <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -301,15 +313,17 @@ export function BuilderSection() {
         {/* Middle Pane: Tool Editor */}
         <div className="flex-1 overflow-y-auto bg-[var(--bg-primary)] custom-scrollbar relative border-r border-[var(--border)]">
           {parseError && (
-            <div className="m-6 p-4 bg-red-500/10 border border-red-500/50 rounded-xl text-sm text-red-500 animate-fade-in">
+            <div className="m-6 p-4 bg-[var(--danger-soft)] border border-[var(--danger)]/50 rounded-xl text-sm text-[var(--danger)] animate-fade-in">
               <span className="font-bold block mb-1">Configuration Error</span>
               kontexta.json failed to parse: {parseError}. Fix the file manually before continuing.
             </div>
           )}
           {saveError && (
-            <div className="m-6 p-4 bg-red-500/10 border border-red-500/50 rounded-xl text-sm text-red-500 animate-fade-in">
+            <div className="m-6 p-4 bg-[var(--danger-soft)] border border-[var(--danger)]/50 rounded-xl text-sm text-[var(--danger)] animate-fade-in">
               {saveError}
-              <button onClick={() => setSaveError(null)} className="ml-2 text-red-500 hover:text-red-400">✕</button>
+              <button onClick={() => setSaveError(null)} className="ml-2 text-[var(--danger)] hover:opacity-80" aria-label="Dismiss error">
+                <X className="w-4 h-4" aria-hidden />
+              </button>
             </div>
           )}
 
@@ -334,7 +348,7 @@ export function BuilderSection() {
               </div>
             ) : (
               <div className="h-full flex flex-col items-center justify-center text-center py-20 animate-fade-in">
-                <div className="w-16 h-16 rounded-full bg-[var(--bg-secondary)] flex items-center justify-center mb-6 border border-[var(--border)]">
+                <div className="w-16 h-16 rounded-full bp-keep-round bg-[var(--bg-secondary)] flex items-center justify-center mb-6 border border-[var(--border)]">
                   <svg className="w-8 h-8 text-[var(--text-secondary)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z" />
                   </svg>
@@ -386,71 +400,36 @@ export function BuilderSection() {
       </div>
 
 
-      {confirmingDeleteTool !== null && typeof document !== "undefined" && createPortal(
-        <div
-          role="dialog"
-          aria-label={`Confirm delete tool ${confirmingDeleteTool}`}
-          className="fixed inset-0 z-[100] bg-black/60 flex items-center justify-center p-4 animate-fade-in"
-          onClick={(e) => e.target === e.currentTarget && setConfirmingDeleteTool(null)}
-        >
-          <div className="w-full max-w-md bg-[var(--bg-primary)] border border-[var(--border)] rounded-2xl p-6 shadow-2xl space-y-6">
-            <div>
-              <h2 className="text-xl font-bold mb-2 text-[var(--text-primary)]">Delete tool &ldquo;{confirmingDeleteTool}&rdquo;?</h2>
-              <p className="text-sm text-[var(--text-secondary)] leading-relaxed">
-                This removes the tool definition from your <code>kontexta.json</code>. The change is staged — click **Save** in the top bar to persist.
-              </p>
-            </div>
-            <div className="flex justify-end gap-3 pt-4 border-t border-[var(--border)]">
-              <button
-                onClick={() => setConfirmingDeleteTool(null)}
-                className="px-4 py-2 text-sm font-bold border border-[var(--border)] rounded-lg hover:bg-[var(--bg-secondary)] transition-all"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={performDeleteTool}
-                className="px-4 py-2 text-sm font-bold bg-red-500 text-white rounded-lg hover:bg-red-600 shadow-lg shadow-red-500/20 transition-all"
-              >
-                Delete Tool
-              </button>
-            </div>
-          </div>
-        </div>,
-        document.body,
-      )}
+      <ConfirmDialog
+        open={confirmingDeleteTool !== null}
+        onClose={() => setConfirmingDeleteTool(null)}
+        onConfirm={performDeleteTool}
+        title={`Delete tool "${confirmingDeleteTool}"?`}
+        message="This removes the tool from the draft. Click Save in the top bar to apply."
+        confirmLabel="Delete tool"
+        destructive
+      />
 
-      {confirmingDeleteFile && typeof document !== "undefined" && createPortal(
-        <div
-          role="dialog"
-          aria-label="Confirm delete kontexta.json"
-          className="fixed inset-0 z-[100] bg-black/60 flex items-center justify-center p-4 animate-fade-in"
-          onClick={(e) => e.target === e.currentTarget && setConfirmingDeleteFile(false)}
-        >
-          <div className="w-full max-w-md bg-[var(--bg-primary)] border border-[var(--border)] rounded-2xl p-6 shadow-2xl space-y-6">
-            <div>
-              <h2 className="text-xl font-bold mb-2 text-[var(--text-primary)]">Delete kontexta.json?</h2>
-              <p className="text-sm text-[var(--text-secondary)] leading-relaxed">
-                This removes the configuration file from this project. All Hands tools will be unregistered immediately.
-              </p>
-            </div>
-            <div className="flex justify-end gap-3 pt-4 border-t border-[var(--border)]">
-              <button
-                onClick={() => setConfirmingDeleteFile(false)}
-                className="px-4 py-2 text-sm font-bold border border-[var(--border)] rounded-lg hover:bg-[var(--bg-secondary)] transition-all"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={performDeleteFile}
-                className="px-4 py-2 text-sm font-bold bg-red-500 text-white rounded-lg hover:bg-red-600 shadow-lg shadow-red-500/20 transition-all"
-              >
-                Delete File
-              </button>
-            </div>
-          </div>
-        </div>,
-        document.body,
-      )}
+      <ConfirmDialog
+        open={confirmingDeleteFile}
+        onClose={() => setConfirmingDeleteFile(false)}
+        onConfirm={performDeleteFile}
+        title="Delete kontexta.json?"
+        message="This removes the configuration file from this project. All Hands tools will be unregistered immediately."
+        confirmLabel="Delete file"
+        destructive
+      />
+
+      <ConfirmDialog
+        open={saveConflict !== null}
+        onClose={() => setSaveConflict(null)}
+        onConfirm={performOverwrite}
+        title="Config changed on disk"
+        message="kontexta.json changed on disk since you loaded it. Overwriting will replace those changes with the version you're editing here."
+        confirmLabel="Overwrite"
+        destructive
+        loading={overwriting}
+      />
     </div>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { X } from "lucide-react";
 
 interface GitWizardModalProps {
   isOpen: boolean;
@@ -80,23 +81,25 @@ export function GitWizardModal({ isOpen, onClose, onSave, currentUrl }: GitWizar
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in">
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-2xl w-[480px] max-w-[90vw] overflow-hidden flex flex-col">
-        <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 flex items-center justify-between">
+      <div className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg shadow-2xl w-[480px] max-w-[90vw] overflow-hidden flex flex-col">
+        <div className="px-6 py-4 border-b border-[var(--border)] bg-[var(--bg-tertiary)]/50 flex items-center justify-between">
           <div>
-            <h2 className="text-sm font-bold text-slate-800 dark:text-slate-100 tracking-wide">
+            <h2 className="text-sm font-bold text-[var(--text-primary)] tracking-wide">
               Configure Context Vault
             </h2>
-            <p className="text-xs text-slate-500 mt-1">
+            <p className="text-xs text-[var(--text-secondary)] mt-1">
               Choose how Kontexta connects to your remote Git repository.
             </p>
           </div>
-          <button type="button" onClick={onClose} className="btn btn-icon-md" aria-label="Close dialog">✕</button>
+          <button type="button" onClick={onClose} className="btn btn-icon-md" aria-label="Close dialog">
+            <X className="w-4 h-4" aria-hidden />
+          </button>
         </div>
 
         <div className="p-6 flex flex-col gap-6">
           {/* Method Selection */}
           <div className="flex flex-col gap-2">
-            <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+            <label className="text-xs font-bold text-[var(--text-secondary)]">
               Authentication Method
             </label>
             <div className="grid grid-cols-3 gap-2">
@@ -121,7 +124,7 @@ export function GitWizardModal({ isOpen, onClose, onSave, currentUrl }: GitWizar
             </div>
             
             {/* Helper Text */}
-            <div className="mt-1 text-[11px] text-slate-500">
+            <div className="mt-1 text-[11px] text-[var(--text-secondary)]">
               {method === "ssh" && "Recommended. Uses your local machine's SSH keys. No passwords needed."}
               {method === "https_pat" && "Injects a GitHub Personal Access Token directly into the URL."}
               {method === "https_basic" && "Relies on GitHub CLI (gh auth login) or OS credential managers."}
@@ -131,7 +134,7 @@ export function GitWizardModal({ isOpen, onClose, onSave, currentUrl }: GitWizar
           {/* Form Fields */}
           <div className="flex flex-col gap-4">
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+              <label className="text-xs font-bold text-[var(--text-secondary)]">
                 Repository URL
               </label>
               <input
@@ -143,14 +146,14 @@ export function GitWizardModal({ isOpen, onClose, onSave, currentUrl }: GitWizar
                     ? "git@github.com:username/repo.git"
                     : "https://github.com/username/repo.git"
                 }
-                className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded px-3 py-2 text-xs text-slate-800 dark:text-slate-100 placeholder:text-slate-400 outline-none focus:border-amber-accent transition-colors"
+                className="bg-[var(--bg-primary)] border border-[var(--border)] rounded px-3 py-2 text-xs text-[var(--text-primary)] placeholder:text-[var(--muted)] outline-none focus:border-[var(--accent)] transition-colors"
               />
             </div>
 
             {method === "https_pat" && (
               <>
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                  <label className="text-xs font-bold text-[var(--text-secondary)]">
                     GitHub Username (Optional)
                   </label>
                   <input
@@ -158,11 +161,11 @@ export function GitWizardModal({ isOpen, onClose, onSave, currentUrl }: GitWizar
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
                     placeholder="e.g. safiyu"
-                    className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded px-3 py-2 text-xs text-slate-800 dark:text-slate-100 placeholder:text-slate-400 outline-none focus:border-amber-accent transition-colors"
+                    className="bg-[var(--bg-primary)] border border-[var(--border)] rounded px-3 py-2 text-xs text-[var(--text-primary)] placeholder:text-[var(--muted)] outline-none focus:border-[var(--accent)] transition-colors"
                   />
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                  <label className="text-xs font-bold text-[var(--text-secondary)]">
                     Personal Access Token (PAT)
                   </label>
                   <input
@@ -170,7 +173,7 @@ export function GitWizardModal({ isOpen, onClose, onSave, currentUrl }: GitWizar
                     value={token}
                     onChange={(e) => setToken(e.target.value)}
                     placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
-                    className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded px-3 py-2 text-xs text-slate-800 dark:text-slate-100 placeholder:text-slate-400 outline-none focus:border-amber-accent transition-colors"
+                    className="bg-[var(--bg-primary)] border border-[var(--border)] rounded px-3 py-2 text-xs text-[var(--text-primary)] placeholder:text-[var(--muted)] outline-none focus:border-[var(--accent)] transition-colors"
                   />
                 </div>
               </>
@@ -183,7 +186,7 @@ export function GitWizardModal({ isOpen, onClose, onSave, currentUrl }: GitWizar
             </div>
             <div className="flex flex-col gap-1">
               <h4 className="text-[11px] font-bold text-amber-accent uppercase tracking-wider">Single Vault Architecture</h4>
-              <p className="text-[10px] text-slate-600 dark:text-slate-400 leading-relaxed">
+              <p className="text-[10px] text-[var(--text-secondary)] leading-relaxed">
                 You can use the <b>same repository URL</b> across all your projects. Kontexta automatically organizes your files into project-specific folders (e.g., <code className="bg-black/10 dark:bg-black/30 px-1 py-0.5 rounded text-[9px]">/backups/your-project-name</code>). 
                 <br/><br/>
                 <b>Note:</b> Kontexta exclusively synchronizes with the <code className="bg-black/10 dark:bg-black/30 px-1 py-0.5 rounded text-[9px] font-bold">main</code> branch.
@@ -193,7 +196,7 @@ export function GitWizardModal({ isOpen, onClose, onSave, currentUrl }: GitWizar
         </div>
 
         {/* Actions */}
-        <div className="px-6 py-4 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-100 dark:border-slate-800 flex justify-end gap-3">
+        <div className="px-6 py-4 bg-[var(--bg-tertiary)]/50 border-t border-[var(--border)] flex justify-end gap-3">
           <button
             onClick={onClose}
             className="btn btn-md"

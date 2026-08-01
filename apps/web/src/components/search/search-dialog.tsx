@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
+import { Search } from "lucide-react";
+import { Dialog } from "@/components/ui/dialog";
 
 interface SearchDialogProps {
   open: boolean;
@@ -96,20 +98,16 @@ export function SearchDialog({ open, onClose, onSelectFile }: SearchDialogProps)
     onSelectFile(result);
   };
 
-  const handleOverlayClick = (e: React.MouseEvent) => {
-    if (e.target === e.currentTarget) {
-      onClose();
-    }
-  };
-
-  if (!open) return null;
-
   return (
-    <div
-      className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm pt-[20vh] animate-fade-in"
-      onClick={handleOverlayClick}
+    <Dialog
+      open={open}
+      onClose={onClose}
+      title="Search"
+      hideHeader
+      widthClass="max-w-[560px]"
+      positionClass="left-1/2 top-[20vh] -translate-x-1/2"
     >
-      <div className="w-[560px] mx-auto bg-[var(--bg-primary)] border border-[var(--border)] rounded-xl shadow-2xl overflow-hidden animate-scale-in">
+      <div className="-m-5 overflow-hidden rounded-xl">
         <div className="relative">
           <input
             ref={inputRef}
@@ -136,7 +134,7 @@ export function SearchDialog({ open, onClose, onSelectFile }: SearchDialogProps)
 
           {!loading && query && results.length === 0 && (
             <div className="flex flex-col items-center py-12 text-[var(--text-secondary)] gap-3">
-              <span className="text-4xl opacity-30">🔍</span>
+              <Search className="w-8 h-8 opacity-30" aria-hidden />
               <p className="text-sm font-medium">No results found</p>
               <p className="text-xs opacity-60 italic">Try a different search term</p>
             </div>
@@ -148,16 +146,17 @@ export function SearchDialog({ open, onClose, onSelectFile }: SearchDialogProps)
                 <button
                   key={result.id}
                   onClick={() => handleSelectResult(result)}
-                  className={`w-full px-5 py-4 text-left rounded-lg transition-all duration-200 group flex flex-col gap-1 ${
+                  onMouseEnter={() => setSelectedIdx(idx)}
+                  className={`w-full px-5 py-4 text-left rounded-lg transition-all duration-200 flex flex-col gap-1 ${
                     idx === selectedIdx
-                      ? "bg-amber-accent/15 text-white shadow-[inset_0_0_12px_rgba(180,120,30,0.1)]"
-                      : "text-[var(--text-secondary)] hover:bg-amber-accent/5 hover:text-white"
+                      ? "bg-[var(--accent-soft)]"
+                      : "hover:bg-[var(--accent-soft)]/60"
                   }`}
                 >
-                  <div className={`text-sm font-semibold transition-colors ${idx === selectedIdx ? "text-white" : "text-[var(--text-primary)] group-hover:text-white"}`}>
+                  <div className="text-sm font-semibold transition-colors text-[var(--text-primary)]">
                     {result.title}
                   </div>
-                  <div className={`text-xs transition-colors ${idx === selectedIdx ? "text-white/60" : "text-[var(--text-secondary)] group-hover:text-white/40"}`}>
+                  <div className="text-xs transition-colors text-[var(--text-secondary)]">
                     {result.storage_type} · {result.path}
                   </div>
                 </button>
@@ -166,6 +165,6 @@ export function SearchDialog({ open, onClose, onSelectFile }: SearchDialogProps)
           )}
         </div>
       </div>
-    </div>
+    </Dialog>
   );
 }

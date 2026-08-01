@@ -248,7 +248,7 @@ export function MermaidViewer({ source, className, filename }: MermaidViewerProp
         </div>
       )}
       {error && (
-        <pre className="text-red-500 whitespace-pre-wrap mb-2 text-sm">
+        <pre className="text-[var(--danger)] whitespace-pre-wrap mb-2 text-sm">
           Mermaid render error: {error}
         </pre>
       )}

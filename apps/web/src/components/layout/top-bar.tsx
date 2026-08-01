@@ -2,12 +2,17 @@
 
 import { useTheme } from "next-themes";
 import { useEffect, useState } from "react";
+import { Sun, Moon, LayoutGrid } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { AnimatedLogo } from "./animated-logo";
 import { SyncPopover, type SyncLogEntry } from "@/components/sync/sync-popover";
+import { DropdownMenu } from "@/components/ui/dropdown-menu";
+import pkg from "../../../package.json";
 
-// Shown in the Blueprint theme's title-block annotation; bump on releases.
-const KONTEXTA_REV = "4.1.0";
+// Shown in the Blueprint theme's title-block annotation; sourced from
+// package.json so it can't drift from the actual released version.
+const KONTEXTA_REV = pkg.version;
 
 interface TopBarProps {
   onSearch: () => void;
@@ -42,36 +47,30 @@ export function TopBar({
   const [mounted, setMounted] = useState(false);
   const [isMac, setIsMac] = useState(false);
   const [syncOpen, setSyncOpen] = useState(false);
-  const [publishMenuOpen, setPublishMenuOpen] = useState(false);
   const [reindexing, setReindexing] = useState(false);
-  // null = no toast, otherwise the success/error line shown briefly below.
-  const [reindexToast, setReindexToast] = useState<string | null>(null);
 
   const handleReindex = async () => {
     if (reindexing) return;
     setReindexing(true);
-    setReindexToast(null);
     try {
       const res = await fetch("/api/reindex", { method: "POST" });
       const body = await res.json().catch(() => ({}));
       if (res.ok && body?.success) {
         const t = body.totals ?? { newly_indexed: 0, refreshed: 0, pruned: 0, errors: 0 };
-        setReindexToast(
+        toast.success(
           `Reindexed ${body.scopes?.length ?? 0} scope(s) in ${body.duration_ms ?? "?"}ms — ` +
           `+${t.newly_indexed} new, ${t.refreshed} updated, ${t.pruned} removed` +
           (t.errors ? `, ${t.errors} scope error(s)` : ""),
         );
       } else if (res.status === 409) {
-        setReindexToast("Reindex already in progress");
+        toast.error("Reindex already in progress");
       } else {
-        setReindexToast(`Reindex failed: ${body?.error ?? `HTTP ${res.status}`}`);
+        toast.error(`Reindex failed: ${body?.error ?? `HTTP ${res.status}`}`);
       }
     } catch (e: any) {
-      setReindexToast(`Reindex failed: ${e?.message ?? "Network error"}`);
+      toast.error(`Reindex failed: ${e?.message ?? "Network error"}`);
     } finally {
       setReindexing(false);
-      // Auto-clear after 8s so the toast doesn't sit forever.
-      setTimeout(() => setReindexToast(null), 8000);
     }
   };
 
@@ -80,14 +79,6 @@ export function TopBar({
     setIsMac(navigator.platform.toUpperCase().indexOf("MAC") >= 0);
   }, []);
 
-  useEffect(() => {
-    const close = () => setPublishMenuOpen(false);
-    if (publishMenuOpen) {
-      window.addEventListener("click", close);
-      return () => window.removeEventListener("click", close);
-    }
-  }, [publishMenuOpen]);
-
   const modifier = isMac ? "⌘" : "Ctrl";
 
   return (
@@ -95,7 +86,7 @@ export function TopBar({
       <div className="flex items-center gap-0 group cursor-pointer" onClick={() => router.push("/")}>
         <AnimatedLogo size="sm" />
         <span
-          className="-ml-3 font-extrabold text-xl tracking-[4px] font-title text-[#0F274F] dark:text-white drop-shadow-[0_0_15px_rgba(180,120,30,0.1)] dark:drop-shadow-[0_0_15px_rgba(180,120,30,0.3)] transition-all group-hover:drop-shadow-[0_0_20px_rgba(180,120,30,0.5)]"
+          className="-ml-3 font-extrabold text-xl tracking-[4px] font-title text-[var(--text-primary)] drop-shadow-[0_0_15px_rgba(180,120,30,0.1)] dark:drop-shadow-[0_0_15px_rgba(180,120,30,0.3)] transition-all group-hover:drop-shadow-[0_0_20px_rgba(180,120,30,0.5)]"
         >
           ONTEXTA
         </span>
@@ -104,7 +95,7 @@ export function TopBar({
       <div className="flex-1 flex justify-center px-4">
         <button
           onClick={onSearch}
-          className="w-full max-w-[440px] h-10 px-4 bg-[var(--bg-tertiary)]/50 text-[13px] text-[#5C3D24] dark:text-[#F5C97A] rounded-xl hover:bg-[var(--bg-secondary)] transition-all flex items-center gap-3 border border-[var(--border)] group focus-glow"
+          className="w-full max-w-[440px] h-10 px-4 bg-[var(--bg-tertiary)]/50 text-[13px] text-[var(--text-secondary)] rounded-xl hover:bg-[var(--bg-secondary)] transition-all flex items-center gap-3 border border-[var(--border)] group focus-glow"
         >
           <svg
             viewBox="0 0 24 24"
@@ -119,7 +110,7 @@ export function TopBar({
             <line x1="21" y1="21" x2="16.65" y2="16.65" />
           </svg>
           <span className="flex-1 text-left opacity-60 group-hover:opacity-100">Search context...</span>
-          <kbd className="text-[10px] font-mono text-[#5C3D24] dark:text-[#F5C97A] bg-[var(--bg-secondary)] px-2 py-1 rounded-md border border-[var(--border)] shadow-sm opacity-50">{modifier}K</kbd>
+          <kbd className="text-[10px] font-mono text-[var(--text-secondary)] bg-[var(--bg-secondary)] px-2 py-1 rounded-md border border-[var(--border)] shadow-sm opacity-50">{modifier}K</kbd>
         </button>
       </div>
 
@@ -168,51 +159,39 @@ export function TopBar({
           About
         </button>
 
-        <div className="relative">
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setPublishMenuOpen((o) => !o);
-            }}
-            className="btn btn-md !font-mono font-bold uppercase tracking-wider text-[var(--accent)] bp-toolbar-btn"
-            aria-label="Publish menu"
-            title="Publish documentation"
-          >
-            Publish ▾
-          </button>
-          {publishMenuOpen && (
-            <div className="absolute right-0 top-full mt-2 w-48 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-xl shadow-xl overflow-hidden z-[100]">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setPublishMenuOpen(false);
-                  onPublish();
-                }}
-                className="w-full px-4 py-2.5 text-left text-sm text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] transition-colors flex items-center gap-2"
-              >
-                <svg className="w-4 h-4 text-[#B4781E]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <DropdownMenu
+          trigger={
+            <button
+              className="btn btn-md !font-mono font-bold uppercase tracking-wider text-[var(--accent)] bp-toolbar-btn"
+              aria-label="Publish menu"
+              title="Publish documentation"
+            >
+              Publish ▾
+            </button>
+          }
+          items={[
+            {
+              label: "New Publish",
+              onSelect: onPublish,
+              icon: (
+                <svg className="w-4 h-4 text-[var(--accent)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M4 4h16v16H4z" />
                   <path d="M12 8v8M8 12h8" />
                 </svg>
-                New Publish
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setPublishMenuOpen(false);
-                  onViewPublished();
-                }}
-                className="w-full px-4 py-2.5 text-left text-sm text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] transition-colors flex items-center gap-2 border-t border-[var(--border)]"
-              >
-                <svg className="w-4 h-4 text-[#B4781E]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              ),
+            },
+            {
+              label: "View Published",
+              onSelect: onViewPublished,
+              icon: (
+                <svg className="w-4 h-4 text-[var(--accent)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
                   <circle cx="12" cy="12" r="3" />
                 </svg>
-                View Published
-              </button>
-            </div>
-          )}
-        </div>
+              ),
+            },
+          ]}
+        />
 
         <button
           onClick={async () => {
@@ -221,7 +200,7 @@ export function TopBar({
             // navigating — prevents a spurious 1008 WS reconnect error.
             router.push("/login");
           }}
-          className="p-2 rounded-md text-[var(--text-secondary)] hover:text-red-400 hover:bg-[var(--bg-tertiary)] transition-colors"
+          className="p-2 rounded-md text-[var(--text-secondary)] hover:text-[var(--danger)] hover:bg-[var(--bg-tertiary)] transition-colors"
           aria-label="Lock Kontexta"
           title="Lock Kontexta"
         >
@@ -247,11 +226,18 @@ export function TopBar({
             onClick={() =>
               setTheme(theme === "light" ? "dark" : theme === "dark" ? "blueprint" : "light")
             }
-            className="px-2 h-5 rounded-md border border-[var(--border)] font-mono text-[10px] uppercase tracking-wider text-[var(--text-secondary)] hover:text-[var(--accent)] hover:border-[var(--accent)] transition-colors"
+            className="px-2 h-5 rounded-md border border-[var(--border)] font-mono text-[10px] uppercase tracking-wider text-[var(--text-secondary)] hover:text-[var(--accent)] hover:border-[var(--accent)] transition-colors inline-flex items-center gap-1"
             aria-label="Cycle theme (light / dark / blueprint)"
             title={`Theme: ${theme} — click to cycle`}
           >
-            {theme === "light" ? "☀ light" : theme === "dark" ? "☽ dark" : "▦ blueprint"}
+            {theme === "light" ? (
+              <Sun className="w-3 h-3" aria-hidden />
+            ) : theme === "dark" ? (
+              <Moon className="w-3 h-3" aria-hidden />
+            ) : (
+              <LayoutGrid className="w-3 h-3" aria-hidden />
+            )}
+            {theme === "light" ? "light" : theme === "dark" ? "dark" : "blueprint"}
           </button>
         )}
       </div>
@@ -266,14 +252,6 @@ export function TopBar({
         selectedProjectName={selectedProjectName ?? null}
         onSyncProject={onSyncProject}
       />
-      {reindexToast && (
-        <div
-          role="status"
-          className="fixed top-20 right-6 z-[100] max-w-md px-4 py-3 rounded-lg shadow-xl bg-[var(--bg-secondary)] border border-[var(--border)] text-sm text-[var(--text-primary)]"
-        >
-          {reindexToast}
-        </div>
-      )}
     </header>
   );
 }
