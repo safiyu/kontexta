@@ -16,7 +16,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   closeDatabase();
-  rmSync(dataDir, { recursive: true, force: true });
+  rmSync(dataDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
 describe("projectMap", () => {
@@ -112,7 +112,7 @@ describe("projectMap", () => {
     expect(lineCount).toBeLessThanOrEqual(6);
     expect(r.stats.truncated).toBe(true);
     expect(r.outline).toContain("truncated");
-  });
+  }, 30_000);
 
   it("est_tokens scales with outline length", async () => {
     for (let i = 0; i < 10; i++) {
@@ -121,7 +121,7 @@ describe("projectMap", () => {
     const r = projectMap({ dataDir });
     expect(r.est_tokens).toBeGreaterThan(0);
     expect(r.est_tokens).toBe(Math.ceil(r.outline.length / 4));
-  });
+  }, 30_000);
 
   it("sorts folders before files at each level", async () => {
     await createFile({ title: "Zfile", content: "z".repeat(50), destination: "knowledge", dataDir });

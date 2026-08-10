@@ -1,0 +1,114 @@
+name: CLI Smoke Test
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+on:
+  pull_request:
+    paths:
+      - 'packages/cli/**'
+      - 'apps/web/**'
+      - 'apps/mcp/**'
+      - 'packages/core/**'
+      - '.github/workflows/cli-smoke.yml'
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      tarball: ${{ steps.pack.outputs.tarball }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          package_json_file: package.json
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+
+      - name: Pack CLI bundle
+        id: pack
+        run: |
+          pnpm -C packages/cli pack:bundle
+          cd packages/cli && npm pack
+          echo "tarball=$(ls kontexta-*.tgz)" >> $GITHUB_OUTPUT
+
+      - name: Test MCP package standalone
+        run: |
+          cd apps/mcp
+          pnpm run build:npm
+          npm pack
+          mkdir -p /tmp/mcp-smoke && cd /tmp/mcp-smoke
+          npm init -y >/dev/null
+          npm install $GITHUB_WORKSPACE/apps/mcp/kontexta-mcp-*.tgz
+          printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"ci","version":"1"}}}' \
+            | ./node_modules/.bin/kontexta-mcp | head -c 2000 | grep -q '"capabilities"'
+
+      - name: Upload tarball
+        uses: actions/upload-artifact@v4
+        with:
+          name: kontexta-tarball
+          path: packages/cli/kontexta-*.tgz
+
+  smoke:
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Download tarball
+        uses: actions/download-artifact@v4
+        with:
+          name: kontexta-tarball
+          path: .
+
+      - name: Install globally
+        shell: bash
+        run: npm install -g ./kontexta-*.tgz
+
+      - name: doctor
+        shell: bash
+        run: kontexta doctor
+
+      - name: start + health
+        shell: bash
+        env:
+          PORT: '45600'
+          KONTEXTA_NO_OPEN: '1'
+          KONTEXTA_DATA_DIR: ${{ runner.temp }}/kontexta-vault
+        run: |
+          kontexta start &
+          PID=$!
+          for i in $(seq 1 60); do
+            if curl -sf http://127.0.0.1:45600/api/health; then break; fi
+            sleep 1
+          done
+          curl -sf http://127.0.0.1:45600/api/health
+          kill $PID
+
+      - name: mcp handshake
+        shell: bash
+        run: |
+          printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"ci","version":"1"}}}' \
+            | perl -e 'alarm shift @ARGV; exec @ARGV' 10 kontexta mcp | head -c 4096 | grep -q '"capabilities"'

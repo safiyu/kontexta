@@ -4,7 +4,7 @@
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { createDatabase, closeDatabase, getDatabase } from "../src/db/index.js";
 import { createFile } from "../src/files/index.js";
 import {
@@ -192,11 +192,12 @@ describe("Metadata Module", () => {
 
   it("registerProject: creates project with correct slug", async () => {
     // Register project
-    const project = registerProject("My Test Project", "/path/to/project", "A test project");
+    const inputPath = "/path/to/project";
+    const project = registerProject("My Test Project", inputPath, "A test project");
 
     expect(project.name).toBe("My Test Project");
     expect(project.slug).toBe("my-test-project");
-    expect(project.path).toBe("/path/to/project");
+    expect(project.path).toBe(resolve(inputPath));
     expect(project.description).toBe("A test project");
     expect(project.id).toBeDefined();
     expect(project.created_at).toBeDefined();
@@ -209,10 +210,11 @@ describe("Metadata Module", () => {
     ).run("Default (unregistered work)", "default", "Auto-provisioned by distillation engine for orphan slug 'default'.");
     const syntheticId = Number(result.lastInsertRowid);
 
-    const project = registerProject("Default", "/home/user/projects/default", "My real project");
+    const inputPath = "/home/user/projects/default";
+    const project = registerProject("Default", inputPath, "My real project");
 
     expect(project.id).toBe(syntheticId);
-    expect(project.path).toBe("/home/user/projects/default");
+    expect(project.path).toBe(resolve(inputPath));
     expect(project.name).toBe("Default");
     expect(project.description).toBe("My real project");
   });
@@ -227,10 +229,11 @@ describe("Metadata Module", () => {
     ).run("Scratch (auto)", "scratch", "Auto-provisioned by distillation engine for orphan slug 'scratch'.");
     const syntheticId = Number(result.lastInsertRowid);
 
-    const project = registerProject("Scratch (auto)", "/home/user/projects/scratch", "My real scratch project");
+    const inputPath = "/home/user/projects/scratch";
+    const project = registerProject("Scratch (auto)", inputPath, "My real scratch project");
 
     expect(project.id).toBe(syntheticId);
-    expect(project.path).toBe("/home/user/projects/scratch");
+    expect(project.path).toBe(resolve(inputPath));
     expect(project.name).toBe("Scratch (auto)");
     expect(project.description).toBe("My real scratch project");
   });

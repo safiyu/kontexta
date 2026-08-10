@@ -10,6 +10,7 @@ const targets = [
   'apps/mcp/package.json',
   'apps/publish/package.json',
   'apps/web/package.json',
+  'packages/cli/package.json',
   'packages/core/package.json',
   'glama.json'
 ];

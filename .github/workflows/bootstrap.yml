@@ -1,0 +1,52 @@
+name: bootstrap
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+on:
+  pull_request:
+    paths:
+      - 'bootstrap'
+      - 'bootstrap.ps1'
+      - '.github/workflows/bootstrap.yml'
+      - 'package.json'
+      - '.nvmrc'
+  push:
+    branches: [main]
+
+jobs:
+  posix:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+      - name: Install shellcheck (ubuntu)
+        if: matrix.os == 'ubuntu-latest'
+        run: sudo apt-get install -y shellcheck
+      - name: shellcheck
+        if: matrix.os == 'ubuntu-latest'
+        run: shellcheck bootstrap
+      - run: ./bootstrap
+      - run: ./bootstrap  # idempotency
+      - run: pnpm build
+      - run: pnpm test
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+      - run: ./bootstrap.ps1
+        shell: pwsh
+      - run: ./bootstrap.ps1
+        shell: pwsh
+      - run: pnpm build
+      - run: pnpm test

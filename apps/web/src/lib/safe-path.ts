@@ -1,6 +1,10 @@
 import { realpathSync, existsSync } from "node:fs";
 import { resolve, isAbsolute, sep } from "node:path";
-import { homedir } from "node:os";
+// homeSensitivePrefixes comes from kxta-core (server-external) so that no
+// os.homedir() call exists in webpack-bundled chunks — @vercel/nft re-folds
+// bundled+minified homedir expressions into recursive user-profile globs at
+// build time, failing `next build` on Windows (protected junctions → EPERM).
+import { homeSensitivePrefixes } from "kxta-core";
 
 const SYSTEM_PREFIXES = [
   "/etc",
@@ -13,13 +17,6 @@ const SYSTEM_PREFIXES = [
   "/var/lib",
   "/var/run",
 ];
-
-function homeSensitivePrefixes(): string[] {
-  const home = homedir();
-  return [".ssh", ".aws", ".gnupg", ".kube", ".config/gcloud", ".docker"].map(
-    (p) => `${home}/${p}`,
-  );
-}
 
 function startsWithPath(target: string, prefix: string): boolean {
   const t = target.endsWith(sep) ? target : target + sep;

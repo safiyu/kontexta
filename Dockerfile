@@ -16,6 +16,7 @@ COPY apps/web/package.json ./apps/web/
 COPY apps/mcp/package.json ./apps/mcp/
 COPY apps/publish/package.json ./apps/publish/
 COPY packages/core/package.json ./packages/core/
+COPY packages/cli/package.json ./packages/cli/
 
 # Install dependencies
 RUN pnpm install --frozen-lockfile

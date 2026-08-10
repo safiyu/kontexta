@@ -1,6 +1,6 @@
 {
   "name": "kontexta-mcp",
-  "version": "4.2.0",
+  "version": "4.3.0",
   "description": "The local Brain and Hands for AI coding agents (MCP Server)",
   "keywords": [
     "mcp",
@@ -57,21 +57,24 @@
     "smoke": "node test-tools.mjs",
     "gen:manifest": "node scripts/generate-manifest.js",
     "test": "node test-tools.mjs",
-    "prepublishOnly": "pnpm run build:npm",
-    "postinstall": "pnpm rebuild re2"
+    "prepublishOnly": "pnpm run build:npm"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.0",
+    "@mozilla/readability": "^0.6.0",
     "better-sqlite3": "^12.10.0",
     "chokidar": "^4.0.0",
-    "kxta-core": "workspace:*",
+    "glob": "^11.0.0",
+    "jsdom": "^29.1.1",
     "re2": "^1.24.1",
     "simple-git": "^3.27.0",
+    "turndown": "^7.2.4",
     "undici": "^7.0.0",
     "zod": "^3.24.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
+    "kxta-core": "workspace:*",
     "tsup": "^8.3.0",
     "typescript": "^5.7.0"
   },

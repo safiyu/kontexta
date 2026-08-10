@@ -1,5 +1,26 @@
 # Changelog
 
+## 4.3.0 — One command, and Kontexta is running
+
+Installing Kontexta no longer requires Docker, pnpm, or a build step. If you have Node 22, you have Kontexta.
+
+### Added
+
+- **`npx kontexta start` — the new one-click install.** One cross-platform command boots the full dashboard and MCP server, picks a free port, and opens your browser. First-run setup (master password, data location, projects) happens in the browser. Also ships `kontexta mcp` (stdio MCP server for your AI client config) and `kontexta doctor` (environment diagnostics: Node version, data directory, native-module health).
+- **Contributor bootstrap in one step.** `./bootstrap` (macOS/Linux) and `bootstrap.ps1` (Windows) check your Node version, activate the pinned pnpm via corepack, probe for a C/C++ toolchain, install dependencies, and build the core — then tell you exactly what to run next.
+- **Per-OS CI smoke tests.** Every change to the CLI is verified on Ubuntu, macOS, and Windows: the published tarball is installed fresh, the dashboard boots and passes its health check, and the MCP server completes a real handshake — all without a compiler on the machine.
+- **Optional shared vault for Docker.** The compose file now documents a same-path mount so the container can share the exact vault used by `npx kontexta` and local dev — with a clear warning about never running both against it at once.
+
+### Changed
+
+- **README and install docs lead with `npx kontexta start`.** Docker remains a first-class alternative; the source build is now framed as the contributor path (`./bootstrap && pnpm dev`).
+- **Installing via npm no longer requires pnpm on your machine.** `apps/mcp` dropped its `postinstall: pnpm rebuild re2` hook; native modules load from prebuilt binaries matched to your OS and Node version.
+
+### Fixed
+
+- **`npm install kontexta-mcp` works again.** The published package carried an unresolvable internal `workspace:*` dependency, so installing it outside the monorepo failed with `EUNSUPPORTEDPROTOCOL`. The internal core is now compiled into the published build and its runtime dependencies are declared properly — verified end-to-end by CI on every release.
+- **One vault everywhere, including Windows.** The new CLI now resolves the default data directory identically to the server core on every platform (`%APPDATA%\kontexta` on Windows), so `npx kontexta start` and `npx kontexta-mcp` always read and write the same vault.
+
 ## 4.2.0 — Export any file as Markdown, Text, or PDF
 
 You can now save any file straight from the viewer, in whatever format suits you.

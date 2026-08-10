@@ -92,7 +92,8 @@ export function housekeepJournal(cfg: HousekeepConfig): HousekeepResult {
     const archiveDir = join(cfg.baseDir, cfg.projectSlug, "_archive");
     mkdirSync(archiveDir, { recursive: true });
     for (const row of cold) {
-      const dest = join(archiveDir, row.path.split("/").pop() ?? `task-${row.file_id}.md`);
+      const basename = row.path.split("/").pop()?.split("\\").pop() ?? `task-${row.file_id}.md`;
+      const dest = join(archiveDir, basename);
       if (!existsSync(dest) && existsSync(row.path)) {
         try {
           renameSync(row.path, dest);

@@ -117,53 +117,34 @@ Kontexta doesn't try to replace your favorite agent or memory library — it sit
 
 ---
 
-## Quick Start (5-Minute Trial)
+## Quick Start (One Command)
 
-### 1. Run the MCP Server (No Install)
-The fastest way to try Kontexta is via `npx`. Add this to your MCP client configuration (e.g., `mcpServers.json`):
+Requires Node 22.x LTS. That's it — no Docker, no pnpm, no build.
+
+```bash
+npx kontexta start
+```
+
+Boots the dashboard on `http://localhost:3000` (opens in your browser) and starts the MCP server. First run walks you through master password, data location, and project registration in the browser.
+
+### Add to your AI client (MCP-only)
+
+If you only want the MCP server (no dashboard), point your AI client at:
 
 ```json
 {
   "mcpServers": {
     "kxta": {
       "command": "npx",
-      "args": ["-y", "kontexta-mcp"],
-      "env": {
-        // Optional: defaults to your OS-standard data directory
-        // "KONTEXTA_DATA_DIR": "/absolute/path/to/your/knowledge-vault"
-      }
+      "args": ["-y", "kontexta", "mcp"]
     }
   }
 }
 ```
 
-### 2. Run the Dashboard (Docker)
-For the full "Obsidian-meets-Terminal" UI, download the compose file, edit your volume mounts and environment variables (e.g., project paths), and run:
+### Alternative: Docker
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/safiyu/kontexta/main/docker-compose.hub.yml -o docker-compose.yml
-# Important: Open docker-compose.yml and edit the volumes section 
-# to mount your projects directory so the agent can see them.
-docker compose up -d
-```
-The UI lands at `http://localhost:3000`.
-
-To run on custom ports:
-```bash
-HOST_PORT=8080 WS_HOST_PORT=8081 \
-docker compose up -d
-```
-The WebSocket host port defaults to `3001`. If you change `HOST_PORT`, also set `WS_HOST_PORT`.
-You can also specify where data and projects live on the host:
-```bash
-DATA_DIR=/absolute/path/to/kontexta-data \
-PROJECT_DIR=/absolute/path/to/your/projects \
-HOST_PORT=8080 WS_HOST_PORT=8081 \
-docker compose up -d
-```
-The WebSocket host port defaults to `HOST_PORT + 1` if not specified.
-Note: `PROJECT_DIR` should be an absolute host path and is mounted to the same absolute path inside the container so file paths remain consistent between your host and the in-container MCP tools.
-The compose file includes a startup check that fails fast if `PROJECT_DIR` is not set, preventing accidental runs without a mounted projects directory.
+For containerized deployments, see [`docs/INSTALL.md#docker-hub-compose`](docs/INSTALL.md#docker-hub-compose).
 
 ---
 

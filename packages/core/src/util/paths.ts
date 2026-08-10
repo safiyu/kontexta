@@ -2,23 +2,37 @@ import * as os from "node:os";
 import * as path from "node:path";
 import * as fs from "node:fs";
 
+// @vercel/nft — Next's build-time file tracer — statically evaluates
+// os.homedir() and process.env.* inside fs-call arguments and expands any
+// unresolved remainder into a recursive glob rooted at the evaluated
+// prefix. On Windows that means walking C:\Users\<user>\** through
+// protected junctions ("Application Data"), which fails `next build` with
+// EPERM/EACCES. Routing the values through this opaque identity makes the
+// prefix statically unknown, so the tracer skips the expression instead
+// of globbing the user profile. Zero runtime cost.
+const opaque = <T>(v: T): T => v;
+
 /**
  * Resolves the absolute path to the system default data directory.
  * Falls back to OS-specific standards if KONTEXTA_DATA_DIR is not set.
+ *
+ * Exported so webpack-bundled consumers (apps/web) never re-implement this
+ * with raw os.homedir()/process.env reads — bundled+minified copies of this
+ * logic are exactly what @vercel/nft re-folds into user-profile globs.
  */
-function defaultDataDir(): string {
-  const home = os.homedir();
+export function defaultDataDir(): string {
+  const home = opaque(os.homedir());
   switch (process.platform) {
     case "darwin":
       return path.join(home, "Library", "Application Support", "kontexta");
     case "win32":
       return path.join(
-        process.env.APPDATA ?? path.join(home, "AppData", "Roaming"),
+        opaque(process.env.APPDATA) ?? path.join(home, "AppData", "Roaming"),
         "kontexta"
       );
     default:
       return path.join(
-        process.env.XDG_DATA_HOME ?? path.join(home, ".local", "share"),
+        opaque(process.env.XDG_DATA_HOME) ?? path.join(home, ".local", "share"),
         "kontexta"
       );
   }
@@ -67,7 +81,7 @@ export function resetDataDirCache(): void {
 export function getDataDir(): string {
   if (_resolvedDataDir) return _resolvedDataDir;
 
-  const home = os.homedir();
+  const home = opaque(os.homedir());
   const cacheFile = path.join(home, ".kontexta_datadir");
   const envOverride = process.env.KONTEXTA_DATA_DIR;
   const isWeb = isWebContext();
@@ -120,6 +134,25 @@ export function getDataDir(): string {
  */
 export function getDbPath(): string {
   return process.env.KONTEXTA_DB_PATH || path.join(getDataDir(), "kontexta.db");
+}
+
+/** Human-readable tilde-abbreviated version of the OS default data dir. */
+export function defaultDataDirDisplay(): string {
+  const full = defaultDataDir();
+  const home = opaque(os.homedir());
+  return full.startsWith(home) ? `~${full.slice(home.length)}` : full;
+}
+
+/**
+ * Sensitive home-relative directories that user-supplied paths must never
+ * resolve into. Lives here (not in webpack-bundled app code) so os.homedir()
+ * never appears in a minified server chunk — see the `opaque` note above.
+ */
+export function homeSensitivePrefixes(): string[] {
+  const home = opaque(os.homedir());
+  return [".ssh", ".aws", ".gnupg", ".kube", ".config/gcloud", ".docker"].map(
+    (p) => `${home}/${p}`,
+  );
 }
 
 function safeMkdir(dir: string): void {

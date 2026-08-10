@@ -14,8 +14,11 @@ import { spawn } from "node:child_process";
 import { join, resolve } from "node:path";
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync, existsSync, statSync, readFileSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
+import { fileURLToPath } from "node:url";
 
-const REPO = resolve(new URL("../..", import.meta.url).pathname);
+// fileURLToPath, not URL.pathname: on Windows .pathname is "/D:/..." and
+// resolve() then prepends the current drive, yielding "D:\D:\...".
+const REPO = resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const SERVER = join(REPO, "apps/mcp/dist/index.js");
 
 // Use a fresh temp dataDir so we don't pollute the user's KB.
@@ -493,11 +496,11 @@ function assert(cond, msg) {
       tools: {
         "say-hi": {
           description: "echoes hello-from-hands",
-          command: ["echo", "hello-from-hands"],
+          command: ["node", "-e", "console.log('hello-from-hands')"],
         },
         "needs-approval": {
           description: "echoes only after confirmation",
-          command: ["echo", "approved"],
+          command: ["node", "-e", "console.log('approved')"],
           confirm: true,
         },
       },
