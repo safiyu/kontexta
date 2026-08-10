@@ -51,6 +51,12 @@ const pdfkitDataGlob = "./" + relative(configDir, pdfkitDataDir) + "/*.afm";
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  // Pin the file tracer to the monorepo root. Without this, Next infers a
+  // workspace root by walking up for lockfiles; on Windows (notably GitHub
+  // runners) that inference can land on the user profile dir, and tracing
+  // then scandirs protected junctions like "C:\Users\<u>\Application Data"
+  // — failing the whole build with EPERM.
+  outputFileTracingRoot: join(configDir, "..", ".."),
   serverExternalPackages: NATIVE_SERVER_ONLY,
   // Cloud Workstations / proxied dev environments serve the page from a
   // hostname different from `localhost`. Next 15 logs a "Cross origin
