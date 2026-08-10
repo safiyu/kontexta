@@ -48,35 +48,5 @@ jobs:
         shell: pwsh
       - run: ./bootstrap.ps1
         shell: pwsh
-      # TEMP DIAGNOSTIC (remove once Windows build is green): log any glob
-      # pattern @vercel/nft roots outside the workspace.
-      - name: Write glob tracer
-        shell: bash
-        run: |
-          cat > "$RUNNER_TEMP/trace-glob.cjs" <<'EOF'
-          const Module = require('module');
-          const origRequire = Module.prototype.require;
-          Module.prototype.require = function (id) {
-            const exp = origRequire.apply(this, arguments);
-            if (typeof id === 'string' && id.includes('compiled/glob') && typeof exp === 'function' && !exp.__traced) {
-              const wrapped = function (pattern, options, cb) {
-                try {
-                  if (String(pattern).includes('Users')) {
-                    console.error('[TRACE-GLOB] pattern=' + JSON.stringify(pattern) + '\n' + new Error().stack + '\n');
-                  }
-                } catch {}
-                return exp.apply(this, arguments);
-              };
-              Object.assign(wrapped, exp);
-              wrapped.__traced = true;
-              return wrapped;
-            }
-            return exp;
-          };
-          EOF
-      - name: pnpm build
-        shell: bash
-        env:
-          NODE_OPTIONS: --require ${{ runner.temp }}\trace-glob.cjs
-        run: pnpm build
+      - run: pnpm build
       - run: pnpm test
