@@ -48,5 +48,31 @@ jobs:
         shell: pwsh
       - run: ./bootstrap.ps1
         shell: pwsh
-      - run: pnpm build
+      # TEMP DIAGNOSTIC (remove before merge): identify what scans the
+      # protected 'Application Data' junction during next build on Windows.
+      - name: Write scandir tracer
+        shell: bash
+        run: |
+          cat > "$RUNNER_TEMP/trace-scandir.cjs" <<'EOF'
+          const fs = require('fs');
+          let hits = 0;
+          function logHit(api, p) {
+            if (hits++ > 4) return;
+            console.error(`\n[TRACE-SCANDIR] ${api}(${p}) called from:\n` + new Error().stack + '\n');
+          }
+          for (const api of ['readdir', 'readdirSync', 'opendir', 'opendirSync', 'lstat', 'lstatSync', 'stat', 'statSync']) {
+            const orig = fs[api];
+            if (!orig) continue;
+            fs[api] = function (p, ...rest) {
+              try { if (typeof p === 'string' && p.includes('Application Data')) logHit(api, p); } catch {}
+              return orig.call(this, p, ...rest);
+            };
+          }
+          EOF
+          echo "tracer at $RUNNER_TEMP/trace-scandir.cjs"
+      - name: pnpm build (traced)
+        shell: bash
+        env:
+          NODE_OPTIONS: --require ${{ runner.temp }}\trace-scandir.cjs
+        run: pnpm build
       - run: pnpm test
