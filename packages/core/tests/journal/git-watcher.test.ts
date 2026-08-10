@@ -37,7 +37,7 @@ describe("git-watcher.checkGit", () => {
     const state: GitWatcherState = { branch: null, head: null };
     await checkGit(repoDir, state);
     writeFileSync(join(repoDir, "b.txt"), "y");
-    execSync("git add b.txt && git commit -q -m 'feat: add b' --no-verify", { cwd: repoDir });
+    execSync("git add b.txt && git commit -q -m \"feat: add b\" --no-verify", { cwd: repoDir });
     const events = await checkGit(repoDir, state);
     const commit = events.find((e) => e.event === "git_commit");
     expect(commit).toBeDefined();

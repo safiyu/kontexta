@@ -13,6 +13,9 @@ import { withLock } from "../util/safety.js";
 import type { ProjectRecord, FileRecord } from "../types.js";
 import { stripIndexedExt } from "../util/extensions.js";
 
+/** Git tree paths always use forward slashes, regardless of host OS. */
+const toGitPath = (p: string): string => p.split(sep).join("/");
+
 // Strip `user:pass@` from URLs in git stderr before logging or returning.
 function redactCredentials(s: string): string {
   return s.replace(/([a-z][a-z0-9+.-]*:\/\/)([^:@\/\s]+:[^@\/\s]+)@/gi, "$1***:***@");
@@ -129,7 +132,7 @@ export async function commitFile(
   await withLock(`git:${resolve(repoDir)}`, async () => {
     await ensureGitRepo(repoDir);
     const git: SimpleGit = gitFor(repoDir);
-    const relativePath = relative(repoDir, filePath);
+    const relativePath = toGitPath(relative(repoDir, filePath));
     await git.add(["-f", relativePath]);
     // Path-scoped commit so concurrent activity in the repo can't get swept in.
     await git.commit(message, [relativePath], { "--no-verify": null, "--no-gpg-sign": null });
@@ -160,7 +163,7 @@ export async function commitDelete(
     try {
       await ensureGitRepo(repoDir);
       const git: SimpleGit = gitFor(repoDir);
-      const relativePath = relative(repoDir, filePath);
+      const relativePath = toGitPath(relative(repoDir, filePath));
       // Use `git rm -f --ignore-unmatch` so it's a no-op when the path was
       // never tracked. --cached would only update the index; we want both
       // index AND remove-from-working-tree-if-still-there.
@@ -200,7 +203,7 @@ export async function getHistory(
   filePath: string
 ): Promise<Array<{ hash: string; message: string; date: string; author: string }>> {
   const git: SimpleGit = gitFor(repoDir);
-  const relativePath = relative(repoDir, filePath);
+  const relativePath = toGitPath(relative(repoDir, filePath));
 
   const log: LogResult = await git.log({ file: relativePath });
 
@@ -227,7 +230,7 @@ export async function getDiff(
   commitB: string
 ): Promise<string> {
   const git: SimpleGit = gitFor(repoDir);
-  const relativePath = relative(repoDir, filePath);
+  const relativePath = toGitPath(relative(repoDir, filePath));
 
   const diff = await git.diff([`${commitA}..${commitB}`, "--", relativePath]);
 
@@ -248,7 +251,7 @@ export async function restoreVersion(
 ): Promise<string> {
   return await withLock(`git:${resolve(repoDir)}`, async () => {
     const git: SimpleGit = gitFor(repoDir);
-    const relativePath = relative(repoDir, filePath);
+    const relativePath = toGitPath(relative(repoDir, filePath));
 
     // Reject anything that doesn't look like a hex commit hash (or a
     // strict short hash). HEAD~N / branch names / arbitrary revspecs are
@@ -635,7 +638,7 @@ async function _syncBackupLocked(
     );
   }
 
-  const backupRelativeDir = relative(dataDir, backupDir);
+  const backupRelativeDir = toGitPath(relative(dataDir, backupDir));
   await git.add(["-A", "-f", backupRelativeDir]);
 
   const status = await git.status();
@@ -766,7 +769,7 @@ async function _syncBackupLocked(
           "--",
           backupRelativeDir,
         ]);
-        deletedRel = out.split("\n").map((s) => s.trim()).filter(Boolean);
+        deletedRel = out.split("\n").map((s) => s.trim()).filter(Boolean).map((p) => p.split("/").join(sep));
       } catch (e) {
         console.warn("syncBackup: failed to diff for deletions:", e);
       }

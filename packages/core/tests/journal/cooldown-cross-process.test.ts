@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
+import { pathToFileURL } from "node:url";
 import { acquireCooldown } from "../../src/journal/cooldown.js";
 import { createDatabase, closeDatabase } from "../../src/db/index.js";
 
@@ -42,9 +43,11 @@ describe("cooldown — cross-process", () => {
     // return null.
     const scriptPath = join(testDir, "child.mjs");
     const projectRoot = join(__dirname, "..", "..");
+    const cooldownUrl = pathToFileURL(join(projectRoot, "dist", "journal", "cooldown.js")).href;
+    const dbUrl = pathToFileURL(join(projectRoot, "dist", "db", "index.js")).href;
     writeFileSync(scriptPath, `
-import { acquireCooldown } from "${join(projectRoot, "dist", "journal", "cooldown.js").replace(/\\\\/g, "/")}";
-import { createDatabase, closeDatabase } from "${join(projectRoot, "dist", "db", "index.js").replace(/\\\\/g, "/")}";
+import { acquireCooldown } from ${JSON.stringify(cooldownUrl)};
+import { createDatabase, closeDatabase } from ${JSON.stringify(dbUrl)};
 createDatabase(${JSON.stringify(dbPath)});
 const t = acquireCooldown(${JSON.stringify(testDir)}, "shared", 60);
 console.log(JSON.stringify({ token: t }));
@@ -69,9 +72,11 @@ closeDatabase();
 
     const scriptPath = join(testDir, "child2.mjs");
     const projectRoot = join(__dirname, "..", "..");
+    const cooldownUrl = pathToFileURL(join(projectRoot, "dist", "journal", "cooldown.js")).href;
+    const dbUrl = pathToFileURL(join(projectRoot, "dist", "db", "index.js")).href;
     writeFileSync(scriptPath, `
-import { acquireCooldown } from "${join(projectRoot, "dist", "journal", "cooldown.js").replace(/\\\\/g, "/")}";
-import { createDatabase, closeDatabase } from "${join(projectRoot, "dist", "db", "index.js").replace(/\\\\/g, "/")}";
+import { acquireCooldown } from ${JSON.stringify(cooldownUrl)};
+import { createDatabase, closeDatabase } from ${JSON.stringify(dbUrl)};
 await new Promise((r) => setTimeout(r, 20));
 createDatabase(${JSON.stringify(dbPath)});
 const t = acquireCooldown(${JSON.stringify(testDir)}, "shared2", 0);
