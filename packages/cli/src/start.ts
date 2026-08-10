@@ -58,6 +58,11 @@ export async function runStart(): Promise<never> {
       PORT: String(port),
       KONTEXTA_DATA_DIR: data.path,
       HOSTNAME: '127.0.0.1',
+      // Tell the dashboard how it was installed. Without this, detectInstall()
+      // falls through to "source" (no docker marker, no npm_execpath on a
+      // direct node spawn) and the config snippets point at the bundled
+      // node_modules copy of kontexta-mcp instead of the npx command.
+      KONTEXTA_INSTALL_HINT: 'npm',
     },
   });
 
