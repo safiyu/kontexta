@@ -15,8 +15,12 @@ const opaque = <T>(v: T): T => v;
 /**
  * Resolves the absolute path to the system default data directory.
  * Falls back to OS-specific standards if KONTEXTA_DATA_DIR is not set.
+ *
+ * Exported so webpack-bundled consumers (apps/web) never re-implement this
+ * with raw os.homedir()/process.env reads — bundled+minified copies of this
+ * logic are exactly what @vercel/nft re-folds into user-profile globs.
  */
-function defaultDataDir(): string {
+export function defaultDataDir(): string {
   const home = opaque(os.homedir());
   switch (process.platform) {
     case "darwin":
@@ -130,6 +134,13 @@ export function getDataDir(): string {
  */
 export function getDbPath(): string {
   return process.env.KONTEXTA_DB_PATH || path.join(getDataDir(), "kontexta.db");
+}
+
+/** Human-readable tilde-abbreviated version of the OS default data dir. */
+export function defaultDataDirDisplay(): string {
+  const full = defaultDataDir();
+  const home = opaque(os.homedir());
+  return full.startsWith(home) ? `~${full.slice(home.length)}` : full;
 }
 
 function safeMkdir(dir: string): void {
