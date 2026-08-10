@@ -1,13 +1,44 @@
 # Installing Kontexta
 
-Kontexta ships three install paths:
+Kontexta ships four install paths:
 
-- **[Docker Hub compose](#docker-hub-compose)** — full UI + MCP server, no build, recommended for most users
+- **[npx (Recommended)](#npx-recommended)** — full UI + MCP server, one command, cross-platform
+- **[Docker Hub compose](#docker-hub-compose)** — containerized deployment, full UI + MCP server
 - **[Docker run](#docker-run)** — single `docker run` invocation, useful for ad-hoc spawning
 - **[Build from source](#build-from-source)** — clone the repo and build the image locally
-- **[Local development](#local-development)** — run from source without Docker
+- **[Local development (contributors)](#local-development-contributors)** — run from source without Docker
 
-For MCP-only setups (no web UI), see [MCP install via npm](MCP.md#install-via-npm).
+---
+
+## npx (Recommended)
+
+Requires Node 22.x LTS. No Docker, no pnpm, no build.
+
+```bash
+npx kontexta start
+```
+
+Boots the dashboard on `http://localhost:3000` (opens in your browser) and starts the MCP server. First run walks you through master password, data location, and project registration.
+
+### MCP-only (no dashboard)
+
+If you only want the MCP server (no dashboard), point your AI client at:
+
+```json
+{
+  "mcpServers": {
+    "kxta": {
+      "command": "npx",
+      "args": ["-y", "kontexta", "mcp"]
+    }
+  }
+}
+```
+
+### Requirements
+
+- **Node.js 22.x LTS** — the CLI detects your Node version and warns if it's incompatible
+- Nothing else — the CLI bundles all dependencies and prebuilt native modules
 
 ---
 
@@ -49,6 +80,11 @@ Before running `docker compose up`, open `docker-compose.hub.yml` and check the 
   **Required:** `PROJECT_DIR` must be set to an absolute path before running compose. The compose file includes a startup check that fails fast if `PROJECT_DIR` is not set.
 
 2. **Data Persistence**: By default, your vault (SQLite, backups, KB) is stored in `./kontexta-data` relative to the compose file. Use `DATA_DIR` to change the host-side path (e.g., `DATA_DIR=/var/lib/kontexta`).
+
+   **Sharing one vault with non-Docker installs (optional):** `npx kontexta` and `pnpm dev` default to your OS data directory (`~/Library/Application Support/kontexta` on macOS, `~/.local/share/kontexta` on Linux). The container can use that same vault via the same-path mount variant documented in the compose file's `volumes` section — set `DATA_DIR` to your OS data dir and switch the mount to `${DATA_DIR}:${DATA_DIR}` with matching `KONTEXTA_DATA_DIR`.
+
+   > [!WARNING]
+   > Never run the container and a host process (`npx kontexta start`, `pnpm dev`, `npx kontexta-mcp`) against a shared vault **at the same time**. The vault is SQLite in WAL mode; concurrent access through a Docker bind mount is unreliable and can corrupt the database. Treat the shared vault as one-process-at-a-time.
 
 3. **Port Mapping**: If port `3000` is already in use on your host, set `HOST_PORT`:
    ```bash
@@ -187,38 +223,32 @@ Returns `{ written: [{ path, action, version }], skipped: [{ path, reason }] }`.
 
 ---
 
-## Local development
+## Local development (contributors)
 
 > [!IMPORTANT]
 > **Kontexta is a pnpm monorepo.** Do **not** use `npm install` at the workspace root — it will ignore `pnpm-workspace.yaml` and produce a broken `node_modules` layout. You must use **pnpm** (or **corepack**). If you install the MCP server globally via npm (`npm install -g kontexta-mcp`), that is a separate, self-contained package and does not use the monorepo.
 
-### Prerequisites
-
-| Tool | Version | Why |
-| :--- | :--- | :--- |
-| Node.js | **22.x LTS** (pinned via `.nvmrc`) | Required by Next 15 + React 19. Pinned to 22 to avoid native-module ABI mismatches. |
-| pnpm | **9.15.0** (pinned via `packageManager`) | Package manager for the workspace |
-| git | 2.20+ | Sync engine shells out via `simple-git` at runtime |
-| C/C++ toolchain | platform-specific (see below) | `better-sqlite3` builds a native module on install |
-
-**Node version:** the repo includes a `.nvmrc` pinned to `22`. If you use nvm, run `nvm use` once inside the repo and you'll always be on the right version. Native modules (`better-sqlite3`, `re2`) compile against the active Node ABI — mixing versions across `pnpm install` and `node` invocations causes `ERR_DLOPEN_FAILED`. Avoid switching Node versions after installing; if you do, run `pnpm rebuild re2 better-sqlite3` to recompile.
-
-**Install pnpm** (matches the repo's pinned version):
+Requires Node 22.x LTS (see `.nvmrc`).
 
 ```bash
-# Option A: corepack (ships with Node)
-corepack enable && corepack prepare pnpm@9.15.0 --activate
-
-# Option B: npm
-npm install -g pnpm@9.15.0
+./bootstrap && pnpm dev
 ```
 
-**Install the C/C++ toolchain** (only needed for the `better-sqlite3` build during `pnpm install`):
+The bootstrap script activates corepack + pnpm from `package.json`, probes for a C/C++ toolchain, installs dependencies, and builds `packages/core`. Re-running is idempotent. On Windows, use `.\bootstrap.ps1`.
 
-- **Debian/Ubuntu:** `sudo apt install build-essential python3`
-- **Fedora/RHEL:** `sudo dnf install gcc-c++ make python3`
-- **macOS:** `xcode-select --install`
-- **Windows:** Install Visual Studio Build Tools with the "Desktop development with C++" workload
+### Prerequisites
+
+The `./bootstrap` script handles the following automatically:
+
+| What | Version | Why |
+| :--- | :--- | :--- |
+| Node version check | **22.x LTS** (pinned via `.nvmrc`) | Required by Next 15 + React 19. Pinned to 22 to avoid native-module ABI mismatches. |
+| pnpm activation | pinned via root `package.json` `packageManager` (currently 10.34.3) | Activated via corepack from `package.json` |
+| C/C++ toolchain probe | platform-specific | `better-sqlite3` builds a native module; bootstrap warns if toolchain is missing |
+| Install workspace deps | — | Runs `pnpm install` |
+| Build core package | — | Runs `pnpm -C packages/core build` |
+
+If you prefer to set up manually instead of using `./bootstrap`, see the manual steps below.
 
 ### Repository layout
 
@@ -231,10 +261,13 @@ kontexta/
 │   │   └── scripts/dev-lite.sh  # low-memory dev server helper
 │   └── mcp/        # MCP stdio server for AI agents
 ├── packages/
+│   ├── cli/        # kontexta npm package: `npx kontexta start`
 │   └── core/       # SQLite/FTS5, git engine, file watcher (kxta-core)
 ├── docker-compose.yml      # build from source
 ├── docker-compose.hub.yml  # pull from Docker Hub (no build)
 ├── Dockerfile
+├── bootstrap               # macOS/Linux contributor setup
+├── bootstrap.ps1           # Windows contributor setup
 ├── .nvmrc                  # pins Node 22 for native module ABI consistency
 ├── pnpm-workspace.yaml
 └── turbo.json
@@ -242,16 +275,22 @@ kontexta/
 
 `apps/web` and `apps/mcp` both depend on `kxta-core` via `workspace:*`. The core package must be built once before either app can resolve its imports — `pnpm build` handles this automatically via turbo's dependency graph.
 
-### Install & first build
+### Manual setup (without bootstrap)
+
+If you didn't use `./bootstrap`:
 
 ```bash
 git clone <repository-url>
 cd kontexta
-pnpm install                # installs every workspace package, builds better-sqlite3
-pnpm build                  # builds kxta-core first, then apps/web and apps/mcp
+./bootstrap                 # activates corepack + pnpm, checks toolchain, installs + builds
 ```
 
-`pnpm install` may take a few minutes on first run while `better-sqlite3` compiles. If you see a build error here, your toolchain is missing — see Prerequisites.
+`pnpm install` may take a few minutes on first run while `better-sqlite3` compiles. If you see a build error here, your toolchain is missing — install the C/C++ toolchain for your platform:
+
+- **Debian/Ubuntu:** `sudo apt install build-essential python3`
+- **Fedora/RHEL:** `sudo dnf install gcc-c++ make python3`
+- **macOS:** `xcode-select --install`
+- **Windows:** Install Visual Studio Build Tools with the "Desktop development with C++" workload
 
 ### Run in development
 

@@ -33,6 +33,28 @@ services:
       - "${HOST_PORT:-3000}:3000"
     volumes:
       - "${DATA_DIR:-./kontexta-data}:/app/data"
+      # ── Optional: share ONE vault with non-Docker installs (npx kontexta,
+      # pnpm dev). Replace the line above with a same-path mount so the vault
+      # lives at the identical absolute path inside and outside the container:
+      #
+      #   - "${DATA_DIR}:${DATA_DIR}"
+      #
+      # and change KONTEXTA_DATA_DIR / KONTEXTA_DB_PATH below to match:
+      #
+      #   - KONTEXTA_DATA_DIR=${DATA_DIR}
+      #   - KONTEXTA_DB_PATH=${DATA_DIR}/kontexta.db
+      #
+      # Then set DATA_DIR to your OS data dir, e.g. on macOS:
+      #   DATA_DIR="$HOME/Library/Application Support/kontexta"
+      # on Linux:
+      #   DATA_DIR="$HOME/.local/share/kontexta"
+      #
+      # WARNING: never run the container and a host process (npx kontexta /
+      # pnpm dev / npx kontexta-mcp) against the shared vault AT THE SAME
+      # TIME. The vault is SQLite in WAL mode; concurrent access through a
+      # bind mount is unreliable and can corrupt the database. Stop one
+      # before starting the other.
+      #
       # Mount your projects directory. By default the container exposes it at /projects
       # IMPORTANT: mount the project directory to the same absolute path
       # on the host and inside the container so on-disk paths remain stable.

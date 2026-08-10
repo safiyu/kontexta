@@ -2,6 +2,18 @@
 
 Thank you for your interest in contributing to Kontexta! This project aims to provide the most reliable, deterministic context-management layer for AI coding agents. By contributing, you're helping build a smarter, local-first future for agentic workflows.
 
+## Getting started
+
+Requires Node 22.x LTS (see `.nvmrc`).
+
+```bash
+./bootstrap && pnpm dev
+```
+
+The bootstrap script activates corepack + pnpm from `package.json`, probes for a C/C++ toolchain, installs dependencies, and builds `packages/core`. Re-running is idempotent. On Windows, use `.\bootstrap.ps1`.
+
+See `docs/INSTALL.md#local-development-contributors` for the full breakdown of what bootstrap does.
+
 ## Architecture: Brain, Hands, Eyes
 
 Kontexta is built around a closed-loop feedback system:
@@ -19,28 +31,6 @@ This is a monorepo managed by `pnpm` and `turbo`.
 - `apps/mcp`: The MCP (Model Context Protocol) server that exposes the Brain and Hands to AI agents.
 - `apps/web`: The Next.js-based dashboard for visual context management and configuration.
 
-## Getting Started
-
-### Prerequisites
-- **Node.js**: **v22 LTS** (pinned via `.nvmrc`). Run `nvm use` in the repo root to activate the correct version. Native modules (`better-sqlite3`, `re2`) must be compiled for the active Node ABI — switching versions after install requires `pnpm rebuild re2 better-sqlite3`.
-- **pnpm**: v9.15.0 (`corepack enable && corepack prepare pnpm@9.15.0 --activate`).
-- **C/C++ toolchain**: required to compile `better-sqlite3` if no prebuilt binary exists for your platform (`build-essential` on Debian/Ubuntu, `xcode-select --install` on macOS).
-
-### Local Setup
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/safiyu/kontexta.git
-   cd kontexta
-   nvm use        # activates Node 22 from .nvmrc
-   ```
-2. Install dependencies:
-   ```bash
-   pnpm install
-   ```
-3. Build the project:
-   ```bash
-   pnpm build
-   ```
 
 ## Development Workflow
 
