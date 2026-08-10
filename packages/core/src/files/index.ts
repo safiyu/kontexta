@@ -537,17 +537,23 @@ export function listFiles(opts: ListFilesOptions): FileRecord[] {
     }
 
     if (filters.folder !== undefined) {
+      // Everything interpolated into a LIKE ... ESCAPE '\' pattern must be
+      // escaped — including project_path and the literal backslash
+      // separators. Unescaped, Windows paths (C:\Users\...) have every '\'
+      // consumed as an escape character and the pattern never matches.
       const segment = escapeLike(filters.folder);
+      const bs = "\\\\"; // literal backslash separator inside the pattern
       if (filters.project_path) {
         // Scope to files under the given project root.
+        const root = escapeLike(filters.project_path);
         sql += " AND (path LIKE ? ESCAPE '\\' OR path LIKE ? ESCAPE '\\')";
-        params.push(`${filters.project_path}/${segment}/%`);
-        params.push(`${filters.project_path}\\${segment}\\%`);
+        params.push(`${root}/${segment}/%`);
+        params.push(`${root}${bs}${segment}${bs}%`);
       } else {
         // Original behaviour: match any path segment named like folder.
         sql += " AND (path LIKE ? ESCAPE '\\' OR path LIKE ? ESCAPE '\\')";
         params.push(`%/${segment}/%`);
-        params.push(`%\\${segment}\\%`);
+        params.push(`%${bs}${segment}${bs}%`);
       }
     }
   }

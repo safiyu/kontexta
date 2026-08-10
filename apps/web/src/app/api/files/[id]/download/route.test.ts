@@ -31,7 +31,9 @@ describe("GET /api/files/[id]/download", () => {
     expect(res.status).toBe(404);
   });
 
-  test("sanitizes filenames with CR/LF to prevent response splitting", async () => {
+  // NTFS forbids control characters in filenames, so the malicious fixture
+  // can only exist on POSIX — the sanitizer itself is platform-independent.
+  test.skipIf(process.platform === "win32")("sanitizes filenames with CR/LF to prevent response splitting", async () => {
     ensureDbInitialized();
     const dataDir = process.env.KONTEXTA_DATA_DIR || "";
     const created = await createFile({
