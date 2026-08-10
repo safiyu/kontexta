@@ -77,14 +77,25 @@ const nextConfig: NextConfig = {
   // matches any port-prefixed workstation hostname; add your own here if
   // you proxy through a different domain.
   allowedDevOrigins: ["*.cloudworkstations.dev", "*.cluster-*.cloudworkstations.dev"],
-  outputFileTracingIncludes: {
-    "**/*": [
-      "../../packages/core/src/agent-rules/rules-block.md",
-      "../../packages/core/src/db/migrations/*.sql",
-      "../../CHANGELOG.md",
-      pdfkitDataGlob,
-    ],
-  },
+  // Every pattern below escapes the project dir (../..) — on Windows,
+  // Next's classic-glob trace collection walks such patterns through the
+  // user profile and dies on protected junctions ("Application Data")
+  // with EPERM (vercel/next.js#62281). Skip them on win32: they only
+  // matter for standalone outputs that keep their traced node_modules
+  // (the Docker image — built on Linux). The npm tarball resolves
+  // kxta-core/pdfkit from real modules at runtime instead, and Windows
+  // production builds are local/CI validation only.
+  outputFileTracingIncludes:
+    process.platform === "win32"
+      ? {}
+      : {
+          "**/*": [
+            "../../packages/core/src/agent-rules/rules-block.md",
+            "../../packages/core/src/db/migrations/*.sql",
+            "../../CHANGELOG.md",
+            pdfkitDataGlob,
+          ],
+        },
   webpack: (config, { isServer }) => {
     if (isServer) {
       // Require at runtime — never bundle or re-evaluate. Critical for
