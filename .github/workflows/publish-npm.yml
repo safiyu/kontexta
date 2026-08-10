@@ -1,4 +1,4 @@
-name: Publish kontexta-mcp to npm
+name: Publish kontexta packages to npm
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -24,7 +24,7 @@ concurrency:
 jobs:
   publish:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -51,15 +51,17 @@ jobs:
           cd node_modules/.pnpm/better-sqlite3@12.10.0/node_modules/better-sqlite3
           npx node-gyp rebuild
 
-      - name: Verify tag matches package version
+      - name: Verify tag matches package versions
         run: |
           TAG="${GITHUB_REF_NAME#v}"
-          PKG=$(node -p "require('./apps/mcp/package.json').version")
-          if [ "$TAG" != "$PKG" ]; then
-            echo "::error::Tag $GITHUB_REF_NAME does not match apps/mcp/package.json version $PKG"
-            exit 1
-          fi
-          echo "Tag $GITHUB_REF_NAME matches package version $PKG"
+          for MANIFEST in apps/mcp/package.json packages/cli/package.json; do
+            PKG=$(node -p "require('./$MANIFEST').version")
+            if [ "$TAG" != "$PKG" ]; then
+              echo "::error::Tag $GITHUB_REF_NAME does not match $MANIFEST version $PKG"
+              exit 1
+            fi
+            echo "Tag $GITHUB_REF_NAME matches $MANIFEST version $PKG"
+          done
 
       - name: Build kxta-core
         # tsup's noExternal hook resolves kxta-core via its `main`
@@ -73,9 +75,25 @@ jobs:
       - name: Run smoke tests
         run: pnpm -C apps/mcp test
 
-      - name: Publish to npm
+      - name: Publish kontexta-mcp to npm
         run: npx -y npm@latest publish ./apps/mcp --access public --provenance
- 
+
+      # ── kontexta (one-click CLI): same tag, same run — the two packages
+      # must always ship together (the CLI bundles the MCP server's dist).
+      - name: Build all workspaces (web standalone needed for CLI bundle)
+        run: pnpm build
+
+      - name: Pack CLI bundle
+        run: pnpm -C packages/cli build && pnpm -C packages/cli pack:bundle
+
+      - name: CLI tarball sanity
+        run: |
+          cd packages/cli && npm pack --dry-run 2>&1 | tail -5
+          node dist/index.js --version
+
+      - name: Publish kontexta to npm
+        run: npx -y npm@latest publish ./packages/cli --access public --provenance
+
       - name: Extract release notes from CHANGELOG
         id: notes
         run: |
