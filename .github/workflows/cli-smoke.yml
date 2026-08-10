@@ -111,4 +111,4 @@ jobs:
         shell: bash
         run: |
           printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"ci","version":"1"}}}' \
-            | timeout 10 kontexta mcp | head -c 4096 | grep -q '"capabilities"'
+            | perl -e 'alarm shift @ARGV; exec @ARGV' 10 kontexta mcp | head -c 4096 | grep -q '"capabilities"'
