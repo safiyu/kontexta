@@ -54,20 +54,24 @@ jobs:
         shell: bash
         run: |
           cat > "$RUNNER_TEMP/trace-scandir.cjs" <<'EOF'
-          const fs = require('fs');
-          let hits = 0;
-          function logHit(api, p) {
-            if (hits++ > 4) return;
-            console.error(`\n[TRACE-SCANDIR] ${api}(${p}) called from:\n` + new Error().stack + '\n');
-          }
-          for (const api of ['readdir', 'readdirSync', 'opendir', 'opendirSync', 'lstat', 'lstatSync', 'stat', 'statSync']) {
-            const orig = fs[api];
-            if (!orig) continue;
-            fs[api] = function (p, ...rest) {
-              try { if (typeof p === 'string' && p.includes('Application Data')) logHit(api, p); } catch {}
-              return orig.call(this, p, ...rest);
-            };
-          }
+          const Module = require('module');
+          const origRequire = Module.prototype.require;
+          Module.prototype.require = function (id) {
+            const exp = origRequire.apply(this, arguments);
+            if (typeof id === 'string' && id.includes('compiled/glob') && typeof exp === 'function' && !exp.__traced) {
+              const wrapped = function (pattern, options, cb) {
+                try {
+                  console.error('[TRACE-GLOB] pattern=' + JSON.stringify(pattern) +
+                    ' cwd=' + JSON.stringify(options && options.cwd) + '\n' + new Error().stack + '\n');
+                } catch {}
+                return exp.apply(this, arguments);
+              };
+              Object.assign(wrapped, exp);
+              wrapped.__traced = true;
+              return wrapped;
+            }
+            return exp;
+          };
           EOF
           echo "tracer at $RUNNER_TEMP/trace-scandir.cjs"
       - name: pnpm build (traced)
