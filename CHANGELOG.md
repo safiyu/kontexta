@@ -1,5 +1,11 @@
 # Changelog
 
+## 4.3.2 — Config snippets know how you were installed
+
+### Fixed
+
+- **Client config snippets from an npx-installed dashboard now use `npx`.** The dashboard previously mis-detected a `npx kontexta start` install as a source build and pointed MCP client configs at a file inside the npx cache — a path that breaks whenever npx evicts it. The CLI now tells the dashboard how it was installed, so `/docs` emits the durable `npx -y kontexta-mcp` config instead.
+
 ## 4.3.1 — One command, and Kontexta is running
 
 Installing Kontexta no longer requires Docker, pnpm, or a build step. If you have Node 22, you have Kontexta.
