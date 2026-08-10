@@ -1,6 +1,6 @@
 # Changelog
 
-## 4.3.0 — One command, and Kontexta is running
+## 4.3.1 — One command, and Kontexta is running
 
 Installing Kontexta no longer requires Docker, pnpm, or a build step. If you have Node 22, you have Kontexta.
 
