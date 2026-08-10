@@ -51,7 +51,7 @@ describe("journal repository", () => {
     db.prepare(`INSERT INTO files (id, path, title, project_id, storage_type) VALUES (11, '/tmp/y.md', 'y', 1, 'local')`).run();
     upsertJournalMeta({ file_id: 11, project_id: 1, task_slug: "b", started_at: "2026-05-01T00:00Z", last_active_at: "2026-05-12T00:00Z", touched_files: [], raw_sources: [], git_refs: [] });
 
-    const open = openTasksForProject(1, 90);
+    const open = openTasksForProject(1, 90, new Date("2026-05-15T00:00:00Z"));
     expect(open.map((t) => t.task_slug)).toEqual(["b", "a"]);
   });
 });
