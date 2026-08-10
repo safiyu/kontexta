@@ -493,11 +493,11 @@ function assert(cond, msg) {
       tools: {
         "say-hi": {
           description: "echoes hello-from-hands",
-          command: ["echo", "hello-from-hands"],
+          command: ["node", "-e", "console.log('hello-from-hands')"],
         },
         "needs-approval": {
           description: "echoes only after confirmation",
-          command: ["echo", "approved"],
+          command: ["node", "-e", "console.log('approved')"],
           confirm: true,
         },
       },
