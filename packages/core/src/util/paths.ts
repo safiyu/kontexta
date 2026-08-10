@@ -2,23 +2,33 @@ import * as os from "node:os";
 import * as path from "node:path";
 import * as fs from "node:fs";
 
+// @vercel/nft — Next's build-time file tracer — statically evaluates
+// os.homedir() and process.env.* inside fs-call arguments and expands any
+// unresolved remainder into a recursive glob rooted at the evaluated
+// prefix. On Windows that means walking C:\Users\<user>\** through
+// protected junctions ("Application Data"), which fails `next build` with
+// EPERM/EACCES. Routing the values through this opaque identity makes the
+// prefix statically unknown, so the tracer skips the expression instead
+// of globbing the user profile. Zero runtime cost.
+const opaque = <T>(v: T): T => v;
+
 /**
  * Resolves the absolute path to the system default data directory.
  * Falls back to OS-specific standards if KONTEXTA_DATA_DIR is not set.
  */
 function defaultDataDir(): string {
-  const home = os.homedir();
+  const home = opaque(os.homedir());
   switch (process.platform) {
     case "darwin":
       return path.join(home, "Library", "Application Support", "kontexta");
     case "win32":
       return path.join(
-        process.env.APPDATA ?? path.join(home, "AppData", "Roaming"),
+        opaque(process.env.APPDATA) ?? path.join(home, "AppData", "Roaming"),
         "kontexta"
       );
     default:
       return path.join(
-        process.env.XDG_DATA_HOME ?? path.join(home, ".local", "share"),
+        opaque(process.env.XDG_DATA_HOME) ?? path.join(home, ".local", "share"),
         "kontexta"
       );
   }
@@ -67,7 +77,7 @@ export function resetDataDirCache(): void {
 export function getDataDir(): string {
   if (_resolvedDataDir) return _resolvedDataDir;
 
-  const home = os.homedir();
+  const home = opaque(os.homedir());
   const cacheFile = path.join(home, ".kontexta_datadir");
   const envOverride = process.env.KONTEXTA_DATA_DIR;
   const isWeb = isWebContext();
