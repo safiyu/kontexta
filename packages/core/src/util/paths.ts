@@ -143,6 +143,18 @@ export function defaultDataDirDisplay(): string {
   return full.startsWith(home) ? `~${full.slice(home.length)}` : full;
 }
 
+/**
+ * Sensitive home-relative directories that user-supplied paths must never
+ * resolve into. Lives here (not in webpack-bundled app code) so os.homedir()
+ * never appears in a minified server chunk — see the `opaque` note above.
+ */
+export function homeSensitivePrefixes(): string[] {
+  const home = opaque(os.homedir());
+  return [".ssh", ".aws", ".gnupg", ".kube", ".config/gcloud", ".docker"].map(
+    (p) => `${home}/${p}`,
+  );
+}
+
 function safeMkdir(dir: string): void {
   try {
     fs.mkdirSync(dir, { recursive: true });
