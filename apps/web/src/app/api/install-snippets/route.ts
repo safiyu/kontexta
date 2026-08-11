@@ -104,6 +104,7 @@ export async function GET(req: NextRequest) {
           sourceEntrypoint: manualEntrypoint ?? "",
           isDefaultDir,
           defaultDirDisplay,
+          hasLocalCliMcp: process.env.KONTEXTA_INSTALL_HINT === "npm",
         });
   return NextResponse.json({
     ...snippet,

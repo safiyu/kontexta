@@ -15,6 +15,8 @@ export interface TemplateVars {
   isDefaultDir: boolean;
   /** Human-readable default path for this OS, e.g. ~/.local/share/kontexta */
   defaultDirDisplay: string;
+  /** True when this dashboard was launched via `npx kontexta start` — the `kontexta` package is confirmed locally installed. */
+  hasLocalCliMcp: boolean;
 }
 
 export interface Snippet {
@@ -22,6 +24,17 @@ export interface Snippet {
   body: string;
   notes: string[];
   configPath?: string;
+}
+
+// A detected local `kontexta` install (from npx kontexta start) beats the generic kontexta-mcp default — same server either way.
+function npmArgs(vars: TemplateVars): string[] {
+  return vars.hasLocalCliMcp ? ["-y", "kontexta", "mcp"] : ["-y", "kontexta-mcp"];
+}
+function npmNotes(vars: TemplateVars, install: Install): string[] {
+  if (install !== "npm") return [];
+  return vars.hasLocalCliMcp
+    ? ["Detected a local kontexta install — using its bundled MCP server. Alternative: npx -y kontexta-mcp."]
+    : ["Alternative: npx kontexta mcp — same MCP server, bundled with the one-click dashboard package."];
 }
 
 function dataDirNote(vars: TemplateVars, install: Install): string {
@@ -37,7 +50,7 @@ function genericJson(vars: TemplateVars, install: Install): Snippet {
     install === "docker"
       ? ["run", "--rm", "-i", "-v", `${hostDir}:/app/data`, `safiyu/kontexta:${vars.version}`, "mcp"]
       : install === "npm"
-        ? ["-y", "kontexta-mcp"]
+        ? npmArgs(vars)
         : [vars.sourceEntrypoint];
   // For docker, always include the data dir env. For npm/source, omit it when
   // using the OS default — the MCP server auto-discovers the path from the
@@ -48,7 +61,7 @@ function genericJson(vars: TemplateVars, install: Install): Snippet {
   const serverConfig: Record<string, unknown> = { command, args };
   if (env) serverConfig.env = env;
   const body = JSON.stringify({ mcpServers: { kxta: serverConfig } }, null, 2);
-  return { kind: "json", body, notes: [dataDirNote(vars, install)] };
+  return { kind: "json", body, notes: [dataDirNote(vars, install), ...npmNotes(vars, install)] };
 }
 
 function claudeCodeShell(vars: TemplateVars, install: Install): Snippet {
@@ -57,7 +70,7 @@ function claudeCodeShell(vars: TemplateVars, install: Install): Snippet {
     install === "docker"
       ? `-- docker run --rm -i -v ${hostDir}:/app/data safiyu/kontexta:${vars.version} mcp`
       : install === "npm"
-        ? `-- npx -y kontexta-mcp`
+        ? `-- npx ${npmArgs(vars).join(" ")}`
         : `-- node ${vars.sourceEntrypoint}`;
   // Omit -e KONTEXTA_DATA_DIR for npm/source when using the OS default — the
   // MCP server auto-discovers the path from ~/.kontexta_datadir written by the web app.
@@ -67,7 +80,7 @@ function claudeCodeShell(vars: TemplateVars, install: Install): Snippet {
   return {
     kind: "shell",
     body: `claude mcp add kxta -s user \\${envFlag}\n  ${tail}`,
-    notes: [dataDirNote(vars, install)],
+    notes: [dataDirNote(vars, install), ...npmNotes(vars, install)],
   };
 }
 
@@ -94,7 +107,7 @@ function clineSnippet(vars: TemplateVars, install: Install): Snippet {
     install === "docker"
       ? ["run", "--rm", "-i", "-v", `${hostDir}:/app/data`, `safiyu/kontexta:${vars.version}`, "mcp"]
       : install === "npm"
-        ? ["-y", "kontexta-mcp"]
+        ? npmArgs(vars)
         : [vars.sourceEntrypoint];
   const env = install === "docker" || !vars.isDefaultDir ? { KONTEXTA_DATA_DIR: vars.dataDir } : undefined;
   const serverConfig: Record<string, unknown> = { command, args };
@@ -105,6 +118,7 @@ function clineSnippet(vars: TemplateVars, install: Install): Snippet {
     body,
     notes: [
       dataDirNote(vars, install),
+      ...npmNotes(vars, install),
       "Cline reads MCP config from ~/.cline/mcp_settings.json (Cline extension for VS Code / Cursor).",
       "After adding this config, reload the VS Code / Cursor window for changes to take effect.",
     ],
@@ -119,7 +133,7 @@ function continueSnippet(vars: TemplateVars, install: Install): Snippet {
     install === "docker"
       ? ["run", "--rm", "-i", "-v", `${hostDir}:/app/data`, `safiyu/kontexta:${vars.version}`, "mcp"]
       : install === "npm"
-        ? ["-y", "kontexta-mcp"]
+        ? npmArgs(vars)
         : [vars.sourceEntrypoint];
   const showEnv = install === "docker" || !vars.isDefaultDir;
   const envBlock = showEnv ? `\n    env:\n      KONTEXTA_DATA_DIR: "${vars.dataDir}"` : "";
@@ -136,6 +150,7 @@ ${args.map(a => `      - "${a}"`).join('\n')}${envBlock}`;
     body,
     notes: [
       dataDirNote(vars, install),
+      ...npmNotes(vars, install),
       "Use this format for your ~/.continue/config.yaml or a dedicated file in ~/.continue/mcpServers/",
       "MCP tools only appear in Continue's 'Agent Mode'.",
     ],
@@ -150,7 +165,7 @@ function copilotSnippet(vars: TemplateVars, install: Install): Snippet {
     install === "docker"
       ? ["run", "--rm", "-i", "-v", `${hostDir}:/app/data`, `safiyu/kontexta:${vars.version}`, "mcp"]
       : install === "npm"
-        ? ["-y", "kontexta-mcp"]
+        ? npmArgs(vars)
         : [vars.sourceEntrypoint];
   const env = install === "docker" || !vars.isDefaultDir ? { KONTEXTA_DATA_DIR: vars.dataDir } : undefined;
   const serverConfig: Record<string, unknown> = { type: "stdio", command, args };
@@ -161,6 +176,7 @@ function copilotSnippet(vars: TemplateVars, install: Install): Snippet {
     body,
     notes: [
       dataDirNote(vars, install),
+      ...npmNotes(vars, install),
       "VS Code Insider's built-in GitHub Copilot chat supports MCP servers via mcp.json.",
       "Open your mcp.json file (e.g. ~/.config/Code\\-\\Insiders/User/mcp.json) and paste this JSON.",
       "mcp.json location — VS Code Insider: Linux: ~/.config/Code - Insiders/User/mcp.json",
