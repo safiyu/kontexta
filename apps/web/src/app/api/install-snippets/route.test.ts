@@ -1,18 +1,45 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { writeFileSync, rmSync, existsSync } from "node:fs";
-import { join } from "node:path";
+import { writeFileSync, rmSync, existsSync, renameSync } from "node:fs";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import { GET } from "./route";
 
-const FLAG_PATH = join(process.cwd(), ".kontexta-manual-mcp");
+const FLAG_NAME = ".kontexta-manual-mcp";
+const HERE = dirname(fileURLToPath(import.meta.url)); // same dir as route.ts — checked first in its walk-up
+const LOCAL_FLAG_PATH = join(HERE, FLAG_NAME);
 const REAL_MCP_ENTRYPOINT = join(process.cwd(), "..", "mcp", "dist", "index.js"); // must exist on disk for the flag to be trusted
+
+// Mirrors route.ts's own search so tests never depend on ambient flags (e.g. CI's bootstrap step writes a real one at repo root).
+function findAmbientFlag(): string | null {
+  let dir = HERE;
+  for (let i = 0; i < 15; i++) {
+    const candidate = join(dir, FLAG_NAME);
+    if (existsSync(candidate)) return candidate;
+    const parent = dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return null;
+}
+
+let relocatedAmbientFlag: string | null = null;
 
 beforeEach(() => {
   process.env.KONTEXTA_DATA_DIR = "/tmp/test-data";
-  rmSync(FLAG_PATH, { force: true }); // isolate from a real dev-machine flag
+  rmSync(LOCAL_FLAG_PATH, { force: true });
+  const ambient = findAmbientFlag();
+  if (ambient) {
+    renameSync(ambient, ambient + ".disabled-by-test");
+    relocatedAmbientFlag = ambient;
+  }
 });
 
 afterEach(() => {
-  rmSync(FLAG_PATH, { force: true });
+  rmSync(LOCAL_FLAG_PATH, { force: true });
+  if (relocatedAmbientFlag) {
+    renameSync(relocatedAmbientFlag + ".disabled-by-test", relocatedAmbientFlag);
+    relocatedAmbientFlag = null;
+  }
 });
 
 function req(qs: string) {
@@ -44,7 +71,7 @@ describe("GET /api/install-snippets", () => {
   });
   it("source install with a valid bootstrap flag returns the real entrypoint", async () => {
     expect(existsSync(REAL_MCP_ENTRYPOINT)).toBe(true); // pnpm -C apps/mcp build must have run
-    writeFileSync(FLAG_PATH, REAL_MCP_ENTRYPOINT);
+    writeFileSync(LOCAL_FLAG_PATH, REAL_MCP_ENTRYPOINT);
     vi.resetModules();
     const { GET: freshGet } = await import("./route");
     const res = await freshGet(req("client=claude-code&install=source") as any);
