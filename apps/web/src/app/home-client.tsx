@@ -644,6 +644,7 @@ export default function HomePage() {
         status={sync.status}
         lastDoneAt={sync.lastDoneAt}
         stage={sync.stage}
+        onOpenConfigure={() => setDocsOpen(true)}
       />
 
       <SearchDialog

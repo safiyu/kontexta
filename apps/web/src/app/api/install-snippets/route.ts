@@ -2,36 +2,41 @@ import { NextRequest, NextResponse } from "next/server";
 import path from "node:path";
 import os from "node:os";
 import { readFileSync, existsSync } from "node:fs";
-import { createRequire } from "node:module";
-import { renderTemplate, CLIENTS, INSTALLS, type Client, type Install } from "@/lib/install-templates";
+import { fileURLToPath } from "node:url";
+import { renderTemplate, CLIENTS, INSTALLS, type Client, type Install, type Snippet } from "@/lib/install-templates";
 import { DATA_DIR } from "@/lib/db-init";
-// Imported from kxta-core (a server-external package) instead of computing
-// locally: webpack-bundled os.homedir()/process.env.APPDATA expressions get
-// re-folded by @vercel/nft into recursive user-profile globs at build time,
-// which fails `next build` on Windows (protected junctions → EPERM).
+// kxta-core is server-external so os.homedir()/APPDATA reads never get bundled into a Windows-breaking nft glob.
 import { defaultDataDir, defaultDataDirDisplay } from "kxta-core";
 
-let cachedSourceEntrypoint: string | null = null;
-function resolveSourceEntrypoint(): string {
-  if (cachedSourceEntrypoint) return cachedSourceEntrypoint;
-  // In Docker the MCP server is deployed separately to /app/apps/mcp and is
-  // not resolvable from the standalone web bundle's node_modules graph.
-  const inDocker =
-    process.env.KONTEXTA_INSTALL_HINT === "docker" ||
-    (() => { try { return existsSync("/.dockerenv"); } catch { return false; } })();
-  if (inDocker) {
-    cachedSourceEntrypoint = "/app/apps/mcp/dist/index.js";
-    return cachedSourceEntrypoint;
+// Written by ./bootstrap / bootstrap.ps1 at repo root — the source of truth for a manual install's entrypoint.
+const MANUAL_INSTALL_FLAG = ".kontexta-manual-mcp";
+
+let cachedManualEntrypoint: string | null | undefined; // undefined = not yet resolved
+function resolveManualEntrypoint(): string | null {
+  if (cachedManualEntrypoint !== undefined) return cachedManualEntrypoint;
+  // Walk up from this module's own file — not process.cwd(), which Next's standalone server.js chdir()s away from repo root.
+  let dir = path.dirname(fileURLToPath(import.meta.url));
+  for (let i = 0; i < 15; i++) {
+    const flagPath = path.join(dir, MANUAL_INSTALL_FLAG);
+    if (existsSync(flagPath)) {
+      const entrypoint = readFileSync(flagPath, "utf-8").trim();
+      cachedManualEntrypoint = entrypoint && existsSync(entrypoint) ? entrypoint : null;
+      return cachedManualEntrypoint;
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
   }
-  try {
-    const pkgName = ["kontexta", "mcp"].join("-");
-    cachedSourceEntrypoint = createRequire(import.meta.url).resolve(pkgName);
-    return cachedSourceEntrypoint;
-  } catch {
-    // Fallback to relative path in monorepo structure
-    // This resolves to apps/mcp/dist/index.js from the workspace root
-    return path.resolve(process.cwd(), "..", "mcp", "dist", "index.js");
-  }
+  cachedManualEntrypoint = null;
+  return cachedManualEntrypoint;
+}
+
+function manualNotFoundSnippet(): Snippet {
+  return {
+    kind: "shell",
+    body: "# No manual/source install detected.\n# Run ./bootstrap (macOS/Linux) or .\\bootstrap.ps1 (Windows) from your\n# kontexta checkout, then reload this page.",
+    notes: ["Manual install requires running the bootstrap script once from a cloned kontexta repository."],
+  };
 }
 
 let cachedVersion: string | null = null;
@@ -83,22 +88,24 @@ export async function GET(req: NextRequest) {
 
   const defaultDir = defaultDataDir();
   const defaultDirDisplay = defaultDataDirDisplay();
-  // Sanitize: never surface temp/test paths in install snippets.
-  // If the running server resolved a temp path (e.g. from a dev test run),
-  // fall back to the OS standard so the snippet stays useful.
+  // Never surface a temp/test dataDir (e.g. from a dev test run) — fall back to the OS default instead.
   const rawDataDir = DATA_DIR;
   const dataDir = isTempPath(rawDataDir) ? defaultDir : rawDataDir;
   const isDefaultDir = path.resolve(dataDir) === path.resolve(defaultDir);
 
-  const vars = {
-    dataDir,
-    hostDataDir: process.env.KONTEXTA_HOST_DATA_DIR ?? null,
-    version: loadVersion(),
-    sourceEntrypoint: resolveSourceEntrypoint(),
-    isDefaultDir,
-    defaultDirDisplay,
-  };
-  const snippet = renderTemplate(client, install, vars);
+  const manualEntrypoint = install === "source" ? resolveManualEntrypoint() : null;
+  const snippet =
+    install === "source" && !manualEntrypoint
+      ? manualNotFoundSnippet()
+      : renderTemplate(client, install, {
+          dataDir,
+          hostDataDir: process.env.KONTEXTA_HOST_DATA_DIR ?? null,
+          version: loadVersion(),
+          sourceEntrypoint: manualEntrypoint ?? "",
+          isDefaultDir,
+          defaultDirDisplay,
+          hasLocalCliMcp: process.env.KONTEXTA_INSTALL_HINT === "npm",
+        });
   return NextResponse.json({
     ...snippet,
     detectedInstall: detectInstall(),

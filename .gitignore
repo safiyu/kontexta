@@ -25,6 +25,7 @@ scratch/
 apps/web/src/lib/mcp-tools.json
 apps/web/.next/standalone/
 kontexta.json
+.kontexta-manual-mcp
 .env.local
 .env
 

@@ -34,6 +34,7 @@ Windows: %APPDATA%\\Claude\\claude_desktop_config.json",
   "kind": "json",
   "notes": [
     "Data directory: /app/data (custom — set via KONTEXTA_DATA_DIR)",
+    "Alternative: npx kontexta mcp — same MCP server, bundled with the one-click dashboard package.",
   ],
 }
 `;

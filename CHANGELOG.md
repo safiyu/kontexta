@@ -1,5 +1,14 @@
 # Changelog
 
+## 4.4.0 — Update in one command, and know when you should
+
+### Added
+
+- **`./update` and `update.ps1`** for source/manual installs: safety-checks a clean working tree, fast-forward pulls, re-runs bootstrap, and rebuilds the whole workspace in one step.
+- **New-version notice in the dashboard.** The status bar checks the npm registry for the latest `kontexta` release and shows an "update available" link (opens Configure) when you're behind — works regardless of install method, since the comparison is always against the published package version.
+- **Configure's manual-install entrypoint is now detection-based**, not guessed: `./bootstrap` writes a flag with the real `apps/mcp/dist/index.js` path, so the Source-build snippet always points at your actual checkout instead of a frozen build-output copy. Shows a clear message when no bootstrapped checkout is found.
+- **Configure's npm snippet detects a local `kontexta` CLI install** (from `npx kontexta start`) and prefers `npx kontexta mcp` — the same server, already fetched — falling back to the standalone `kontexta-mcp` package otherwise. Either way, the alternative is noted.
+
 ## 4.3.2 — Config snippets know how you were installed
 
 ### Fixed
