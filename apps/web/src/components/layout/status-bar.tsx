@@ -8,6 +8,7 @@ interface StatusBarProps {
   status: SyncStatus;
   lastDoneAt: number | null;
   stage: string | null;
+  onOpenConfigure?: () => void;
 }
 
 function formatRelative(ts: number | null): string {
@@ -19,11 +20,25 @@ function formatRelative(ts: number | null): string {
   return `${Math.floor(sec / 86400)}d ago`;
 }
 
-export function StatusBar({ globalRemoteUrl, status, lastDoneAt, stage }: StatusBarProps) {
+interface VersionCheck {
+  currentVersion: string;
+  latestVersion: string | null;
+  updateAvailable: boolean;
+}
+
+export function StatusBar({ globalRemoteUrl, status, lastDoneAt, stage, onOpenConfigure }: StatusBarProps) {
   // Tick every 30s so "synced 2m ago" stays fresh.
   const [, setTick] = useState(0);
   useEffect(() => {
     const t = setInterval(() => setTick((n) => n + 1), 30_000);
+    return () => clearInterval(t);
+  }, []);
+
+  const [versionCheck, setVersionCheck] = useState<VersionCheck | null>(null);
+  useEffect(() => {
+    const check = () => fetch("/api/version-check").then((r) => r.json()).then(setVersionCheck).catch(() => {});
+    check();
+    const t = setInterval(check, 6 * 60 * 60 * 1000); // long-running sessions still notice a new release
     return () => clearInterval(t);
   }, []);
 
@@ -59,6 +74,15 @@ export function StatusBar({ globalRemoteUrl, status, lastDoneAt, stage }: Status
           <span className="text-[var(--border)]">·</span>
           <span className="truncate max-w-[260px] opacity-70">{remoteLabel}</span>
         </>
+      )}
+      {versionCheck?.updateAvailable && (
+        <button
+          onClick={onOpenConfigure}
+          className="ml-auto text-[var(--accent)] hover:underline"
+          title={`You're on v${versionCheck.currentVersion} — open Configure for update instructions`}
+        >
+          ⬆ v{versionCheck.latestVersion} available
+        </button>
       )}
     </footer>
   );

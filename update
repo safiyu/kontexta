@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+step() { printf "\033[36m▸ %s\033[0m\n" "$1"; }
+fail() { printf "\033[31m✗ %s\033[0m\n" "$1" >&2; exit 1; }
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
+
+step "Checking working tree is clean"
+if [ -n "$(git status --porcelain)" ]; then
+  fail "Uncommitted changes found. Commit or stash them first: git stash"
+fi
+
+step "Checking current branch tracks a remote"
+if ! git rev-parse --abbrev-ref --symbolic-full-name "@{u}" >/dev/null 2>&1; then
+  fail "Current branch has no upstream to pull from."
+fi
+
+step "Pulling latest changes (fast-forward only)"
+if ! git pull --ff-only; then
+  fail "Fast-forward pull failed — you have local commits ahead of upstream. Rebase or merge manually, then re-run ./update."
+fi
+
+step "Re-running bootstrap (picks up any Node/pnpm version change)"
+"$SCRIPT_DIR/bootstrap"
+
+step "Building the full workspace (core, mcp, web)"
+pnpm build
+
+printf "\n\033[32m✓ Update complete.\033[0m\n"
+printf "  Restart pnpm dev (or your production process) to pick up the new build.\n"
