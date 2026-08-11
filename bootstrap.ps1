@@ -44,6 +44,9 @@ Step 'Building kxta-core'
 pnpm -C packages/core build
 if ($LASTEXITCODE -ne 0) { Fail 'core build failed' }
 
+Step 'Flagging manual install (lets the dashboard show a real MCP config)'
+Join-Path $PSScriptRoot 'apps\mcp\dist\index.js' | Set-Content -Path (Join-Path $PSScriptRoot '.kontexta-manual-mcp') -NoNewline
+
 Write-Host ''
 Write-Host '✓ Bootstrap complete.' -ForegroundColor Green
 Write-Host '  Next: pnpm dev       Turbopack dev server on :3000'
