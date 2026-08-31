@@ -64,6 +64,20 @@ const pdfkitDataGlob =
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  // Browsers frame localhost from any origin — DENY blocks clickjacking into destructive actions on the signed-in dashboard.
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: [
+          { key: "X-Frame-Options", value: "DENY" },
+          { key: "Content-Security-Policy", value: "frame-ancestors 'none'" },
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "Referrer-Policy", value: "no-referrer" },
+        ],
+      },
+    ];
+  },
   // Pin the file tracer to the monorepo root. Without this, Next infers a
   // workspace root by walking up for lockfiles; on Windows (notably GitHub
   // runners) that inference can land on the user profile dir, and tracing
