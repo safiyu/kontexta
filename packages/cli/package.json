@@ -1,6 +1,6 @@
 {
   "name": "kontexta",
-  "version": "4.4.0",
+  "version": "4.4.1",
   "description": "One-click local dashboard + MCP server for AI coding agents",
   "type": "module",
   "license": "Apache-2.0",

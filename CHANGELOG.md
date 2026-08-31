@@ -1,5 +1,11 @@
 # Changelog
 
+## 4.4.1 — Clickjacking-safe dashboard
+
+### Fixed
+
+- **Dashboard responses now set `X-Frame-Options: DENY` and `frame-ancestors 'none'`**, plus `X-Content-Type-Options: nosniff` and `Referrer-Policy: no-referrer`. Prevents a hostile site the user visits in the same browser from iframing `http://localhost:<port>` and clickjacking into destructive dashboard actions.
+
 ## 4.4.0 — Update in one command, and know when you should
 
 ### Added
