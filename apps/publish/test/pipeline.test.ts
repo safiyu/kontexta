@@ -32,4 +32,19 @@ describe("runPipeline", () => {
     expect(html).toContain("Overview");
     expect(html).toContain("api-endpoint");
   });
+
+  it("returns an outputs array covering every generated file", () => {
+    const result = runPipeline(config, reader());
+    expect(result.outputs.map(o => o.relPath).sort()).toEqual(["index.html"]);
+    const idx = result.outputs.find(o => o.relPath === "index.html")!;
+    expect(idx.content).toBe(result.html);
+  });
+
+  it("includes llms.txt in outputs when enabled", () => {
+    const llmConfig = { ...config, llmsTxt: true };
+    const result = runPipeline(llmConfig, reader());
+    expect(result.outputs.map(o => o.relPath).sort()).toEqual(["index.html", "llms.txt"]);
+    const llms = result.outputs.find(o => o.relPath === "llms.txt")!;
+    expect(llms.content).toContain("# T - LLM-Readable Documentation");
+  });
 });

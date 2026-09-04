@@ -12,8 +12,10 @@ import { createCoreReader } from "./source/reader.js";
 
 export interface BuildReport { docCount: number; endpointCount: number; termCount: number; folders: string[]; }
 
+export interface PipelineOutput { relPath: string; content: string; }
+
 /** Render a list of doc files into RenderedDoc[] and produce HTML + report. */
-function renderDocs(config: PublishConfig, docFiles: DocFile[]): { html: string; report: BuildReport; docs: RenderedDoc[]; search: import("./types.js").SearchEntry[] } {
+function renderDocs(config: PublishConfig, docFiles: DocFile[]): { html: string; report: BuildReport; docs: RenderedDoc[]; search: import("./types.js").SearchEntry[]; outputs: PipelineOutput[] } {
   const docs: RenderedDoc[] = docFiles.map((doc) => {
     const { html, toc, endpoints, terms } = renderDocBody(doc.body);
     return { doc, html, toc, endpoints, terms };
@@ -21,6 +23,11 @@ function renderDocs(config: PublishConfig, docFiles: DocFile[]): { html: string;
   const nav = buildNav(docs);
   const search = buildSearchIndex(docs);
   const html = assembleShell({ config, nav, docs, search });
+  const outputs: PipelineOutput[] = [{ relPath: "index.html", content: html }];
+  if (config.llmsTxt) {
+    const llmsTxt = generateLlmsTxt(docs, search, config.site.title);
+    outputs.push({ relPath: "llms.txt", content: llmsTxt });
+  }
   return {
     html,
     report: {
@@ -31,10 +38,11 @@ function renderDocs(config: PublishConfig, docFiles: DocFile[]): { html: string;
     },
     docs,
     search,
+    outputs,
   };
 }
 
-export function runPipeline(config: PublishConfig, reader?: VaultReader): { html: string; report: BuildReport; docs: RenderedDoc[]; search: import("./types.js").SearchEntry[] } {
+export function runPipeline(config: PublishConfig, reader?: VaultReader): { html: string; report: BuildReport; docs: RenderedDoc[]; search: import("./types.js").SearchEntry[]; outputs: PipelineOutput[] } {
   const projectPath = config.source.projectPath;
   const vaultReader = reader || createCoreReader({ projectPath });
   const docFiles = enumerateDocs(vaultReader, config.source.folders, projectPath);
