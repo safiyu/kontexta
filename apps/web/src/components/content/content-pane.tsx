@@ -10,6 +10,7 @@ import remarkStringify from "remark-stringify";
 import stripMarkdown from "strip-markdown";
 import { MarkdownViewer } from "./markdown-viewer";
 import { MermaidViewer } from "./mermaid-viewer";
+import { HtmlViewer } from "./html-viewer";
 import { MarkdownEditor } from "./markdown-editor";
 import { DeleteConfirmDialog } from "./delete-confirm-dialog";
 import { GitErrorDialog } from "./git-error-dialog";
@@ -791,6 +792,8 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
           <div className="h-full overflow-auto">
             {file.path.endsWith(".mmd") ? (
               <MermaidViewer source={file.content} className="p-8" filename={file.title} />
+            ) : file.path.endsWith(".html") ? (
+              <HtmlViewer html={file.content} />
             ) : (
               <MarkdownViewer content={file.content} className="p-8" />
             )}
