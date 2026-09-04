@@ -374,23 +374,14 @@ server.tool(
 
 server.tool(
   "export_report",
-  "Export an existing HTML report file as PDF or PNG. By default returns { url } pointing at the web-served download; set inline_bytes=true to receive base64 bytes directly in the tool response (larger transcript).",
+  "Export an existing HTML report file as PDF or PNG. Returns a { url } pointing at the web-served download — the caller fetches the file with an authenticated request.",
   {
     id: z.number(),
     format: z.enum(["pdf", "png"]).default("pdf"),
-    inline_bytes: z.boolean().optional().default(false),
   },
-  async ({ id, format, inline_bytes }) => {
+  async ({ id, format }) => {
     const url = `/api/files/${id}/export-html?format=${format}`;
-    if (!inline_bytes) return { content: [{ type: "text", text: JSON.stringify({ url }, null, 2) }] };
-    const { readFile } = await import("kxta-core");
-    const renderModule = await import("kxta-publish/render/html-export" as any);
-    const { join } = await import("node:path");
-    const f = readFile(id);
-    const bytes = format === "pdf"
-      ? await renderModule.renderHtmlToPdf(f.content, { assetsDir: join(dataDir, "reports", "resources") })
-      : await renderModule.renderHtmlToPng(f.content, { assetsDir: join(dataDir, "reports", "resources") });
-    return { content: [{ type: "text", text: JSON.stringify({ bytes_base64: bytes.toString("base64"), format }, null, 2) }] };
+    return { content: [{ type: "text", text: JSON.stringify({ url }, null, 2) }] };
   }
 );
 

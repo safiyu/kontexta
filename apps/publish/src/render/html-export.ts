@@ -2,11 +2,11 @@ import { install, computeExecutablePath, resolveBuildId, Browser, BrowserPlatfor
 import puppeteer from "puppeteer-core";
 import { existsSync, mkdirSync, writeFileSync, mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { pathToFileURL } from "node:url";
 
 function cacheDir(): string {
-  const dir = process.env.KONTEXTA_CHROMIUM_CACHE ?? join(process.env.HOME ?? tmpdir(), ".cache", "kontexta", "chromium");
+  const dir = process.env.KONTEXTA_CHROMIUM_CACHE ?? join(homedir() || tmpdir(), ".cache", "kontexta", "chromium");
   mkdirSync(dir, { recursive: true });
   return dir;
 }
@@ -34,7 +34,9 @@ async function withPage<T>(html: string, opts: { assetsDir?: string }, fn: (page
     const file = join(tmp, "index.html");
     const wrapped = `<!doctype html><html><head><meta charset="utf-8"><base href="./"></head><body>${html}</body></html>`;
     writeFileSync(file, wrapped, "utf8");
-    const browser = await puppeteer.launch({ executablePath, args: ["--no-sandbox", "--disable-gpu"] });
+    const args = ["--disable-gpu"];
+    if (process.env.KONTEXTA_CHROMIUM_NO_SANDBOX === "1") args.push("--no-sandbox");
+    const browser = await puppeteer.launch({ executablePath, args });
     try {
       const page = await browser.newPage();
       await page.setRequestInterception(true);

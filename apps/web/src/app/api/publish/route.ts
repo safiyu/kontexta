@@ -96,13 +96,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Index publish outputs in KB so they appear in file list and MCP
+    // Index publish outputs in KB so they appear in file list and MCP.
+    // Only .html and .md; .txt (llms.txt) would drift path vs format since createFile always writes `.${format}`.
     for (const out of result.outputs) {
       const ext = out.relPath.split(".").pop()?.toLowerCase();
       let format: "html" | "md" | undefined;
       if (ext === "html") format = "html";
       else if (ext === "md") format = "md";
-      else if (ext === "txt") format = "md";
       if (!format) continue;
       const fullPath = join(outputDir, out.relPath);
       const title = basename(out.relPath, `.${ext}`);

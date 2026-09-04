@@ -32,8 +32,8 @@ async function waitHealth(port: number, timeoutMs = 30_000): Promise<void> {
 
 export async function runStart(): Promise<never> {
   const nodeMajor = Number(process.versions.node.split('.')[0]);
-  if (nodeMajor !== 22) {
-    process.stderr.write(`kontexta requires Node 22.x LTS (found v${process.versions.node}). See .nvmrc.\n`);
+  if (nodeMajor < 22) {
+    process.stderr.write(`kontexta requires Node >= 22 (found v${process.versions.node}). See .nvmrc.\n`);
     process.exit(1);
   }
 
