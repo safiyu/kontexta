@@ -49,6 +49,9 @@ import {
   RULE_BLOCK_VERSION,
   gracefulShutdown,
   startDistillEngine,
+  writeResource,
+  listResources,
+  deleteResource,
   type AgentId,
 } from "kxta-core";
 import RE2Class from "./re2-compat.js";
@@ -309,7 +312,7 @@ server.tool(
 
 server.tool(
   "create_file",
-  "Create a new markdown or mermaid file in the knowledge base or project. This operation writes a new file to disk and adds it to the local SQLite FTS5 index. Destination can be 'knowledge' (global KB), 'project' (reference file inside a project repo), or 'kontexta' (internal Kontexta schema file). If destination is 'project' or 'kontexta', project_id is strictly required. No external auth required. Rate limits do not apply (local operation). Returns the created file metadata including its new ID, path, and estimated tokens. If the destination directory does not exist, it will be created automatically. Use this tool to instantiate new contextual documents or notes. To modify an existing file, use 'update_file' instead. Parameters: 'destination' dictates required fields; if 'project' or 'kontexta', 'project_id' must be a valid integer. 'tags' and 'folder' are optional. Pass format='mmd' to create a Mermaid diagram file (.mmd); defaults to 'md'.",
+  "Create a new markdown, mermaid, or HTML file in the knowledge base or project. This operation writes a new file to disk and adds it to the local SQLite FTS5 index. Destination can be 'knowledge' (global KB), 'project' (reference file inside a project repo), or 'kontexta' (internal Kontexta schema file). If destination is 'project' or 'kontexta', project_id is strictly required. No external auth required. Rate limits do not apply (local operation). Returns the created file metadata including its new ID, path, and estimated tokens. If the destination directory does not exist, it will be created automatically. Use this tool to instantiate new contextual documents or notes. To modify an existing file, use 'update_file' instead. Parameters: 'destination' dictates required fields; if 'project' or 'kontexta', 'project_id' must be a valid integer. 'tags' and 'folder' are optional. Pass format='mmd' to create a Mermaid diagram file (.mmd) or format='html' for HTML reports; defaults to 'md'.",
   {
     title: z.string().describe("Title of the file"),
     content: z.string().describe("Content of the file"),
@@ -317,7 +320,7 @@ server.tool(
     project_id: z.number().optional().describe("Project ID (required for project/kontexta destinations)"),
     folder: z.string().optional().describe("Optional folder path"),
     tags: z.array(z.string()).optional().describe("Optional array of tags"),
-    format: z.enum(["md", "mmd"]).optional().describe("File extension to write. Defaults to 'md'."),
+    format: z.enum(["md", "mmd", "html"]).optional().describe("File extension to write. Defaults to 'md'. Use 'html' for HTML reports."),
   },
   async ({ title, content, destination, project_id, folder, tags, format }) => {
     const result = await createFile({
@@ -333,6 +336,61 @@ server.tool(
     return {
       content: [{ type: "text", text: JSON.stringify(annotateTokens(result), null, 2) }],
     };
+  }
+);
+
+server.tool(
+  "add_report_resource",
+  "Write an image or other binary resource into the shared reports/resources/ folder. Returns the resolved filename (may differ from the requested name if it was slugged or collision-suffixed) and the URL that HTML reports should reference (`resources/<filename>` after prepending `/api/reports/`). Bytes are passed base64-encoded.",
+  {
+    filename: z.string().describe("Requested filename with extension"),
+    bytes_base64: z.string().describe("Base64-encoded file bytes"),
+  },
+  async ({ filename, bytes_base64 }) => {
+    const info = writeResource(dataDir, filename, Buffer.from(bytes_base64, "base64"));
+    return { content: [{ type: "text", text: JSON.stringify(info, null, 2) }] };
+  }
+);
+
+server.tool(
+  "list_report_resources",
+  "List all files currently stored under reports/resources/. Returns filename, size in bytes, and served URL.",
+  {},
+  async () => {
+    const items = listResources(dataDir);
+    return { content: [{ type: "text", text: JSON.stringify(items, null, 2) }] };
+  }
+);
+
+server.tool(
+  "delete_report_resource",
+  "Delete a file from reports/resources/. No-op if it doesn't exist.",
+  { filename: z.string() },
+  async ({ filename }) => {
+    deleteResource(dataDir, filename);
+    return { content: [{ type: "text", text: JSON.stringify({ ok: true, filename }, null, 2) }] };
+  }
+);
+
+server.tool(
+  "export_report",
+  "Export an existing HTML report file as PDF or PNG. By default returns { url } pointing at the web-served download; set inline_bytes=true to receive base64 bytes directly in the tool response (larger transcript).",
+  {
+    id: z.number(),
+    format: z.enum(["pdf", "png"]).default("pdf"),
+    inline_bytes: z.boolean().optional().default(false),
+  },
+  async ({ id, format, inline_bytes }) => {
+    const url = `/api/files/${id}/export-html?format=${format}`;
+    if (!inline_bytes) return { content: [{ type: "text", text: JSON.stringify({ url }, null, 2) }] };
+    const { readFile } = await import("kxta-core");
+    const renderModule = await import("kxta-publish/render/html-export" as any);
+    const { join } = await import("node:path");
+    const f = readFile(id);
+    const bytes = format === "pdf"
+      ? await renderModule.renderHtmlToPdf(f.content, { assetsDir: join(dataDir, "reports", "resources") })
+      : await renderModule.renderHtmlToPng(f.content, { assetsDir: join(dataDir, "reports", "resources") });
+    return { content: [{ type: "text", text: JSON.stringify({ bytes_base64: bytes.toString("base64"), format }, null, 2) }] };
   }
 );
 
