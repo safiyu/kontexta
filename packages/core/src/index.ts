@@ -48,3 +48,5 @@ export {
 export * from "./journal/index.js";
 export * from "./profile/index.js";
 export * from "./calendar/index.js";
+export { writeResource, readResource, listResources, deleteResource, resourceUrlFor, mimeFor } from "./reports/resources.js";
+export { sanitizeHtml } from "./reports/sanitize.js";
