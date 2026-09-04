@@ -6,8 +6,8 @@ import {
 } from "../src/util/extensions.js";
 
 describe("INDEXED_EXTENSIONS", () => {
-  it("includes md and mmd in that order", () => {
-    expect(INDEXED_EXTENSIONS).toEqual([".md", ".mmd"]);
+  it("includes md, mmd, and html in that order", () => {
+    expect(INDEXED_EXTENSIONS).toEqual([".md", ".mmd", ".html"]);
   });
 });
 
@@ -17,6 +17,9 @@ describe("isIndexedFile", () => {
   });
   it("matches .mmd", () => {
     expect(isIndexedFile("/a/b/c.mmd")).toBe(true);
+  });
+  it("matches .html", () => {
+    expect(isIndexedFile("/a/b/c.html")).toBe(true);
   });
   it("rejects unrelated extensions", () => {
     expect(isIndexedFile("/a/b/c.txt")).toBe(false);
@@ -34,6 +37,9 @@ describe("stripIndexedExt", () => {
   });
   it("strips .mmd", () => {
     expect(stripIndexedExt("diagram.mmd")).toBe("diagram");
+  });
+  it("strips .html", () => {
+    expect(stripIndexedExt("report.html")).toBe("report");
   });
   it("leaves unrelated names alone", () => {
     expect(stripIndexedExt("readme.txt")).toBe("readme.txt");

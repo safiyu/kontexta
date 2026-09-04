@@ -38,6 +38,19 @@ describe("html files", () => {
     expect(updated.content).toContain("<p>x</p>");
     expect(updated.content).not.toMatch(/javascript:/);
   });
+
+  it("skipHtmlSanitize preserves trusted content verbatim (publish pipeline output)", async () => {
+    const trusted = '<html><head><script src="app.js"></script></head><body>x</body></html>';
+    const rec = await createFile({
+      title: "site",
+      content: trusted,
+      destination: "knowledge",
+      dataDir,
+      format: "html",
+      skipHtmlSanitize: true,
+    });
+    expect(rec.content).toBe(trusted);
+  });
 });
 
 afterEach(() => {

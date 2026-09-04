@@ -132,30 +132,31 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
   };
 
   const [exportingPdf, setExportingPdf] = useState(false);
+  const [exportingPng, setExportingPng] = useState(false);
+  const isHtmlFile = !!file?.path.endsWith(".html");
 
-  const handleExportPdf = async () => {
-    if (!file) return;
-    setExportingPdf(true);
-    const toastId = toast.loading("Generating PDF…");
+  const downloadFromEndpoint = async (endpoint: string, fallbackName: string, kindLabel: string, setBusy: (b: boolean) => void) => {
+    setBusy(true);
+    const toastId = toast.loading(`Generating ${kindLabel}…`);
     try {
-      const res = await fetch(`/api/files/${file.id}/export-pdf`);
+      const res = await fetch(endpoint);
       if (!res.ok) {
         const text = await res.text();
-        let message = `Failed to export PDF (HTTP ${res.status})`;
+        let message = `Failed to export ${kindLabel} (HTTP ${res.status})`;
         try {
           const parsed = JSON.parse(text);
           if (parsed?.error) message = parsed.error;
         } catch {
           // Response wasn't JSON (e.g. a framework error page) — log the
           // raw body so it's still visible for debugging.
-          console.error("[export-pdf] non-JSON error response:", text);
+          console.error(`[export-${kindLabel}] non-JSON error response:`, text);
         }
         toast.error(message, { id: toastId });
         return;
       }
       const disposition = res.headers.get("content-disposition") || "";
       const match = /filename="([^"]+)"/.exec(disposition);
-      const filename = match?.[1] ?? `${baseFilename()}.pdf`;
+      const filename = match?.[1] ?? fallbackName;
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -165,13 +166,24 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
-      toast.success("Exported PDF", { id: toastId });
+      toast.success(`Exported ${kindLabel}`, { id: toastId });
     } catch (err) {
-      console.error("[export-pdf] request failed:", err);
-      toast.error("Failed to export PDF — check the browser console for details.", { id: toastId });
+      console.error(`[export-${kindLabel}] request failed:`, err);
+      toast.error(`Failed to export ${kindLabel} — check the browser console for details.`, { id: toastId });
     } finally {
-      setExportingPdf(false);
+      setBusy(false);
     }
+  };
+
+  const handleExportPdf = () => {
+    if (!file) return;
+    const endpoint = isHtmlFile ? `/api/files/${file.id}/export-html?format=pdf` : `/api/files/${file.id}/export-pdf`;
+    downloadFromEndpoint(endpoint, `${baseFilename()}.pdf`, "PDF", setExportingPdf);
+  };
+
+  const handleExportPng = () => {
+    if (!file) return;
+    downloadFromEndpoint(`/api/files/${file.id}/export-html?format=png`, `${baseFilename()}.png`, "PNG", setExportingPng);
   };
 
   const handleRefresh = async () => {
@@ -209,10 +221,12 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
   const onDirtyChangeRef = useRef(onDirtyChange);
   useEffect(() => { onDirtyChangeRef.current = onDirtyChange; }, [onDirtyChange]);
 
+  const [htmlEditorDirty, setHtmlEditorDirty] = useState(false);
+
   useEffect(() => {
-    const dirty = editing && file != null && editContent !== file.content;
+    const dirty = (editing && file != null && editContent !== file.content) || (editHtmlOpen && htmlEditorDirty);
     onDirtyChangeRef.current?.(dirty);
-  }, [editing, editContent, file?.content]);
+  }, [editing, editContent, file?.content, editHtmlOpen, htmlEditorDirty]);
   useEffect(() => () => { onDirtyChangeRef.current?.(false); }, []);
 
   useEffect(() => {
@@ -223,6 +237,11 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
       setViewHistory(false);
       return;
     }
+
+    // Navigating away must drop any editor left open on the previous file.
+    setEditing(false);
+    setViewHistory(false);
+    setEditHtmlOpen(false);
 
     const controller = new AbortController();
     const fetchFile = async () => {
@@ -664,19 +683,26 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
               <DropdownMenu
                 trigger={
                   <button
-                    disabled={exportingPdf}
+                    disabled={exportingPdf || exportingPng}
                     className="btn btn-md"
                     aria-label="Export file"
-                    title={exportingPdf ? "Generating PDF…" : "Export file"}
+                    title={exportingPdf ? "Generating PDF…" : exportingPng ? "Generating PNG…" : "Export file"}
                   >
-                    <DownloadIcon className={`w-4 h-4 opacity-70 ${exportingPdf ? "animate-pulse" : ""}`} />
+                    <DownloadIcon className={`w-4 h-4 opacity-70 ${exportingPdf || exportingPng ? "animate-pulse" : ""}`} />
                   </button>
                 }
-                items={[
-                  { label: "Markdown (.md)", onSelect: handleExportMarkdown },
-                  { label: "Text (.txt)", onSelect: () => { handleExportText(); } },
-                  { label: "PDF", onSelect: handleExportPdf },
-                ]}
+                items={
+                  isHtmlFile
+                    ? [
+                        { label: "PDF", onSelect: handleExportPdf },
+                        { label: "PNG", onSelect: handleExportPng },
+                      ]
+                    : [
+                        { label: "Markdown (.md)", onSelect: handleExportMarkdown },
+                        { label: "Text (.txt)", onSelect: () => { handleExportText(); } },
+                        { label: "PDF", onSelect: handleExportPdf },
+                      ]
+                }
               />
               <button
                 onClick={() => setDeleteDialogOpen(true)}
@@ -844,9 +870,12 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
         <HtmlEditor
           fileId={file.id}
           initial={file.content}
-          onClose={() => setEditHtmlOpen(false)}
+          expectedUpdatedAt={file.updated_at}
+          onClose={() => { setEditHtmlOpen(false); setHtmlEditorDirty(false); }}
+          onDirtyChange={setHtmlEditorDirty}
           onSaved={(updatedFile) => {
             const issuedFor = file.id;
+            setHtmlEditorDirty(false);
             if (fileIdRef.current !== issuedFor) {
               if (updatedFile.git_warning) {
                 console.warn(`[kontexta] git_warning for stale file ${issuedFor}:`, updatedFile.git_warning);

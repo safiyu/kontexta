@@ -100,4 +100,18 @@ describe("POST /api/files/upload", () => {
     const body = await res.json();
     expect(body.rejected.length).toBeGreaterThan(0);
   });
+
+  test("accepts .html uploads, writes them as .html, and sanitizes on write", async () => {
+    const res = await POST(multipart({
+      project_id: "",
+      folder: "",
+      files: [{ filename: "report.html", content: "<p>hi</p><script>alert(1)</script>", type: "text/html" }],
+    }) as any);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.uploaded).toHaveLength(1);
+    expect(body.uploaded[0].final_name).toBe("report.html");
+    const file = readFile(body.uploaded[0].id);
+    expect(file.content).toBe("<p>hi</p>");
+  });
 });

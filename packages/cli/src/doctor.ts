@@ -1,10 +1,22 @@
 import { createRequire } from 'node:module';
-import { existsSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, statSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir, tmpdir } from 'node:os';
 import { resolveDataDir } from './util/data-dir.js';
 
 const require = createRequire(import.meta.url);
+
+// packages/cli declares @puppeteer/browsers directly (never via kxta-publish, which is private/workspace-only and unreachable from a standalone npm install) so this Chromium bookkeeping is intentionally separate from apps/publish/src/render/html-export.ts's copy.
+function chromiumCachePath(): string {
+  return process.env.KONTEXTA_CHROMIUM_CACHE ?? join(homedir() || tmpdir(), '.cache', 'kontexta', 'chromium');
+}
+
+async function findInstalledChromium(cache: string): Promise<{ executablePath: string; buildId: string } | null> {
+  const b: any = await import('@puppeteer/browsers');
+  const installed: any[] = await b.getInstalledBrowsers({ cacheDir: cache });
+  const found = installed.find((x) => x.browser === b.Browser.CHROMIUM && existsSync(x.executablePath));
+  return found ? { executablePath: found.executablePath, buildId: found.buildId } : null;
+}
 
 type CheckResult = { name: string; ok: boolean; detail: string };
 
@@ -59,19 +71,18 @@ function humanSize(bytes: number): string {
   return `${n.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
 }
 
-function checkPuppeteerChromium(): CheckResult {
+async function checkPuppeteerChromium(): Promise<CheckResult> {
   try {
-    const cache = process.env.KONTEXTA_CHROMIUM_CACHE ?? join(homedir() || tmpdir(), '.cache', 'kontexta', 'chromium');
+    const cache = chromiumCachePath();
     if (!existsSync(cache)) {
       return { name: 'puppeteer-chromium', ok: false, detail: 'not installed (run `kontexta doctor install-chromium` or wait for first PDF export)' };
     }
-    const entries = readdirSync(cache);
-    const buildDirs = entries.filter((e) => e.startsWith('chrome') || e.startsWith('chromium'));
-    if (buildDirs.length === 0) {
+    const found = await findInstalledChromium(cache);
+    if (!found) {
       return { name: 'puppeteer-chromium', ok: false, detail: 'not installed (run `kontexta doctor install-chromium` or wait for first PDF export)' };
     }
     const size = humanSize(dirSizeBytes(cache));
-    return { name: 'puppeteer-chromium', ok: true, detail: `${buildDirs.join(', ')} (${size}) in ${cache}` };
+    return { name: 'puppeteer-chromium', ok: true, detail: `${found.buildId} (${size}) in ${cache}` };
   } catch (e: any) {
     return { name: 'puppeteer-chromium', ok: false, detail: `check failed: ${e?.message ?? e}` };
   }
@@ -79,12 +90,14 @@ function checkPuppeteerChromium(): CheckResult {
 
 export async function installChromium(): Promise<number> {
   try {
+    const cache = chromiumCachePath();
+    mkdirSync(cache, { recursive: true });
+    const existing = await findInstalledChromium(cache);
+    if (existing) { process.stdout.write(`Already present: ${existing.executablePath}\n`); return 0; }
     const b: any = await import('@puppeteer/browsers');
-    const cache = process.env.KONTEXTA_CHROMIUM_CACHE ?? join(homedir() || tmpdir(), '.cache', 'kontexta', 'chromium');
     const platform = b.detectBrowserPlatform() ?? b.BrowserPlatform.LINUX;
     const buildId = await b.resolveBuildId(b.Browser.CHROMIUM, platform, 'latest');
     const exec = b.computeExecutablePath({ browser: b.Browser.CHROMIUM, buildId, cacheDir: cache });
-    if (existsSync(exec)) { process.stdout.write(`Already present: ${exec}\n`); return 0; }
     process.stdout.write(`Downloading Chromium ${buildId} to ${cache}…\n`);
     await b.install({ browser: b.Browser.CHROMIUM, buildId, cacheDir: cache });
     process.stdout.write(`Installed: ${exec}\n`);
@@ -101,7 +114,7 @@ export async function runDoctor(): Promise<number> {
     checkDataDir(),
     checkNative('better-sqlite3'),
     checkNative('re2'),
-    checkPuppeteerChromium(),
+    await checkPuppeteerChromium(),
   ];
   for (const r of results) {
     process.stdout.write(`${r.name}: ${r.detail}\n`);

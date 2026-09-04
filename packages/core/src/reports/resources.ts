@@ -15,7 +15,8 @@ const MIME: Record<string, string> = {
   ".json": "application/json",
 };
 
-export interface ResourceInfo { filename: string; size: number; url: string; }
+/** `src` (`resources/<filename>`) is what reports must embed — it resolves under both the dashboard's and the exporter's `<base>`; `url` is the absolute, dashboard-only API path. */
+export interface ResourceInfo { filename: string; size: number; src: string; url: string; }
 
 const NAME_RE = /^[a-z0-9._-]+$/;
 
@@ -37,6 +38,10 @@ export function resourceUrlFor(filename: string): string {
   return `/api/reports/resources/${filename}`;
 }
 
+export function resourceSrcFor(filename: string): string {
+  return `resources/${filename}`;
+}
+
 export function writeResource(projectRoot: string, filename: string, bytes: Buffer): ResourceInfo {
   if (filename.includes("..") || filename.includes("/") || filename.includes("\\")) throw new Error(`path traversal not allowed: ${filename}`);
   const dir = resourcesDirPath(projectRoot);
@@ -55,7 +60,7 @@ export function writeResource(projectRoot: string, filename: string, bytes: Buff
     }
   }
   writeFileSync(target, bytes);
-  return { filename: safe, size: bytes.length, url: resourceUrlFor(safe) };
+  return { filename: safe, size: bytes.length, src: resourceSrcFor(safe), url: resourceUrlFor(safe) };
 }
 
 export function readResource(projectRoot: string, filename: string): { bytes: Buffer; mime: string } {
@@ -72,6 +77,7 @@ export function listResources(projectRoot: string): ResourceInfo[] {
   return readdirSync(dir).filter(n => NAME_RE.test(n)).map(n => ({
     filename: n,
     size: statSync(join(dir, n)).size,
+    src: resourceSrcFor(n),
     url: resourceUrlFor(n),
   }));
 }

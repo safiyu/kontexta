@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { runPipeline } from "kxta-publish/pipeline";
 import { mkdirSync, writeFileSync, existsSync, statSync } from "node:fs";
 import { join, basename } from "node:path";
-import { getDataDir, getDatabase, createFile, updateFile, listFiles } from "kxta-core";
+import { getDataDir, getDatabase, createFile } from "kxta-core";
 import { checkAuth } from "@/lib/auth";
 import { assertSafeOutputPath } from "@/lib/safe-path";
 
@@ -82,35 +82,21 @@ export async function POST(request: NextRequest) {
 
     const result = runPipeline(config);
 
-    // Write index.html
-    writeFileSync(indexPath, result.html, "utf-8");
-
-    // Write llms.txt if enabled
-    if (body.llmsTxt) {
-      const { generateLlmsTxt } = await import("kxta-publish/render/llms");
-      const llmsPath = join(outputDir, "llms.txt");
-      writeFileSync(
-        llmsPath,
-        generateLlmsTxt(result.docs, result.search, config.site.title),
-        "utf-8"
-      );
+    // Write every pipeline output straight from result.outputs — avoids regenerating llms.txt with a second call.
+    for (const out of result.outputs) {
+      writeFileSync(join(outputDir, out.relPath), out.content, "utf-8");
     }
 
-    // Index publish outputs in KB so they appear in file list and MCP.
-    // Only .html and .md; .txt (llms.txt) would drift path vs format since createFile always writes `.${format}`.
-    for (const out of result.outputs) {
-      const ext = out.relPath.split(".").pop()?.toLowerCase();
-      let format: "html" | "md" | undefined;
-      if (ext === "html") format = "html";
-      else if (ext === "md") format = "md";
-      if (!format) continue;
-      const fullPath = join(outputDir, out.relPath);
-      const title = basename(out.relPath, `.${ext}`);
-      try {
-        const existing = listFiles({ dataDir, filters: { path: fullPath } });
-        if (existing.length > 0) {
-          await updateFile(existing[0].id, out.content, dataDir);
-        } else {
+    // Index outputs in the KB (default location only — createFile's own upsert makes this idempotent); skipHtmlSanitize is safe since this is our own trusted pipeline output, not agent/user content.
+    if (outputDir === defaultOutput) {
+      for (const out of result.outputs) {
+        const ext = out.relPath.split(".").pop()?.toLowerCase();
+        let format: "html" | "md" | undefined;
+        if (ext === "html") format = "html";
+        else if (ext === "md") format = "md";
+        if (!format) continue;
+        const title = basename(out.relPath, `.${ext}`);
+        try {
           await createFile({
             title,
             content: out.content,
@@ -118,10 +104,11 @@ export async function POST(request: NextRequest) {
             folder: "publish",
             dataDir,
             format,
+            skipHtmlSanitize: true,
           });
+        } catch (err) {
+          console.error(`Failed to index publish output ${out.relPath}:`, err);
         }
-      } catch (err) {
-        console.error(`Failed to index publish output ${out.relPath}:`, err);
       }
     }
 

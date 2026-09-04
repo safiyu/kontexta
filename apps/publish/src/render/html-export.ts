@@ -1,22 +1,41 @@
-import { install, computeExecutablePath, resolveBuildId, Browser, BrowserPlatform, detectBrowserPlatform } from "@puppeteer/browsers";
+import { install, computeExecutablePath, resolveBuildId, getInstalledBrowsers, Browser, BrowserPlatform, detectBrowserPlatform } from "@puppeteer/browsers";
 import puppeteer from "puppeteer-core";
 import { existsSync, mkdirSync, writeFileSync, mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { homedir, tmpdir } from "node:os";
 import { pathToFileURL } from "node:url";
 
+export function chromiumCachePath(): string {
+  return process.env.KONTEXTA_CHROMIUM_CACHE ?? join(homedir() || tmpdir(), ".cache", "kontexta", "chromium");
+}
+
 function cacheDir(): string {
-  const dir = process.env.KONTEXTA_CHROMIUM_CACHE ?? join(homedir() || tmpdir(), ".cache", "kontexta", "chromium");
+  const dir = chromiumCachePath();
   mkdirSync(dir, { recursive: true });
   return dir;
 }
 
-export async function ensureChromium(): Promise<{ executablePath: string; installed: boolean }> {
+// Memoized in-flight promise: makes concurrent calls within a process share one install instead of racing to write the same archive, and skips the network round-trip entirely once something is cached.
+let chromiumPromise: Promise<{ executablePath: string; installed: boolean }> | undefined;
+
+export function ensureChromium(): Promise<{ executablePath: string; installed: boolean }> {
+  if (!chromiumPromise) {
+    chromiumPromise = ensureChromiumUncached().catch((err) => {
+      chromiumPromise = undefined;
+      throw err;
+    });
+  }
+  return chromiumPromise;
+}
+
+async function ensureChromiumUncached(): Promise<{ executablePath: string; installed: boolean }> {
   const cache = cacheDir();
+  const installed = await getInstalledBrowsers({ cacheDir: cache });
+  const found = installed.find((b) => b.browser === Browser.CHROMIUM && existsSync(b.executablePath));
+  if (found) return { executablePath: found.executablePath, installed: false };
   const platform = detectBrowserPlatform() ?? BrowserPlatform.LINUX;
   const buildId = await resolveBuildId(Browser.CHROMIUM, platform, "latest");
   const exec = computeExecutablePath({ browser: Browser.CHROMIUM, buildId, cacheDir: cache });
-  if (existsSync(exec)) return { executablePath: exec, installed: false };
   await install({ browser: Browser.CHROMIUM, buildId, cacheDir: cache });
   return { executablePath: exec, installed: true };
 }

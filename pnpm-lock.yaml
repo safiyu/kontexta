@@ -32,6 +32,9 @@ importers:
       chokidar:
         specifier: ^4.0.0
         version: 4.0.3
+      dompurify:
+        specifier: ^3.4.14
+        version: 3.4.14
       glob:
         specifier: ^11.0.0
         version: 11.1.0
@@ -314,6 +317,9 @@ importers:
       chokidar:
         specifier: ^4.0.0
         version: 4.0.3
+      dejavu-fonts-ttf:
+        specifier: ^2.37.3
+        version: 2.37.3
       dompurify:
         specifier: ^3.4.14
         version: 3.4.14
@@ -2734,9 +2740,6 @@ packages:
 
   dompurify@3.4.14:
     resolution: {integrity: sha512-dVoH9z+MY+C9IilgGCk3YfFqjLi3fChm2OiKJMzh6axrJ5qwxqWaZamgmHrpv22CN/KdbZJuGEGgfQoL00LTdg==}
-
-  dompurify@3.4.7:
-    resolution: {integrity: sha512-2jBxDJY4RR06tQNy4w5FlFH7kfxsQZlufd0sbv+chfHCxeJwrFw2baUDsSwvBISD4K4RDbd0PTfy3uNXsR6siA==}
 
   dunder-proto@1.0.1:
     resolution: {integrity: sha512-KIN/nDJBQRcXw0MLVhZE9iQHmG68qAVIBg9CqmUYjmQIhgij9U5MFvrqkUL5FbtyyzZuOeOt0zdeRe4UY7ct+A==}
@@ -6743,10 +6746,6 @@ snapshots:
     optionalDependencies:
       '@types/trusted-types': 2.0.7
 
-  dompurify@3.4.7:
-    optionalDependencies:
-      '@types/trusted-types': 2.0.7
-
   dunder-proto@1.0.1:
     dependencies:
       call-bind-apply-helpers: 1.0.2
@@ -7527,7 +7526,7 @@ snapshots:
       d3-sankey: 0.12.3
       dagre-d3-es: 7.0.14
       dayjs: 1.11.21
-      dompurify: 3.4.7
+      dompurify: 3.4.14
       es-toolkit: 1.47.0
       katex: 0.16.47
       khroma: 2.1.0

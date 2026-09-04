@@ -6,7 +6,8 @@ export function HtmlViewer({ html }: { html: string }) {
   return (
     <iframe
       title="report"
-      sandbox=""
+      // allow-same-origin (no allow-scripts, so it can't be combined to escape) keeps the SameSite=Lax cookie flowing to /api/reports/resources/*
+      sandbox="allow-same-origin"
       srcDoc={srcDoc}
       style={{ width: "100%", height: "100%", border: "0", background: "white" }}
     />

@@ -341,7 +341,7 @@ server.tool(
 
 server.tool(
   "add_report_resource",
-  "Write an image or other binary resource into the shared reports/resources/ folder. Returns the resolved filename (may differ from the requested name if it was slugged or collision-suffixed) and the URL that HTML reports should reference (`resources/<filename>` after prepending `/api/reports/`). Bytes are passed base64-encoded.",
+  "Write an image or other binary resource into the shared reports/resources/ folder. Returns { filename, size, src, url } — embed the report's <img>/<a> tags with `src` exactly as given (e.g. `<img src=\"resources/chart.png\">`); it is the only form that resolves correctly both in the dashboard viewer and in PDF/PNG export. Do not use `url` inside report HTML — it only works in the dashboard. Bytes are passed base64-encoded.",
   {
     filename: z.string().describe("Requested filename with extension"),
     bytes_base64: z.string().describe("Base64-encoded file bytes"),
@@ -374,14 +374,28 @@ server.tool(
 
 server.tool(
   "export_report",
-  "Export an existing HTML report file as PDF or PNG. Returns a { url } pointing at the web-served download — the caller fetches the file with an authenticated request.",
+  "Export an existing HTML report as PDF or PNG. Returns { url } for the web-served download (requires an authenticated dashboard request) by default. Set inline_bytes=true to render in-process and get { bytes_base64 } instead — only available when running via the full `kontexta` CLI, not the standalone kontexta-mcp package; falls back to { url } with a note if unavailable.",
   {
     id: z.number(),
     format: z.enum(["pdf", "png"]).default("pdf"),
+    inline_bytes: z.boolean().optional().default(false),
   },
-  async ({ id, format }) => {
+  async ({ id, format, inline_bytes }) => {
     const url = `/api/files/${id}/export-html?format=${format}`;
-    return { content: [{ type: "text", text: JSON.stringify({ url }, null, 2) }] };
+    if (!inline_bytes) return { content: [{ type: "text", text: JSON.stringify({ url }, null, 2) }] };
+    try {
+      const { readFile } = await import("kxta-core");
+      // kxta-publish is intentionally undeclared here (private/workspace-only) — only resolves under the bundled `kontexta` CLI; the catch below covers the standalone package.
+      const mod: any = await import("kxta-publish/render/html-export" as any);
+      const { join } = await import("node:path");
+      const f = readFile(id);
+      const bytes = format === "pdf"
+        ? await mod.renderHtmlToPdf(f.content, { assetsDir: join(dataDir, "reports", "resources") })
+        : await mod.renderHtmlToPng(f.content, { assetsDir: join(dataDir, "reports", "resources") });
+      return { content: [{ type: "text", text: JSON.stringify({ bytes_base64: bytes.toString("base64"), format }, null, 2) }] };
+    } catch (e: any) {
+      return { content: [{ type: "text", text: JSON.stringify({ url, note: `inline_bytes unavailable in this install: ${e?.message ?? String(e)}` }, null, 2) }] };
+    }
   }
 );
 

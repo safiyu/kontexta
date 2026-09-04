@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { writeResource, readResource, listResources, deleteResource, resourceUrlFor, mimeFor } from "../../src/reports/resources.js";
+import { writeResource, readResource, listResources, deleteResource, resourceUrlFor, resourceSrcFor, mimeFor } from "../../src/reports/resources.js";
 
 let root: string;
 beforeEach(() => { root = mkdtempSync(join(tmpdir(), "kxta-res-")); });
@@ -14,6 +14,9 @@ describe("resources", () => {
     expect(info.filename).toBe("chart-one.png");
     expect(info.size).toBe(7);
     expect(info.url).toBe("/api/reports/resources/chart-one.png");
+    // src is the relative embed path — resolves under both the dashboard's and the exporter's <base>, unlike the absolute `url`.
+    expect(info.src).toBe("resources/chart-one.png");
+    expect(info.src).toBe(resourceSrcFor(info.filename));
   });
 
   it("reads back with correct mime", () => {

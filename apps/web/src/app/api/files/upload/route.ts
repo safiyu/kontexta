@@ -207,6 +207,7 @@ export async function POST(req: NextRequest) {
     // recover a title that re-slugifies back to finalBasename's stem.
     const finalStem = finalBasename.slice(0, -extname(finalBasename).length);
 
+    const format = ext === ".html" ? "html" : ext === ".mmd" ? "mmd" : "md";
     try {
       const created = await createFile({
         title: finalStem,
@@ -216,6 +217,7 @@ export async function POST(req: NextRequest) {
         folder: folder || undefined,
         tags,
         dataDir: DATA_DIR,
+        format,
       });
       uploaded.push({ id: created.id, path: created.path, original_name: original, final_name: finalBasename });
     } catch (e: any) {
