@@ -25,10 +25,8 @@ function slugName(input: string): string {
   return `${base}${ext || ""}`;
 }
 
-function resourcesDir(projectRoot: string): string {
-  const dir = join(projectRoot, "reports", "resources");
-  mkdirSync(dir, { recursive: true });
-  return dir;
+function resourcesDirPath(projectRoot: string): string {
+  return join(projectRoot, "reports", "resources");
 }
 
 export function mimeFor(filename: string): string {
@@ -41,7 +39,8 @@ export function resourceUrlFor(filename: string): string {
 
 export function writeResource(projectRoot: string, filename: string, bytes: Buffer): ResourceInfo {
   if (filename.includes("..") || filename.includes("/") || filename.includes("\\")) throw new Error(`path traversal not allowed: ${filename}`);
-  const dir = resourcesDir(projectRoot);
+  const dir = resourcesDirPath(projectRoot);
+  mkdirSync(dir, { recursive: true });
   let safe = slugName(filename);
   if (!NAME_RE.test(safe)) throw new Error(`unsafe filename: ${filename}`);
   let target = assertPathInside(dir, safe);
@@ -61,14 +60,14 @@ export function writeResource(projectRoot: string, filename: string, bytes: Buff
 
 export function readResource(projectRoot: string, filename: string): { bytes: Buffer; mime: string } {
   if (filename.includes("..") || filename.includes("/") || filename.includes("\\")) throw new Error(`path traversal not allowed: ${filename}`);
-  const dir = resourcesDir(projectRoot);
+  const dir = resourcesDirPath(projectRoot);
   if (!NAME_RE.test(filename)) throw new Error(`unsafe filename: ${filename}`);
   const target = assertPathInside(dir, filename);
   return { bytes: readFileSync(target), mime: mimeFor(filename) };
 }
 
 export function listResources(projectRoot: string): ResourceInfo[] {
-  const dir = resourcesDir(projectRoot);
+  const dir = resourcesDirPath(projectRoot);
   if (!existsSync(dir)) return [];
   return readdirSync(dir).filter(n => NAME_RE.test(n)).map(n => ({
     filename: n,
@@ -79,7 +78,7 @@ export function listResources(projectRoot: string): ResourceInfo[] {
 
 export function deleteResource(projectRoot: string, filename: string): void {
   if (filename.includes("..") || filename.includes("/") || filename.includes("\\")) throw new Error(`path traversal not allowed: ${filename}`);
-  const dir = resourcesDir(projectRoot);
+  const dir = resourcesDirPath(projectRoot);
   if (!NAME_RE.test(filename)) throw new Error(`unsafe filename: ${filename}`);
   const target = assertPathInside(dir, filename);
   if (existsSync(target)) unlinkSync(target);

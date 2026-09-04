@@ -18,6 +18,8 @@ export async function GET(
         "Content-Type": mime,
         "Content-Length": String(bytes.byteLength),
         "Cache-Control": "private, max-age=60",
+        "X-Content-Type-Options": "nosniff",
+        "Content-Security-Policy": "sandbox; default-src 'none'",
       },
     });
   } catch (err: any) {

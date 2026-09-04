@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { toast } from "sonner";
 import { Dialog } from "@/components/ui/dialog";
 
 export function HtmlEditor({
@@ -26,12 +27,15 @@ export function HtmlEditor({
         body: JSON.stringify({ content: value }),
       });
       if (!res.ok) {
-        alert("Save failed");
+        const body = await res.text().catch(() => "");
+        toast.error(`Save failed${body ? `: ${body}` : ""}`);
         return;
       }
       const updatedFile = await res.json();
       onSaved(updatedFile);
       onClose();
+    } catch (err: any) {
+      toast.error(`Save failed: ${err?.message ?? String(err)}`);
     } finally {
       setBusy(false);
     }

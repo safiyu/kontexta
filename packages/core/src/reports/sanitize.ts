@@ -4,9 +4,9 @@ import createDOMPurify from "dompurify";
 const { window } = new JSDOM("");
 const purify = createDOMPurify(window as any);
 
+const URL_ATTRS = new Set(["href", "src", "action", "formaction", "xlink:href"]);
 purify.addHook("uponSanitizeAttribute", (_node, data) => {
-  const isUrlAttr = data.attrName === "href" || data.attrName === "src" || data.attrName === "action";
-  if (!isUrlAttr) return;
+  if (!URL_ATTRS.has(data.attrName)) return;
   const v = String(data.attrValue).trim();
   if (data.attrName === "src" && /^data:image\//i.test(v)) return;
   if (/^(javascript|data|vbscript|file):/i.test(v)) data.keepAttr = false;

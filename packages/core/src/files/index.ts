@@ -1,6 +1,7 @@
 /**
  * File operations module for Kontexta
- * Handles CRUD operations for .md and .mmd files with SQLite indexing
+ * Handles CRUD operations for .md, .mmd, and .html files with SQLite indexing.
+ * HTML content is sanitized via DOMPurify (see ../reports/sanitize.ts) on every write.
  */
 import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync, unlinkSync, renameSync, mkdirSync, readdirSync, statSync, lstatSync, existsSync, rmSync } from "node:fs";

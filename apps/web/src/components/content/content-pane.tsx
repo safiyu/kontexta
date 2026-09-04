@@ -106,7 +106,7 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
   const [removingOrphan, setRemovingOrphan] = useState(false);
   const [editHtmlOpen, setEditHtmlOpen] = useState(false);
 
-  const baseFilename = () => (file?.title || "untitled").replace(/\.(md|mmd)$/i, "");
+  const baseFilename = () => (file?.title || "untitled").replace(/\.(md|mmd|html)$/i, "");
 
   const handleExportMarkdown = () => {
     if (!file) return;
