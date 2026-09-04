@@ -1,6 +1,6 @@
 {
   "name": "kxta-core",
-  "version": "4.4.1",
+  "version": "4.4.2",
   "description": "Core context and command engines for Kontexta",
   "private": true,
   "type": "module",
@@ -16,6 +16,7 @@
     "@mozilla/readability": "^0.6.0",
     "better-sqlite3": "^12.10.0",
     "chokidar": "^4.0.0",
+    "dompurify": "^3.4.14",
     "glob": "^11.0.0",
     "jsdom": "^29.1.1",
     "simple-git": "^3.27.0",
@@ -24,6 +25,7 @@
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.12",
+    "@types/dompurify": "^3.2.0",
     "@types/jsdom": "^28.0.1",
     "@types/turndown": "^5.0.6",
     "typescript": "^5.7.0",

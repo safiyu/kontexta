@@ -7,7 +7,7 @@ import { basename, extname, dirname } from "node:path";
 const MAX_BYTES = 5 * 1024 * 1024;
 const MAX_TOTAL_BYTES = Number(process.env.KONTEXTA_UPLOAD_MAX_TOTAL_BYTES ?? 50 * 1024 * 1024);
 const MAX_FILES = Number(process.env.KONTEXTA_UPLOAD_MAX_FILES ?? 200);
-const ALLOWED_EXT = new Set([".md", ".markdown", ".mmd"]);
+const ALLOWED_EXT = new Set([".md", ".markdown", ".mmd", ".html"]);
 
 interface UploadedItem {
   id: number;

@@ -9,6 +9,7 @@ import { getDatabase } from "../db/index.js";
 import { commitFile, commitDelete } from "../git/index.js";
 import { assertPathInside, escapeLike, withLock, fileLockKey } from "../util/safety.js";
 import { profileRelPath, repairProfile } from "../profile/index.js";
+import { sanitizeHtml } from "../reports/sanitize.js";
 import type { FileRecord, Destination, FileFilters, StorageType } from "../types.js";
 
 /**
@@ -109,7 +110,7 @@ export interface CreateFileOptions {
   dataDir: string;
   sourcePath?: string;
   /** File extension to write. Defaults to "md". */
-  format?: "md" | "mmd";
+  format?: "md" | "mmd" | "html";
 }
 
 export interface FileRecordWithContent extends FileRecord {
@@ -219,6 +220,7 @@ export async function createFile(opts: CreateFileOptions): Promise<FileRecordWit
     repairedSections = repaired;
     content = repairedContent;
   }
+  if (format === "html") content = sanitizeHtml(content);
   writeFileSync(filePath, content, "utf8");
   const contentHash = computeHash(content);
 
@@ -363,6 +365,7 @@ export async function updateFile(id: number, content: string, dataDir: string): 
       console.warn("updateFile: failed to stash pre-existing content for rollback:", e);
     }
   }
+  if (fileRecord.path.endsWith(".html")) content = sanitizeHtml(content);
   writeFileSync(fileRecord.path, content, "utf8");
   const contentHash = computeHash(content);
 
