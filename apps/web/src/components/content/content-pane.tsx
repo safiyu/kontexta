@@ -11,6 +11,7 @@ import stripMarkdown from "strip-markdown";
 import { MarkdownViewer } from "./markdown-viewer";
 import { MermaidViewer } from "./mermaid-viewer";
 import { HtmlViewer } from "./html-viewer";
+import { HtmlEditor } from "./html-editor";
 import { MarkdownEditor } from "./markdown-editor";
 import { DeleteConfirmDialog } from "./delete-confirm-dialog";
 import { GitErrorDialog } from "./git-error-dialog";
@@ -103,6 +104,7 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
   const [gitErrorDetail, setGitErrorDetail] = useState<string | undefined>(undefined);
   const [refreshing, setRefreshing] = useState(false);
   const [removingOrphan, setRemovingOrphan] = useState(false);
+  const [editHtmlOpen, setEditHtmlOpen] = useState(false);
 
   const baseFilename = () => (file?.title || "untitled").replace(/\.(md|mmd)$/i, "");
 
@@ -539,33 +541,35 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
   return (
     <div key={fileId} className="h-full flex flex-col animate-fade-in">
       <div className="h-10 px-4 border-b border-[var(--border)] flex items-center gap-4 text-[14px] sticky top-0 bg-[var(--bg-primary)] z-10">
-        {(["view", "edit", "history"] as const).map((mode) => {
-          const active =
-            (mode === "view" && !editing && !viewHistory) ||
-            (mode === "edit" && editing) ||
-            (mode === "history" && viewHistory);
-          const onTabClick = () => {
-            if (mode === "edit") {
-              if (!editing) handleEdit();
-              return;
-            }
-            // Switching away from edit cancels in-progress edits.
-            if (editing) handleCancel();
-            setViewHistory(mode === "history");
-            if (mode === "history") fetchHistory();
-          };
-          return (
-            <button
-              key={mode}
-              onClick={onTabClick}
-              className={`btn btn-sm -mb-px py-2 border-b-2 transition-colors ${
-                active ? "border-[var(--accent)]" : ""
-              }`}
-            >
-              {mode[0].toUpperCase() + mode.slice(1)}
-            </button>
-          );
-        })}
+        {(["view", "edit", "history"] as const)
+          .filter((mode) => mode !== "edit" || !file.path.endsWith(".html"))
+          .map((mode) => {
+            const active =
+              (mode === "view" && !editing && !viewHistory) ||
+              (mode === "edit" && editing) ||
+              (mode === "history" && viewHistory);
+            const onTabClick = () => {
+              if (mode === "edit") {
+                if (!editing) handleEdit();
+                return;
+              }
+              // Switching away from edit cancels in-progress edits.
+              if (editing) handleCancel();
+              setViewHistory(mode === "history");
+              if (mode === "history") fetchHistory();
+            };
+            return (
+              <button
+                key={mode}
+                onClick={onTabClick}
+                className={`btn btn-sm -mb-px py-2 border-b-2 transition-colors ${
+                  active ? "border-[var(--accent)]" : ""
+                }`}
+              >
+                {mode[0].toUpperCase() + mode.slice(1)}
+              </button>
+            );
+          })}
         <div className="ml-auto flex items-center gap-3 text-[12px] text-[var(--text-secondary)] font-mono">
           {editing ? (
             <>
@@ -609,6 +613,19 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
                   <path d="M21 12a9 9 0 0 1-15 6.7L3 16"></path>
                 </svg>
               </button>
+              {file.path.endsWith(".html") && (
+                <button
+                  type="button"
+                  onClick={() => setEditHtmlOpen(true)}
+                  className="btn btn-md"
+                  aria-label="Edit HTML source"
+                  title="Edit HTML source"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 opacity-70">
+                    <path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
+                  </svg>
+                </button>
+              )}
               <button
                 onClick={async () => {
                   if (!file) return;
@@ -816,6 +833,30 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
         body={gitErrorBody}
         detail={gitErrorDetail}
       />
+
+      {editHtmlOpen && file && (
+        <HtmlEditor
+          fileId={file.id}
+          initial={file.content}
+          onClose={() => setEditHtmlOpen(false)}
+          onSaved={(updatedFile) => {
+            const issuedFor = file.id;
+            if (fileIdRef.current !== issuedFor) {
+              if (updatedFile.git_warning) {
+                console.warn(`[kontexta] git_warning for stale file ${issuedFor}:`, updatedFile.git_warning);
+              }
+              return;
+            }
+            setFile(updatedFile);
+            if (updatedFile.git_warning) {
+              setGitErrorTitle("Git commit failed");
+              setGitErrorBody("Your changes were saved to the database, but Kontexta could not create a Git history entry for this file.");
+              setGitErrorDetail(updatedFile.git_warning);
+              setGitErrorOpen(true);
+            }
+          }}
+        />
+      )}
     </div>
   );
 }
