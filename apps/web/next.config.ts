@@ -36,6 +36,7 @@ const NATIVE_SERVER_ONLY = [
   // directly at all (see the outputFileTracingIncludes comment below).
   "kxta-publish",
   "kxta-publish/render/pdf",
+  "kxta-publish/render/html-export",
 ];
 
 // pdfkit's *.afm font-metric files (see above) are loaded with a dynamic
@@ -56,11 +57,19 @@ const publishRequire = createRequire(join(kxtaPublishDir, "package.json"));
 const pdfmakeDir = dirname(publishRequire.resolve("pdfmake/package.json"));
 const pdfmakeRequire = createRequire(join(pdfmakeDir, "package.json"));
 const pdfkitDataDir = dirname(pdfmakeRequire.resolve("pdfkit/js/data/Helvetica.afm"));
+// DejaVu Sans TTFs are read by kxta-publish/render/pdf via
+// `require.resolve("dejavu-fonts-ttf/ttf/DejaVuSans.ttf")`. Same tracer
+// story as the pdfkit .afm files: the read happens through a runtime
+// path join, so Next's file tracer doesn't follow it and the standalone
+// build ships without the fonts unless we list them here explicitly.
+const dejavuTtfDir = dirname(publishRequire.resolve("dejavu-fonts-ttf/ttf/DejaVuSans.ttf"));
 // Glob patterns must use forward slashes even on Windows — path.relative()
 // emits backslashes there, which glob engines treat as escape characters
 // (breaking the pattern and sending the matcher scanning outside the repo).
 const pdfkitDataGlob =
   "./" + relative(configDir, pdfkitDataDir).split(sep).join("/") + "/*.afm";
+const dejavuTtfGlob =
+  "./" + relative(configDir, dejavuTtfDir).split(sep).join("/") + "/DejaVuSans*.ttf";
 
 const nextConfig: NextConfig = {
   output: "standalone",
@@ -108,6 +117,7 @@ const nextConfig: NextConfig = {
             "../../packages/core/src/db/migrations/*.sql",
             "../../CHANGELOG.md",
             pdfkitDataGlob,
+            dejavuTtfGlob,
           ],
         },
   webpack: (config, { isServer }) => {
