@@ -539,6 +539,11 @@ export function listFiles(opts: ListFilesOptions): FileRecord[] {
       sql += " AND NOT EXISTS (SELECT 1 FROM file_tags WHERE file_tags.file_id = files.id)";
     }
 
+    if (filters.path !== undefined) {
+      sql += " AND path = ?";
+      params.push(filters.path);
+    }
+
     if (filters.folder !== undefined) {
       // Everything interpolated into a LIKE ... ESCAPE '\' pattern must be
       // escaped — including project_path and the literal backslash

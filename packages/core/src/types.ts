@@ -61,6 +61,8 @@ export interface FileFilters {
   offset?: number;
   /** When set, scope folder matching to paths under this project root. */
   project_path?: string;
+  /** Exact path match filter. */
+  path?: string;
 }
 
 export interface SearchFilters {
