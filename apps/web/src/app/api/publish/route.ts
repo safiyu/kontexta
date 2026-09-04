@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { runPipeline } from "kxta-publish/pipeline";
 import { mkdirSync, writeFileSync, existsSync, statSync } from "node:fs";
-import { join } from "node:path";
-import { getDataDir, getDatabase } from "kxta-core";
+import { join, basename } from "node:path";
+import { getDataDir, getDatabase, createFile, updateFile, listFiles } from "kxta-core";
 import { checkAuth } from "@/lib/auth";
 import { assertSafeOutputPath } from "@/lib/safe-path";
 
@@ -94,6 +94,35 @@ export async function POST(request: NextRequest) {
         generateLlmsTxt(result.docs, result.search, config.site.title),
         "utf-8"
       );
+    }
+
+    // Index publish outputs in KB so they appear in file list and MCP
+    for (const out of result.outputs) {
+      const ext = out.relPath.split(".").pop()?.toLowerCase();
+      let format: "html" | "md" | undefined;
+      if (ext === "html") format = "html";
+      else if (ext === "md") format = "md";
+      else if (ext === "txt") format = "md";
+      if (!format) continue;
+      const fullPath = join(outputDir, out.relPath);
+      const title = basename(out.relPath, `.${ext}`);
+      try {
+        const existing = listFiles({ dataDir, filters: { path: fullPath } });
+        if (existing.length > 0) {
+          await updateFile(existing[0].id, out.content, dataDir);
+        } else {
+          await createFile({
+            title,
+            content: out.content,
+            destination: "knowledge",
+            folder: "publish",
+            dataDir,
+            format,
+          });
+        }
+      } catch (err) {
+        console.error(`Failed to index publish output ${out.relPath}:`, err);
+      }
     }
 
     return NextResponse.json({
