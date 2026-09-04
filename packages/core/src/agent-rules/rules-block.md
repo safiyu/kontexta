@@ -100,7 +100,7 @@ The matrix below is grouped by intent. For each tool: when to reach for it, the 
 
 | Tool | When | Not when | Use instead |
 |---|---|---|---|
-| `create_file` | One new file (md or mmd via `format`) | Bulk-creating ≥2 files | `create_files` |
+| `create_file` | One new file (md, mmd, or html via `format`) | Bulk-creating ≥2 files | `create_files` |
 | `create_files` | 2+ new files in one call | Single file | `create_file` |
 | `update_file` | Replacing the whole body | Editing one section | `update_file_section` |
 | `update_file_section` | Surgical edit at a known heading | Replacing the whole file | `update_file` |
@@ -128,6 +128,15 @@ The matrix below is grouped by intent. For each tool: when to reach for it, the 
 | `list_folders` | Enumerate folders in the project | Finding files | `list_files` |
 | `create_folder` | Create a new (possibly nested) folder | Files don't need explicit folders | |
 | `delete_folder` | Remove an empty folder | Folder still has files | `delete_files` first |
+
+#### Reports
+
+| Tool | When | Not when | Use instead |
+|---|---|---|---|
+| `add_report_resource` | Add an image to the shared `reports/resources/` pool | Embedding data URIs | |
+| `list_report_resources` | List all shared report resources | Need full file list | `list_files` |
+| `delete_report_resource` | Delete a shared resource by name | Deleting a report file | `delete_file` |
+| `export_report` | Export an HTML report as PDF or PNG | Exporting markdown | |
 
 #### History & recovery
 

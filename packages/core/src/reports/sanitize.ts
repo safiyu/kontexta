@@ -2,7 +2,7 @@ import { JSDOM } from "jsdom";
 import createDOMPurify from "dompurify";
 
 const { window } = new JSDOM("");
-const purify = createDOMPurify(window as unknown as Window);
+const purify = createDOMPurify(window as any);
 
 purify.addHook("uponSanitizeAttribute", (_node, data) => {
   const isUrlAttr = data.attrName === "href" || data.attrName === "src" || data.attrName === "action";
