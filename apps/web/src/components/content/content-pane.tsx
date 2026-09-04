@@ -542,7 +542,7 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
     <div key={fileId} className="h-full flex flex-col animate-fade-in">
       <div className="h-10 px-4 border-b border-[var(--border)] flex items-center gap-4 text-[14px] sticky top-0 bg-[var(--bg-primary)] z-10">
         {(["view", "edit", "history"] as const)
-          .filter((mode) => mode !== "edit" || !file.path.endsWith(".html"))
+          .filter((mode) => mode !== "edit" || (!file.path.endsWith(".html") && !file.path.includes("/publish/")))
           .map((mode) => {
             const active =
               (mode === "view" && !editing && !viewHistory) ||
@@ -570,6 +570,11 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
               </button>
             );
           })}
+        {file.path.includes("/publish/") && (
+          <span className="inline-flex items-center px-2 py-0.5 rounded bg-amber-accent/10 border border-amber-accent/30 text-[10px] text-[var(--text-primary)] uppercase tracking-wider font-bold" title="Regenerated on publish">
+            Read-only
+          </span>
+        )}
         <div className="ml-auto flex items-center gap-3 text-[12px] text-[var(--text-secondary)] font-mono">
           {editing ? (
             <>
@@ -613,7 +618,7 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
                   <path d="M21 12a9 9 0 0 1-15 6.7L3 16"></path>
                 </svg>
               </button>
-              {file.path.endsWith(".html") && (
+              {file.path.endsWith(".html") && !file.path.includes("/publish/") && (
                 <button
                   type="button"
                   onClick={() => setEditHtmlOpen(true)}
