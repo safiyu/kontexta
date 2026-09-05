@@ -42,7 +42,8 @@ async function ensureChromiumUncached(): Promise<{ executablePath: string; insta
 
 // Chromium's own sandbox needs unprivileged user namespaces, which many CI runners (GitHub's ubuntu-latest since Ubuntu 23.10+) and most Docker containers disable by default — retrying once with --no-sandbox after a launch failure covers both without requiring per-environment configuration.
 export async function launchChromium(executablePath: string): Promise<any> {
-  const baseArgs = ["--disable-gpu"];
+  // --disable-dev-shm-usage: CI/Docker's /dev/shm is often tiny (64MB default), which starves the renderer under memory pressure and hangs page loads instead of cleanly failing — always safe, since it just makes Chrome use /tmp instead.
+  const baseArgs = ["--disable-gpu", "--disable-dev-shm-usage"];
   const forceNoSandbox = process.env.KONTEXTA_CHROMIUM_NO_SANDBOX === "1";
   try {
     return await puppeteer.launch({ executablePath, args: forceNoSandbox ? [...baseArgs, "--no-sandbox"] : baseArgs });
@@ -74,7 +75,8 @@ async function withPage<T>(html: string, opts: { assetsDir?: string }, fn: (page
         if (r.url().startsWith("file://")) r.continue();
         else r.abort();
       });
-      await page.goto(pathToFileURL(file).href, { waitUntil: "networkidle0" });
+      // "load" (not "networkidle0"): our content is sanitizer-stripped of scripts, so nothing loads asynchronously after resources finish — "load" waits for images too, without networkidle0's flaky reliance on Chromium's background connection count ever reaching zero, which can hang indefinitely in network-restricted CI/containers.
+      await page.goto(pathToFileURL(file).href, { waitUntil: "load" });
       return await fn(page);
     } finally {
       await browser.close();
