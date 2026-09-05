@@ -40,17 +40,32 @@ async function ensureChromiumUncached(): Promise<{ executablePath: string; insta
   return { executablePath: exec, installed: true };
 }
 
-// Chromium's own sandbox needs unprivileged user namespaces, which many CI runners (GitHub's ubuntu-latest since Ubuntu 23.10+) and most Docker containers disable by default — retrying once with --no-sandbox after a launch failure covers both without requiring per-environment configuration.
+// Chromium's own sandbox needs unprivileged user namespaces, which many CI runners (GitHub's ubuntu-latest since Ubuntu 23.10+) and most Docker containers disable by default.
+const NO_SANDBOX_ARG = "--no-sandbox";
+
+// Memoized per-process: a failed sandboxed launch attempt is expensive (Chromium spawns, crashes, and crashpad dumps a full stack trace to disk before Puppeteer detects the exit) — discovering "this environment needs --no-sandbox" once and reusing that for every subsequent render avoids paying that tax on every single call, which was slow enough to blow past page.goto's own 30s navigation timeout on the second render.
+let needsNoSandbox: boolean | undefined;
+
+/** Test-only: clears the memoized sandbox-capability discovery between test cases. */
+export function resetChromiumSandboxMemo(): void {
+  needsNoSandbox = undefined;
+}
+
 export async function launchChromium(executablePath: string): Promise<any> {
   // --disable-dev-shm-usage: CI/Docker's /dev/shm is often tiny (64MB default), which starves the renderer under memory pressure and hangs page loads instead of cleanly failing — always safe, since it just makes Chrome use /tmp instead.
   const baseArgs = ["--disable-gpu", "--disable-dev-shm-usage"];
   const forceNoSandbox = process.env.KONTEXTA_CHROMIUM_NO_SANDBOX === "1";
+  if (needsNoSandbox === true || forceNoSandbox) {
+    return await puppeteer.launch({ executablePath, args: [...baseArgs, NO_SANDBOX_ARG] });
+  }
   try {
-    return await puppeteer.launch({ executablePath, args: forceNoSandbox ? [...baseArgs, "--no-sandbox"] : baseArgs });
+    const browser = await puppeteer.launch({ executablePath, args: baseArgs });
+    needsNoSandbox = false;
+    return browser;
   } catch (err) {
-    if (forceNoSandbox) throw err;
-    console.warn("[kxta-publish] Chromium launch failed with its sandbox enabled — retrying with --no-sandbox (typical in CI/Docker; set KONTEXTA_CHROMIUM_NO_SANDBOX=1 to skip the first attempt).");
-    return await puppeteer.launch({ executablePath, args: [...baseArgs, "--no-sandbox"] });
+    console.warn("[kxta-publish] Chromium launch failed with its sandbox enabled — retrying with --no-sandbox (typical in CI/Docker) and remembering that for the rest of this process.");
+    needsNoSandbox = true;
+    return await puppeteer.launch({ executablePath, args: [...baseArgs, NO_SANDBOX_ARG] });
   }
 }
 
