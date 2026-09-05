@@ -29,5 +29,6 @@ afterEach(async () => {
   else process.env.KONTEXTA_DATA_DIR = prevDataDir;
   if (prevDbPath === undefined) delete process.env.KONTEXTA_DB_PATH;
   else process.env.KONTEXTA_DB_PATH = prevDbPath;
-  if (existsSync(dir)) rmSync(dir, { recursive: true, force: true });
+  // maxRetries/retryDelay: on Windows, a just-closed file handle (e.g. archiver's read stream in the zip-export tests) can lag a few hundred ms behind the stream's "end" event, transiently EBUSY-ing this rmdir — Node's built-in retry exists specifically for this.
+  if (existsSync(dir)) rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
 });
