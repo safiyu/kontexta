@@ -55,17 +55,18 @@ export async function launchChromium(executablePath: string): Promise<any> {
   // --disable-dev-shm-usage: CI/Docker's /dev/shm is often tiny (64MB default), which starves the renderer under memory pressure and hangs page loads instead of cleanly failing — always safe, since it just makes Chrome use /tmp instead.
   const baseArgs = ["--disable-gpu", "--disable-dev-shm-usage"];
   const forceNoSandbox = process.env.KONTEXTA_CHROMIUM_NO_SANDBOX === "1";
+  // timeout: Puppeteer's own launch() default is 30s; the one-time failed-sandboxed-attempt (spawn + crash + crashpad's stack dump) alone has been observed taking ~19s on a loaded CI runner, too close to that default for comfort.
   if (needsNoSandbox === true || forceNoSandbox) {
-    return await puppeteer.launch({ executablePath, args: [...baseArgs, NO_SANDBOX_ARG] });
+    return await puppeteer.launch({ executablePath, args: [...baseArgs, NO_SANDBOX_ARG], timeout: 90_000 });
   }
   try {
-    const browser = await puppeteer.launch({ executablePath, args: baseArgs });
+    const browser = await puppeteer.launch({ executablePath, args: baseArgs, timeout: 90_000 });
     needsNoSandbox = false;
     return browser;
   } catch (err) {
     console.warn("[kxta-publish] Chromium launch failed with its sandbox enabled — retrying with --no-sandbox (typical in CI/Docker) and remembering that for the rest of this process.");
     needsNoSandbox = true;
-    return await puppeteer.launch({ executablePath, args: [...baseArgs, NO_SANDBOX_ARG] });
+    return await puppeteer.launch({ executablePath, args: [...baseArgs, NO_SANDBOX_ARG], timeout: 90_000 });
   }
 }
 
@@ -91,7 +92,8 @@ async function withPage<T>(html: string, opts: { assetsDir?: string }, fn: (page
         else r.abort();
       });
       // "load" (not "networkidle0"): our content is sanitizer-stripped of scripts, so nothing loads asynchronously after resources finish — "load" waits for images too, without networkidle0's flaky reliance on Chromium's background connection count ever reaching zero, which can hang indefinitely in network-restricted CI/containers.
-      await page.goto(pathToFileURL(file).href, { waitUntil: "load" });
+      // timeout: Puppeteer's own default is 30s, independent of any test-level timeout; on a loaded/shared CI runner the one-time sandbox-discovery launch alone has been observed eating well into that budget, so this needs real headroom rather than trusting the default.
+      await page.goto(pathToFileURL(file).href, { waitUntil: "load", timeout: 90_000 });
       return await fn(page);
     } finally {
       await browser.close();
