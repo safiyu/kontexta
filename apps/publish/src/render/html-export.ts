@@ -40,6 +40,19 @@ async function ensureChromiumUncached(): Promise<{ executablePath: string; insta
   return { executablePath: exec, installed: true };
 }
 
+// Chromium's own sandbox needs unprivileged user namespaces, which many CI runners (GitHub's ubuntu-latest since Ubuntu 23.10+) and most Docker containers disable by default — retrying once with --no-sandbox after a launch failure covers both without requiring per-environment configuration.
+export async function launchChromium(executablePath: string): Promise<any> {
+  const baseArgs = ["--disable-gpu"];
+  const forceNoSandbox = process.env.KONTEXTA_CHROMIUM_NO_SANDBOX === "1";
+  try {
+    return await puppeteer.launch({ executablePath, args: forceNoSandbox ? [...baseArgs, "--no-sandbox"] : baseArgs });
+  } catch (err) {
+    if (forceNoSandbox) throw err;
+    console.warn("[kxta-publish] Chromium launch failed with its sandbox enabled — retrying with --no-sandbox (typical in CI/Docker; set KONTEXTA_CHROMIUM_NO_SANDBOX=1 to skip the first attempt).");
+    return await puppeteer.launch({ executablePath, args: [...baseArgs, "--no-sandbox"] });
+  }
+}
+
 async function withPage<T>(html: string, opts: { assetsDir?: string }, fn: (page: any) => Promise<T>): Promise<T> {
   const { executablePath } = await ensureChromium();
   const tmp = mkdtempSync(join(tmpdir(), "kxta-html-"));
@@ -53,9 +66,7 @@ async function withPage<T>(html: string, opts: { assetsDir?: string }, fn: (page
     const file = join(tmp, "index.html");
     const wrapped = `<!doctype html><html><head><meta charset="utf-8"><base href="./"></head><body>${html}</body></html>`;
     writeFileSync(file, wrapped, "utf8");
-    const args = ["--disable-gpu"];
-    if (process.env.KONTEXTA_CHROMIUM_NO_SANDBOX === "1") args.push("--no-sandbox");
-    const browser = await puppeteer.launch({ executablePath, args });
+    const browser = await launchChromium(executablePath);
     try {
       const page = await browser.newPage();
       await page.setRequestInterception(true);
