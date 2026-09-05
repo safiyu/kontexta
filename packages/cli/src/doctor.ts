@@ -18,7 +18,7 @@ async function findInstalledChromium(cache: string): Promise<{ executablePath: s
   return found ? { executablePath: found.executablePath, buildId: found.buildId } : null;
 }
 
-type CheckResult = { name: string; ok: boolean; detail: string };
+type CheckResult = { name: string; ok: boolean; detail: string; informational?: boolean };
 
 function checkNode(): CheckResult {
   const v = process.versions.node;
@@ -71,20 +71,21 @@ function humanSize(bytes: number): string {
   return `${n.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
 }
 
+// Informational only: Chromium is lazy-downloaded on first PDF export, so being absent is the expected state on a fresh install, not a failure — this must never gate the doctor exit code.
 async function checkPuppeteerChromium(): Promise<CheckResult> {
   try {
     const cache = chromiumCachePath();
     if (!existsSync(cache)) {
-      return { name: 'puppeteer-chromium', ok: false, detail: 'not installed (run `kontexta doctor install-chromium` or wait for first PDF export)' };
+      return { name: 'puppeteer-chromium', ok: false, informational: true, detail: 'not installed (run `kontexta doctor install-chromium` or wait for first PDF export)' };
     }
     const found = await findInstalledChromium(cache);
     if (!found) {
-      return { name: 'puppeteer-chromium', ok: false, detail: 'not installed (run `kontexta doctor install-chromium` or wait for first PDF export)' };
+      return { name: 'puppeteer-chromium', ok: false, informational: true, detail: 'not installed (run `kontexta doctor install-chromium` or wait for first PDF export)' };
     }
     const size = humanSize(dirSizeBytes(cache));
-    return { name: 'puppeteer-chromium', ok: true, detail: `${found.buildId} (${size}) in ${cache}` };
+    return { name: 'puppeteer-chromium', ok: true, informational: true, detail: `${found.buildId} (${size}) in ${cache}` };
   } catch (e: any) {
-    return { name: 'puppeteer-chromium', ok: false, detail: `check failed: ${e?.message ?? e}` };
+    return { name: 'puppeteer-chromium', ok: false, informational: true, detail: `check failed: ${e?.message ?? e}` };
   }
 }
 
@@ -119,5 +120,5 @@ export async function runDoctor(): Promise<number> {
   for (const r of results) {
     process.stdout.write(`${r.name}: ${r.detail}\n`);
   }
-  return results.every((r) => r.ok) ? 0 : 1;
+  return results.every((r) => r.ok || r.informational) ? 0 : 1;
 }
