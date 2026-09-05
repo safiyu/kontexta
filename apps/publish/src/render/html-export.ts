@@ -70,15 +70,14 @@ export async function launchChromium(executablePath: string): Promise<any> {
   }
 }
 
-async function withPage<T>(html: string, opts: { assetsDir?: string }, fn: (page: any) => Promise<T>): Promise<T> {
-  const { executablePath } = await ensureChromium();
+async function navigateAndRun<T>(executablePath: string, html: string, assetsDir: string | undefined, fn: (page: any) => Promise<T>): Promise<T> {
   const tmp = mkdtempSync(join(tmpdir(), "kxta-html-"));
   try {
-    if (opts.assetsDir && existsSync(opts.assetsDir)) {
+    if (assetsDir && existsSync(assetsDir)) {
       const dst = join(tmp, "resources");
       mkdirSync(dst, { recursive: true });
       const { copyFileSync, readdirSync } = await import("node:fs");
-      for (const n of readdirSync(opts.assetsDir)) copyFileSync(join(opts.assetsDir, n), join(dst, n));
+      for (const n of readdirSync(assetsDir)) copyFileSync(join(assetsDir, n), join(dst, n));
     }
     const file = join(tmp, "index.html");
     const wrapped = `<!doctype html><html><head><meta charset="utf-8"><base href="./"></head><body>${html}</body></html>`;
@@ -92,7 +91,7 @@ async function withPage<T>(html: string, opts: { assetsDir?: string }, fn: (page
         else r.abort();
       });
       // "load" (not "networkidle0"): our content is sanitizer-stripped of scripts, so nothing loads asynchronously after resources finish — "load" waits for images too, without networkidle0's flaky reliance on Chromium's background connection count ever reaching zero, which can hang indefinitely in network-restricted CI/containers.
-      // timeout: Puppeteer's own default is 30s, independent of any test-level timeout; on a loaded/shared CI runner the one-time sandbox-discovery launch alone has been observed eating well into that budget, so this needs real headroom rather than trusting the default.
+      // timeout: Puppeteer's own default is 30s, independent of any test-level timeout; a cold Chromium's first-ever navigation in a process has been observed needing far more than that (see warmUpChromium).
       await page.goto(pathToFileURL(file).href, { waitUntil: "load", timeout: 90_000 });
       return await fn(page);
     } finally {
@@ -101,6 +100,25 @@ async function withPage<T>(html: string, opts: { assetsDir?: string }, fn: (page
   } finally {
     rmSync(tmp, { recursive: true, force: true });
   }
+}
+
+// Memoized per-process: a freshly-extracted Chromium binary's FIRST-EVER launch+navigate has been observed taking 90s+ on Windows CI (antivirus/SmartScreen scanning an unfamiliar executable and its renderer subprocess) while every call after it finishes in under 2s — the OS-level verdict gets cached after the first real use. Paying that cost once, upfront, via a throwaway render keeps every real caller (tests and production alike) off that unpredictable first-call tax.
+let warmupPromise: Promise<void> | undefined;
+
+export function warmUpChromium(executablePath: string): Promise<void> {
+  if (!warmupPromise) {
+    warmupPromise = navigateAndRun(executablePath, "<p>warmup</p>", undefined, async () => {}).catch((err) => {
+      warmupPromise = undefined;
+      throw err;
+    });
+  }
+  return warmupPromise;
+}
+
+async function withPage<T>(html: string, opts: { assetsDir?: string }, fn: (page: any) => Promise<T>): Promise<T> {
+  const { executablePath } = await ensureChromium();
+  await warmUpChromium(executablePath);
+  return navigateAndRun(executablePath, html, opts.assetsDir, fn);
 }
 
 export async function renderHtmlToPdf(html: string, opts: { assetsDir?: string }): Promise<Buffer> {
