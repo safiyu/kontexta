@@ -1,6 +1,6 @@
 {
   "name": "kontexta",
-  "version": "4.4.1",
+  "version": "4.5.0",
   "description": "One-click local dashboard + MCP server for AI coding agents",
   "type": "module",
   "license": "Apache-2.0",
@@ -38,6 +38,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.0",
     "@mozilla/readability": "^0.6.0",
+    "@puppeteer/browsers": "^3.2.2",
     "@radix-ui/react-dialog": "^1.1.23",
     "@radix-ui/react-dropdown-menu": "^2.1.24",
     "@tiptap/extension-link": "^2.11.0",
@@ -51,6 +52,8 @@
     "archiver": "^7.0.1",
     "better-sqlite3": "^12.10.0",
     "chokidar": "^4.0.0",
+    "dejavu-fonts-ttf": "^2.37.3",
+    "dompurify": "^3.4.14",
     "glob": "^11.0.0",
     "gray-matter": "^4.0.3",
     "html-to-pdfmake": "^2.5.33",
@@ -63,6 +66,7 @@
     "next-themes": "^0.4.4",
     "open": "^10.2.0",
     "pdfmake": "^0.3.11",
+    "puppeteer-core": "^25.10.0",
     "re2": "^1.24.1",
     "react": "19.2.6",
     "react-dom": "19.2.6",

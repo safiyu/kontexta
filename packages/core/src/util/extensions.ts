@@ -4,7 +4,7 @@
  * visible to the watcher, the discover/refresh walker, file creation,
  * and the title-derivation paths in core.
  */
-export const INDEXED_EXTENSIONS = [".md", ".mmd"] as const;
+export const INDEXED_EXTENSIONS = [".md", ".mmd", ".html"] as const;
 export type IndexedExt = (typeof INDEXED_EXTENSIONS)[number];
 
 export function isIndexedFile(filePath: string): boolean {

@@ -56,6 +56,10 @@ export const TOOL_CATEGORIES: Record<string, ToolCategory> = {
   housekeep_journal: "Write",
   distill_journal_commit_upgrades: "Write",
   clip_url: "Write",
+  add_report_resource: "Write",
+  delete_report_resource: "Write",
+  list_report_resources: "Read",
+  export_report: "Discovery",
   // Search
   search: "Search",
   bundle_search: "Search",

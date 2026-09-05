@@ -1,5 +1,24 @@
 # Changelog
 
+## 4.5.0 — HTML reports in the knowledge base
+
+### Added
+
+- **HTML reports as first-class KB entries.** Save an analysis as HTML with linked images, view it in the dashboard (sandboxed), and export it as PDF or PNG. A new `reports/` folder holds the reports themselves; a shared `reports/resources/` folder holds their images (served at `/api/reports/resources/<name>`).
+- **New MCP tools:** `create_file` / `update_file` accept `format="html"`; `add_report_resource`, `list_report_resources`, `delete_report_resource` manage the shared resource pool; `export_report` returns a download URL (or inline bytes) for PDF/PNG.
+- **Published pages appear in the knowledge base.** After each publish, generated `index.html` / `llms.txt` are indexed under `publish/` and browsable through the normal file list. They're read-only in the UI (regenerated on the next publish).
+
+### Changed
+
+- **PDF export for HTML reports uses headless Chromium.** Real CSS layout, real images, real fonts. Chromium is downloaded lazily on first export into `~/.cache/kontexta/chromium/`, so `npx kontexta start` install time is unchanged. `kontexta doctor` reports whether it's installed.
+
+## 4.4.2 — PDF export renders arrows, check marks, and code
+
+### Fixed
+
+- **PDF export no longer drops characters like `→`, `←`, `↑`, `↓`, `⇒`, `✓`, and `✗`.** pdfmake's bundled Roboto TTFs omit those glyphs, so they silently rendered as blank space in exported PDFs. Switched the PDF renderer to DejaVu Sans (full BMP coverage — arrows, math, checkmarks, extended Latin/Greek/Cyrillic).
+- **Fenced code blocks in exported PDFs are now monospaced.** They previously inherited the proportional document font, so indented lines and aligned characters didn't line up. Code and `<pre>` blocks now use DejaVu Sans Mono.
+
 ## 4.4.1 — Clickjacking-safe dashboard
 
 ### Fixed

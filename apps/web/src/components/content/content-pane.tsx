@@ -10,6 +10,8 @@ import remarkStringify from "remark-stringify";
 import stripMarkdown from "strip-markdown";
 import { MarkdownViewer } from "./markdown-viewer";
 import { MermaidViewer } from "./mermaid-viewer";
+import { HtmlViewer } from "./html-viewer";
+import { HtmlEditor } from "./html-editor";
 import { MarkdownEditor } from "./markdown-editor";
 import { DeleteConfirmDialog } from "./delete-confirm-dialog";
 import { GitErrorDialog } from "./git-error-dialog";
@@ -102,8 +104,9 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
   const [gitErrorDetail, setGitErrorDetail] = useState<string | undefined>(undefined);
   const [refreshing, setRefreshing] = useState(false);
   const [removingOrphan, setRemovingOrphan] = useState(false);
+  const [editHtmlOpen, setEditHtmlOpen] = useState(false);
 
-  const baseFilename = () => (file?.title || "untitled").replace(/\.(md|mmd)$/i, "");
+  const baseFilename = () => (file?.title || "untitled").replace(/\.(md|mmd|html)$/i, "");
 
   const handleExportMarkdown = () => {
     if (!file) return;
@@ -129,30 +132,31 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
   };
 
   const [exportingPdf, setExportingPdf] = useState(false);
+  const [exportingPng, setExportingPng] = useState(false);
+  const isHtmlFile = !!file?.path.endsWith(".html");
 
-  const handleExportPdf = async () => {
-    if (!file) return;
-    setExportingPdf(true);
-    const toastId = toast.loading("Generating PDF…");
+  const downloadFromEndpoint = async (endpoint: string, fallbackName: string, kindLabel: string, setBusy: (b: boolean) => void) => {
+    setBusy(true);
+    const toastId = toast.loading(`Generating ${kindLabel}…`);
     try {
-      const res = await fetch(`/api/files/${file.id}/export-pdf`);
+      const res = await fetch(endpoint);
       if (!res.ok) {
         const text = await res.text();
-        let message = `Failed to export PDF (HTTP ${res.status})`;
+        let message = `Failed to export ${kindLabel} (HTTP ${res.status})`;
         try {
           const parsed = JSON.parse(text);
           if (parsed?.error) message = parsed.error;
         } catch {
           // Response wasn't JSON (e.g. a framework error page) — log the
           // raw body so it's still visible for debugging.
-          console.error("[export-pdf] non-JSON error response:", text);
+          console.error(`[export-${kindLabel}] non-JSON error response:`, text);
         }
         toast.error(message, { id: toastId });
         return;
       }
       const disposition = res.headers.get("content-disposition") || "";
       const match = /filename="([^"]+)"/.exec(disposition);
-      const filename = match?.[1] ?? `${baseFilename()}.pdf`;
+      const filename = match?.[1] ?? fallbackName;
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -162,13 +166,24 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
-      toast.success("Exported PDF", { id: toastId });
+      toast.success(`Exported ${kindLabel}`, { id: toastId });
     } catch (err) {
-      console.error("[export-pdf] request failed:", err);
-      toast.error("Failed to export PDF — check the browser console for details.", { id: toastId });
+      console.error(`[export-${kindLabel}] request failed:`, err);
+      toast.error(`Failed to export ${kindLabel} — check the browser console for details.`, { id: toastId });
     } finally {
-      setExportingPdf(false);
+      setBusy(false);
     }
+  };
+
+  const handleExportPdf = () => {
+    if (!file) return;
+    const endpoint = isHtmlFile ? `/api/files/${file.id}/export-html?format=pdf` : `/api/files/${file.id}/export-pdf`;
+    downloadFromEndpoint(endpoint, `${baseFilename()}.pdf`, "PDF", setExportingPdf);
+  };
+
+  const handleExportPng = () => {
+    if (!file) return;
+    downloadFromEndpoint(`/api/files/${file.id}/export-html?format=png`, `${baseFilename()}.png`, "PNG", setExportingPng);
   };
 
   const handleRefresh = async () => {
@@ -206,10 +221,12 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
   const onDirtyChangeRef = useRef(onDirtyChange);
   useEffect(() => { onDirtyChangeRef.current = onDirtyChange; }, [onDirtyChange]);
 
+  const [htmlEditorDirty, setHtmlEditorDirty] = useState(false);
+
   useEffect(() => {
-    const dirty = editing && file != null && editContent !== file.content;
+    const dirty = (editing && file != null && editContent !== file.content) || (editHtmlOpen && htmlEditorDirty);
     onDirtyChangeRef.current?.(dirty);
-  }, [editing, editContent, file?.content]);
+  }, [editing, editContent, file?.content, editHtmlOpen, htmlEditorDirty]);
   useEffect(() => () => { onDirtyChangeRef.current?.(false); }, []);
 
   useEffect(() => {
@@ -220,6 +237,11 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
       setViewHistory(false);
       return;
     }
+
+    // Navigating away must drop any editor left open on the previous file.
+    setEditing(false);
+    setViewHistory(false);
+    setEditHtmlOpen(false);
 
     const controller = new AbortController();
     const fetchFile = async () => {
@@ -535,36 +557,44 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
     );
   }
 
+  const inPublishFolder = file.path.replace(/\\/g, "/").includes("/publish/");
   return (
     <div key={fileId} className="h-full flex flex-col animate-fade-in">
       <div className="h-10 px-4 border-b border-[var(--border)] flex items-center gap-4 text-[14px] sticky top-0 bg-[var(--bg-primary)] z-10">
-        {(["view", "edit", "history"] as const).map((mode) => {
-          const active =
-            (mode === "view" && !editing && !viewHistory) ||
-            (mode === "edit" && editing) ||
-            (mode === "history" && viewHistory);
-          const onTabClick = () => {
-            if (mode === "edit") {
-              if (!editing) handleEdit();
-              return;
-            }
-            // Switching away from edit cancels in-progress edits.
-            if (editing) handleCancel();
-            setViewHistory(mode === "history");
-            if (mode === "history") fetchHistory();
-          };
-          return (
-            <button
-              key={mode}
-              onClick={onTabClick}
-              className={`btn btn-sm -mb-px py-2 border-b-2 transition-colors ${
-                active ? "border-[var(--accent)]" : ""
-              }`}
-            >
-              {mode[0].toUpperCase() + mode.slice(1)}
-            </button>
-          );
-        })}
+        {(["view", "edit", "history"] as const)
+          .filter((mode) => mode !== "edit" || (!file.path.endsWith(".html") && !inPublishFolder))
+          .map((mode) => {
+            const active =
+              (mode === "view" && !editing && !viewHistory) ||
+              (mode === "edit" && editing) ||
+              (mode === "history" && viewHistory);
+            const onTabClick = () => {
+              if (mode === "edit") {
+                if (!editing) handleEdit();
+                return;
+              }
+              // Switching away from edit cancels in-progress edits.
+              if (editing) handleCancel();
+              setViewHistory(mode === "history");
+              if (mode === "history") fetchHistory();
+            };
+            return (
+              <button
+                key={mode}
+                onClick={onTabClick}
+                className={`btn btn-sm -mb-px py-2 border-b-2 transition-colors ${
+                  active ? "border-[var(--accent)]" : ""
+                }`}
+              >
+                {mode[0].toUpperCase() + mode.slice(1)}
+              </button>
+            );
+          })}
+        {inPublishFolder && (
+          <span className="inline-flex items-center px-2 py-0.5 rounded bg-amber-accent/10 border border-amber-accent/30 text-[10px] text-[var(--text-primary)] uppercase tracking-wider font-bold" title="Regenerated on publish">
+            Read-only
+          </span>
+        )}
         <div className="ml-auto flex items-center gap-3 text-[12px] text-[var(--text-secondary)] font-mono">
           {editing ? (
             <>
@@ -608,6 +638,19 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
                   <path d="M21 12a9 9 0 0 1-15 6.7L3 16"></path>
                 </svg>
               </button>
+              {file.path.endsWith(".html") && !inPublishFolder && (
+                <button
+                  type="button"
+                  onClick={() => setEditHtmlOpen(true)}
+                  className="btn btn-md"
+                  aria-label="Edit HTML source"
+                  title="Edit HTML source"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 opacity-70">
+                    <path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
+                  </svg>
+                </button>
+              )}
               <button
                 onClick={async () => {
                   if (!file) return;
@@ -640,19 +683,26 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
               <DropdownMenu
                 trigger={
                   <button
-                    disabled={exportingPdf}
+                    disabled={exportingPdf || exportingPng}
                     className="btn btn-md"
                     aria-label="Export file"
-                    title={exportingPdf ? "Generating PDF…" : "Export file"}
+                    title={exportingPdf ? "Generating PDF…" : exportingPng ? "Generating PNG…" : "Export file"}
                   >
-                    <DownloadIcon className={`w-4 h-4 opacity-70 ${exportingPdf ? "animate-pulse" : ""}`} />
+                    <DownloadIcon className={`w-4 h-4 opacity-70 ${exportingPdf || exportingPng ? "animate-pulse" : ""}`} />
                   </button>
                 }
-                items={[
-                  { label: "Markdown (.md)", onSelect: handleExportMarkdown },
-                  { label: "Text (.txt)", onSelect: () => { handleExportText(); } },
-                  { label: "PDF", onSelect: handleExportPdf },
-                ]}
+                items={
+                  isHtmlFile
+                    ? [
+                        { label: "PDF", onSelect: handleExportPdf },
+                        { label: "PNG", onSelect: handleExportPng },
+                      ]
+                    : [
+                        { label: "Markdown (.md)", onSelect: handleExportMarkdown },
+                        { label: "Text (.txt)", onSelect: () => { handleExportText(); } },
+                        { label: "PDF", onSelect: handleExportPdf },
+                      ]
+                }
               />
               <button
                 onClick={() => setDeleteDialogOpen(true)}
@@ -791,6 +841,8 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
           <div className="h-full overflow-auto">
             {file.path.endsWith(".mmd") ? (
               <MermaidViewer source={file.content} className="p-8" filename={file.title} />
+            ) : file.path.endsWith(".html") ? (
+              <HtmlViewer html={file.content} />
             ) : (
               <MarkdownViewer content={file.content} className="p-8" />
             )}
@@ -813,6 +865,33 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
         body={gitErrorBody}
         detail={gitErrorDetail}
       />
+
+      {editHtmlOpen && file && (
+        <HtmlEditor
+          fileId={file.id}
+          initial={file.content}
+          expectedUpdatedAt={file.updated_at}
+          onClose={() => { setEditHtmlOpen(false); setHtmlEditorDirty(false); }}
+          onDirtyChange={setHtmlEditorDirty}
+          onSaved={(updatedFile) => {
+            const issuedFor = file.id;
+            setHtmlEditorDirty(false);
+            if (fileIdRef.current !== issuedFor) {
+              if (updatedFile.git_warning) {
+                console.warn(`[kontexta] git_warning for stale file ${issuedFor}:`, updatedFile.git_warning);
+              }
+              return;
+            }
+            setFile(updatedFile);
+            if (updatedFile.git_warning) {
+              setGitErrorTitle("Git commit failed");
+              setGitErrorBody("Your changes were saved to the database, but Kontexta could not create a Git history entry for this file.");
+              setGitErrorDetail(updatedFile.git_warning);
+              setGitErrorOpen(true);
+            }
+          }}
+        />
+      )}
     </div>
   );
 }

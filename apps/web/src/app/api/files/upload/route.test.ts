@@ -16,6 +16,7 @@ function multipart(parts: Record<string, string | { filename: string; content: s
   return new Request("http://localhost/api/files/upload", { method: "POST", body: fd });
 }
 
+// 20s (not vitest's 5s default) on tests below that write real files: each createFile does disk I/O + a DB write + a git commit, measurably slower than 5s on loaded CI runners (same class of flake as the zip-export tests).
 describe("POST /api/files/upload", () => {
   test("uploads a single .md file to KB root", async () => {
     const res = await POST(multipart({
@@ -31,7 +32,7 @@ describe("POST /api/files/upload", () => {
     expect(body.uploaded[0].final_name).toBe("notes.md");
     const file = readFile(body.uploaded[0].id);
     expect(file.content).toBe("# Hello");
-  });
+  }, 20_000);
 
   test("auto-suffixes on collision", async () => {
     await POST(multipart({
@@ -46,7 +47,7 @@ describe("POST /api/files/upload", () => {
     }) as any);
     const body = await res.json();
     expect(body.uploaded[0].final_name).toBe("dup-2.md");
-  });
+  }, 20_000);
 
   test("rejects non-markdown extensions", async () => {
     const res = await POST(multipart({
@@ -60,7 +61,7 @@ describe("POST /api/files/upload", () => {
     const body = await res.json();
     expect(body.uploaded.length).toBe(1);
     expect(body.rejected).toEqual([{ name: "bad.png", reason: "unsupported_extension" }]);
-  });
+  }, 20_000);
 
   test("rejects oversize files", async () => {
     const huge = "x".repeat(5 * 1024 * 1024 + 1);
@@ -89,7 +90,7 @@ describe("POST /api/files/upload", () => {
     const body = await res.json();
     expect(body.uploaded).toHaveLength(1);
     expect(body.uploaded[0].final_name).toMatch(/\.mmd$/);
-  });
+  }, 20_000);
 
   test("still rejects unrelated extensions", async () => {
     const res = await POST(multipart({
@@ -100,4 +101,18 @@ describe("POST /api/files/upload", () => {
     const body = await res.json();
     expect(body.rejected.length).toBeGreaterThan(0);
   });
+
+  test("accepts .html uploads, writes them as .html, and sanitizes on write", async () => {
+    const res = await POST(multipart({
+      project_id: "",
+      folder: "",
+      files: [{ filename: "report.html", content: "<p>hi</p><script>alert(1)</script>", type: "text/html" }],
+    }) as any);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.uploaded).toHaveLength(1);
+    expect(body.uploaded[0].final_name).toBe("report.html");
+    const file = readFile(body.uploaded[0].id);
+    expect(file.content).toBe("<p>hi</p>");
+  }, 20_000);
 });

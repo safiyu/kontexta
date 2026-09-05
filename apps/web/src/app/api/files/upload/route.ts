@@ -7,7 +7,7 @@ import { basename, extname, dirname } from "node:path";
 const MAX_BYTES = 5 * 1024 * 1024;
 const MAX_TOTAL_BYTES = Number(process.env.KONTEXTA_UPLOAD_MAX_TOTAL_BYTES ?? 50 * 1024 * 1024);
 const MAX_FILES = Number(process.env.KONTEXTA_UPLOAD_MAX_FILES ?? 200);
-const ALLOWED_EXT = new Set([".md", ".markdown", ".mmd"]);
+const ALLOWED_EXT = new Set([".md", ".markdown", ".mmd", ".html"]);
 
 interface UploadedItem {
   id: number;
@@ -207,6 +207,7 @@ export async function POST(req: NextRequest) {
     // recover a title that re-slugifies back to finalBasename's stem.
     const finalStem = finalBasename.slice(0, -extname(finalBasename).length);
 
+    const format = ext === ".html" ? "html" : ext === ".mmd" ? "mmd" : "md";
     try {
       const created = await createFile({
         title: finalStem,
@@ -216,6 +217,7 @@ export async function POST(req: NextRequest) {
         folder: folder || undefined,
         tags,
         dataDir: DATA_DIR,
+        format,
       });
       uploaded.push({ id: created.id, path: created.path, original_name: original, final_name: finalBasename });
     } catch (e: any) {

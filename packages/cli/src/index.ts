@@ -3,11 +3,12 @@ import { createRequire } from 'node:module';
 const HELP = `kontexta — one-click local dashboard + MCP server
 
 Usage:
-  kontexta start         Boot dashboard + MCP on port 3000 (or $PORT)
-  kontexta mcp           Run stdio MCP server (for AI client config)
-  kontexta doctor        Print environment diagnostics
-  kontexta --version     Print version
-  kontexta --help        Print this help
+  kontexta start                     Boot dashboard + MCP on port 3000 (or $PORT)
+  kontexta mcp                       Run stdio MCP server (for AI client config)
+  kontexta doctor                    Print environment diagnostics
+  kontexta doctor install-chromium   Download the Chromium build used for PDF export
+  kontexta --version                 Print version
+  kontexta --help                    Print this help
 `;
 
 (async () => {
@@ -28,6 +29,10 @@ Usage:
     process.exit(0);
   }
   if (arg === 'doctor') {
+    if (process.argv[3] === 'install-chromium') {
+      const { installChromium } = await import('./doctor.js');
+      process.exit(await installChromium());
+    }
     const { runDoctor } = await import('./doctor.js');
     process.exit(await runDoctor());
   }

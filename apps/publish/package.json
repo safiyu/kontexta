@@ -1,6 +1,6 @@
 {
   "name": "kxta-publish",
-  "version": "4.4.1",
+  "version": "4.5.0",
   "private": true,
   "type": "module",
   "bin": {
@@ -10,7 +10,8 @@
   "exports": {
     "./pipeline": "./dist/pipeline.js",
     "./render/llms": "./dist/render/llms.js",
-    "./render/pdf": "./dist/render/pdf.js"
+    "./render/pdf": "./dist/render/pdf.js",
+    "./render/html-export": "./dist/render/html-export.js"
   },
   "scripts": {
     "build": "tsc && node scripts/copy-assets.mjs",
@@ -19,13 +20,16 @@
     "dev": "tsc --watch"
   },
   "dependencies": {
+    "@puppeteer/browsers": "^3.2.2",
+    "dejavu-fonts-ttf": "^2.37.3",
     "gray-matter": "^4.0.3",
     "html-to-pdfmake": "^2.5.33",
     "js-yaml": "^4.1.0",
     "jsdom": "^29.1.1",
     "kxta-core": "workspace:*",
     "markdown-it": "^14.1.0",
-    "pdfmake": "^0.3.11"
+    "pdfmake": "^0.3.11",
+    "puppeteer-core": "^25.10.0"
   },
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",

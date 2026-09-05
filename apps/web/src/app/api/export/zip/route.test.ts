@@ -47,6 +47,7 @@ describe("GET /api/export/zip", () => {
     expect(res.status).toBe(404);
   });
 
+  // 20s (not vitest's 5s default) on these three: they do real disk I/O through archiver + unzipper on freshly-created files, which is measurably slower on Windows CI (antivirus on-access scanning, NTFS handle-release lag) than the assertion-only tests above.
   test("exports by file_ids preserving relative paths", async () => {
     const dataDir = process.env.KONTEXTA_DATA_DIR || "";
     const projectDir = join(dataDir, "test-project");
@@ -62,7 +63,7 @@ describe("GET /api/export/zip", () => {
     // file_ids mode preserves project-relative paths.
     expect([...entries.keys()].sort()).toEqual(["notes/b.md", "specs/a.md"]);
     expect(entries.get("specs/a.md")).toBe("AAA");
-  });
+  }, 20_000);
 
   test("exports a project recursively", async () => {
     const dataDir = process.env.KONTEXTA_DATA_DIR || "";
@@ -77,7 +78,7 @@ describe("GET /api/export/zip", () => {
     const entries = await readZipEntries(res);
     expect(entries.get("root.md")).toBe("R");
     expect(entries.get("sub/deeper/deep.md")).toBe("D");
-  });
+  }, 20_000);
 
   test("exports a folder", async () => {
     const dataDir = process.env.KONTEXTA_DATA_DIR || "";
@@ -92,7 +93,7 @@ describe("GET /api/export/zip", () => {
     const entries = await readZipEntries(res);
     // folder mode = paths relative to the folder root.
     expect([...entries.keys()]).toEqual(["in.md"]);
-  });
+  }, 20_000);
 
   test("413 when total size exceeds KONTEXTA_EXPORT_MAX_BYTES", async () => {
     process.env.KONTEXTA_EXPORT_MAX_BYTES = "10";

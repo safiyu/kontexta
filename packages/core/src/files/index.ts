@@ -1,6 +1,7 @@
 /**
  * File operations module for Kontexta
- * Handles CRUD operations for .md and .mmd files with SQLite indexing
+ * Handles CRUD operations for .md, .mmd, and .html files with SQLite indexing.
+ * HTML content is sanitized via DOMPurify (see ../reports/sanitize.ts) on every write.
  */
 import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync, unlinkSync, renameSync, mkdirSync, readdirSync, statSync, lstatSync, existsSync, rmSync } from "node:fs";
@@ -9,6 +10,8 @@ import { getDatabase } from "../db/index.js";
 import { commitFile, commitDelete } from "../git/index.js";
 import { assertPathInside, escapeLike, withLock, fileLockKey } from "../util/safety.js";
 import { profileRelPath, repairProfile } from "../profile/index.js";
+import { sanitizeHtml } from "../reports/sanitize.js";
+import { isIndexedFile } from "../util/extensions.js";
 import type { FileRecord, Destination, FileFilters, StorageType } from "../types.js";
 
 /**
@@ -69,12 +72,11 @@ export function listProjectFoldersWithFiles(projectPath: string): string[] {
         if (lst.isDirectory()) {
           scan(fullPath, relPath);
         } else if (lst.isFile()) {
-          const ext = entry.endsWith(".mmd") ? ".mmd" : entry.endsWith(".md") ? ".md" : "";
-          if (ext) {
-            // Count file in every ancestor folder
-            const parts = relPath.split("/");
+          if (isIndexedFile(entry)) {
+            // relPath is join()-built (native separator) — splitting on a hardcoded "/" silently produced zero ancestors on Windows.
+            const parts = relPath.split(sep);
             for (let i = 0; i < parts.length - 1; i++) {
-              const ancestor = parts.slice(0, i + 1).join("/");
+              const ancestor = parts.slice(0, i + 1).join(sep);
               folderFileCount.set(ancestor, (folderFileCount.get(ancestor) ?? 0) + 1);
             }
           }
@@ -109,7 +111,9 @@ export interface CreateFileOptions {
   dataDir: string;
   sourcePath?: string;
   /** File extension to write. Defaults to "md". */
-  format?: "md" | "mmd";
+  format?: "md" | "mmd" | "html";
+  /** Internal-only escape hatch for server-generated trusted HTML (e.g. the publish pipeline's own output) — never set this for agent- or user-supplied content. */
+  skipHtmlSanitize?: boolean;
 }
 
 export interface FileRecordWithContent extends FileRecord {
@@ -144,7 +148,7 @@ export function slugify(name: string): string {
  */
 export async function createFile(opts: CreateFileOptions): Promise<FileRecordWithContent> {
   const db = getDatabase();
-  let { title, content, destination, projectId, folder, tags = [], dataDir, sourcePath, format = "md" } = opts;
+  let { title, content, destination, projectId, folder, tags = [], dataDir, sourcePath, format = "md", skipHtmlSanitize = false } = opts;
 
   let filePath: string;
   let storageType: StorageType;
@@ -219,6 +223,7 @@ export async function createFile(opts: CreateFileOptions): Promise<FileRecordWit
     repairedSections = repaired;
     content = repairedContent;
   }
+  if (format === "html" && !skipHtmlSanitize) content = await sanitizeHtml(content);
   writeFileSync(filePath, content, "utf8");
   const contentHash = computeHash(content);
 
@@ -363,6 +368,7 @@ export async function updateFile(id: number, content: string, dataDir: string): 
       console.warn("updateFile: failed to stash pre-existing content for rollback:", e);
     }
   }
+  if (fileRecord.path.endsWith(".html")) content = await sanitizeHtml(content);
   writeFileSync(fileRecord.path, content, "utf8");
   const contentHash = computeHash(content);
 
@@ -534,6 +540,11 @@ export function listFiles(opts: ListFilesOptions): FileRecord[] {
 
     if (filters.untagged === true) {
       sql += " AND NOT EXISTS (SELECT 1 FROM file_tags WHERE file_tags.file_id = files.id)";
+    }
+
+    if (filters.path !== undefined) {
+      sql += " AND path = ?";
+      params.push(filters.path);
     }
 
     if (filters.folder !== undefined) {
