@@ -73,10 +73,10 @@ export function listProjectFoldersWithFiles(projectPath: string): string[] {
           scan(fullPath, relPath);
         } else if (lst.isFile()) {
           if (isIndexedFile(entry)) {
-            // Count file in every ancestor folder
-            const parts = relPath.split("/");
+            // relPath is join()-built (native separator) — splitting on a hardcoded "/" silently produced zero ancestors on Windows.
+            const parts = relPath.split(sep);
             for (let i = 0; i < parts.length - 1; i++) {
-              const ancestor = parts.slice(0, i + 1).join("/");
+              const ancestor = parts.slice(0, i + 1).join(sep);
               folderFileCount.set(ancestor, (folderFileCount.get(ancestor) ?? 0) + 1);
             }
           }
