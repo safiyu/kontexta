@@ -11,7 +11,7 @@
 # Data is persisted in ./kontexta-data on the host.
 #
 # Environment variables (override as needed):
-#   HOST_PORT    — Host port for the web app (default: 3000). The WebSocket
+#   HOST_PORT    — Host port for the web app (default: 23002). The WebSocket
 #                  shares this port (upgrade path /_kontexta_ws).
 #   DATA_DIR     — Host path for persistent data (defaults to ./kontexta-data)
 #   PROJECT_DIR  — Host path to mount your projects (defaults to ./projects)
@@ -30,7 +30,7 @@ services:
     ports:
       # WebSocket file-watcher shares this same port (upgrade path
       # /_kontexta_ws), so no second port is published.
-      - "${HOST_PORT:-3000}:3000"
+      - "${HOST_PORT:-23002}:23002"
     volumes:
       - "${DATA_DIR:-./kontexta-data}:/app/data"
       # ── Optional: share ONE vault with non-Docker installs (npx kontexta,
@@ -62,7 +62,7 @@ services:
     environment:
       - NODE_ENV=production
       - HOSTNAME=0.0.0.0
-      - PORT=3000
+      - PORT=23002
       - KONTEXTA_DATA_DIR=/app/data
       - KONTEXTA_DB_PATH=/app/data/kontexta.db
       # Host path for the data directory — used by the web UI to generate
@@ -73,7 +73,7 @@ services:
     entrypoint: ["/bin/sh", "-c", "if [ -z \"$PROJECT_DIR\" ]; then echo 'ERROR: PROJECT_DIR is not set. Set PROJECT_DIR to an absolute host path before running docker compose.' >&2; exit 1; fi; exec node apps/web/server.js"]
     restart: always
     healthcheck:
-      test: ["CMD-SHELL", "node -e \"require('http').get('http://127.0.0.1:3000/api/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))\""]
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://127.0.0.1:23002/api/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))\""]
       interval: 30s
       timeout: 5s
       retries: 3

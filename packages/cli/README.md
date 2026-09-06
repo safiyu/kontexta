@@ -10,11 +10,11 @@ The Kontexta CLI brings the full dashboard and MCP server to your machine with a
 npx kontexta start
 ```
 
-Boots the dashboard on `http://localhost:3000` (opens in your browser) and starts the MCP server. First run walks you through setup: master password, data location, and project registration.
+Boots the dashboard on `http://localhost:23002` (opens in your browser) and starts the MCP server. First run walks you through master password, data location, and project registration.
 
 ## Subcommands
 
-- **`kontexta start`** — boot dashboard + MCP server on port 3000 (or `$PORT`)
+- **`kontexta start`** — boot dashboard + MCP server on port 23002 (or `$PORT`)
 - **`kontexta mcp`** — run stdio MCP server (for AI client config)
 - **`kontexta doctor`** — print environment diagnostics
 

@@ -48,7 +48,7 @@ To work on the UI:
 cd apps/web
 pnpm dev
 ```
-The dashboard will be available at `http://localhost:3000`.
+The dashboard will be available at `http://localhost:23002`.
 
 > **Low-memory machine?** Use `pnpm dev:lite` (or `pnpm dev:lite` from the repo root). It runs `next dev` on webpack instead of Turbopack and caps Node's heap at 1.5 GB — recommended on Cloud Workstations / small VMs where Turbopack can push the host OOM.
 

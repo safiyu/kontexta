@@ -17,8 +17,8 @@ export interface DockerConfig {
 
 const DEFAULTS: DockerConfig = {
   hostDataDir: "",
-  hostPort: 3000,
-  wsHostPort: 3001,
+  hostPort: 23002,
+  wsHostPort: 23003,
   projectDir: "",
 };
 

@@ -56,10 +56,10 @@ Both invoke the same `dist/index.js` — use whichever your client's config form
 The MCP server runs headless. If you want the matching three-pane web UI, run the Docker image alongside it (it reads the same `KONTEXTA_DATA_DIR`):
 
 ```bash
-docker run -d -p 3000:3000 -v /absolute/path/to/your/data:/app/data safiyu/kontexta:latest
+docker run -d -p 23002:23002 -v /absolute/path/to/your/data:/app/data safiyu/kontexta:latest
 ```
 
-Open `http://localhost:3000`.
+Open `http://localhost:23002`.
 
 ## Tool categories
 

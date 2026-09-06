@@ -1,5 +1,11 @@
 # Changelog
 
+## 4.5.2 — Default port moved to 23002
+
+### Changed
+
+- **Default dashboard port is now 23002** (was 3000) across `kontexta start`, `pnpm dev`, and Docker, to avoid collisions. `PORT` / `HOST_PORT` overrides still win.
+
 ## 4.5.1 — Hermes Agent in the Configure section
 
 ### Added

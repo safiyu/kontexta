@@ -39,7 +39,7 @@ If you only need the MCP server (no web UI), install via npm — no Docker requi
 If you also want the web UI, run the Docker image alongside the npx install — both read the same `KONTEXTA_DATA_DIR`:
 
 ```bash
-docker run -d -p 3000:3000 -v /absolute/path/to/your/data:/app/data safiyu/kontexta:latest
+docker run -d -p 23002:23002 -v /absolute/path/to/your/data:/app/data safiyu/kontexta:latest
 ```
 
 ---

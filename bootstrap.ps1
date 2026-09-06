@@ -49,6 +49,6 @@ Join-Path $PSScriptRoot 'apps\mcp\dist\index.js' | Set-Content -Path (Join-Path 
 
 Write-Host ''
 Write-Host '✓ Bootstrap complete.' -ForegroundColor Green
-Write-Host '  Next: pnpm dev       Turbopack dev server on :3000'
+Write-Host '  Next: pnpm dev       Turbopack dev server on :23002'
 Write-Host '        pnpm dev:lite  webpack, low-memory alternative'
 Write-Host '        pnpm test       run vitest across the workspace'
