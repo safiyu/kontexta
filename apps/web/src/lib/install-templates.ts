@@ -1,5 +1,5 @@
 export const CLIENTS = [
-  "claude-code", "claude-desktop", "cursor", "codex", "gemini", "antigravity", "continue", "aider", "cline", "copilot", "generic",
+  "claude-code", "claude-desktop", "cursor", "codex", "gemini", "antigravity", "continue", "aider", "cline", "copilot", "hermes", "generic",
 ] as const;
 export type Client = typeof CLIENTS[number];
 
@@ -26,9 +26,18 @@ export interface Snippet {
   configPath?: string;
 }
 
-// A detected local `kontexta` install (from npx kontexta start) beats the generic kontexta-mcp default — same server either way.
+// A detected local `kontexta` install (from `npx kontexta start`) beats the generic kontexta-mcp default — same server either way.
 function npmArgs(vars: TemplateVars): string[] {
   return vars.hasLocalCliMcp ? ["-y", "kontexta", "mcp"] : ["-y", "kontexta-mcp"];
+}
+// Escape a value for a YAML double-quoted scalar (the `mcp_servers` block pasted
+// into Hermes/Continue config). YAML — like JSON — treats `\` as an escape
+// character, so an unescaped Windows path (C:\Users\...) is INVALID YAML (`\U`
+// is read as a unicode escape) and the whole block fails to parse. The JSON
+// snippets never hit this because JSON.stringify escapes for us; the hand-built
+// YAML templates must escape by hand.
+function yamlDq(s: string): string {
+  return s.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 }
 function npmNotes(vars: TemplateVars, install: Install): string[] {
   if (install !== "npm") return [];
@@ -136,15 +145,15 @@ function continueSnippet(vars: TemplateVars, install: Install): Snippet {
         ? npmArgs(vars)
         : [vars.sourceEntrypoint];
   const showEnv = install === "docker" || !vars.isDefaultDir;
-  const envBlock = showEnv ? `\n    env:\n      KONTEXTA_DATA_DIR: "${vars.dataDir}"` : "";
+  const envBlock = showEnv ? `\n    env:\n      KONTEXTA_DATA_DIR: "${yamlDq(vars.dataDir)}"` : "";
   const body = `name: kontexta
 version: ${vars.version}
 schema: v1
 mcpServers:
   - name: kxta
-    command: "${command}"
+    command: "${yamlDq(command)}"
     args:
-${args.map(a => `      - "${a}"`).join('\n')}${envBlock}`;
+${args.map(a => `      - "${yamlDq(a)}"`).join("\n")}${envBlock}`;
   return {
     kind: "shell",
     body,
@@ -187,6 +196,36 @@ function copilotSnippet(vars: TemplateVars, install: Install): Snippet {
   };
 }
 
+function hermesSnippet(vars: TemplateVars, install: Install): Snippet {
+  const command = install === "docker" ? "docker" : install === "npm" ? "npx" : "node";
+  const hostDir = vars.hostDataDir || vars.dataDir;
+  const args =
+    install === "docker"
+      ? ["run", "--rm", "-i", "-v", `${hostDir}:/app/data`, `safiyu/kontexta:${vars.version}`, "mcp"]
+      : install === "npm"
+        ? npmArgs(vars)
+        : [vars.sourceEntrypoint];
+  const showEnv = install === "docker" || !vars.isDefaultDir;
+  const envBlock = showEnv ? `\n    env:\n      KONTEXTA_DATA_DIR: "${yamlDq(vars.dataDir)}"` : "";
+  const body = `mcp_servers:
+  kxta:
+    command: "${yamlDq(command)}"
+    args:
+${args.map(a => `      - "${yamlDq(a)}"`).join("\n")}${envBlock}`;
+  return {
+    kind: "shell",
+    body,
+    notes: [
+      dataDirNote(vars, install),
+      ...npmNotes(vars, install),
+      "Paste this under the existing `mcp_servers` key (create it if missing) in ~/.hermes/config.yaml — or $HERMES_HOME/config.yaml when a profile/home override is set. Never put API keys in config.yaml; those belong in .env.",
+      "After editing, restart Hermes — MCP servers are loaded at startup only, there is no hot-reload.",
+      "Windows: bare `npx` fails to spawn (it is a .cmd shim); point `command` at the full path, e.g. \"C:/Program Files/nodejs/npx.cmd\".",
+    ],
+    configPath: "~/.hermes/config.yaml (mcp_servers)"
+  };
+}
+
 const TEMPLATES: Record<Client, (vars: TemplateVars, install: Install) => Snippet> = {
   "claude-code": claudeCodeShell,
   "claude-desktop": genericJson,
@@ -198,6 +237,7 @@ const TEMPLATES: Record<Client, (vars: TemplateVars, install: Install) => Snippe
   aider: aiderSnippet,
   cline: clineSnippet,
   copilot: copilotSnippet,
+  hermes: hermesSnippet,
   generic: genericJson,
 };
 
@@ -212,6 +252,7 @@ const CLIENT_CONFIG_PATHS: Record<Client, string> = {
   "aider": ".aider.conf.yml (global or project-local)",
   "cline": "~/.cline/mcp_settings.json (Cline extension for VS Code / Cursor)",
   "copilot": "VS Code Settings → mcp.servers (VS Code Insider built-in Copilot chat)",
+  "hermes": "~/.hermes/config.yaml (or $HERMES_HOME/config.yaml) — under the `mcp_servers` key. Restart Hermes after editing.",
   "generic": "Paste into your AI client's MCP configuration settings or file."
 };
 

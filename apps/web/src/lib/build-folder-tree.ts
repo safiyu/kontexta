@@ -6,6 +6,9 @@ export interface FolderTreeNode {
   isExplicit?: boolean;
 }
 
+// Folder path keys are forward-slash relative paths throughout the UI; normalize native separators.
+const toPosix = (p: string): string => p.replace(/\\/g, "/");
+
 export function buildFolderTree(
   files: { id: number; title: string; path: string }[],
   projectPath: string,
@@ -19,17 +22,18 @@ export function buildFolderTree(
     files: [],
   };
 
-  const normalizedProjectPath = projectPath.endsWith("/")
-    ? projectPath
-    : projectPath + "/";
+  // Server paths use the OS-native separator; backslash paths used to collapse into single flat nodes and drop all files.
+  const base = toPosix(projectPath);
+  const normalizedProjectPath = base.endsWith("/") ? base : base + "/";
 
   for (const file of files) {
     // Skip files that don't actually live under this project. A stale row
     // (post-rename, post-misclassification by the watcher) used to render
     // as bogus top-level "/repos/foo/..." nodes when the absolute path
     // was treated as relative.
-    if (!file.path.startsWith(normalizedProjectPath)) continue;
-    const relativePath = file.path.slice(normalizedProjectPath.length);
+    const posixPath = toPosix(file.path);
+    if (!posixPath.startsWith(normalizedProjectPath)) continue;
+    const relativePath = posixPath.slice(normalizedProjectPath.length);
 
     const segments = relativePath.split("/");
     const fileName = segments.pop()!;
@@ -50,9 +54,9 @@ export function buildFolderTree(
     current.files.push({ id: file.id, title: file.title, path: file.path });
   }
 
-  // Inject empty folders
+  // Inject empty folders (posix keys to match the file-derived keys above).
   for (const folderPath of emptyFolders) {
-    const segments = folderPath.split("/");
+    const segments = toPosix(folderPath).split("/");
     let current = root;
     let currentPath = "";
 

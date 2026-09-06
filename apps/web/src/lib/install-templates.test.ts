@@ -54,6 +54,27 @@ describe("install-templates", () => {
     expect(snip.body).toContain("kontexta-mcp");
     expect(snip.notes.join(" ")).toContain("npx kontexta mcp");
   });
+  it("hermes renders an mcp_servers YAML block pointing at ~/.hermes/config.yaml", () => {
+    const snip = renderTemplate("hermes", "npm", VARS);
+    expect(snip.kind).toBe("shell");
+    expect(snip.body).toContain("mcp_servers:");
+    expect(snip.body).toContain("kxta:");
+    expect(snip.body).toContain("kontexta-mcp");
+    expect(snip.configPath).toContain("~/.hermes/config.yaml");
+    expect(snip.notes.join(" ")).toContain("Windows");
+    expect(snip.notes.join(" ")).toContain("restart");
+  });
+  it("hermes escapes Windows backslash paths so the YAML block stays valid", () => {
+    const winPath = "C:\\Users\\safiy\\AppData\\Roaming\\kontexta";
+    const win = { ...VARS, dataDir: winPath, hostDataDir: winPath };
+    const snip = renderTemplate("hermes", "docker", win);
+    // The raw, unescaped path must NOT appear (YAML would read \U as a unicode escape).
+    expect(snip.body).not.toContain("C:\\Users\\safiy");
+    // The -v mount arg must be escaped.
+    expect(snip.body).toContain(`"C:\\\\Users\\\\safiy\\\\AppData\\\\Roaming\\\\kontexta:/app/data"`);
+    // The KONTEXTA_DATA_DIR env value must be escaped.
+    expect(snip.body).toContain(`KONTEXTA_DATA_DIR: "C:\\\\Users\\\\safiy\\\\AppData\\\\Roaming\\\\kontexta"`);
+  });
   it("npm install prefers a detected local kontexta CLI, notes the kontexta-mcp alternative", () => {
     const snip = renderTemplate("claude-desktop", "npm", { ...VARS, hasLocalCliMcp: true });
     expect(snip.body).toContain('"kontexta"');

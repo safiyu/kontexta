@@ -41,9 +41,9 @@ export async function runStart(): Promise<never> {
   process.stdout.write(`Using data at ${data.path}\n`);
 
   const rawPort = process.env.PORT;
-  const preferred = rawPort && /^\d+$/.test(rawPort) ? Number(rawPort) : 3000;
+  const preferred = rawPort && /^\d+$/.test(rawPort) ? Number(rawPort) : 23002;
   if (rawPort && !/^\d+$/.test(rawPort)) {
-    process.stderr.write(`PORT=${rawPort} is not a valid integer; using 3000\n`);
+    process.stderr.write(`PORT=${rawPort} is not a valid integer; using 23002\n`);
   }
   const port = await pickPort(preferred);
   if (port !== preferred) {

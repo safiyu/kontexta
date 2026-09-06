@@ -9,7 +9,7 @@ export async function GET(req: NextRequest) {
   // Allow health checks from localhost (Docker/container health checks)
   // without requiring full session auth. This is safe because Docker's
   // health check runs inside the container, and the port is not exposed
-  // to the internet (only localhost:3000 is reachable from inside).
+  // to the internet (only localhost:23002 is reachable from inside).
   const hostHeader = req.headers.get("host") || "";
   const isLocalHealthCheck = hostHeader.startsWith("127.0.0.1:") || hostHeader.startsWith("[::1]:");
 

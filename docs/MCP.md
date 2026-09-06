@@ -39,7 +39,7 @@ If you only need the MCP server (no web UI), install via npm — no Docker requi
 If you also want the web UI, run the Docker image alongside the npx install — both read the same `KONTEXTA_DATA_DIR`:
 
 ```bash
-docker run -d -p 3000:3000 -v /absolute/path/to/your/data:/app/data safiyu/kontexta:latest
+docker run -d -p 23002:23002 -v /absolute/path/to/your/data:/app/data safiyu/kontexta:latest
 ```
 
 ---
@@ -101,6 +101,16 @@ Use absolute paths — most clients launch the process from their own working di
 - **Continue.dev**: `~/.continue/config.json` — add to the `mcpServers` array.
 - **Cursor**: `Settings → Features → MCP`
 - **Cline**: `~/.cline/mcp_settings.json` — the Cline extension for VS Code / Cursor reads this file directly. After adding the config, reload the VS Code / Cursor window.
+- **Hermes Agent**: Hermes uses a `mcp_servers` key in `~/.hermes/config.yaml` (or `$HERMES_HOME/config.yaml` when a profile/home override is set). Paste the YAML block from the dashboard's Configure section under it — the `env`/data-directory rules are the same. Two Hermes specifics: MCP servers are loaded at startup only, so restart Hermes after editing (no hot-reload); and on Windows, a bare `npx` command fails to spawn because it is a `.cmd` shim — use the full path instead (e.g. `command: "C:/Program Files/nodejs/npx.cmd"`).
+
+Example Hermes configuration (npm install):
+
+```yaml
+mcp_servers:
+  kxta:
+    command: "npx"
+    args: ["-y", "kontexta", "mcp"]
+```
 
 ---
 

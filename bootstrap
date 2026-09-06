@@ -42,6 +42,6 @@ step "Flagging manual install (lets the dashboard show a real MCP config)"
 printf "%s\n" "$SCRIPT_DIR/apps/mcp/dist/index.js" > "$SCRIPT_DIR/.kontexta-manual-mcp"
 
 printf "\n\033[32m✓ Bootstrap complete.\033[0m\n"
-printf "  Next: \033[1mpnpm dev\033[0m       Turbopack dev server on :3000\n"
+printf "  Next: \033[1mpnpm dev\033[0m       Turbopack dev server on :23002\n"
 printf "        \033[1mpnpm dev:lite\033[0m  webpack, low-memory alternative\n"
 printf "        \033[1mpnpm test\033[0m       run vitest across the workspace\n"

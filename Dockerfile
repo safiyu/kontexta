@@ -87,9 +87,9 @@ COPY --from=builder /app/packages/core/src/agent-rules/rules-block.md ./packages
 # Copy deployed MCP server
 COPY --from=builder /app/mcp-deploy ./apps/mcp
 
-# Web UI on 3000. The file-watcher WebSocket shares this same port
+# Web UI on 23002. The file-watcher WebSocket shares this same port
 # (upgrade path /_kontexta_ws), so no separate port is exposed.
-EXPOSE 3000
+EXPOSE 23002
 
 # Drop privileges. Anything bind-mounted in must be readable by uid 1000.
 USER node

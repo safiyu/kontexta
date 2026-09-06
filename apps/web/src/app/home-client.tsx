@@ -531,7 +531,8 @@ export default function HomePage() {
 
     let folderSegments: string[] = [];
     if (file && sectionBase && file.path?.startsWith(sectionBase)) {
-      const rel = file.path.slice(sectionBase.length).replace(/^\/+/, "");
+      // Normalize separators: on Windows both paths are backslash-separated, so splitting on "/" alone yields one giant segment.
+      const rel = file.path.slice(sectionBase.length).replace(/\\/g, "/").replace(/^\/+/, "");
       const parts = rel.split("/").filter(Boolean);
       folderSegments = parts.slice(0, -1);
     } else if (selectedFolder) {

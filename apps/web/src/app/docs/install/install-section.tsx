@@ -15,6 +15,7 @@ const CLIENTS = [
   { id: "aider", label: "Aider" },
   { id: "cline", label: "Cline" },
   { id: "copilot", label: "GitHub Copilot (VS Code Insider)" },
+  { id: "hermes", label: "Hermes Agent" },
   { id: "generic", label: "Generic JSON" },
 ];
 const INSTALLS = [

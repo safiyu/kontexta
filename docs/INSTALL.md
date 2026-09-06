@@ -18,7 +18,7 @@ Requires Node 22.x LTS. No Docker, no pnpm, no build.
 npx kontexta start
 ```
 
-Boots the dashboard on `http://localhost:3000` (opens in your browser) and starts the MCP server. First run walks you through master password, data location, and project registration.
+Boots the dashboard on `http://localhost:23002` (opens in your browser) and starts the MCP server. First run walks you through master password, data location, and project registration.
 
 ### MCP-only (no dashboard)
 
@@ -117,7 +117,7 @@ The fastest way to run Kontexta in production is using the official Docker Hub i
 
 ```bash
 docker run -d \
-  -p 3000:3000 \
+  -p 23002:23002 \
   # using environment variables to keep the host paths explicit
   -v "$DATA_DIR":/app/data \
   -v "$PROJECT_DIR":/projects \
@@ -127,7 +127,7 @@ docker run -d \
 
 **Flag breakdown:**
 - `-d`: Run in detached mode (background).
-- `-p 3000:3000`: Publish the Web UI. The WebSocket file-watcher shares this port (upgrade path `/_kontexta_ws`), so no second `-p` is needed.
+- `-p 23002:23002`: Publish the Web UI. The WebSocket file-watcher shares this port (upgrade path `/_kontexta_ws`), so no second `-p` is needed.
 - `-v ...:/app/data`: Persist your vault (SQLite, backups, knowledge base).
 - `-v /host/path:/container/path`: Mount your projects so the agent can see them.
 - `--name kontexta`: Give the container a predictable name (useful for `docker exec` MCP tool calls).
@@ -149,7 +149,7 @@ docker compose up -d --build
 
 ## After install
 
-Access the UI at `http://localhost:3000`. The WebSocket file-watcher shares this same port (upgrade path `/_kontexta_ws`), so a single published port is all you need. Data is persisted in `./kontexta-data` on the host. The container is wired with a healthcheck against `/api/health` (returns `{"status":"ok"}` once the SQLite handle is open).
+Access the UI at `http://localhost:23002`. The WebSocket file-watcher shares this same port (upgrade path `/_kontexta_ws`), so a single published port is all you need. Data is persisted in `./kontexta-data` on the host. The container is wired with a healthcheck against `/api/health` (returns `{"status":"ok"}` once the SQLite handle is open).
 
 To stop and remove:
 
@@ -300,13 +300,13 @@ pnpm dev
 
 This starts:
 
-- Next.js dev server on `http://localhost:3000` (Turbopack hot reload)
+- Next.js dev server on `http://localhost:23002` (Turbopack hot reload)
 - WebSocket file-watcher attached to the same HTTP server at `/_kontexta_ws` (auto-started by `instrumentation.ts`)
 
 > [!TIP]
 > **Low-memory machine?** Use `pnpm dev:lite` instead. It runs `next dev` on webpack (skips Turbopack's native engine) and caps Node's heap at 1.5 GB via `--max-old-space-size=1536`. Recommended on Cloud Workstations / small VMs where Turbopack can push the host into OOM. Boots to "Ready" in ~8s on a typical workstation.
 >
-> `dev:lite` also kills any orphaned `next-server` process left behind by a previous Ctrl-C before starting, so it always binds port 3000 cleanly. If you ever see the server start on `3001` instead, it means a previous dev server is still running — `dev:lite` handles this automatically.
+> `dev:lite` also kills any orphaned `next-server` process left behind by a previous Ctrl-C before starting, so it always binds port 23002 cleanly. If you ever see the server start on `23003` instead, it means a previous dev server is still running — `dev:lite` handles this automatically.
 >
 > **Cloud Workstations note:** if you see a "Cross origin request" warning about `*.cloudworkstations.dev`, it's harmless — `next.config.ts` already whitelists that domain via `allowedDevOrigins`.
 
@@ -341,10 +341,10 @@ KONTEXTA_DATA_DIR=/path/to/your/data
 
 With `pnpm dev` running:
 
-1. **UI loads:** open `http://localhost:3000` — the three-pane layout (folder tree / file list / content) renders.
-2. **Health endpoint:** `curl http://localhost:3000/api/health` returns `{"status":"ok"}`.
-3. **WebSocket connected:** open browser DevTools → Network → WS — a connection to `ws://localhost:3000/_kontexta_ws` (status 101) is open. Footer status bar shows `synced` or `idle` (not red).
-4. **Calendar loads:** open `http://localhost:3000/calendar` — the month view renders with the toolbar. No entities exist yet, so the grid will be empty until you add one via the **Entities** button or the `calendar_add_entity` MCP tool.
+1. **UI loads:** open `http://localhost:23002` — the three-pane layout (folder tree / file list / content) renders.
+2. **Health endpoint:** `curl http://localhost:23002/api/health` returns `{"status":"ok"}`.
+3. **WebSocket connected:** open browser DevTools → Network → WS — a connection to `ws://localhost:23002/_kontexta_ws` (status 101) is open. Footer status bar shows `synced` or `idle` (not red).
+4. **Calendar loads:** open `http://localhost:23002/calendar` — the month view renders with the toolbar. No entities exist yet, so the grid will be empty until you add one via the **Entities** button or the `calendar_add_entity` MCP tool.
 
 ### Run in production (standalone, without Docker)
 
@@ -357,11 +357,11 @@ pnpm build
 
 NODE_ENV=production \
 KONTEXTA_DATA_DIR=/var/lib/kontexta \
-PORT=3000 \
+PORT=23002 \
 node apps/web/.next/standalone/apps/web/server.js
 ```
 
-You must also place `apps/web/.next/static/` and `apps/web/public/` adjacent to `server.js` in the standalone tree (the `Dockerfile` shows the exact layout). Reverse-proxy `/` to `:3000` — the WebSocket file-watcher rides on the same port at `/_kontexta_ws`, so make sure your proxy forwards the HTTP `Upgrade` header (nginx: `proxy_set_header Upgrade $http_upgrade; proxy_set_header Connection "upgrade";`). No second port to publish or proxy.
+You must also place `apps/web/.next/static/` and `apps/web/public/` adjacent to `server.js` in the standalone tree (the `Dockerfile` shows the exact layout). Reverse-proxy `/` to `:23002` — the WebSocket file-watcher rides on the same port at `/_kontexta_ws`, so make sure your proxy forwards the HTTP `Upgrade` header (nginx: `proxy_set_header Upgrade $http_upgrade; proxy_set_header Connection "upgrade";`). No second port to publish or proxy.
 
 ### Tests
 

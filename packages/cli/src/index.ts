@@ -3,7 +3,7 @@ import { createRequire } from 'node:module';
 const HELP = `kontexta — one-click local dashboard + MCP server
 
 Usage:
-  kontexta start                     Boot dashboard + MCP on port 3000 (or $PORT)
+  kontexta start                     Boot dashboard + MCP on port 23002 (or $PORT)
   kontexta mcp                       Run stdio MCP server (for AI client config)
   kontexta doctor                    Print environment diagnostics
   kontexta doctor install-chromium   Download the Chromium build used for PDF export

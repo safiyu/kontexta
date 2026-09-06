@@ -125,7 +125,7 @@ Requires Node 22.x LTS. That's it — no Docker, no pnpm, no build.
 npx kontexta start
 ```
 
-Boots the dashboard on `http://localhost:3000` (opens in your browser) and starts the MCP server. First run walks you through master password, data location, and project registration in the browser.
+Boots the dashboard on `http://localhost:23002` (opens in your browser) and starts the MCP server. First run walks you through master password, data location, and project registration in the browser.
 
 ### Add to your AI client (MCP-only)
 
