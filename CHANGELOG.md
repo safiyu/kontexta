@@ -1,5 +1,11 @@
 # Changelog
 
+## 4.5.1 — Hermes Agent in the Configure section
+
+### Added
+
+- **Hermes Agent client in the dashboard's Configure section.** Pick "Hermes Agent" to get a ready-to-paste `mcp_servers` YAML block for `~/.hermes/config.yaml`, with the standard install-method detection (docker / npm / source) and data-directory rules. Notes cover Hermes specifics: MCP servers load at startup only (restart after editing), and on Windows the `npx` command must be the full `.cmd` path because bare `npx` is a shim that won't spawn. `docs/MCP.md` documents the same.
+
 ## 4.5.0 — HTML reports in the knowledge base
 
 ### Added
