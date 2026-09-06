@@ -26,9 +26,18 @@ export interface Snippet {
   configPath?: string;
 }
 
-// A detected local `kontexta` install (from npx kontexta start) beats the generic kontexta-mcp default — same server either way.
+// A detected local `kontexta` install (from `npx kontexta start`) beats the generic kontexta-mcp default — same server either way.
 function npmArgs(vars: TemplateVars): string[] {
   return vars.hasLocalCliMcp ? ["-y", "kontexta", "mcp"] : ["-y", "kontexta-mcp"];
+}
+// Escape a value for a YAML double-quoted scalar (the `mcp_servers` block pasted
+// into Hermes/Continue config). YAML — like JSON — treats `\` as an escape
+// character, so an unescaped Windows path (C:\Users\...) is INVALID YAML (`\U`
+// is read as a unicode escape) and the whole block fails to parse. The JSON
+// snippets never hit this because JSON.stringify escapes for us; the hand-built
+// YAML templates must escape by hand.
+function yamlDq(s: string): string {
+  return s.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 }
 function npmNotes(vars: TemplateVars, install: Install): string[] {
   if (install !== "npm") return [];
@@ -136,15 +145,15 @@ function continueSnippet(vars: TemplateVars, install: Install): Snippet {
         ? npmArgs(vars)
         : [vars.sourceEntrypoint];
   const showEnv = install === "docker" || !vars.isDefaultDir;
-  const envBlock = showEnv ? `\n    env:\n      KONTEXTA_DATA_DIR: "${vars.dataDir}"` : "";
+  const envBlock = showEnv ? `\n    env:\n      KONTEXTA_DATA_DIR: "${yamlDq(vars.dataDir)}"` : "";
   const body = `name: kontexta
 version: ${vars.version}
 schema: v1
 mcpServers:
   - name: kxta
-    command: "${command}"
+    command: "${yamlDq(command)}"
     args:
-${args.map(a => `      - "${a}"`).join('\n')}${envBlock}`;
+${args.map(a => `      - "${yamlDq(a)}"`).join("\n")}${envBlock}`;
   return {
     kind: "shell",
     body,
@@ -197,12 +206,12 @@ function hermesSnippet(vars: TemplateVars, install: Install): Snippet {
         ? npmArgs(vars)
         : [vars.sourceEntrypoint];
   const showEnv = install === "docker" || !vars.isDefaultDir;
-  const envBlock = showEnv ? `\n    env:\n      KONTEXTA_DATA_DIR: "${vars.dataDir}"` : "";
+  const envBlock = showEnv ? `\n    env:\n      KONTEXTA_DATA_DIR: "${yamlDq(vars.dataDir)}"` : "";
   const body = `mcp_servers:
   kxta:
-    command: "${command}"
+    command: "${yamlDq(command)}"
     args:
-${args.map(a => `      - "${a}"`).join('\n')}${envBlock}`;
+${args.map(a => `      - "${yamlDq(a)}"`).join("\n")}${envBlock}`;
   return {
     kind: "shell",
     body,
