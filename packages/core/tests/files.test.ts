@@ -372,6 +372,38 @@ describe("File Operations", () => {
     expect(rec.content_class).toBeNull();
   });
 
+  test("moveFile updates content_class when crossing dictionary <-> notes", async () => {
+    const created = await createFile({
+      title: "Movable",
+      content: "hello",
+      destination: "knowledge",
+      folder: "knowledge/dictionary/misc",
+      dataDir: testDir,
+    });
+    expect(created.content_class).toBe("dictionary");
+
+    const targetPath = join(testDir, "knowledge", "knowledge", "notes", "misc", "movable.md");
+    mkdirSync(join(testDir, "knowledge", "knowledge", "notes", "misc"), { recursive: true });
+
+    const moved = moveFile(created.id, targetPath, testDir);
+    expect(moved.content_class).toBe("note");
+  });
+
+  test("moveFile sets content_class to null when moving into legacy path", async () => {
+    const created = await createFile({
+      title: "Movable2",
+      content: "hello",
+      destination: "knowledge",
+      folder: "knowledge/dictionary/misc",
+      dataDir: testDir,
+    });
+    const targetPath = join(testDir, "knowledge", "knowledge", "misc", "movable2.md");
+    mkdirSync(join(testDir, "knowledge", "knowledge", "misc"), { recursive: true });
+
+    const moved = moveFile(created.id, targetPath, testDir);
+    expect(moved.content_class).toBeNull();
+  });
+
   test("migration 008: content_class column, index, and check constraint", () => {
     const db = getDatabase();
 
