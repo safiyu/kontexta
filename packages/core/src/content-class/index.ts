@@ -7,9 +7,7 @@ export interface ComputeContentClassArgs {
   dataDir: string;
 }
 
-// Pure classifier. Rule 1 short-circuits on storage_type; rule 2 matches
-// against the path relative to <dataDir>/knowledge/. Never throws — invalid
-// inputs collapse to null. See docs/superpowers/specs/2026-09-10-content-class-*
+// Pure classifier: non-local storage → 'project'; else path-prefix match relative to <dataDir>/knowledge/. Never throws; invalid inputs → null.
 export function computeContentClass(args: ComputeContentClassArgs): ContentClass | null {
   const { storageType, path, dataDir } = args;
 

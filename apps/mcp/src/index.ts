@@ -800,7 +800,7 @@ server.tool(
 
 server.tool(
   "regex_search",
-  "Match a JS regex against the body of every file in scope (project, KB, or all) and return per-file hits with line numbers. Slower than FTS `search` because it reads each file's content; use only when FTS misses substrings, URLs, or code identifiers. Read-only; no side effects, auth, or rate limits. Capped at 500 files / 10 hits per file by default; the response reports `files_truncated` and per-file truncation so the agent can re-scope. `project_id: null` = KB only; omit = everywhere. Invalid regex throws.",
+  "Match a JS regex against the body of every file in scope (project, KB, or all) and return per-file hits with line numbers. Slower than FTS `search` because it reads each file's content; use only when FTS misses substrings, URLs, or code identifiers. Read-only; no side effects, auth, or rate limits. Capped at 500 files / 10 hits per file by default; the response reports `files_truncated` and per-file truncation so the agent can re-scope. `project_id: null` = KB only; omit = everywhere; `kind` narrows to one content class. Invalid regex throws.",
   {
     pattern: z.string().describe("JavaScript RegExp source"),
     project_id: z.number().nullable().optional().describe("Scope to one project, null for KB-only, omit for everything"),
@@ -917,7 +917,7 @@ server.tool(
 
 server.tool(
   "list_files",
-  "List file metadata with optional filters (project_id, tag, favorite, folder, untagged) and pagination. Read-only; no side effects, auth, or rate limits. Each row is annotated with tags, est_tokens, and size_bytes; the response includes `total_est_tokens` so you can budget before reading bodies. `project_id: null` returns ONLY Knowledge Base files; omit the field to span everything. Use to browse known structure; for keyword/content lookup use `search`; for a denser whole-vault dump use `project_map`.",
+  "List file metadata with optional filters (project_id, tag, favorite, folder, untagged, kind) and pagination. Read-only; no side effects, auth, or rate limits. Each row is annotated with tags, est_tokens, size_bytes, and content_class; the response includes `total_est_tokens` so you can budget before reading bodies. `project_id: null` returns ONLY Knowledge Base files; omit the field to span everything; `kind` narrows to one content class. Use to browse known structure; for keyword/content lookup use `search`; for a denser whole-vault dump use `project_map`.",
   {
     project_id: z.number().nullable().optional().describe("Filter by project ID. Pass null to list ONLY Knowledge Base files (project_id IS NULL)."),
     tag: z.string().optional().describe("Filter by tag name"),
@@ -951,7 +951,7 @@ server.tool(
 
 server.tool(
   "search",
-  "Full-text (SQLite FTS5) keyword search across files. Returns ranked matches with inline match_excerpt and title_highlight (no follow-up `read_file` needed for snippets) plus tags, est_tokens, size_bytes, and aggregate `total_est_tokens`. Read-only; no side effects, auth, or rate limits. FTS is tokenised: it WILL miss URLs, hyphenated terms, and partial substrings — fall back to `regex_search` for those. `project_id: null` searches only the KB; omit the field to span everything; `tags[]` requires ALL listed tags to match. For prompt-ready bundled bodies use `bundle_search`.",
+  "Full-text (SQLite FTS5) keyword search across files. Returns ranked matches with inline match_excerpt and title_highlight (no follow-up `read_file` needed for snippets) plus tags, est_tokens, size_bytes, content_class, and aggregate `total_est_tokens`. Read-only; no side effects, auth, or rate limits. Ordering: dictionary hits sort above everything else for the same query (dictionary-wins on conflict), then BM25 rank. FTS is tokenised: it WILL miss URLs, hyphenated terms, and partial substrings — fall back to `regex_search` for those. `project_id: null` searches only the KB; omit the field to span everything; `tags[]` requires ALL listed tags to match; `kind` narrows to one content class. For prompt-ready bundled bodies use `bundle_search`.",
   {
     query: z.string().describe("Search query"),
     project_id: z.number().nullable().optional().describe("Filter by project ID. Pass null to search ONLY Knowledge Base files."),
@@ -986,7 +986,7 @@ server.tool(
 
 server.tool(
   "bundle_search",
-  "Run an FTS search and concatenate matched bodies into a single prompt-ready bundle (XML `<document>` blocks or markdown headers + fences) capped at `max_tokens`. Files are added in rank order until the next would exceed the budget; the rest go to `skipped[]`. Read-only; no side effects, auth, or rate limits. Use instead of `search` + N×`read_file` when you need several related files as one context blob. Defaults: format=xml, max_tokens=50000. `project_id: null` = KB only; `tags[]` requires ALL to match.",
+  "Run an FTS search and concatenate matched bodies into a single prompt-ready bundle (XML `<document>` blocks or markdown headers + fences) capped at `max_tokens`. Files are added in rank order (dictionary-wins first, then BM25) until the next would exceed the budget; the rest go to `skipped[]`. Read-only; no side effects, auth, or rate limits. Use instead of `search` + N×`read_file` when you need several related files as one context blob. Defaults: format=xml, max_tokens=50000. `project_id: null` = KB only; `tags[]` requires ALL to match; `kind` narrows to one content class.",
   {
     query: z.string().describe("Full-text search query"),
     project_id: z.number().nullable().optional().describe("Filter by project ID. Pass null to bundle ONLY Knowledge Base files."),
@@ -1494,7 +1494,7 @@ server.tool(
 
 server.tool(
   "clip_url",
-  "SIDE-EFFECTFUL — fetches an EXTERNAL URL and writes a NEW KB file. Downloads the page, extracts the main article via Readability, converts to markdown, and saves it as a new clipping. NOT idempotent / no de-dup — re-clipping the same URL creates a second file. AUTH: anonymous by default; pass `headers` (e.g. `{Cookie: 'session=...'}` or `{Authorization: 'Bearer ...'}`) to clip behind logins. Kontexta does not rate-limit but the upstream may throttle. On auth-required pages returns isError with `code: AUTH_REQUIRED`, optional `login_url`, and a hint to retry with `headers`. Returns `{file_id, path, title, source}`. Use to ingest external docs into the KB.",
+  "SIDE-EFFECTFUL — fetches an EXTERNAL URL and writes a NEW KB file. Downloads the page, extracts the main article via Readability, converts to markdown, and saves it under `knowledge/urlclips/`. Auto-classified as content_class='dictionary' (clipped external references are treated as authoritative reference material). NOT idempotent / no de-dup — re-clipping the same URL creates a second file. AUTH: anonymous by default; pass `headers` (e.g. `{Cookie: 'session=...'}` or `{Authorization: 'Bearer ...'}`) to clip behind logins. Kontexta does not rate-limit but the upstream may throttle. On auth-required pages returns isError with `code: AUTH_REQUIRED`, optional `login_url`, and a hint to retry with `headers`. Returns `{file_id, path, title, source}`. Use to ingest external docs into the KB.",
   {
     url: z.string().url().describe("The URL to clip"),
     title: z.string().optional().describe("Optional title override (defaults to the page's <title>)"),
@@ -1964,7 +1964,7 @@ server.tool(
 
 server.tool(
   "find_related",
-  "Find other files sharing tags with the given file, ranked by `shared_tag_count` descending. Read-only; no side effects, auth, or rate limits. Returns annotated file rows with `shared_tag_count` and `shared_tags`. Empty result means the file has no tags or no other file shares them — try `search`/`regex_search` for content-based discovery, or `suggest_tags` to bootstrap labels first. Default limit 10.",
+  "Find other files sharing tags with the given file, ranked by `shared_tag_count` descending. Read-only; no side effects, auth, or rate limits. Returns annotated file rows with `shared_tag_count` and `shared_tags`. Empty result means the file has no tags or no other file shares them — try `search`/`regex_search` for content-based discovery, or `suggest_tags` to bootstrap labels first. `kind` narrows to one content class. Default limit 10.",
   {
     file_id: z.number().describe("ID of the file to find relations for"),
     limit: z.number().optional().describe("Maximum number of related files to return (default 10)"),
@@ -1994,7 +1994,7 @@ server.tool(
 
 server.tool(
   "create_files",
-  "Batch variant of `create_file` — create up to 200 markdown or mermaid files in one call. Each item follows the same rules (project_id required if destination is `project` or `kontexta`). SIDE EFFECTS: writes new files to disk and inserts FTS5 rows; missing folders are mkdir'd. Per-item failures are isolated to `errors[]` and the rest of the batch still commits — partial success is the norm, always inspect `error_count`. No external auth or rate limits. Returns `{created_count, error_count, created, errors}`. Use for bulk ingestion; for >200 items, page yourself. Pass format='mmd' on an item to create a Mermaid diagram file (.mmd); defaults to 'md'.",
+  "Batch variant of `create_file` — create up to 200 markdown, mermaid, or HTML files in one call. Each item follows the same rules: `project_id` required if `destination` is `project`/`kontexta`; `kind` ('dictionary' or 'note') required if `destination` is `knowledge`. SIDE EFFECTS: writes new files to disk and inserts FTS5 rows; missing folders are mkdir'd. Per-item failures are isolated to `errors[]` and the rest of the batch still commits — partial success is the norm, always inspect `error_count`. No external auth or rate limits. Returns `{created_count, error_count, created, errors}`. Use for bulk ingestion; for >200 items, page yourself. Pass format='mmd' on an item to create a Mermaid diagram file (.mmd) or 'html' for HTML reports; defaults to 'md'.",
   {
     files: z
       .array(

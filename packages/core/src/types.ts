@@ -5,13 +5,7 @@
 export type StorageType = "local" | "reference" | "backup";
 export type Destination = "knowledge" | "project" | "kontexta";
 
-/**
- * Authority-axis classification for a file. Orthogonal to StorageType
- * (which describes where/how the file is stored). 'dictionary' here does NOT
- * collide with storage_type='reference' — different columns, different axes.
- * Legacy KB content that hasn't been sorted into one of the named subfolders
- * is left as null.
- */
+// Authority-axis file class, orthogonal to StorageType — 'dictionary' here is unrelated to storage_type='reference'; legacy uncategorised KB files are null.
 export type ContentClass = "dictionary" | "note" | "journal" | "project";
 
 export interface FileRecord {
