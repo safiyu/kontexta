@@ -2,7 +2,7 @@ export interface FolderTreeNode {
   name: string;
   path: string;
   children: FolderTreeNode[];
-  files: { id: number; title: string; path: string }[];
+  files: { id: number; title: string; path: string; content_class?: "dictionary" | "note" | "journal" | "project" | null }[];
   isExplicit?: boolean;
 }
 
@@ -10,7 +10,7 @@ export interface FolderTreeNode {
 const toPosix = (p: string): string => p.replace(/\\/g, "/");
 
 export function buildFolderTree(
-  files: { id: number; title: string; path: string }[],
+  files: { id: number; title: string; path: string; content_class?: "dictionary" | "note" | "journal" | "project" | null }[],
   projectPath: string,
   emptyFolders: string[] = [],
   prune: boolean = true
@@ -51,7 +51,7 @@ export function buildFolderTree(
       current = child;
     }
 
-    current.files.push({ id: file.id, title: file.title, path: file.path });
+    current.files.push({ id: file.id, title: file.title, path: file.path, content_class: file.content_class ?? null });
   }
 
   // Inject empty folders (posix keys to match the file-derived keys above).

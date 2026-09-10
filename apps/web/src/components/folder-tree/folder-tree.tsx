@@ -5,6 +5,7 @@ import { Folder, CalendarDays, BookText, Workflow, Globe, UserCircle, Tag, Chevr
 import { TreeNode } from "./tree-node";
 import { buildFolderTree, FolderTreeNode } from "@/lib/build-folder-tree";
 import { EmptyState } from "@/components/ui/empty-state";
+import { ContentClassIcon } from "../file-list/content-class-icon";
 
 interface Project {
   id: number;
@@ -17,6 +18,7 @@ interface ProjectFile {
   id: number;
   path: string;
   title: string;
+  content_class?: "dictionary" | "note" | "journal" | "project" | null;
 }
 
 interface TagCount { id: number; name: string; count: number }
@@ -44,21 +46,6 @@ interface FolderTreeProps {
   /** Open the new-folder dialog scoped to a KB bucket (subfolder create). */
   onCreateBucketFolder?: (bucket: string) => void;
 }
-
-const FileIcon = ({ className }: { className?: string }) => (
-  <svg
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    className={className}
-  >
-    <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
-    <polyline points="14 2 14 8 20 8" />
-  </svg>
-);
 
 const FolderIcon = ({ className }: { className?: string }) => (
   <svg
@@ -233,7 +220,7 @@ function FolderNodes({
         <TreeNode
           key={file.id}
           label={file.title}
-          icon={<FileIcon className="w-3.5 h-3.5 text-amber-accent group-hover:text-[var(--accent)] transition-colors" />}
+          icon={<ContentClassIcon contentClass={file.content_class ?? null} className="w-3.5 h-3.5 text-amber-accent group-hover:text-[var(--accent)] transition-colors" />}
           onClick={() => onSelectFile(file.id)}
         />
       ))}
@@ -386,7 +373,7 @@ export function FolderTree({
                         isProfile ? (
                           <UserCircle className="w-3.5 h-3.5 text-[var(--accent)] group-hover:text-[var(--accent)] transition-colors" />
                         ) : (
-                          <FileIcon className="w-3.5 h-3.5 text-amber-accent group-hover:text-[var(--accent)] transition-colors" />
+                          <ContentClassIcon contentClass={file.content_class ?? null} className="w-3.5 h-3.5 text-amber-accent group-hover:text-[var(--accent)] transition-colors" />
                         )
                       }
                       onClick={() => onSelectFile(file.id)}

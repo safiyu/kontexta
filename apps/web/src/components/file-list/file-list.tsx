@@ -30,6 +30,7 @@ interface File {
   est_tokens?: number | null;
   favorite?: boolean;
   tags?: string[] | null;
+  content_class?: "dictionary" | "note" | "journal" | "project" | null;
 }
 
 type SortBy = "name" | "updated_at" | "created_at";
@@ -379,6 +380,7 @@ export function FileList({
               estTokens={file.est_tokens}
               favorite={file.favorite}
               tags={file.tags ?? undefined}
+              contentClass={file.content_class ?? null}
               selectMode={selectMode}
               selected={selectedIds.has(file.id)}
               onToggleSelect={() => {
