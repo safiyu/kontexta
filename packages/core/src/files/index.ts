@@ -13,6 +13,7 @@ import { profileRelPath, repairProfile } from "../profile/index.js";
 import { sanitizeHtml } from "../reports/sanitize.js";
 import { isIndexedFile } from "../util/extensions.js";
 import { validateKnowledgeWrite } from "./layout.js";
+import { computeContentClass } from "../content-class/index.js";
 import type { FileRecord, Destination, FileFilters, StorageType } from "../types.js";
 
 /**
@@ -229,14 +230,17 @@ export async function createFile(opts: CreateFileOptions): Promise<FileRecordWit
   writeFileSync(filePath, content, "utf8");
   const contentHash = computeHash(content);
 
+  const contentClass = computeContentClass({ storageType, path: filePath, dataDir });
+
   // ON CONFLICT(path) absorbs the watcher's stub row if chokidar's `add` won the race.
   const upsertStmt = db.prepare(`
-    INSERT INTO files (path, title, project_id, storage_type, source_path, content_hash)
-    VALUES (?, ?, ?, ?, ?, ?)
+    INSERT INTO files (path, title, project_id, storage_type, content_class, source_path, content_hash)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(path) DO UPDATE SET
       title = excluded.title,
       project_id = excluded.project_id,
       storage_type = excluded.storage_type,
+      content_class = excluded.content_class,
       source_path = excluded.source_path,
       content_hash = excluded.content_hash,
       updated_at = datetime('now')
@@ -250,15 +254,15 @@ export async function createFile(opts: CreateFileOptions): Promise<FileRecordWit
 
   // Snapshot for rollback — upsert may overwrite an existing row.
   const priorRow = db
-    .prepare("SELECT id, title, project_id, storage_type, source_path, content_hash, updated_at FROM files WHERE path = ?")
+    .prepare("SELECT id, title, project_id, storage_type, content_class, source_path, content_hash, updated_at FROM files WHERE path = ?")
     .get(filePath) as
-    | { id: number; title: string; project_id: number | null; storage_type: string; source_path: string | null; content_hash: string; updated_at: string }
+    | { id: number; title: string; project_id: number | null; storage_type: string; content_class: string | null; source_path: string | null; content_hash: string; updated_at: string }
     | undefined;
 
   let fileId: number;
   try {
     fileId = db.transaction(() => {
-      upsertStmt.run(filePath, title, projectId || null, storageType, sourcePath || null, contentHash);
+      upsertStmt.run(filePath, title, projectId || null, storageType, contentClass, sourcePath || null, contentHash);
       const row = getIdByPathStmt.get(filePath) as { id: number } | undefined;
       if (!row) throw new Error(`createFile: row missing after upsert for ${filePath}`);
       const id = row.id;
@@ -289,8 +293,8 @@ export async function createFile(opts: CreateFileOptions): Promise<FileRecordWit
     try {
       if (priorRow) {
         db.prepare(
-          "UPDATE files SET title=?, project_id=?, storage_type=?, source_path=?, content_hash=?, updated_at=? WHERE id=?"
-        ).run(priorRow.title, priorRow.project_id, priorRow.storage_type, priorRow.source_path, priorRow.content_hash, priorRow.updated_at, priorRow.id);
+          "UPDATE files SET title=?, project_id=?, storage_type=?, content_class=?, source_path=?, content_hash=?, updated_at=? WHERE id=?"
+        ).run(priorRow.title, priorRow.project_id, priorRow.storage_type, priorRow.content_class, priorRow.source_path, priorRow.content_hash, priorRow.updated_at, priorRow.id);
       } else {
         db.prepare("DELETE FROM files WHERE path = ?").run(filePath);
       }

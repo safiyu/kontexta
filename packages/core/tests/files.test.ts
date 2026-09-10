@@ -328,6 +328,50 @@ describe("File Operations", () => {
     expect(folders).not.toContain(join("src", "loop"));
   });
 
+  test("createFile classifies file under knowledge/dictionary as 'dictionary'", async () => {
+    const rec = await createFile({
+      title: "SLT System IDs",
+      content: "# SLT System IDs\n",
+      destination: "knowledge",
+      folder: "knowledge/dictionary/slt",
+      dataDir: testDir,
+    });
+    expect(rec.content_class).toBe("dictionary");
+  });
+
+  test("createFile classifies file under knowledge/notes as 'note'", async () => {
+    const rec = await createFile({
+      title: "PPROD Cutover Notes",
+      content: "# Notes\n",
+      destination: "knowledge",
+      folder: "knowledge/notes/incidents",
+      dataDir: testDir,
+    });
+    expect(rec.content_class).toBe("note");
+  });
+
+  test("createFile classifies clip target (knowledge/urlclips) as 'dictionary'", async () => {
+    const rec = await createFile({
+      title: "Some Clip",
+      content: "clipped body",
+      destination: "knowledge",
+      folder: "knowledge/urlclips",
+      dataDir: testDir,
+    });
+    expect(rec.content_class).toBe("dictionary");
+  });
+
+  test("createFile leaves content_class null for legacy KB path (knowledge root)", async () => {
+    const rec = await createFile({
+      title: "profile",
+      content: "legacy",
+      destination: "knowledge",
+      dataDir: testDir,
+    });
+    // profile.md at knowledge root is legacy — not under any named subfolder
+    expect(rec.content_class).toBeNull();
+  });
+
   test("migration 008: content_class column, index, and check constraint", () => {
     const db = getDatabase();
 
