@@ -76,9 +76,6 @@ export function MermaidViewer({ source, className, filename }: MermaidViewerProp
         const { svg: rendered } = await mermaid.render(renderId, source);
         if (!cancelled) {
           setSvg(rendered);
-          if (containerRef.current) {
-            containerRef.current.innerHTML = rendered;
-          }
         }
         // Even on success, mermaid sometimes leaves its measuring sandbox
         // attached. Cheap to sweep.
@@ -93,7 +90,6 @@ export function MermaidViewer({ source, className, filename }: MermaidViewerProp
           const msg = e instanceof Error ? e.message : String(e);
           setError(msg);
           setSvg(null);
-          if (containerRef.current) containerRef.current.innerHTML = "";
         }
       }
     })();
@@ -262,7 +258,8 @@ export function MermaidViewer({ source, className, filename }: MermaidViewerProp
           Mermaid render error: {error}
         </pre>
       )}
-      <div ref={containerRef} />
+      {/* Let React drive innerHTML via state so reconciliation of conditional siblings above can't wipe the diagram. Ref stays attached so PNG export can still read getBBox from the live node. */}
+      <div ref={containerRef} dangerouslySetInnerHTML={svg ? { __html: svg } : undefined} />
       {error && (
         <pre className="mt-2 p-3 bg-zinc-900 text-zinc-100 text-xs overflow-x-auto">
           {source}
