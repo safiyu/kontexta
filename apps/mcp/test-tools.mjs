@@ -29,8 +29,8 @@ mkdirSync(join(DATA_DIR, "knowledge"), { recursive: true });
 // files would never get indexed).
 const SEED_TITLE_1 = "auth-notes";
 const SEED_TITLE_2 = "deployment-checklist";
-const SEED_PATH_1 = join(DATA_DIR, "knowledge", `${SEED_TITLE_1}.md`);
-const SEED_PATH_2 = join(DATA_DIR, "knowledge", `${SEED_TITLE_2}.md`);
+const SEED_PATH_1 = join(DATA_DIR, "knowledge", "knowledge", `${SEED_TITLE_1}.md`);
+const SEED_PATH_2 = join(DATA_DIR, "knowledge", "knowledge", `${SEED_TITLE_2}.md`);
 
 console.log(`[test] dataDir = ${DATA_DIR}`);
 
@@ -134,6 +134,7 @@ function assert(cond, msg) {
       title: SEED_TITLE_1,
       content: "# Authentication notes\n\nWe use OAuth and JWT tokens.\n\n## Setup\n\nInstall the auth middleware.\n\n## Rotation\n\nKeys rotate weekly.\n",
       destination: "knowledge",
+      folder: "knowledge",
     });
     seedFile1 = r;
     assert(r.path === SEED_PATH_1, `wrong path: ${r.path}`);
@@ -145,6 +146,7 @@ function assert(cond, msg) {
       title: SEED_TITLE_2,
       content: "# Deployment checklist\n\n## Pre-flight\n\nRun migrations.\n\n## Post-flight\n\nVerify health.\n",
       destination: "knowledge",
+      folder: "knowledge",
     });
     seedFile2 = r;
     assert(r.path === SEED_PATH_2, `wrong path: ${r.path}`);
@@ -282,11 +284,11 @@ function assert(cond, msg) {
   });
 
   await test("create_folder + delete_folder round-trip", async () => {
-    const c = await call("create_folder", { project_id: null, name: "smoke-test-folder" });
+    const c = await call("create_folder", { project_id: null, name: "knowledge/smoke-test-folder" });
     assert(c.path.endsWith("smoke-test-folder"), `wrong path: ${c.path}`);
     const list = await call("list_folders", { project_id: null });
-    assert(list.folders.includes("smoke-test-folder"), "folder not in list");
-    const d = await call("delete_folder", { project_id: null, name: "smoke-test-folder" });
+    assert(list.folders.some((f) => f.endsWith("smoke-test-folder")), "folder not in list");
+    const d = await call("delete_folder", { project_id: null, name: "knowledge/smoke-test-folder" });
     assert(d.success === true, "delete failed");
   });
 
@@ -301,7 +303,7 @@ function assert(cond, msg) {
 
   // ---- Move file (NEW) ----
   await test("move_file inside KB", async () => {
-    const newPath = join(DATA_DIR, "knowledge", "auth-notes-renamed.md");
+    const newPath = join(DATA_DIR, "knowledge", "knowledge", "auth-notes-renamed.md");
     const r = await call("move_file", { file_id: seedFile1.id, new_path: newPath });
     assert(r.path === newPath, `expected ${newPath}, got ${r.path}`);
     assert(existsSync(newPath), "file not moved on disk");
@@ -323,9 +325,9 @@ function assert(cond, msg) {
   await test("create_files batch", async () => {
     const r = await call("create_files", {
       files: [
-        { title: "batch-a", content: "alpha", destination: "knowledge" },
-        { title: "batch-b", content: "beta", destination: "knowledge" },
-        { title: "batch-c", content: "gamma", destination: "knowledge" },
+        { title: "batch-a", content: "alpha", destination: "knowledge", folder: "knowledge" },
+        { title: "batch-b", content: "beta", destination: "knowledge", folder: "knowledge" },
+        { title: "batch-c", content: "gamma", destination: "knowledge", folder: "knowledge" },
       ],
     });
     assert(r.created_count === 3, `expected 3 created, got ${r.created_count}`);

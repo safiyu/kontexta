@@ -82,9 +82,17 @@ export async function PATCH(
   }
 
   try {
-    const updated = await withLock(`git:${resolve(repoDir)}`, async () => moveFile(n, newPath));
+    const updated = await withLock(`git:${resolve(repoDir)}`, async () => moveFile(n, newPath, DATA_DIR));
     return NextResponse.json(updated);
   } catch (e: any) {
-    return NextResponse.json({ error: e?.message ?? "Failed to move file" }, { status: 500 });
+    const msg = e?.message ?? "Failed to move file";
+    // Client-caused validation (layout/containment/EEXIST/non-absolute) is 4xx, not 5xx.
+    const isClientError =
+      /^moveFile: /.test(msg) ||
+      / requires \.(md|mmd|html)/.test(msg) ||
+      /allowed at the knowledge root/.test(msg) ||
+      /Only these folders are allowed/.test(msg) ||
+      /destination already exists/.test(msg);
+    return NextResponse.json({ error: msg }, { status: isClientError ? 400 : 500 });
   }
 }

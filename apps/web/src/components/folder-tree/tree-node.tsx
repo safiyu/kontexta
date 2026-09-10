@@ -11,6 +11,9 @@ interface TreeNodeProps {
   children?: ReactNode;
   onClick?: () => void;
   hasHands?: boolean;
+  /** Renders at the right edge of the row (e.g. per-bucket "+" button). Clicks
+      inside are not treated as row clicks. */
+  trailingAction?: ReactNode;
 }
 
 export function TreeNode({
@@ -21,6 +24,7 @@ export function TreeNode({
   children,
   onClick,
   hasHands = false,
+  trailingAction,
 }: TreeNodeProps) {
   const [expanded, setExpanded] = useState(initialExpanded);
 
@@ -60,6 +64,14 @@ export function TreeNode({
               <path d="M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0" />
               <path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15" />
             </svg>
+          </span>
+        )}
+        {trailingAction && (
+          <span
+            className="ml-auto flex items-center opacity-0 group-hover:opacity-100 transition-opacity"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {trailingAction}
           </span>
         )}
       </div>

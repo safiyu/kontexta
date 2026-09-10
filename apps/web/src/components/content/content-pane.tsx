@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { FolderOpen, AlertTriangle, Search } from "lucide-react";
+import { AlertTriangle, Search } from "lucide-react";
 import { toast } from "sonner";
 import { unified } from "unified";
 import remarkParse from "remark-parse";
@@ -13,6 +13,9 @@ import { MermaidViewer } from "./mermaid-viewer";
 import { HtmlViewer } from "./html-viewer";
 import { HtmlEditor } from "./html-editor";
 import { MarkdownEditor } from "./markdown-editor";
+import { ProfileEditor } from "./profile-editor";
+import { WelcomeBanner } from "./welcome-banner";
+import { BacklinksPanel } from "./backlinks-panel";
 import { DeleteConfirmDialog } from "./delete-confirm-dialog";
 import { GitErrorDialog } from "./git-error-dialog";
 import { DropdownMenu } from "@/components/ui/dropdown-menu";
@@ -77,6 +80,8 @@ interface ContentPaneProps {
   // Lets the parent guard navigation handlers against discarding
   // in-progress edits (window.confirm before clearing selectedFileId).
   onDirtyChange?: (dirty: boolean) => void;
+  // Set from the parent so intra-pane navigation (backlinks click) can update selectedFileId.
+  onNavigateToFile?: (id: number) => void;
 }
 
 interface LoadError {
@@ -86,7 +91,7 @@ interface LoadError {
   path?: string;
 }
 
-export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: ContentPaneProps) {
+export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange, onNavigateToFile }: ContentPaneProps) {
   const [file, setFile] = useState<File | null>(null);
   const [loadError, setLoadError] = useState<LoadError | null>(null);
   const [editing, setEditing] = useState(false);
@@ -470,15 +475,8 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
   };
 
   if (!fileId) {
-    return (
-      <div className="h-full flex flex-col items-center justify-center animate-fade-in">
-        <EmptyState
-          icon={<FolderOpen className="w-16 h-16 opacity-40 dark-icon" aria-hidden />}
-          title="Select a file to preview"
-          hint="Choose a file from the list on the left"
-        />
-      </div>
-    );
+    // Empty state = the daily briefing (matches what the MCP server hands the agent).
+    return <WelcomeBanner />;
   }
 
   if (loading) {
@@ -557,7 +555,17 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
     );
   }
 
-  const inPublishFolder = file.path.replace(/\\/g, "/").includes("/publish/");
+  // profile.md gets a dedicated structured editor — matches the 6-section shape enforced server-side.
+  const posixPath = file.path.replace(/\\/g, "/");
+  if (posixPath.endsWith("/knowledge/profile.md")) {
+    return (
+      <div key={fileId} className="h-full flex flex-col">
+        <ProfileEditor onDirtyChange={onDirtyChange} onChanged={onChanged} />
+      </div>
+    );
+  }
+
+  const inPublishFolder = posixPath.includes("/publish/");
   return (
     <div key={fileId} className="h-full flex flex-col animate-fade-in">
       <div className="h-10 px-4 border-b border-[var(--border)] flex items-center gap-4 text-[14px] sticky top-0 bg-[var(--bg-primary)] z-10">
@@ -845,6 +853,10 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
               <HtmlViewer html={file.content} />
             ) : (
               <MarkdownViewer content={file.content} className="p-8" />
+            )}
+            {/* Backlinks: only meaningful for prose (.md). Component hides itself when there are none. */}
+            {!file.path.endsWith(".mmd") && !file.path.endsWith(".html") && onNavigateToFile && (
+              <BacklinksPanel fileId={file.id} onSelectFile={onNavigateToFile} />
             )}
           </div>
         )}

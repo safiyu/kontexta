@@ -1,43 +1,67 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Dialog } from "../ui/dialog";
+import { KB_BUCKETS, bucketOf, formatForFolder, isHtmlResources, type KbFormat } from "@/lib/kb-layout";
 
 interface NewFileDialogProps {
   open: boolean;
   onClose: () => void;
-  onCreate: (title: string, content: string, destination: "knowledge" | "project" | "kontexta", folder?: string) => Promise<boolean>;
+  onCreate: (title: string, content: string, destination: "knowledge" | "project" | "kontexta", folder?: string, format?: KbFormat) => Promise<boolean>;
   currentProjectId: number | null;
   availableFolders: string[];
+  /** Preselected folder (from the tree). Empty string / undefined = pick manually. */
+  defaultFolder?: string;
 }
 
-export function NewFileDialog({ open, onClose, onCreate, currentProjectId, availableFolders }: NewFileDialogProps) {
+export function NewFileDialog({ open, onClose, onCreate, currentProjectId, availableFolders, defaultFolder }: NewFileDialogProps) {
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [folder, setFolder] = useState("");
   const [destination, setDestination] = useState<"knowledge" | "project" | "kontexta">(
     currentProjectId ? "project" : "knowledge"
   );
+  const [format, setFormat] = useState<KbFormat>("md");
   const [loading, setLoading] = useState(false);
 
+  // Reset only on false→true transition — defaultFolder can change mid-open without wiping user input.
+  const prevOpenRef = useRef(false);
   useEffect(() => {
-    if (open) {
-      setDestination(currentProjectId ? "project" : "knowledge");
-      setFolder("");
+    if (open && !prevOpenRef.current) {
+      const initialDest = currentProjectId ? "project" : "knowledge";
+      setDestination(initialDest);
+      const initialFolder = initialDest === "knowledge" ? (defaultFolder ?? "") : "";
+      setFolder(initialFolder);
+      const inferred = initialDest === "knowledge" ? formatForFolder(initialFolder) : null;
+      setFormat(inferred ?? "md");
       setTitle("");
       setContent("");
     }
-  }, [open, currentProjectId]);
+    prevOpenRef.current = open;
+  }, [open, currentProjectId, defaultFolder]);
+
+  // Whenever the folder changes (KB destination only), realign the format so
+  // the user doesn't accidentally write `.mmd` into `journal/`.
+  useEffect(() => {
+    if (destination !== "knowledge") return;
+    const inferred = formatForFolder(folder);
+    if (inferred) setFormat(inferred);
+  }, [folder, destination]);
+
+  const isKb = destination === "knowledge";
+  const kbBucket = isKb ? bucketOf(folder) : null;
+  const formatLocked = isKb && kbBucket !== null && !isHtmlResources(folder);
+  // Bucket-scoped folder suggestions: keep KB users out of legacy folders.
+  const suggestedFolders = isKb
+    ? availableFolders.filter((f) => KB_BUCKETS.some((b) => f === b || f.startsWith(`${b}/`) || f.startsWith(`${b}\\`)))
+    : availableFolders;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) return;
     setLoading(true);
     try {
-      const created = await onCreate(title, content, destination, folder || undefined);
-      // Only clear the form and close on success — onCreate already shows a
-      // toast on failure, and the user's typed content must survive so they
-      // can fix and retry rather than losing it silently.
+      const created = await onCreate(title, content, destination, folder || undefined, format);
       if (created) {
         setTitle("");
         setContent("");
@@ -72,14 +96,16 @@ export function NewFileDialog({ open, onClose, onCreate, currentProjectId, avail
               <label className="block text-[10px] font-bold text-[var(--text-secondary)] tracking-widest mb-1.5">
                 FOLDER
               </label>
-              {availableFolders.length > 0 ? (
+              {suggestedFolders.length > 0 ? (
                 <select
                   value={folder}
                   onChange={(e) => setFolder(e.target.value)}
                   className="w-full bg-[var(--bg-secondary)] border border-[var(--border)] rounded px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-amber-accent/50 cursor-pointer"
+                  required={isKb}
                 >
-                  <option value="">— Root level —</option>
-                  {availableFolders.map((f) => (
+                  {!isKb && <option value="">— Root level —</option>}
+                  {isKb && <option value="" disabled>— Pick a folder —</option>}
+                  {suggestedFolders.map((f) => (
                     <option key={f} value={f}>{f}</option>
                   ))}
                 </select>
@@ -88,7 +114,7 @@ export function NewFileDialog({ open, onClose, onCreate, currentProjectId, avail
                   type="text"
                   value={folder}
                   onChange={(e) => setFolder(e.target.value)}
-                  placeholder="No folders yet — type to create"
+                  placeholder={isKb ? "e.g. knowledge/topic" : "No folders yet — type to create"}
                   className="w-full bg-[var(--bg-secondary)] border border-[var(--border)] rounded px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-amber-accent/50"
                 />
               )}
@@ -117,12 +143,46 @@ export function NewFileDialog({ open, onClose, onCreate, currentProjectId, avail
             </div>
           </div>
 
+          {isKb && (
+            <div>
+              <label className="block text-[10px] font-bold text-[var(--text-secondary)] tracking-widest mb-1.5">
+                FORMAT{formatLocked && <span className="ml-2 text-[var(--text-secondary)] font-normal normal-case tracking-normal italic">— fixed by {kbBucket}/</span>}
+              </label>
+              <div className="flex gap-3">
+                {(["md", "mmd", "html"] as const).map((f) => {
+                  const active = format === f;
+                  const disabled = formatLocked && !active;
+                  return (
+                    <button
+                      key={f}
+                      type="button"
+                      onClick={() => !disabled && setFormat(f)}
+                      disabled={disabled}
+                      title={disabled ? `Not allowed in ${kbBucket}/` : undefined}
+                      className={`btn btn-sm flex-1 ${active ? "border-[var(--accent)]" : ""} ${disabled ? "opacity-40 cursor-not-allowed" : ""}`}
+                    >
+                      .{f}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           <div>
-            <label className="block text-[10px] font-bold text-[var(--text-secondary)] tracking-widest mb-1.5">CONTENT (MARKDOWN)</label>
+            <label className="block text-[10px] font-bold text-[var(--text-secondary)] tracking-widest mb-1.5">
+              CONTENT ({format === "html" ? "HTML" : format === "mmd" ? "MERMAID" : "MARKDOWN"})
+            </label>
             <textarea
               value={content}
               onChange={(e) => setContent(e.target.value)}
-              placeholder={"# Introduction\nStart typing here..."}
+              placeholder={
+                format === "html"
+                  ? "<h1>Report</h1>"
+                  : format === "mmd"
+                    ? "graph TD\n  A --> B"
+                    : "# Introduction\nStart typing here..."
+              }
               rows={8}
               className="w-full bg-[var(--bg-secondary)] border border-[var(--border)] rounded px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-amber-accent/50 font-mono resize-none"
             />
@@ -139,7 +199,7 @@ export function NewFileDialog({ open, onClose, onCreate, currentProjectId, avail
           </button>
           <button
             type="submit"
-            disabled={loading || !title.trim()}
+            disabled={loading || !title.trim() || (isKb && !folder)}
             className="btn btn-md"
           >
             {loading ? "CREATING..." : "CREATE FILE"}

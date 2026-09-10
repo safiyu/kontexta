@@ -27,7 +27,7 @@ describe("projectMap", () => {
   });
 
   it("renders a single knowledge file with id and title", async () => {
-    await createFile({ title: "Hello", content: "x".repeat(50), destination: "knowledge", dataDir });
+    await createFile({ title: "Hello", content: "x".repeat(50), destination: "knowledge", folder: "knowledge", dataDir });
     const r = projectMap({ dataDir });
     expect(r.outline).toContain("knowledge/");
     expect(r.outline).toMatch(/\[\d+\] Hello/);
@@ -36,14 +36,14 @@ describe("projectMap", () => {
   });
 
   it("groups files by folder under their root", async () => {
-    await createFile({ title: "A", content: "aaa".repeat(30), destination: "knowledge", folder: "notes", dataDir });
-    await createFile({ title: "B", content: "bbb".repeat(30), destination: "knowledge", folder: "notes", dataDir });
-    await createFile({ title: "C", content: "ccc".repeat(30), destination: "knowledge", folder: "drafts", dataDir });
+    await createFile({ title: "A", content: "aaa".repeat(30), destination: "knowledge", folder: "knowledge/notes", dataDir });
+    await createFile({ title: "B", content: "bbb".repeat(30), destination: "knowledge", folder: "knowledge/notes", dataDir });
+    await createFile({ title: "C", content: "ccc".repeat(30), destination: "knowledge", folder: "knowledge/drafts", dataDir });
     const r = projectMap({ dataDir });
     const lines = r.outline.split("\n");
     expect(lines[0]).toBe("knowledge/");
-    expect(lines).toContain("  drafts/");
-    expect(lines).toContain("  notes/");
+    expect(lines.some((l) => l.trimEnd().endsWith("drafts/"))).toBe(true);
+    expect(lines.some((l) => l.trimEnd().endsWith("notes/"))).toBe(true);
     expect(r.stats.files).toBe(3);
     expect(r.stats.folders).toBeGreaterThanOrEqual(2);
   });
@@ -53,6 +53,7 @@ describe("projectMap", () => {
       title: "Tagged",
       content: "body content here for length",
       destination: "knowledge",
+      folder: "knowledge",
       dataDir,
       tags: ["alpha", "beta"],
     });
@@ -62,7 +63,7 @@ describe("projectMap", () => {
   });
 
   it("omits tags when include_tags=false", async () => {
-    await createFile({ title: "T", content: "body".repeat(20), destination: "knowledge", dataDir, tags: ["x"] });
+    await createFile({ title: "T", content: "body".repeat(20), destination: "knowledge", folder: "knowledge", dataDir, tags: ["x"] });
     const r = projectMap({ dataDir, include_tags: false });
     expect(r.outline).not.toContain("#x");
   });
@@ -71,7 +72,7 @@ describe("projectMap", () => {
     const projectDir = mkdtempSync(join(tmpdir(), "kontexta-pm-proj-"));
     const proj = registerProject("Demo", projectDir);
     await createFile({ title: "InProject", content: "p".repeat(50), destination: "kontexta", projectId: proj.id, dataDir });
-    await createFile({ title: "InKB",      content: "k".repeat(50), destination: "knowledge", dataDir });
+    await createFile({ title: "InKB",      content: "k".repeat(50), destination: "knowledge", folder: "knowledge", dataDir });
 
     const r = projectMap({ dataDir, project_id: null });
     expect(r.outline).toContain("InKB");
@@ -94,7 +95,7 @@ describe("projectMap", () => {
   });
 
   it("addTags between calls is reflected in next outline", async () => {
-    const f = await createFile({ title: "TagMe", content: "body".repeat(20), destination: "knowledge", dataDir });
+    const f = await createFile({ title: "TagMe", content: "body".repeat(20), destination: "knowledge", folder: "knowledge", dataDir });
     const before = projectMap({ dataDir });
     expect(before.outline).not.toContain("#fresh");
     addTags(f.id, ["fresh"]);
@@ -104,7 +105,7 @@ describe("projectMap", () => {
 
   it("respects max_lines and reports truncated:true", async () => {
     for (let i = 0; i < 20; i++) {
-      await createFile({ title: `F${i}`, content: `body ${i}`.repeat(10), destination: "knowledge", dataDir });
+      await createFile({ title: `F${i}`, content: `body ${i}`.repeat(10), destination: "knowledge", folder: "knowledge", dataDir });
     }
     const r = projectMap({ dataDir, max_lines: 5 });
     const lineCount = r.outline.split("\n").length;
@@ -116,7 +117,7 @@ describe("projectMap", () => {
 
   it("est_tokens scales with outline length", async () => {
     for (let i = 0; i < 10; i++) {
-      await createFile({ title: `File${i}`, content: "x".repeat(100), destination: "knowledge", dataDir });
+      await createFile({ title: `File${i}`, content: "x".repeat(100), destination: "knowledge", folder: "knowledge", dataDir });
     }
     const r = projectMap({ dataDir });
     expect(r.est_tokens).toBeGreaterThan(0);
@@ -124,8 +125,8 @@ describe("projectMap", () => {
   }, 30_000);
 
   it("sorts folders before files at each level", async () => {
-    await createFile({ title: "Zfile", content: "z".repeat(50), destination: "knowledge", dataDir });
-    await createFile({ title: "AnyFile", content: "a".repeat(50), destination: "knowledge", folder: "asubfolder", dataDir });
+    await createFile({ title: "Zfile", content: "z".repeat(50), destination: "knowledge", folder: "knowledge", dataDir });
+    await createFile({ title: "AnyFile", content: "a".repeat(50), destination: "knowledge", folder: "knowledge/asubfolder", dataDir });
 
     const r = projectMap({ dataDir });
     const lines = r.outline.split("\n");

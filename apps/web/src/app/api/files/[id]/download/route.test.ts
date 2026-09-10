@@ -14,6 +14,7 @@ describe("GET /api/files/[id]/download", () => {
       title: "hello",
       content: "# Hi there",
       destination: "knowledge",
+      folder: "knowledge",
       dataDir,
     });
     const res = await GET(new Request("http://localhost/x") as any, { params: Promise.resolve({ id: String(created.id) }) });
@@ -40,6 +41,7 @@ describe("GET /api/files/[id]/download", () => {
       title: "crlf-victim",
       content: "safe content",
       destination: "knowledge",
+      folder: "knowledge",
       dataDir,
     });
 
@@ -70,6 +72,7 @@ describe("GET /api/files/[id]/download", () => {
       title: "unicode-test",
       content: "content",
       destination: "knowledge",
+      folder: "knowledge",
       dataDir,
     });
 

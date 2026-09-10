@@ -575,6 +575,85 @@ export function listTags(): TagRecord[] {
   return stmt.all() as TagRecord[];
 }
 
+export interface TagWithCount extends TagRecord { count: number }
+
+/** Tags with file counts (LEFT JOIN so orphan tags get count=0). */
+export function listTagsWithCounts(): TagWithCount[] {
+  const db = getDatabase();
+  return db
+    .prepare(
+      "SELECT t.id, t.name, t.color, COUNT(ft.file_id) AS count " +
+      "FROM tags t LEFT JOIN file_tags ft ON ft.tag_id = t.id " +
+      "GROUP BY t.id ORDER BY count DESC, t.name ASC"
+    )
+    .all() as TagWithCount[];
+}
+
+export interface BacklinkRecord {
+  id: number;
+  title: string;
+  path: string;
+  snippet: string | null;
+  reason: "title" | "basename" | "wikilink";
+}
+
+/** Strip FTS5-reserved punctuation so a phrase query built from a title doesn't syntax-error. */
+function ftsPhraseSafe(s: string): string {
+  return s.replace(/["'()*:^-]/g, " ").replace(/\s+/g, " ").trim();
+}
+
+/**
+ * Files that mention the target file by title, basename, or [[wikilink]].
+ * Uses FTS5 phrase search on the title and the extension-stripped basename.
+ * Excludes the file itself and deduplicates across probes.
+ */
+export function findBacklinks(fileId: number, limit = 25): BacklinkRecord[] {
+  const db = getDatabase();
+  const target = db.prepare("SELECT id, title, path FROM files WHERE id = ?").get(fileId) as
+    | { id: number; title: string; path: string }
+    | undefined;
+  if (!target) return [];
+
+  const seen = new Set<number>([target.id]);
+  const out: BacklinkRecord[] = [];
+
+  const runProbe = (query: string, reason: BacklinkRecord["reason"]) => {
+    const safe = ftsPhraseSafe(query);
+    if (!safe) return;
+    let hits: FileRecordWithRank[];
+    try {
+      hits = search({ query: `"${safe}"`, limit });
+    } catch {
+      return;
+    }
+    for (const h of hits) {
+      if (seen.has(h.id)) continue;
+      seen.add(h.id);
+      out.push({ id: h.id, title: h.title, path: h.path, snippet: h.match_excerpt, reason });
+      if (out.length >= limit) return;
+    }
+  };
+
+  // Title phrase — the highest-signal probe.
+  const trimmedTitle = target.title.trim();
+  if (trimmedTitle.length >= 3) runProbe(trimmedTitle, "title");
+
+  // Basename (extension stripped) catches path references like `slt-cdc-notes.md` in code blocks.
+  if (out.length < limit) {
+    const base = target.path.split(/[\\/]/).pop() ?? "";
+    const stem = base.replace(/\.[^./]+$/, "");
+    if (stem && stem.length >= 3 && stem.toLowerCase() !== trimmedTitle.toLowerCase()) {
+      runProbe(stem, "basename");
+    }
+  }
+
+  // Wikilink form — FTS strips brackets so this reuses the title probe. Return
+  // as a distinct reason ONLY when a subsequent content check would confirm it;
+  // for now we treat the title probe as covering it and don't over-claim.
+
+  return out.slice(0, limit);
+}
+
 /**
  * List all projects
  */

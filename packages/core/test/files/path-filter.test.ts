@@ -18,12 +18,14 @@ describe("listFiles path filter", () => {
       title: "File One",
       content: "Content one",
       destination: "knowledge",
+      folder: "knowledge",
       dataDir,
     });
     await createFile({
       title: "File Two",
       content: "Content two",
       destination: "knowledge",
+      folder: "knowledge",
       dataDir,
     });
     const results = listFiles({ dataDir, filters: { path: rec1.path } });
@@ -37,6 +39,7 @@ describe("listFiles path filter", () => {
       title: "Existing File",
       content: "Content",
       destination: "knowledge",
+      folder: "knowledge",
       dataDir,
     });
     const results = listFiles({ dataDir, filters: { path: "/nonexistent/path.md" } });
@@ -48,7 +51,7 @@ describe("listFiles path filter", () => {
       title: "Nested File",
       content: "Content",
       destination: "knowledge",
-      folder: "publish",
+      folder: "knowledge/publish",
       dataDir,
     });
     const results = listFiles({ dataDir, filters: { path: rec.path } });

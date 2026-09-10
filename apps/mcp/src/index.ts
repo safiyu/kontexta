@@ -71,7 +71,7 @@ import { registerCommitUpgradesTool } from "./journal-commit-upgrades-tool.js";
 import { registerHousekeepTool } from "./journal-housekeep-tool.js";
 import { registerCalendarTools } from "./calendar-tools.js";
 import { handleGetProfile } from "./profile-tool.js";
-import { getDataDir } from "kxta-core";
+import { getDataDir, profileRelPath, getEmptySections, listEvents, findConflicts, getEntity } from "kxta-core";
 
 const dataDir = getDataDir();
 
@@ -187,10 +187,99 @@ if (!pkgVersionFound) {
   console.warn("Could not locate kontexta-mcp package.json by walking up from module dir; defaulting version to 0.0.0");
 }
 
-const server = new McpServer({
-  name: "kontexta",
-  version: pkgVersion,
-});
+// Format as UTC — server/user timezone divergence would silently mislead otherwise.
+function fmtWhen(iso: string): string {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  const y = d.getUTCFullYear();
+  const mo = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(d.getUTCDate()).padStart(2, "0");
+  const hh = String(d.getUTCHours()).padStart(2, "0");
+  const mm = String(d.getUTCMinutes()).padStart(2, "0");
+  return `${y}-${mo}-${dd} ${hh}:${mm}Z`;
+}
+
+function buildCalendarSection(now: Date): string {
+  try {
+    const from = now.toISOString();
+    const to = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
+    const events = listEvents({ from, to, limit: 3 });
+    const conflicts = findConflicts({ from, to }).conflicts;
+    const entityName = (id: number) => getEntity(id)?.name ?? `#${id}`;
+
+    const lines: string[] = [];
+    lines.push("📅 UPCOMING (next 7 days, times in UTC)");
+    if (events.length === 0) {
+      lines.push("  (no events)");
+    } else {
+      for (const e of events) {
+        // strip trailing Z from the range endpoint since the header already labels the block UTC
+        const from = fmtWhen(e.starts_at).replace(/Z$/, "");
+        const to = fmtWhen(e.ends_at).replace(/Z$/, "").slice(11);
+        lines.push(`  ${from}–${to}  ${e.title}  (${entityName(e.entity_id)})`);
+      }
+    }
+    if (conflicts.length > 0) {
+      lines.push("");
+      lines.push(`⚠️ CONFLICTS (${conflicts.length})`);
+      for (const c of conflicts.slice(0, 5)) {
+        lines.push(`  ${c.kind}: "${c.event_a.title}" (${entityName(c.event_a.entity_id)}) vs "${c.event_b.title}" (${entityName(c.event_b.entity_id)}) — ${c.reason}`);
+      }
+    }
+    return lines.join("\n");
+  } catch (e) {
+    return `📅 (calendar unavailable: ${(e as Error).message})`;
+  }
+}
+
+function profileFreshnessNote(profilePath: string, empty: string[]): string {
+  const parts: string[] = [];
+  if (empty.length > 0) parts.push(`${empty.length} section(s) still empty: ${empty.join(", ")}`);
+  try {
+    const mtime = statSync(profilePath).mtime;
+    const days = Math.floor((Date.now() - mtime.getTime()) / (24 * 60 * 60 * 1000));
+    if (days >= 30) parts.push(`profile hasn't been updated in ${days} days`);
+  } catch {}
+  if (parts.length === 0) return "";
+  return `\n\n💡 Reminder: keep your profile current so I can act on it. ${parts.join("; ")}. Edit at knowledge/profile.md or via the dashboard's profile pane.`;
+}
+
+// Build the MCP session-instructions blob: welcome, profile, upcoming events, conflicts.
+function loadProfileInstructions(): string | undefined {
+  const now = new Date();
+  const today = now.toISOString().slice(0, 10);
+  const path = join(dataDir, profileRelPath());
+  const profileExists = existsSync(path);
+  const content = profileExists ? readFileSync(path, "utf8").trim() : "";
+  const empty = profileExists ? getEmptySections(content) : [];
+
+  const header =
+    `👋 Kontexta welcome — ${today}\n\n` +
+    `This is the user's session context. Read and honor it for the rest of this session — especially "Session coding style" (comment style, git etiquette, review-before-push) and "Team members and roles" (who's who when writing updates or referencing people).`;
+
+  const profileBlock = profileExists && content
+    ? `📋 PROFILE (knowledge/profile.md)\n${content}`
+    : `📋 PROFILE\n  (not set up yet — nudge the user to fill it in at knowledge/profile.md or the dashboard's profile pane)`;
+
+  const calendarBlock = buildCalendarSection(now);
+  const freshness = profileExists ? profileFreshnessNote(path, empty) : "";
+
+  return [header, "", profileBlock, "", calendarBlock, freshness].filter(Boolean).join("\n");
+}
+
+const server = new McpServer(
+  { name: "kontexta", version: pkgVersion },
+  { instructions: loadProfileInstructions() }
+);
+
+server.tool(
+  "refresh_session_context",
+  "Re-read the session context (profile, upcoming events within 7d, conflicts, freshness nudge) as it stands NOW. Call this when the user just edited their profile or added/moved calendar events and you want the current picture instead of the snapshot taken at session start. Read-only; no side effects. Returns the same block Kontexta sent as MCP instructions at session start.",
+  {},
+  async () => ({
+    content: [{ type: "text", text: loadProfileInstructions() ?? "(no session context available)" }],
+  })
+);
 
 const handsRegistry = new HandsRegistry(server);
 
@@ -1637,7 +1726,8 @@ server.tool(
   async ({ project_id }) => {
     try {
       const base = resolveFolderBase(project_id);
-      const folders = listProjectFolders(base);
+      // Normalize to POSIX so the wire shape matches web /api/folders.
+      const folders = listProjectFolders(base).map((f) => f.replace(/\\/g, "/"));
       return {
         content: [{ type: "text", text: JSON.stringify({ folders, base_path: base }, null, 2) }],
       };
@@ -1661,7 +1751,7 @@ server.tool(
     try {
       validateFolderName(name);
       const base = resolveFolderBase(project_id);
-      const path = createFolder(base, name);
+      const path = createFolder(base, name, { dataDir });
       return {
         content: [{ type: "text", text: JSON.stringify({ path, base_path: base }, null, 2) }],
       };
@@ -1700,6 +1790,15 @@ server.tool(
               ),
             },
           ],
+        };
+      }
+      // Refuse deleting a bare bucket name — would wipe the whole bucket and orphan DB rows.
+      const KB_BUCKETS_TOP = new Set(["journal", "knowledge", "mermaid", "html"]);
+      const segments = name.split(/[/\\]/).filter(Boolean);
+      if (segments.length === 1 && KB_BUCKETS_TOP.has(segments[0])) {
+        return {
+          isError: true,
+          content: [{ type: "text", text: JSON.stringify({ error: `Cannot delete the '${segments[0]}' bucket — part of the fixed KB layout.` }, null, 2) }],
         };
       }
       const base = resolveFolderBase(null);
@@ -1780,7 +1879,7 @@ server.tool(
         throw new Error(`source path ${file.path} is no longer inside ${base}; refusing to move`);
       }
 
-      const updated = moveFile(file_id, new_path);
+      const updated = moveFile(file_id, new_path, dataDir);
       return {
         content: [{ type: "text", text: JSON.stringify(annotateTokens(updated as any), null, 2) }],
       };

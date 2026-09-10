@@ -18,10 +18,10 @@ function multipart(parts: Record<string, string | { filename: string; content: s
 
 // 20s (not vitest's 5s default) on tests below that write real files: each createFile does disk I/O + a DB write + a git commit, measurably slower than 5s on loaded CI runners (same class of flake as the zip-export tests).
 describe("POST /api/files/upload", () => {
-  test("uploads a single .md file to KB root", async () => {
+  test("uploads a single .md file to KB knowledge/ bucket", async () => {
     const res = await POST(multipart({
       project_id: "",
-      folder: "",
+      folder: "knowledge",
       files: [{ filename: "notes.md", content: "# Hello" }],
     }) as any);
     expect(res.status).toBe(200);
@@ -37,12 +37,12 @@ describe("POST /api/files/upload", () => {
   test("auto-suffixes on collision", async () => {
     await POST(multipart({
       project_id: "",
-      folder: "",
+      folder: "knowledge",
       files: [{ filename: "dup.md", content: "first" }],
     }) as any);
     const res = await POST(multipart({
       project_id: "",
-      folder: "",
+      folder: "knowledge",
       files: [{ filename: "dup.md", content: "second" }],
     }) as any);
     const body = await res.json();
@@ -52,7 +52,7 @@ describe("POST /api/files/upload", () => {
   test("rejects non-markdown extensions", async () => {
     const res = await POST(multipart({
       project_id: "",
-      folder: "",
+      folder: "knowledge",
       files: [
         { filename: "ok.md", content: "x" },
         { filename: "bad.png", content: "x", type: "image/png" },
@@ -83,7 +83,7 @@ describe("POST /api/files/upload", () => {
   test("accepts .mmd uploads", async () => {
     const res = await POST(multipart({
       project_id: "",
-      folder: "",
+      folder: "mermaid",
       files: [{ filename: "flow.mmd", content: "graph TD\nA-->B", type: "text/plain" }],
     }) as any);
     expect(res.status).toBe(200);
@@ -105,7 +105,7 @@ describe("POST /api/files/upload", () => {
   test("accepts .html uploads, writes them as .html, and sanitizes on write", async () => {
     const res = await POST(multipart({
       project_id: "",
-      folder: "",
+      folder: "html",
       files: [{ filename: "report.html", content: "<p>hi</p><script>alert(1)</script>", type: "text/html" }],
     }) as any);
     expect(res.status).toBe(200);

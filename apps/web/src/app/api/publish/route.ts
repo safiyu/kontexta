@@ -96,12 +96,14 @@ export async function POST(request: NextRequest) {
         else if (ext === "md") format = "md";
         if (!format) continue;
         const title = basename(out.relPath, `.${ext}`);
+        // 4.6.0 layout rejects bare "publish" at KB root — route by format.
+        const folder = format === "html" ? "html/publish" : "knowledge/publish";
         try {
           await createFile({
             title,
             content: out.content,
             destination: "knowledge",
-            folder: "publish",
+            folder,
             dataDir,
             format,
             skipHtmlSanitize: true,

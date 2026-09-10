@@ -133,7 +133,7 @@ export async function POST(req: NextRequest) {
   const tags = Array.isArray(b.tags) && b.tags.every((t) => typeof t === "string")
     ? (b.tags as string[])
     : undefined;
-  const format = b.format === "md" || b.format === "mmd" ? b.format : undefined;
+  const format = b.format === "md" || b.format === "mmd" || b.format === "html" ? b.format : undefined;
 
   if (title === undefined || content === undefined || destination === undefined) {
     return NextResponse.json(

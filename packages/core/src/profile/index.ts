@@ -1,4 +1,4 @@
-export const REQUIRED_SECTIONS = ["Name", "Role", "Vision", "Roadmap", "Preferences", "Notes"] as const;
+export const REQUIRED_SECTIONS = ["Name", "Role", "Vision", "Roadmap", "Preferences", "Session coding style", "Team members and roles", "Notes"] as const;
 
 export function profileRelPath(): string {
   return "knowledge/profile.md";
@@ -7,6 +7,12 @@ export function profileRelPath(): string {
 /** Return required `##` headings absent from the content. */
 export function getMissingSections(content: string): string[] {
   return REQUIRED_SECTIONS.filter((h) => !hasHeading(content, h));
+}
+
+/** Required `##` sections whose body is missing OR empty — the fresher signal for "profile is stale". */
+export function getEmptySections(content: string): string[] {
+  const bodies = parseSections(content);
+  return REQUIRED_SECTIONS.filter((h) => (bodies.get(h) ?? "").trim().length === 0);
 }
 
 /**
@@ -77,9 +83,12 @@ export function repairProfile(content: string): { content: string; repaired: str
   return { content: next, repaired };
 }
 
-export function assembleProfile(sections: {
-  name: string; role: string; vision: string; roadmap: string; preferences: string; notes: string;
-}): string {
+export interface ProfileSections {
+  name: string; role: string; vision: string; roadmap: string; preferences: string;
+  sessionCodingStyle: string; teamMembersAndRoles: string; notes: string;
+}
+
+export function assembleProfile(sections: ProfileSections): string {
   const body = [
     "# Profile",
     "",
@@ -97,6 +106,12 @@ export function assembleProfile(sections: {
     "",
     "## Preferences",
     sections.preferences.trim(),
+    "",
+    "## Session coding style",
+    sections.sessionCodingStyle.trim(),
+    "",
+    "## Team members and roles",
+    sections.teamMembersAndRoles.trim(),
     "",
     "## Notes",
     sections.notes.trim(),

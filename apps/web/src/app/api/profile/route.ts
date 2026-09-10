@@ -50,8 +50,18 @@ export async function PUT(request: NextRequest) {
     let content: string;
 
     if (body.sections) {
-      // Sections form: { name, role, vision, roadmap, preferences, notes }
-      content = assembleProfile(body.sections);
+      // Sections form must supply all eight fields; missing ones default to empty strings.
+      const s = body.sections as Partial<Record<string, string>>;
+      content = assembleProfile({
+        name: s.name ?? "",
+        role: s.role ?? "",
+        vision: s.vision ?? "",
+        roadmap: s.roadmap ?? "",
+        preferences: s.preferences ?? "",
+        sessionCodingStyle: s.sessionCodingStyle ?? "",
+        teamMembersAndRoles: s.teamMembersAndRoles ?? "",
+        notes: s.notes ?? "",
+      });
     } else if (body.content) {
       // Raw content
       content = body.content;

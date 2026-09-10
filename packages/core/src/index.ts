@@ -8,8 +8,8 @@ export { INDEXED_EXTENSIONS, isIndexedFile, stripIndexedExt } from "./util/exten
 export type { IndexedExt } from "./util/extensions.js";
 export {
   addTags, removeTags, setFavorite, search, FtsQueryError,
-  registerProject, unregisterProject, discoverFiles, refreshIndex, listTags, listProjects,
-  findRelated, getTagsForFiles, type RelatedFileRecord,
+  registerProject, unregisterProject, discoverFiles, refreshIndex, listTags, listTagsWithCounts, listProjects,
+  findRelated, getTagsForFiles, findBacklinks, type RelatedFileRecord, type TagWithCount, type BacklinkRecord,
 } from "./metadata/index.js";
 export { getSetting, setSetting, deleteSetting } from "./metadata/settings.js";
 export { commitFile, commitDelete, getHistory, getDiff, restoreVersion, syncBackup, syncGlobalVault, getGlobalRemote, setGlobalRemote, isValidGitRemoteUrl, type SyncStage } from "./git/index.js";

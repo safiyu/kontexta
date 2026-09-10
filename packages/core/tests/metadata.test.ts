@@ -52,6 +52,7 @@ describe("Metadata Module", () => {
       title: "Test File",
       content: "Test content",
       destination: "knowledge",
+      folder: "knowledge",
       dataDir,
     });
 
@@ -88,6 +89,7 @@ describe("Metadata Module", () => {
       title: "Test File",
       content: "Test content",
       destination: "knowledge",
+      folder: "knowledge",
       dataDir,
     });
 
@@ -122,6 +124,7 @@ describe("Metadata Module", () => {
       title: "Test File",
       content: "Test content",
       destination: "knowledge",
+      folder: "knowledge",
       dataDir,
     });
 
@@ -148,6 +151,7 @@ describe("Metadata Module", () => {
       title: "File One",
       content: "This file contains the keyword unicorn",
       destination: "knowledge",
+      folder: "knowledge",
       dataDir,
     });
 
@@ -155,6 +159,7 @@ describe("Metadata Module", () => {
       title: "File Two",
       content: "This file contains different content",
       destination: "knowledge",
+      folder: "knowledge",
       dataDir,
     });
 
@@ -173,6 +178,7 @@ describe("Metadata Module", () => {
       title: "Important Document",
       content: "Some content here",
       destination: "knowledge",
+      folder: "knowledge",
       dataDir,
     });
 
@@ -180,6 +186,7 @@ describe("Metadata Module", () => {
       title: "Other File",
       content: "Different content",
       destination: "knowledge",
+      folder: "knowledge",
       dataDir,
     });
 
@@ -389,10 +396,10 @@ describe("Metadata Module", () => {
 
   describe("findRelated", () => {
     it("ranks by shared tag count, excludes the source file, returns shared tag names", async () => {
-      const a = await createFile({ title: "A", content: "x", destination: "knowledge", dataDir });
-      const b = await createFile({ title: "B", content: "x", destination: "knowledge", dataDir });
-      const c = await createFile({ title: "C", content: "x", destination: "knowledge", dataDir });
-      const d = await createFile({ title: "D", content: "x", destination: "knowledge", dataDir });
+      const a = await createFile({ title: "A", content: "x", destination: "knowledge", folder: "knowledge", dataDir });
+      const b = await createFile({ title: "B", content: "x", destination: "knowledge", folder: "knowledge", dataDir });
+      const c = await createFile({ title: "C", content: "x", destination: "knowledge", folder: "knowledge", dataDir });
+      const d = await createFile({ title: "D", content: "x", destination: "knowledge", folder: "knowledge", dataDir });
 
       addTags(a.id, ["auth", "security", "architecture"]);
       addTags(b.id, ["auth", "security"]);            // shares 2 with A
@@ -411,15 +418,15 @@ describe("Metadata Module", () => {
     });
 
     it("returns empty array when the source file has no tags", async () => {
-      const f = await createFile({ title: "F", content: "x", destination: "knowledge", dataDir });
+      const f = await createFile({ title: "F", content: "x", destination: "knowledge", folder: "knowledge", dataDir });
       expect(findRelated(f.id)).toEqual([]);
     });
 
     it("respects the limit parameter", async () => {
-      const src = await createFile({ title: "S", content: "x", destination: "knowledge", dataDir });
+      const src = await createFile({ title: "S", content: "x", destination: "knowledge", folder: "knowledge", dataDir });
       addTags(src.id, ["common"]);
       for (let i = 0; i < 5; i++) {
-        const other = await createFile({ title: `O${i}`, content: "x", destination: "knowledge", dataDir });
+        const other = await createFile({ title: `O${i}`, content: "x", destination: "knowledge", folder: "knowledge", dataDir });
         addTags(other.id, ["common"]);
       }
       expect(findRelated(src.id, 3)).toHaveLength(3);

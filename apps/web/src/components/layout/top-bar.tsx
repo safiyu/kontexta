@@ -82,20 +82,20 @@ export function TopBar({
   const modifier = isMac ? "⌘" : "Ctrl";
 
   return (
-    <header className="sticky top-0 z-50 h-16 bg-[var(--bg-secondary)]/80 backdrop-blur-xl flex items-center px-6 border-b border-[var(--border)] gap-3 overflow-visible transition-all">
-      <div className="flex items-center gap-0 group cursor-pointer" onClick={() => router.push("/")}>
+    <header className="sticky top-0 z-50 h-16 bg-[var(--bg-secondary)]/80 backdrop-blur-xl flex flex-nowrap items-center px-6 border-b border-[var(--border)] gap-3 overflow-visible transition-all">
+      <div className="flex items-center gap-0 group cursor-pointer shrink-0" onClick={() => router.push("/")}>
         <AnimatedLogo size="sm" />
         <span
-          className="-ml-3 font-extrabold text-xl tracking-[4px] font-title text-[var(--text-primary)] drop-shadow-[0_0_15px_rgba(180,120,30,0.1)] dark:drop-shadow-[0_0_15px_rgba(180,120,30,0.3)] transition-all group-hover:drop-shadow-[0_0_20px_rgba(180,120,30,0.5)]"
+          className="-ml-3 font-extrabold text-xl tracking-[4px] font-title text-[var(--text-primary)] drop-shadow-[0_0_15px_rgba(180,120,30,0.1)] dark:drop-shadow-[0_0_15px_rgba(180,120,30,0.3)] transition-all group-hover:drop-shadow-[0_0_20px_rgba(180,120,30,0.5)] whitespace-nowrap"
         >
           ONTEXTA
         </span>
       </div>
 
-      <div className="flex-1 flex justify-center px-4">
+      <div className="flex-1 min-w-0 flex justify-center px-4">
         <button
           onClick={onSearch}
-          className="w-full max-w-[440px] h-10 px-4 bg-[var(--bg-tertiary)]/50 text-[13px] text-[var(--text-secondary)] rounded-xl hover:bg-[var(--bg-secondary)] transition-all flex items-center gap-3 border border-[var(--border)] group focus-glow"
+          className="w-full max-w-[440px] min-w-0 h-10 px-4 bg-[var(--bg-tertiary)]/50 text-[13px] text-[var(--text-secondary)] rounded-xl hover:bg-[var(--bg-secondary)] transition-all flex items-center gap-3 border border-[var(--border)] group focus-glow whitespace-nowrap"
         >
           <svg
             viewBox="0 0 24 24"
@@ -114,10 +114,10 @@ export function TopBar({
         </button>
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 shrink-0 flex-nowrap">
         <button
           onClick={() => router.push("/calendar")}
-          className="btn btn-md !font-mono font-bold uppercase tracking-wider text-[var(--accent)] bp-toolbar-btn"
+          className="btn btn-md !font-mono font-bold uppercase tracking-wider text-[var(--accent)] bp-toolbar-btn whitespace-nowrap shrink-0"
           aria-label="Open Calendar"
           title="Open Calendar"
         >
@@ -126,17 +126,17 @@ export function TopBar({
 
         <button
           onClick={() => setSyncOpen((o) => !o)}
-          className="btn btn-md !font-mono font-bold uppercase tracking-wider text-[var(--accent)] bp-toolbar-btn"
+          className="btn btn-md !font-mono font-bold uppercase tracking-wider text-[var(--accent)] bp-toolbar-btn whitespace-nowrap shrink-0"
           aria-label="Sync menu"
           title="Open sync menu"
         >
-          Sync ▾
+          Sync&nbsp;▾
         </button>
 
         <button
           onClick={handleReindex}
           disabled={reindexing}
-          className={`btn btn-md !font-mono font-bold uppercase tracking-wider text-[var(--accent)] bp-toolbar-btn ${reindexing ? "opacity-50" : ""}`}
+          className={`btn btn-md !font-mono font-bold uppercase tracking-wider text-[var(--accent)] bp-toolbar-btn whitespace-nowrap shrink-0 ${reindexing ? "opacity-50" : ""}`}
           aria-label="Reindex — scan disk to add new files and remove orphan rows"
           title="Reindex Knowledge Base + all projects: add new files and drop orphan rows"
         >
@@ -145,7 +145,7 @@ export function TopBar({
 
         <button
           onClick={onConfigure}
-          className="btn btn-md !font-mono font-bold uppercase tracking-wider text-[var(--accent)] bp-toolbar-btn"
+          className="btn btn-md !font-mono font-bold uppercase tracking-wider text-[var(--accent)] bp-toolbar-btn whitespace-nowrap shrink-0"
           aria-label="Configure Kontexta"
         >
           Configure
@@ -153,7 +153,7 @@ export function TopBar({
 
         <button
           onClick={onAbout}
-          className="btn btn-md !font-mono font-bold uppercase tracking-wider text-[var(--accent)] bp-toolbar-btn"
+          className="btn btn-md !font-mono font-bold uppercase tracking-wider text-[var(--accent)] bp-toolbar-btn whitespace-nowrap shrink-0"
           aria-label="About Kontexta"
         >
           About
@@ -162,11 +162,11 @@ export function TopBar({
         <DropdownMenu
           trigger={
             <button
-              className="btn btn-md !font-mono font-bold uppercase tracking-wider text-[var(--accent)] bp-toolbar-btn"
+              className="btn btn-md !font-mono font-bold uppercase tracking-wider text-[var(--accent)] bp-toolbar-btn whitespace-nowrap shrink-0"
               aria-label="Publish menu"
               title="Publish documentation"
             >
-              Publish ▾
+              Publish&nbsp;▾
             </button>
           }
           items={[
@@ -200,7 +200,7 @@ export function TopBar({
             // navigating — prevents a spurious 1008 WS reconnect error.
             router.push("/login");
           }}
-          className="p-2 rounded-md text-[var(--text-secondary)] hover:text-[var(--danger)] hover:bg-[var(--bg-tertiary)] transition-colors"
+          className="p-2 rounded-md text-[var(--text-secondary)] hover:text-[var(--danger)] hover:bg-[var(--bg-tertiary)] transition-colors shrink-0"
           aria-label="Lock Kontexta"
           title="Lock Kontexta"
         >
@@ -219,14 +219,14 @@ export function TopBar({
           </svg>
         </button>
 
-        <span className="bp-title-block bp-annotation">REV {KONTEXTA_REV}</span>
+        <span className="bp-title-block bp-annotation whitespace-nowrap shrink-0">REV {KONTEXTA_REV}</span>
 
         {mounted && (
           <button
             onClick={() =>
               setTheme(theme === "light" ? "dark" : theme === "dark" ? "blueprint" : "light")
             }
-            className="px-2 h-5 rounded-md border border-[var(--border)] font-mono text-[10px] uppercase tracking-wider text-[var(--text-secondary)] hover:text-[var(--accent)] hover:border-[var(--accent)] transition-colors inline-flex items-center gap-1"
+            className="px-2 h-5 rounded-md border border-[var(--border)] font-mono text-[10px] uppercase tracking-wider text-[var(--text-secondary)] hover:text-[var(--accent)] hover:border-[var(--accent)] transition-colors inline-flex items-center gap-1 whitespace-nowrap shrink-0"
             aria-label="Cycle theme (light / dark / blueprint)"
             title={`Theme: ${theme} — click to cycle`}
           >

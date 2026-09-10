@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
     projectPath = join(DATA_DIR, "knowledge");
   }
   try {
-    const path = createFolder(projectPath, name);
+    const path = createFolder(projectPath, name, { dataDir: DATA_DIR });
     return NextResponse.json({ path });
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || "Invalid folder name" }, { status: 400 });
@@ -123,6 +123,15 @@ export async function DELETE(req: NextRequest) {
     const { deleteFolder } = await import("kxta-core");
 
     if (projectIdNum === null) {
+      // Refuse deleting a bare bucket name — would wipe the whole bucket and orphan DB rows.
+      const KB_BUCKETS = new Set(["journal", "knowledge", "mermaid", "html"]);
+      const topSegment = folderName.split(/[/\\]/).filter(Boolean)[0];
+      if (topSegment && KB_BUCKETS.has(topSegment) && folderName.split(/[/\\]/).filter(Boolean).length === 1) {
+        return NextResponse.json(
+          { error: `Cannot delete the '${topSegment}' bucket — it's part of the fixed knowledge base layout. Delete subfolders inside it instead.` },
+          { status: 400 }
+        );
+      }
       // KB folder — safe to delete from disk.
       deleteFolder(projectPath, folderName);
     } else {

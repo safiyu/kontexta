@@ -25,6 +25,7 @@ describe("watcher", () => {
       title: "Watched",
       content: "original",
       destination: "knowledge",
+      folder: "knowledge",
       dataDir: TEST_DATA,
     });
 

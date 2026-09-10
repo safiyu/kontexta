@@ -18,6 +18,7 @@ describe("html files", () => {
       title: "Report One",
       content: "<h1>Hi</h1><img src=\"resources/x.png\">",
       destination: "knowledge",
+      folder: "html",
       dataDir,
       format: "html",
     });
@@ -30,6 +31,7 @@ describe("html files", () => {
       title: "R2",
       content: '<p>ok</p><script>alert(1)</script>',
       destination: "knowledge",
+      folder: "html",
       dataDir,
       format: "html",
     });
@@ -45,6 +47,7 @@ describe("html files", () => {
       title: "site",
       content: trusted,
       destination: "knowledge",
+      folder: "html",
       dataDir,
       format: "html",
       skipHtmlSanitize: true,

@@ -5,13 +5,14 @@
  */
 import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync, unlinkSync, renameSync, mkdirSync, readdirSync, statSync, lstatSync, existsSync, rmSync } from "node:fs";
-import { join, dirname, resolve, sep, isAbsolute, basename } from "node:path";
+import { join, dirname, resolve, sep, isAbsolute, basename, relative } from "node:path";
 import { getDatabase } from "../db/index.js";
 import { commitFile, commitDelete } from "../git/index.js";
 import { assertPathInside, escapeLike, withLock, fileLockKey } from "../util/safety.js";
 import { profileRelPath, repairProfile } from "../profile/index.js";
 import { sanitizeHtml } from "../reports/sanitize.js";
 import { isIndexedFile } from "../util/extensions.js";
+import { validateKnowledgeWrite } from "./layout.js";
 import type { FileRecord, Destination, FileFilters, StorageType } from "../types.js";
 
 /**
@@ -166,6 +167,7 @@ export async function createFile(opts: CreateFileOptions): Promise<FileRecordWit
     filePath = folder
       ? assertPathInside(knowledgeDir, join(folder, filename))
       : assertPathInside(knowledgeDir, filename);
+    validateKnowledgeWrite(relative(knowledgeDir, filePath), "file");
     storageType = "local";
   } else if (destination === "kontexta") {
     if (!projectId) {
@@ -486,8 +488,14 @@ export async function deleteFile(id: number, dataDir?: string): Promise<void> {
 /**
  * Create a new folder in a project
  */
-export function createFolder(projectPath: string, folderName: string): string {
+export function createFolder(projectPath: string, folderName: string, opts?: { dataDir?: string }): string {
   const fullPath = assertPathInside(projectPath, folderName);
+  if (opts?.dataDir) {
+    const knowledgeDir = resolve(opts.dataDir, "knowledge");
+    if (resolve(projectPath) === knowledgeDir) {
+      validateKnowledgeWrite(folderName, "folder");
+    }
+  }
   mkdirSync(fullPath, { recursive: true });
   return fullPath;
 }
@@ -548,23 +556,24 @@ export function listFiles(opts: ListFilesOptions): FileRecord[] {
     }
 
     if (filters.folder !== undefined) {
-      // Everything interpolated into a LIKE ... ESCAPE '\' pattern must be
-      // escaped — including project_path and the literal backslash
-      // separators. Unescaped, Windows paths (C:\Users\...) have every '\'
-      // consumed as an escape character and the pattern never matches.
-      const segment = escapeLike(filters.folder);
+      // Match both separator conventions so POSIX callers still match Windows on-disk paths.
+      const folderPosix = filters.folder.replace(/\\/g, "/");
+      const folderWin = filters.folder.replace(/\//g, "\\");
+      const segmentPosix = escapeLike(folderPosix);
+      const segmentWin = escapeLike(folderWin);
       const bs = "\\\\"; // literal backslash separator inside the pattern
       if (filters.project_path) {
         // Scope to files under the given project root.
-        const root = escapeLike(filters.project_path);
+        const rootRaw = escapeLike(filters.project_path);
+        const rootWin = escapeLike(filters.project_path.replace(/\//g, "\\"));
         sql += " AND (path LIKE ? ESCAPE '\\' OR path LIKE ? ESCAPE '\\')";
-        params.push(`${root}/${segment}/%`);
-        params.push(`${root}${bs}${segment}${bs}%`);
+        params.push(`${rootRaw}/${segmentPosix}/%`);
+        params.push(`${rootWin}${bs}${segmentWin}${bs}%`);
       } else {
         // Original behaviour: match any path segment named like folder.
         sql += " AND (path LIKE ? ESCAPE '\\' OR path LIKE ? ESCAPE '\\')";
-        params.push(`%/${segment}/%`);
-        params.push(`%${bs}${segment}${bs}%`);
+        params.push(`%/${segmentPosix}/%`);
+        params.push(`%${bs}${segmentWin}${bs}%`);
       }
     }
   }
@@ -628,6 +637,20 @@ export function moveFile(id: number, newPath: string, dataDir?: string): FileRec
     const rootWithSep = rootResolved.endsWith(sep) ? rootResolved : rootResolved + sep;
     if (newResolved !== rootResolved && !newResolved.startsWith(rootWithSep)) {
       throw new Error(`moveFile: destination escapes allowed root ${allowedRoot}: ${newPath}`);
+    }
+  }
+  if (!fileRecord.project_id && dataDir) {
+    const knowledgeDir = resolve(dataDir, "knowledge");
+    const newRel = relative(knowledgeDir, resolve(newPath));
+    // In-place rename inside a legacy off-spec bucket stays allowed — matches "migrate at your own pace".
+    const srcRel = relative(knowledgeDir, resolve(fileRecord.path));
+    const topOf = (p: string) => p.split(/[/\\]/).filter(Boolean)[0] ?? "";
+    const ALLOWED_TOP = new Set(["journal", "knowledge", "mermaid", "html"]);
+    const srcTop = topOf(srcRel);
+    const newTop = topOf(newRel);
+    const isSameLegacyBucket = srcTop && !ALLOWED_TOP.has(srcTop) && srcTop === newTop;
+    if (!isSameLegacyBucket) {
+      validateKnowledgeWrite(newRel, "file");
     }
   }
 

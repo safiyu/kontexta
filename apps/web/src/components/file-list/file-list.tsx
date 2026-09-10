@@ -42,7 +42,7 @@ interface FileListProps {
   onSortChange: (sortBy: SortBy) => void;
   selectedFolder: string | null;
   selectedProject: Project | null;
-  selectedSection?: "projects" | "knowledge" | "favorites" | null;
+  selectedSection?: "projects" | "knowledge" | "favorites" | "tags" | null;
   basePath?: string | null;
   onSync: () => void;
   onUnregisterProject?: () => void;
@@ -133,6 +133,9 @@ export function FileList({
       }
     } else if (selectedSection === "favorites") {
       // files is already pre-filtered by page.tsx, and favorites ignore folders
+      result = [...files];
+    } else if (selectedSection === "tags") {
+      // The parent already filtered `files` by the selected tag — show them as-is.
       result = [...files];
     } else if (selectedSection === "knowledge") {
       result = result.filter((f) => !f.project_id);

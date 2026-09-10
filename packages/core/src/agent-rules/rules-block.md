@@ -158,6 +158,7 @@ The matrix below is grouped by intent. For each tool: when to reach for it, the 
 | `project_map` | Folder/file tree for a project | Flat file list | `list_files` |
 | `stats` | Counts and health for a project | Per-file detail | `describe_file` |
 | `whats_new` | Files added/changed since a cutoff | Full-text search | `search` |
+| `refresh_session_context` | Re-fetch profile + upcoming events after mid-session edits | Reading a single profile field | `get_profile` |
 
 #### Calendar
 
