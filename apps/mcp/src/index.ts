@@ -56,7 +56,7 @@ import {
 } from "kxta-core";
 import RE2Class from "./re2-compat.js";
 import type RE2 from "re2";
-import { isAbsolute, join, resolve, sep, dirname } from "node:path";
+import { isAbsolute, join, relative, resolve, sep, dirname } from "node:path";
 import os from "node:os";
 import { statSync, lstatSync, openSync, readSync, closeSync, readFileSync, readdirSync, existsSync, realpathSync } from "node:fs";
 import { createHash } from "node:crypto";
@@ -185,6 +185,34 @@ try {
 }
 if (!pkgVersionFound) {
   console.warn("Could not locate kontexta-mcp package.json by walking up from module dir; defaulting version to 0.0.0");
+}
+
+// Resolve target folder for create_file / create_files, enforcing that
+// destination='knowledge' declares a `kind` (dictionary or note). If the
+// caller also supplied a folder that already targets a known class subfolder
+// we honor it verbatim and just flag a warning when it disagrees with kind.
+type ResolveKindArgs = { destination: string; folder: string | undefined; kind: "dictionary" | "note" | undefined };
+type ResolveKindResult = { folder: string | undefined; warning?: string } | { error: string };
+function resolveKindFolder({ destination, folder, kind }: ResolveKindArgs): ResolveKindResult {
+  if (destination !== "knowledge") return { folder };
+  if (!kind) return { error: "kind is required for destination='knowledge': must be 'dictionary' or 'note'" };
+
+  const norm = folder?.replace(/^\/+|\/+$/g, "") ?? "";
+  const CLASS_PREFIXES = ["knowledge/dictionary", "knowledge/notes", "knowledge/urlclips", "journal"];
+  const alreadyClassScoped = CLASS_PREFIXES.some((p) => norm === p || norm.startsWith(p + "/"));
+
+  if (alreadyClassScoped) {
+    const impliedDict = norm.startsWith("knowledge/dictionary") || norm.startsWith("knowledge/urlclips");
+    const impliedNote = norm.startsWith("knowledge/notes");
+    const impliedClass = impliedDict ? "dictionary" : impliedNote ? "note" : null;
+    if (impliedClass && impliedClass !== kind) {
+      return { folder, warning: `kind='${kind}' but folder targets '${impliedClass}' tree — path wins; content_class will be '${impliedClass}'.` };
+    }
+    return { folder };
+  }
+
+  const classRoot = kind === "dictionary" ? "knowledge/dictionary" : "knowledge/notes";
+  return { folder: norm ? `${classRoot}/${norm}` : classRoot };
 }
 
 // Format as UTC — server/user timezone divergence would silently mislead otherwise.
@@ -410,20 +438,28 @@ server.tool(
     folder: z.string().optional().describe("Optional folder path"),
     tags: z.array(z.string()).optional().describe("Optional array of tags"),
     format: z.enum(["md", "mmd", "html"]).optional().describe("File extension to write. Defaults to 'md'. Use 'html' for HTML reports."),
+    kind: z.enum(["dictionary", "note"]).optional()
+      .describe("REQUIRED for destination='knowledge'. 'dictionary' = authoritative KB (system IDs, mappings, glossaries) — trust these over notes on conflict. 'note' = informational only. Determines the target subfolder under knowledge/. Ignored for destination='project' or 'kontexta'."),
   },
-  async ({ title, content, destination, project_id, folder, tags, format }) => {
+  async ({ title, content, destination, project_id, folder, tags, format, kind }) => {
+    const resolved = resolveKindFolder({ destination, folder, kind });
+    if ("error" in resolved) {
+      return { isError: true, content: [{ type: "text", text: JSON.stringify({ error: resolved.error }, null, 2) }] };
+    }
     const result = await createFile({
       title,
       content,
       destination,
       projectId: project_id,
-      folder,
+      folder: resolved.folder,
       tags,
       dataDir,
       format,
     });
+    const payload: any = annotateTokens(result);
+    if (resolved.warning) payload.warning = resolved.warning;
     return {
-      content: [{ type: "text", text: JSON.stringify(annotateTokens(result), null, 2) }],
+      content: [{ type: "text", text: JSON.stringify(payload, null, 2) }],
     };
   }
 );
@@ -1833,20 +1869,37 @@ server.tool(
 
 server.tool(
   "move_file",
-  "Move/rename a file. Destination 'new_path' must be absolute and resolve INSIDE the file's owning project or global knowledge directory. Cross-project moves are rejected. Operates locally with no auth or limits. Parameters: 'file_id' is a valid file ID. 'new_path' is an absolute path.",
+  "Move/rename a file. Destination 'new_path' must be absolute and resolve INSIDE the file's owning project or global knowledge directory. Cross-project moves are rejected. Alternative: pass `kind='dictionary'|'note'` (with no `new_path`) to move a KB file into the mirrored path in the other class tree — subfolder path is preserved. Operates locally with no auth or limits.",
   {
     file_id: z.number().describe("File ID"),
-    new_path: z.string().describe("Absolute destination path"),
+    new_path: z.string().optional().describe("Absolute destination path"),
+    kind: z.enum(["dictionary", "note"]).optional()
+      .describe("Move the file to the mirrored path in the other class tree. Subfolder path is preserved: knowledge/dictionary/slt/ids.md ↔ knowledge/notes/slt/ids.md. Ignored if `new_path` is also provided."),
   },
-  async ({ file_id, new_path }) => {
+  async ({ file_id, new_path, kind }) => {
     try {
+      const file = readFile(file_id);
+
+      if (kind && !new_path) {
+        if (file.storage_type !== "local") {
+          throw new Error("move_file with kind is only supported for KB files (storage_type='local')");
+        }
+        const kbRoot = join(dataDir, "knowledge");
+        const currentRel = relative(kbRoot, file.path);
+        const parts = currentRel.split(sep);
+        const classIdx = parts.findIndex((p: string) => p === "dictionary" || p === "notes" || p === "urlclips");
+        if (classIdx === -1) {
+          throw new Error("move_file with kind requires the source to live under knowledge/{dictionary,notes,urlclips}");
+        }
+        parts[classIdx] = kind === "dictionary" ? "dictionary" : "notes";
+        new_path = join(kbRoot, ...parts);
+      }
+
       if (typeof new_path !== "string" || new_path.length === 0) {
-        throw new Error("new_path is required");
+        throw new Error("new_path or kind is required");
       }
       if (new_path.includes("\0")) throw new Error("new_path contains null byte");
       if (!isAbsolute(new_path)) throw new Error("new_path must be absolute");
-
-      const file = readFile(file_id);
       let base: string;
       if (file.storage_type === "reference" && file.project_id) {
         const project = getDatabase()
@@ -1952,6 +2005,8 @@ server.tool(
           folder: z.string().optional(),
           tags: z.array(z.string()).optional(),
           format: z.enum(["md", "mmd"]).optional(),
+          kind: z.enum(["dictionary", "note"]).optional()
+            .describe("REQUIRED per-item for destination='knowledge'. See create_file."),
         })
       )
       .min(1)
@@ -1964,17 +2019,24 @@ server.tool(
     for (let i = 0; i < files.length; i++) {
       const f = files[i];
       try {
+        const resolved = resolveKindFolder({ destination: f.destination, folder: f.folder, kind: f.kind });
+        if ("error" in resolved) {
+          errors.push({ index: i, title: f.title, error: resolved.error });
+          continue;
+        }
         const result = await createFile({
           title: f.title,
           content: f.content,
           destination: f.destination,
           projectId: f.project_id,
-          folder: f.folder,
+          folder: resolved.folder,
           tags: f.tags,
           dataDir,
           format: f.format,
         });
-        created.push(annotateTokens(result));
+        const payload: any = annotateTokens(result);
+        if (resolved.warning) payload.warning = resolved.warning;
+        created.push(payload);
       } catch (e: any) {
         errors.push({ index: i, title: f.title, error: e?.message ?? String(e) });
       }
