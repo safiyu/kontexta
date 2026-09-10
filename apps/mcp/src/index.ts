@@ -770,8 +770,10 @@ server.tool(
     case_insensitive: z.boolean().optional(),
     max_files: z.number().int().positive().max(2000).optional().describe("Cap on files scanned (default 500)"),
     max_matches_per_file: z.number().int().positive().max(100).optional().describe("Per-file hit cap (default 10)"),
+    kind: z.enum(["dictionary", "note", "journal", "project"]).optional()
+      .describe("Filter by content class before scanning."),
   },
-  async ({ pattern, project_id, case_insensitive, max_files, max_matches_per_file }) => {
+  async ({ pattern, project_id, case_insensitive, max_files, max_matches_per_file, kind }) => {
     try {
       let re: RE2;
       try {
@@ -783,14 +785,19 @@ server.tool(
       const perFileCap = max_matches_per_file ?? 10;
       const db = getDatabase();
 
-      let where = "";
+      const whereParts: string[] = [];
       const params: any[] = [];
       if (project_id === null) {
-        where = "WHERE project_id IS NULL";
+        whereParts.push("project_id IS NULL");
       } else if (typeof project_id === "number") {
-        where = "WHERE project_id = ?";
+        whereParts.push("project_id = ?");
         params.push(project_id);
       }
+      if (kind) {
+        whereParts.push("content_class = ?");
+        params.push(kind);
+      }
+      const where = whereParts.length ? `WHERE ${whereParts.join(" AND ")}` : "";
       const rows = db
         .prepare(`SELECT id, path, title FROM files ${where} LIMIT ?`)
         .all(...params, fileCap) as { id: number; path: string; title: string }[];
@@ -882,8 +889,10 @@ server.tool(
     untagged: z.boolean().optional().describe("If true, return only files that have no tags. Useful for bulk-tagging workflows."),
     limit: z.number().optional().describe("Maximum number of results"),
     offset: z.number().optional().describe("Offset for pagination"),
+    kind: z.enum(["dictionary", "note", "journal", "project"]).optional()
+      .describe("Filter by content class. dictionary = authoritative KB, note = informational KB, journal = time-log, project = project file."),
   },
-  async ({ project_id, tag, favorite, folder, untagged, limit, offset }) => {
+  async ({ project_id, tag, favorite, folder, untagged, limit, offset, kind }) => {
     const filters: any = {};
     if (project_id !== undefined) filters.project_id = project_id;
     if (tag !== undefined) filters.tag = tag;
@@ -892,6 +901,7 @@ server.tool(
     if (untagged !== undefined) filters.untagged = untagged;
     if (limit !== undefined) filters.limit = limit;
     if (offset !== undefined) filters.offset = offset;
+    if (kind !== undefined) filters.content_class = kind;
 
     const result = listFiles({ dataDir, filters });
     const annotated = attachTags(result.map(annotateTokens));
@@ -910,12 +920,15 @@ server.tool(
     project_id: z.number().nullable().optional().describe("Filter by project ID. Pass null to search ONLY Knowledge Base files."),
     tags: z.array(z.string()).optional().describe("Filter by tags (all must match)"),
     favorite: z.boolean().optional().describe("Filter by favorite status"),
+    kind: z.enum(["dictionary", "note", "journal", "project"]).optional()
+      .describe("Filter by content class. dictionary = authoritative KB (system IDs, mappings, glossaries), note = informational KB, journal = time-log, project = project file. Omit to see all classes with dictionary-first ordering."),
   },
-  async ({ query, project_id, tags, favorite }) => {
+  async ({ query, project_id, tags, favorite, kind }) => {
     const filters: any = { query };
     if (project_id !== undefined) filters.project_id = project_id;
     if (tags !== undefined) filters.tags = tags;
     if (favorite !== undefined) filters.favorite = favorite;
+    if (kind !== undefined) filters.content_class = kind;
 
     let result;
     try {
@@ -946,12 +959,15 @@ server.tool(
       .describe("Bundle format. xml = Anthropic-recommended <document> tags; markdown = ## headers + fenced blocks"),
     max_tokens: z.number().int().positive().default(50000)
       .describe("Token budget. Files added in rank order until the next would exceed; remainder go to skipped[]"),
+    kind: z.enum(["dictionary", "note", "journal", "project"]).optional()
+      .describe("Filter by content class. dictionary = authoritative KB, note = informational KB, journal = time-log, project = project file."),
   },
-  async ({ query, project_id, tags, favorite, format, max_tokens }) => {
+  async ({ query, project_id, tags, favorite, format, max_tokens, kind }) => {
     const filters: any = { query };
     if (project_id !== undefined) filters.project_id = project_id;
     if (tags !== undefined) filters.tags = tags;
     if (favorite !== undefined) filters.favorite = favorite;
+    if (kind !== undefined) filters.content_class = kind;
 
     let result;
     try {
@@ -1898,9 +1914,17 @@ server.tool(
   {
     file_id: z.number().describe("ID of the file to find relations for"),
     limit: z.number().optional().describe("Maximum number of related files to return (default 10)"),
+    kind: z.enum(["dictionary", "note", "journal", "project"]).optional()
+      .describe("Filter related results to a single content class."),
   },
-  async ({ file_id, limit }) => {
-    const related = findRelated(file_id, limit ?? 10);
+  async ({ file_id, limit, kind }) => {
+    // Post-filter by kind since findRelated has no class filter today; over-fetch
+    // when a filter is set so the final result honors `limit` after filtering.
+    const overfetch = kind ? Math.max((limit ?? 10) * 4, 40) : (limit ?? 10);
+    let related = findRelated(file_id, overfetch);
+    if (kind) {
+      related = related.filter((r) => r.content_class === kind).slice(0, limit ?? 10);
+    }
     const annotated = related.map((r) => ({ ...annotateTokens(r), shared_tag_count: r.shared_tag_count, shared_tags: r.shared_tags }));
     return {
       content: [
