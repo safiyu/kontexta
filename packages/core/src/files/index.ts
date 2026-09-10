@@ -537,6 +537,15 @@ export function listFiles(opts: ListFilesOptions): FileRecord[] {
       params.push(filters.storage_type);
     }
 
+    if (filters.content_class !== undefined) {
+      if (filters.content_class === null) {
+        sql += " AND content_class IS NULL";
+      } else {
+        sql += " AND content_class = ?";
+        params.push(filters.content_class);
+      }
+    }
+
     if (filters.favorite !== undefined && filters.favorite) {
       sql += " AND EXISTS (SELECT 1 FROM favorites WHERE favorites.file_id = files.id)";
     }

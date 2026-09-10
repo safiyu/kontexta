@@ -169,13 +169,21 @@ export function search(filters: SearchFilters): FileRecordWithRank[] {
     }
   }
 
-  // Deterministic ordering: FTS rank ties are otherwise resolved by rowid
-  // in implementation-defined ways (undocumented). Include files.id as the
-  // tiebreaker so bundle output is reproducible across rebuilds.
+  if (filters.content_class !== undefined) {
+    if (filters.content_class === null) {
+      sql += " AND files.content_class IS NULL";
+    } else {
+      sql += " AND files.content_class = ?";
+      params.push(filters.content_class);
+    }
+  }
+
+  // Dictionary-wins ordering: authoritative KB hits sort above everything
+  // else regardless of BM25 rank; then FTS rank; then files.id tiebreak.
   const limit = Number.isInteger(filters.limit) && (filters.limit as number) > 0
     ? Math.min(filters.limit as number, 1000)
     : 50;
-  sql += ` ORDER BY rank, files.id LIMIT ${limit}`;
+  sql += ` ORDER BY (files.content_class = 'dictionary') DESC, rank, files.id LIMIT ${limit}`;
 
   const stmt = db.prepare(sql);
   try {
