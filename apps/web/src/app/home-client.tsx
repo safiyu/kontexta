@@ -146,11 +146,11 @@ export default function HomePage() {
     return () => { cancelled = true; };
   }, [allFiles]);
 
-  // Tag is its own axis — clear the other filters so the file list only reflects the tag.
+  // Tag is its own axis — clear the other filters so the file list only reflects the tag. Dirty check runs before any state change so a Cancel leaves the UI untouched.
   const handleSelectTag = (tag: string | null) => {
+    if (tag && !confirmDiscardIfDirty()) return;
     setSelectedTag(tag);
     if (tag) {
-      if (!confirmDiscardIfDirty()) return;
       setSelectedSection("tags");
       setSelectedProjectId(null);
       setSelectedFolder(null);

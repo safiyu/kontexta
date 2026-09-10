@@ -50,17 +50,25 @@ export async function PUT(request: NextRequest) {
     let content: string;
 
     if (body.sections) {
-      // Sections form must supply all eight fields; missing ones default to empty strings.
-      const s = body.sections as Partial<Record<string, string>>;
+      // Sections form is all-or-nothing — reject partial payloads so a targeted update never silently wipes the fields it didn't send.
+      const REQUIRED_SECTIONS = ["name", "role", "vision", "roadmap", "preferences", "sessionCodingStyle", "teamMembersAndRoles", "notes"] as const;
+      const s = body.sections as Partial<Record<typeof REQUIRED_SECTIONS[number], string>>;
+      const missing = REQUIRED_SECTIONS.filter((k) => typeof s[k] !== "string");
+      if (missing.length > 0) {
+        return NextResponse.json(
+          { error: `sections is missing required fields: ${missing.join(", ")}. Send all eight, or use 'content' for a raw update.` },
+          { status: 400 }
+        );
+      }
       content = assembleProfile({
-        name: s.name ?? "",
-        role: s.role ?? "",
-        vision: s.vision ?? "",
-        roadmap: s.roadmap ?? "",
-        preferences: s.preferences ?? "",
-        sessionCodingStyle: s.sessionCodingStyle ?? "",
-        teamMembersAndRoles: s.teamMembersAndRoles ?? "",
-        notes: s.notes ?? "",
+        name: s.name!,
+        role: s.role!,
+        vision: s.vision!,
+        roadmap: s.roadmap!,
+        preferences: s.preferences!,
+        sessionCodingStyle: s.sessionCodingStyle!,
+        teamMembersAndRoles: s.teamMembersAndRoles!,
+        notes: s.notes!,
       });
     } else if (body.content) {
       // Raw content

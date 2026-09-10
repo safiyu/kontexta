@@ -78,7 +78,7 @@ export interface FileFilters {
 
 export interface SearchFilters {
   query: string;
-  project_id?: number;
+  project_id?: number | null;
   tags?: string[];
   favorite?: boolean;
   content_class?: ContentClass | null;

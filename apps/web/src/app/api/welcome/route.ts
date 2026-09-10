@@ -36,9 +36,12 @@ export interface WelcomeResponse {
 
 // Extract the body under a required `## Name` heading; returns first non-empty line only.
 function extractName(content: string): string | null {
-  const m = content.match(/^##\s+Name\s*$([\s\S]*?)(?=^##\s+|\Z)/m);
-  if (!m) return null;
-  for (const line of m[1].split("\n")) {
+  const start = content.match(/^##\s+Name\s*$/m);
+  if (!start || start.index === undefined) return null;
+  const rest = content.slice(start.index + start[0].length);
+  const nextHeading = rest.match(/^##\s+/m);
+  const section = nextHeading && nextHeading.index !== undefined ? rest.slice(0, nextHeading.index) : rest;
+  for (const line of section.split("\n")) {
     const t = line.trim();
     if (t) return t.replace(/^[-*]\s+/, "");
   }

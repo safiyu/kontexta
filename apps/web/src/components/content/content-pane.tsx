@@ -557,7 +557,9 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange, onNavi
 
   // profile.md gets a dedicated structured editor — matches the 6-section shape enforced server-side.
   const posixPath = file.path.replace(/\\/g, "/");
-  if (posixPath.endsWith("/knowledge/profile.md")) {
+  // Only the KB's canonical profile.md — a project file with the same suffix must not hijack the ProfileEditor.
+  const isKbProfile = file.project_id === null && /(^|\/)knowledge\/profile\.md$/.test(posixPath);
+  if (isKbProfile) {
     return (
       <div key={fileId} className="h-full flex flex-col">
         <ProfileEditor onDirtyChange={onDirtyChange} onChanged={onChanged} />
@@ -565,7 +567,8 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange, onNavi
     );
   }
 
-  const inPublishFolder = posixPath.includes("/publish/");
+  // Only the KB's auto-generated publish buckets are read-only — a project's own `publish/` folder stays editable.
+  const inPublishFolder = file.project_id === null && /\/knowledge\/(html|knowledge)\/publish\//.test(posixPath);
   return (
     <div key={fileId} className="h-full flex flex-col animate-fade-in">
       <div className="h-10 px-4 border-b border-[var(--border)] flex items-center gap-4 text-[14px] sticky top-0 bg-[var(--bg-primary)] z-10">

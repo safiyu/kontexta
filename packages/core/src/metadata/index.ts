@@ -149,8 +149,12 @@ export function search(filters: SearchFilters): FileRecordWithRank[] {
   const params: any[] = [filters.query];
 
   if (filters.project_id !== undefined) {
-    sql += " AND files.project_id = ?";
-    params.push(filters.project_id);
+    if (filters.project_id === null) {
+      sql += " AND files.project_id IS NULL";
+    } else {
+      sql += " AND files.project_id = ?";
+      params.push(filters.project_id);
+    }
   }
 
   if (filters.favorite !== undefined && filters.favorite) {
@@ -617,8 +621,8 @@ function ftsPhraseSafe(s: string): string {
  */
 export function findBacklinks(fileId: number, limit = 25): BacklinkRecord[] {
   const db = getDatabase();
-  const target = db.prepare("SELECT id, title, path FROM files WHERE id = ?").get(fileId) as
-    | { id: number; title: string; path: string }
+  const target = db.prepare("SELECT id, title, path, project_id FROM files WHERE id = ?").get(fileId) as
+    | { id: number; title: string; path: string; project_id: number | null }
     | undefined;
   if (!target) return [];
 
@@ -630,7 +634,8 @@ export function findBacklinks(fileId: number, limit = 25): BacklinkRecord[] {
     if (!safe) return;
     let hits: FileRecordWithRank[];
     try {
-      hits = search({ query: `"${safe}"`, limit });
+      // Scope to the target's project (or KB when project_id is null) — cross-project hits are noise, not backlinks.
+      hits = search({ query: `"${safe}"`, limit, project_id: target.project_id });
     } catch {
       return;
     }

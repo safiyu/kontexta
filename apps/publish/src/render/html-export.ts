@@ -66,9 +66,17 @@ export async function launchChromium(executablePath: string): Promise<any> {
     needsNoSandbox = false;
     return browser;
   } catch (err) {
-    console.warn("[kxta-publish] Chromium launch failed with its sandbox enabled — retrying with --no-sandbox (typical in CI/Docker) and remembering that for the rest of this process.");
-    needsNoSandbox = true;
-    return await puppeteer.launch({ executablePath, args: [...baseArgs, NO_SANDBOX_ARG], timeout: 90_000, dumpio });
+    // Only latch the no-sandbox mode when the error actually names a sandbox capability issue — a transient failure (missing lib, EMFILE, corrupted download) must not permanently disable the sandbox for every future render.
+    const msg = String((err as any)?.message ?? err ?? "").toLowerCase();
+    const sandboxRelated = /sandbox|suid|chrome[-_ ]sandbox|no usable sandbox|namespace/.test(msg);
+    if (sandboxRelated) {
+      console.warn("[kxta-publish] Chromium launch failed with its sandbox enabled — retrying with --no-sandbox (typical in CI/Docker) and remembering that for the rest of this process.");
+      needsNoSandbox = true;
+      return await puppeteer.launch({ executablePath, args: [...baseArgs, NO_SANDBOX_ARG], timeout: 90_000, dumpio });
+    }
+    // Non-sandbox failure — retry once with the sandbox still on; if it fails again, surface the original error rather than silently disabling the sandbox forever.
+    console.warn("[kxta-publish] Chromium launch failed (non-sandbox error) — retrying once with sandbox still enabled.");
+    return await puppeteer.launch({ executablePath, args: baseArgs, timeout: 90_000, dumpio });
   }
 }
 
