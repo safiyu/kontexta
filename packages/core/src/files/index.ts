@@ -702,14 +702,19 @@ export function moveFile(id: number, newPath: string, dataDir?: string): FileRec
   // original move went EXDEV the rollback path may also need a copy
   // fallback, but in practice rollback is on the same device that just
   // hosted the file.)
-  const newContentClass = computeContentClass({
-    storageType: fileRecord.storage_type,
-    path: newPath,
-    dataDir: dataDir ?? "",
-  });
-  const updateStmt = db.prepare("UPDATE files SET path = ?, content_class = ?, updated_at = datetime('now') WHERE id = ?");
+  // Only touch content_class when dataDir is known — otherwise preserve the existing value rather than silently wiping it to null.
+  let updateStmt: ReturnType<typeof db.prepare>;
+  let updateArgs: any[];
+  if (dataDir) {
+    const newContentClass = computeContentClass({ storageType: fileRecord.storage_type, path: newPath, dataDir });
+    updateStmt = db.prepare("UPDATE files SET path = ?, content_class = ?, updated_at = datetime('now') WHERE id = ?");
+    updateArgs = [newPath, newContentClass, id];
+  } else {
+    updateStmt = db.prepare("UPDATE files SET path = ?, updated_at = datetime('now') WHERE id = ?");
+    updateArgs = [newPath, id];
+  }
   try {
-    updateStmt.run(newPath, newContentClass, id);
+    updateStmt.run(...updateArgs);
   } catch (e) {
     try { renameSync(newPath, oldPath); } catch (rollbackErr) {
       throw new Error(

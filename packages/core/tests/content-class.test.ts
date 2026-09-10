@@ -84,21 +84,31 @@ describe("computeContentClass", () => {
     ).toBeNull();
   });
 
-  test("KB file under mermaid/ or html/ → null (legacy)", () => {
+  test("KB file under mermaid/ → 'note' (rendered artifact)", () => {
     expect(
       computeContentClass({
         storageType: "local",
         path: `${dataDir}/knowledge/mermaid/architecture.mmd`,
         dataDir,
       })
-    ).toBeNull();
+    ).toBe("note");
+  });
+
+  test("KB file under html/ → 'note' (rendered artifact)", () => {
     expect(
       computeContentClass({
         storageType: "local",
         path: `${dataDir}/knowledge/html/report.html`,
         dataDir,
       })
-    ).toBeNull();
+    ).toBe("note");
+    expect(
+      computeContentClass({
+        storageType: "local",
+        path: `${dataDir}/knowledge/html/specs/foo.html`,
+        dataDir,
+      })
+    ).toBe("note");
   });
 
   test("path outside dataDir with storage_type='local' → null (orphan)", () => {

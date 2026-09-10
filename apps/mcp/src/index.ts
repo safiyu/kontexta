@@ -198,7 +198,8 @@ function resolveKindFolder({ destination, folder, kind }: ResolveKindArgs): Reso
   if (!kind) return { error: "kind is required for destination='knowledge': must be 'dictionary' or 'note'" };
 
   const norm = folder?.replace(/^\/+|\/+$/g, "") ?? "";
-  const CLASS_PREFIXES = ["knowledge/dictionary", "knowledge/notes", "knowledge/urlclips", "journal"];
+  // Non-KB buckets (html/mermaid) also skip rewrite — their layout forbids nesting under knowledge/.
+  const CLASS_PREFIXES = ["knowledge/dictionary", "knowledge/notes", "knowledge/urlclips", "journal", "html", "mermaid"];
   const alreadyClassScoped = CLASS_PREFIXES.some((p) => norm === p || norm.startsWith(p + "/"));
 
   if (alreadyClassScoped) {
@@ -2004,7 +2005,7 @@ server.tool(
           project_id: z.number().optional(),
           folder: z.string().optional(),
           tags: z.array(z.string()).optional(),
-          format: z.enum(["md", "mmd"]).optional(),
+          format: z.enum(["md", "mmd", "html"]).optional(),
           kind: z.enum(["dictionary", "note"]).optional()
             .describe("REQUIRED per-item for destination='knowledge'. See create_file."),
         })

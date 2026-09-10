@@ -155,15 +155,16 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
-    // Resolve target folder from kind unless the caller already targeted a
-    // class-scoped subfolder. Matches the MCP tool's resolveKindFolder logic.
+    // Skip the rewrite when the caller already targeted a class-scoped subfolder OR a non-KB bucket (html/mermaid/journal) whose layout forbids nesting under knowledge/.
     const norm = folder?.replace(/^\/+|\/+$/g, "") ?? "";
-    const alreadyClassScoped =
+    const preservedFolder =
       norm === "knowledge/dictionary" || norm.startsWith("knowledge/dictionary/") ||
       norm === "knowledge/notes" || norm.startsWith("knowledge/notes/") ||
       norm === "knowledge/urlclips" || norm.startsWith("knowledge/urlclips/") ||
-      norm === "journal" || norm.startsWith("journal/");
-    if (!alreadyClassScoped) {
+      norm === "journal" || norm.startsWith("journal/") ||
+      norm === "html" || norm.startsWith("html/") ||
+      norm === "mermaid" || norm.startsWith("mermaid/");
+    if (!preservedFolder) {
       const classRoot = kind === "dictionary" ? "knowledge/dictionary" : "knowledge/notes";
       folder = norm ? `${classRoot}/${norm}` : classRoot;
     }

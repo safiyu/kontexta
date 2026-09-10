@@ -31,6 +31,9 @@ export function computeContentClass(args: ComputeContentClassArgs): ContentClass
   if (norm.startsWith("knowledge/urlclips/")) return "dictionary";
   if (norm.startsWith("knowledge/notes/")) return "note";
   if (norm.startsWith("journal/")) return "journal";
+  // Rendered artifacts (mermaid diagrams, html reports) → note by default.
+  if (norm.startsWith("mermaid/")) return "note";
+  if (norm.startsWith("html/")) return "note";
 
   return null;
 }
