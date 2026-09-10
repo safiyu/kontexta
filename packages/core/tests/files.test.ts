@@ -327,6 +327,22 @@ describe("File Operations", () => {
     // The symlink itself must be skipped — not recursed into
     expect(folders).not.toContain(join("src", "loop"));
   });
+
+  test("migration 008: content_class column, index, and check constraint", () => {
+    const db = getDatabase();
+
+    const cols = db.prepare("PRAGMA table_info(files)").all() as Array<{ name: string; type: string }>;
+    expect(cols.map((c) => c.name)).toContain("content_class");
+
+    const indexes = db.prepare("PRAGMA index_list(files)").all() as Array<{ name: string }>;
+    expect(indexes.map((i) => i.name)).toContain("idx_files_content_class");
+
+    expect(() =>
+      db.prepare(
+        "INSERT INTO files (path, title, storage_type, content_class) VALUES (?, ?, ?, ?)"
+      ).run("/tmp/__ct_check__.md", "check", "local", "not-a-valid-class")
+    ).toThrow();
+  });
 });
 
 describe("Path Safety (assertPathInside)", () => {
