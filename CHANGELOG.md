@@ -19,9 +19,19 @@ This release turns Kontexta into a workspace the agent walks into fully briefed.
 - **A calmer folder tree.** The four knowledge buckets (Journal, Knowledge, Mermaid, HTML) always show at the top with their own icons — even empty. Hover a bucket for a `+` button that adds a subfolder inside it.
 - **Blueprint theme is the new default** for fresh installs. Existing users keep whatever theme they picked.
 
+### Dictionary vs notes: search knows what to trust
+
+- **Every file has a content class now.** Two values you actively pick: `dictionary` (authoritative source-of-truth — mappings, glossaries, runbooks, PR templates, architecture docs) and `note` (informational snapshot — meeting notes, sprint reviews, PR review findings, post-mortems, working thoughts). Two more assigned automatically: `journal` for time-log entries and `project` for files that live in a registered project's repo.
+- **Search prefers dictionary.** When you or the agent search the KB, any file classified as `dictionary` sorts above everything else for the same query. Ambiguous look-ups now default to the authoritative answer instead of getting drowned by 20 sprint reviews that happened to mention the same term.
+- **Agents must declare intent on every KB write.** `create_file` / `create_files` require `kind: "dictionary" | "note"` — no silent default. The routing takes care of the folder: `dictionary` files land under `knowledge/dictionary/`, notes under `knowledge/notes/`. Clipped URLs auto-classify as dictionary.
+- **Switch a file's class from the header.** Open a KB file and there's a `Dictionary | Note` pill in the content-pane header. Click the inactive side to move the file to the mirrored path in the other tree — subfolder preserved.
+- **A `kind` filter on every read tool.** `search`, `list_files`, `find_related`, `bundle_search`, and `regex_search` all take an optional `kind` to narrow to a single class when you want only authoritative results or only working notes.
+- **Per-class icons in the tree and file list.** Distinct glyphs for dictionary, note, journal, and project so you see the shape of your KB at a glance.
+
 ### A knowledge base with a shape
 
 - **The knowledge base now has a predictable layout.** Everything you save lives under one of four folders — `journal/`, `knowledge/`, `mermaid/`, or `html/` — plus a single `profile.md` at the root. Each folder holds one kind of file (markdown, mermaid, HTML) so the agent and the dashboard always know what to do with what's there. Media for HTML reports goes in `html/resources/`.
+- **`knowledge/dictionary/` and `knowledge/notes/` scaffold on install** so the class distinction is visible in the tree from day one, matching how `journal/` appears once populated.
 - **Bring your existing vault along.** A migration script (`scripts/migrate-kb-layout.mjs`) surveys an existing knowledge base, shows you what would move where in a dry run, and applies the changes on demand. Files that are already indexed move safely (paths and search index stay in sync).
 - **Existing off-spec files still work.** They stay readable, editable, and deletable — you can migrate on your own schedule. Only new writes need to follow the layout.
 
