@@ -129,11 +129,12 @@ export async function POST(req: NextRequest) {
     typeof b.projectId === "number" && Number.isInteger(b.projectId) && b.projectId > 0
       ? b.projectId
       : undefined;
-  const folder = typeof b.folder === "string" ? b.folder : undefined;
+  let folder = typeof b.folder === "string" ? b.folder : undefined;
   const tags = Array.isArray(b.tags) && b.tags.every((t) => typeof t === "string")
     ? (b.tags as string[])
     : undefined;
   const format = b.format === "md" || b.format === "mmd" || b.format === "html" ? b.format : undefined;
+  const kind = b.kind === "dictionary" || b.kind === "note" ? b.kind : undefined;
 
   if (title === undefined || content === undefined || destination === undefined) {
     return NextResponse.json(
@@ -146,6 +147,26 @@ export async function POST(req: NextRequest) {
       { error: "projectId required for project/kontexta destination" },
       { status: 400 }
     );
+  }
+  if (destination === "knowledge") {
+    if (!kind) {
+      return NextResponse.json(
+        { error: "kind is required for KB writes: must be 'dictionary' or 'note'" },
+        { status: 400 }
+      );
+    }
+    // Resolve target folder from kind unless the caller already targeted a
+    // class-scoped subfolder. Matches the MCP tool's resolveKindFolder logic.
+    const norm = folder?.replace(/^\/+|\/+$/g, "") ?? "";
+    const alreadyClassScoped =
+      norm === "knowledge/dictionary" || norm.startsWith("knowledge/dictionary/") ||
+      norm === "knowledge/notes" || norm.startsWith("knowledge/notes/") ||
+      norm === "knowledge/urlclips" || norm.startsWith("knowledge/urlclips/") ||
+      norm === "journal" || norm.startsWith("journal/");
+    if (!alreadyClassScoped) {
+      const classRoot = kind === "dictionary" ? "knowledge/dictionary" : "knowledge/notes";
+      folder = norm ? `${classRoot}/${norm}` : classRoot;
+    }
   }
 
   try {

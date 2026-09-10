@@ -4,14 +4,23 @@ import { useState, useEffect, useRef } from "react";
 import { Dialog } from "../ui/dialog";
 import { KB_BUCKETS, bucketOf, formatForFolder, isHtmlResources, type KbFormat } from "@/lib/kb-layout";
 
+type NewFileKind = "dictionary" | "note";
+
 interface NewFileDialogProps {
   open: boolean;
   onClose: () => void;
-  onCreate: (title: string, content: string, destination: "knowledge" | "project" | "kontexta", folder?: string, format?: KbFormat) => Promise<boolean>;
+  onCreate: (title: string, content: string, destination: "knowledge" | "project" | "kontexta", folder?: string, format?: KbFormat, kind?: NewFileKind) => Promise<boolean>;
   currentProjectId: number | null;
   availableFolders: string[];
   /** Preselected folder (from the tree). Empty string / undefined = pick manually. */
   defaultFolder?: string;
+}
+
+function inferKindFromFolder(f: string): NewFileKind | null {
+  const norm = f.replace(/^\/+|\/+$/g, "");
+  if (norm.startsWith("knowledge/dictionary") || norm.startsWith("knowledge/urlclips")) return "dictionary";
+  if (norm.startsWith("knowledge/notes")) return "note";
+  return null;
 }
 
 export function NewFileDialog({ open, onClose, onCreate, currentProjectId, availableFolders, defaultFolder }: NewFileDialogProps) {
@@ -22,6 +31,7 @@ export function NewFileDialog({ open, onClose, onCreate, currentProjectId, avail
     currentProjectId ? "project" : "knowledge"
   );
   const [format, setFormat] = useState<KbFormat>("md");
+  const [kind, setKind] = useState<NewFileKind | null>(null);
   const [loading, setLoading] = useState(false);
 
   // Reset only on false→true transition — defaultFolder can change mid-open without wiping user input.
@@ -34,11 +44,21 @@ export function NewFileDialog({ open, onClose, onCreate, currentProjectId, avail
       setFolder(initialFolder);
       const inferred = initialDest === "knowledge" ? formatForFolder(initialFolder) : null;
       setFormat(inferred ?? "md");
+      setKind(initialDest === "knowledge" ? inferKindFromFolder(initialFolder) : null);
       setTitle("");
       setContent("");
     }
     prevOpenRef.current = open;
   }, [open, currentProjectId, defaultFolder]);
+
+  // Whenever folder changes on the KB side, keep kind in sync if the folder
+  // already carries a class hint. Doesn't clobber an existing kind choice
+  // when the folder is class-neutral.
+  useEffect(() => {
+    if (destination !== "knowledge") return;
+    const inferred = inferKindFromFolder(folder);
+    if (inferred) setKind(inferred);
+  }, [folder, destination]);
 
   // Whenever the folder changes (KB destination only), realign the format so
   // the user doesn't accidentally write `.mmd` into `journal/`.
@@ -59,13 +79,15 @@ export function NewFileDialog({ open, onClose, onCreate, currentProjectId, avail
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) return;
+    if (isKb && !kind) return;
     setLoading(true);
     try {
-      const created = await onCreate(title, content, destination, folder || undefined, format);
+      const created = await onCreate(title, content, destination, folder || undefined, format, isKb ? (kind ?? undefined) : undefined);
       if (created) {
         setTitle("");
         setContent("");
         setFolder("");
+        setKind(null);
         onClose();
       }
     } catch (error) {
@@ -146,6 +168,35 @@ export function NewFileDialog({ open, onClose, onCreate, currentProjectId, avail
           {isKb && (
             <div>
               <label className="block text-[10px] font-bold text-[var(--text-secondary)] tracking-widest mb-1.5">
+                CONTENT CLASS <span className="text-red-500 font-normal normal-case tracking-normal">*</span>
+              </label>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setKind("dictionary")}
+                  className={`btn btn-sm flex-1 ${kind === "dictionary" ? "border-[var(--accent)]" : ""}`}
+                  title="Authoritative — system IDs, mappings, glossaries. Trusted over notes."
+                >
+                  DICTIONARY
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setKind("note")}
+                  className={`btn btn-sm flex-1 ${kind === "note" ? "border-[var(--accent)]" : ""}`}
+                  title="Informational — meeting notes, working thoughts, current-state write-ups."
+                >
+                  NOTE
+                </button>
+              </div>
+              {!kind && (
+                <p className="text-[10px] text-red-500 mt-1">Required — pick dictionary (authoritative) or note (informational).</p>
+              )}
+            </div>
+          )}
+
+          {isKb && (
+            <div>
+              <label className="block text-[10px] font-bold text-[var(--text-secondary)] tracking-widest mb-1.5">
                 FORMAT{formatLocked && <span className="ml-2 text-[var(--text-secondary)] font-normal normal-case tracking-normal italic">— fixed by {kbBucket}/</span>}
               </label>
               <div className="flex gap-3">
@@ -199,7 +250,7 @@ export function NewFileDialog({ open, onClose, onCreate, currentProjectId, avail
           </button>
           <button
             type="submit"
-            disabled={loading || !title.trim() || (isKb && !folder)}
+            disabled={loading || !title.trim() || (isKb && (!folder || !kind))}
             className="btn btn-md"
           >
             {loading ? "CREATING..." : "CREATE FILE"}

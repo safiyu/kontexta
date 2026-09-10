@@ -415,7 +415,8 @@ export default function HomePage() {
     content: string,
     destination: "knowledge" | "project" | "kontexta",
     folder?: string,
-    format?: "md" | "mmd" | "html"
+    format?: "md" | "mmd" | "html",
+    kind?: "dictionary" | "note"
   ) => {
     try {
       const response = await fetch("/api/files", {
@@ -428,6 +429,7 @@ export default function HomePage() {
           projectId: selectedProjectId,
           folder,
           format,
+          kind,
         }),
       });
       const data = await response.json().catch(() => ({}));
