@@ -124,7 +124,8 @@ export default function HomePage() {
   const { files: allFiles, loading: filesLoading, refresh: refreshAllFiles } = useFiles({});
   const refreshFiles = refreshAllFiles;
   const files = useMemo(() => {
-    let base = allFiles;
+    // Hide profile.md from the middle file-list pane — it stays accessible from the folder tree (knowledgeFiles) as a dedicated UserCircle entry.
+    let base = allFiles.filter((f) => !(f.project_id === null && /(^|[\\/])knowledge[\\/]profile\.md$/i.test(f.path)));
     if (selectedSection === "favorites") base = base.filter((f) => f.favorite);
     else if (selectedSection === "projects" && selectedProjectId !== null) base = base.filter((f) => f.project_id === selectedProjectId);
     if (selectedTag) base = base.filter((f) => (f.tags ?? []).includes(selectedTag));
