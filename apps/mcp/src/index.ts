@@ -440,7 +440,7 @@ server.tool(
     tags: z.array(z.string()).optional().describe("Optional array of tags"),
     format: z.enum(["md", "mmd", "html"]).optional().describe("File extension to write. Defaults to 'md'. Use 'html' for HTML reports."),
     kind: z.enum(["dictionary", "note"]).optional()
-      .describe("REQUIRED for destination='knowledge'. 'dictionary' = authoritative KB (system IDs, mappings, glossaries) — trust these over notes on conflict. 'note' = informational only. Determines the target subfolder under knowledge/. Ignored for destination='project' or 'kontexta'."),
+      .describe("REQUIRED for destination='knowledge'. Picks the content class the file will be classified under, which routes it to the right subfolder AND drives dictionary-wins search ordering. 'dictionary' = AUTHORITATIVE — the file IS a source of truth: system-ID / MANDT / mapping tables, glossaries, PR templates, canonical architecture descriptions, runbooks, clipped external reference material. Rare to edit. 'note' = INFORMATIONAL — sprint reviews, meeting prep, PR review findings, session summaries, story stubs, incident post-mortems, working thoughts, current-state write-ups. Useful context but not authoritative and may go stale. Ambiguity test: if this file said something different from the code / mapping table, who wins? File wins → dictionary. File loses → note. Ignored for destination='project' or 'kontexta'."),
   },
   async ({ title, content, destination, project_id, folder, tags, format, kind }) => {
     const resolved = resolveKindFolder({ destination, folder, kind });
@@ -2007,7 +2007,7 @@ server.tool(
           tags: z.array(z.string()).optional(),
           format: z.enum(["md", "mmd", "html"]).optional(),
           kind: z.enum(["dictionary", "note"]).optional()
-            .describe("REQUIRED per-item for destination='knowledge'. See create_file."),
+            .describe("REQUIRED per-item for destination='knowledge'. 'dictionary' = authoritative source-of-truth (mappings, glossaries, runbooks, PR templates). 'note' = informational snapshot (meeting notes, sprint reviews, PR findings, post-mortems). See create_file for the full rubric."),
         })
       )
       .min(1)

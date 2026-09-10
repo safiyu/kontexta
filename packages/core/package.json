@@ -31,5 +31,5 @@
     "typescript": "^5.7.0",
     "vitest": "^3.0.0"
   },
-  "rulesVersion": "2.4.0"
+  "rulesVersion": "2.5.0"
 }

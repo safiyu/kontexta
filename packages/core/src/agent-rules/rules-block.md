@@ -68,6 +68,21 @@ A KI that isn't maintained becomes noise — which is worse than no KI.
 project in a while, run `whats_new(since: "7d")` to surface recently changed 
 files — including KIs updated by other agents or the user.
 
+### Content class (dictionary vs note)
+
+Every KB file has a `content_class` — an authority axis independent of tags/folders. When writing, you MUST pick `kind` on `create_file` / `create_files` (KB destination only):
+
+- **`dictionary`** — authoritative content the user (and you) can trust as the definition. System IDs, ECC↔S4 mappings, glossaries, runbooks, PR templates, canonical architecture descriptions, clipped external references. Editing is rare; the content IS the source of truth.
+- **`note`** — informational context, may be a snapshot. Meeting notes, sprint reviews, PR review findings, "current state" write-ups, working thoughts, session summaries, incident post-mortems. Useful but not authoritative.
+
+Ambiguous? Ask: *"if this said something different from the code / the mapping table / the profile — who wins?"* If the file wins → dictionary. If the file loses (it's just describing a moment) → note.
+
+**Retrieval bias**: search ranks `dictionary` hits above everything else for the same query. Filter with `kind: "dictionary" | "note" | "journal" | "project"` on `search` / `list_files` / `find_related` / `bundle_search` / `regex_search` when you want one class only.
+
+**Location** — you don't have to think about folders. `kind` alone routes: `dictionary` → `knowledge/dictionary/...`, `note` → `knowledge/notes/...`. Add a subfolder inside if it helps organization (`knowledge/dictionary/slt/system-ids.md`), but the class comes first.
+
+`journal` and `project` are auto-assigned (journal from `journal_*` tools; project from files under a registered project's path) — never pass them to `create_file`.
+
 ### Tool reference
 
 The matrix below is grouped by intent. For each tool: when to reach for it, the most common wrong context, and the better sibling tool when wrong.
