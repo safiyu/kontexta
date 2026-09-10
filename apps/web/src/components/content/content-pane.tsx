@@ -56,6 +56,7 @@ interface File {
   content: string;
   path: string;
   storage_type: "db" | "git";
+  content_class: "dictionary" | "note" | "journal" | "project" | null;
   tags: string[];
   favorite: boolean;
   folder: string | null;
@@ -294,6 +295,34 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange, onNavi
     setViewHistory(false);
     return () => controller.abort();
   }, [fileId]);
+
+  const [changingKind, setChangingKind] = useState(false);
+  const handleChangeKind = async (kind: "dictionary" | "note") => {
+    if (!file || changingKind) return;
+    if (file.content_class === kind) return;
+    setChangingKind(true);
+    try {
+      const res = await fetch(`/api/files/${file.id}/move`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        toast.error(body?.error ?? `Move failed: HTTP ${res.status}`);
+        return;
+      }
+      const updated = await res.json();
+      // Local optimistic update — path and content_class change, id stays the same.
+      setFile((prev) => (prev ? { ...prev, path: updated.path, content_class: updated.content_class ?? null } : prev));
+      onChanged?.();
+      toast.success(`Moved to ${kind === "dictionary" ? "dictionary" : "notes"}`);
+    } catch (e: any) {
+      toast.error(`Move failed: ${e?.message ?? "network error"}`);
+    } finally {
+      setChangingKind(false);
+    }
+  };
 
   const handleRemoveOrphanFromIndex = async () => {
     if (fileId == null) return;
@@ -605,6 +634,36 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange, onNavi
           <span className="inline-flex items-center px-2 py-0.5 rounded bg-amber-accent/10 border border-amber-accent/30 text-[10px] text-[var(--text-primary)] uppercase tracking-wider font-bold" title="Regenerated on publish">
             Read-only
           </span>
+        )}
+        {file.project_id === null && /\/knowledge\/knowledge\/(dictionary|notes|urlclips)\//.test(posixPath) && (
+          <div className="inline-flex items-center gap-1 text-[10px]">
+            <button
+              type="button"
+              onClick={() => handleChangeKind("dictionary")}
+              disabled={changingKind || file.content_class === "dictionary"}
+              className={`px-2 py-0.5 rounded uppercase tracking-wider font-bold transition-colors ${
+                file.content_class === "dictionary"
+                  ? "bg-amber-accent/20 border border-amber-accent/40 text-[var(--text-primary)] cursor-default"
+                  : "border border-transparent text-[var(--text-secondary)] hover:border-[var(--border)] hover:text-[var(--text-primary)]"
+              }`}
+              title="Authoritative — trusted over notes on conflict"
+            >
+              Dictionary
+            </button>
+            <button
+              type="button"
+              onClick={() => handleChangeKind("note")}
+              disabled={changingKind || file.content_class === "note"}
+              className={`px-2 py-0.5 rounded uppercase tracking-wider font-bold transition-colors ${
+                file.content_class === "note"
+                  ? "bg-amber-accent/20 border border-amber-accent/40 text-[var(--text-primary)] cursor-default"
+                  : "border border-transparent text-[var(--text-secondary)] hover:border-[var(--border)] hover:text-[var(--text-primary)]"
+              }`}
+              title="Informational"
+            >
+              Note
+            </button>
+          </div>
         )}
         <div className="ml-auto flex items-center gap-3 text-[12px] text-[var(--text-secondary)] font-mono">
           {editing ? (
