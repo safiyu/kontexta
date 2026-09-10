@@ -636,15 +636,20 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange, onNavi
           </span>
         )}
         {file.project_id === null && /\/knowledge\/knowledge\/(dictionary|notes|urlclips)\//.test(posixPath) && (
-          <div className="inline-flex items-center gap-1 text-[10px]">
+          <div
+            className={`inline-flex items-center rounded-full border border-[var(--border)] bg-[var(--bg-secondary)] p-0.5 text-[10px] transition-opacity ${changingKind ? "opacity-60" : ""}`}
+            role="group"
+            aria-label="Content class"
+          >
             <button
               type="button"
               onClick={() => handleChangeKind("dictionary")}
               disabled={changingKind || file.content_class === "dictionary"}
-              className={`px-2 py-0.5 rounded uppercase tracking-wider font-bold transition-colors ${
+              aria-pressed={file.content_class === "dictionary"}
+              className={`px-2.5 py-0.5 rounded-full uppercase tracking-wider font-bold transition-all ${
                 file.content_class === "dictionary"
-                  ? "bg-amber-accent/20 border border-amber-accent/40 text-[var(--text-primary)] cursor-default"
-                  : "border border-transparent text-[var(--text-secondary)] hover:border-[var(--border)] hover:text-[var(--text-primary)]"
+                  ? "bg-amber-accent text-[var(--bg-primary)] cursor-default"
+                  : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer"
               }`}
               title="Authoritative — trusted over notes on conflict"
             >
@@ -654,10 +659,11 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange, onNavi
               type="button"
               onClick={() => handleChangeKind("note")}
               disabled={changingKind || file.content_class === "note"}
-              className={`px-2 py-0.5 rounded uppercase tracking-wider font-bold transition-colors ${
+              aria-pressed={file.content_class === "note"}
+              className={`px-2.5 py-0.5 rounded-full uppercase tracking-wider font-bold transition-all ${
                 file.content_class === "note"
-                  ? "bg-amber-accent/20 border border-amber-accent/40 text-[var(--text-primary)] cursor-default"
-                  : "border border-transparent text-[var(--text-secondary)] hover:border-[var(--border)] hover:text-[var(--text-primary)]"
+                  ? "bg-amber-accent text-[var(--bg-primary)] cursor-default"
+                  : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer"
               }`}
               title="Informational"
             >
