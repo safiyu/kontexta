@@ -56,7 +56,8 @@ describe("createFile enforces layout at knowledge/ root", () => {
       format: "html",
       dataDir,
     });
-    expect(page.path).toContain("knowledge/html/");
+    // Normalize separators — file paths use `\` on Windows, `/` elsewhere.
+    expect(page.path.replace(/\\/g, "/")).toContain("knowledge/html/");
   });
 });
 
