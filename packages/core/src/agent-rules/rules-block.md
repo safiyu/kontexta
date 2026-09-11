@@ -19,6 +19,8 @@ This project is registered with kontexta. Honor these rules to keep the index, h
 
 ### Core rules
 
+**Print the session welcome as your first message.** On the very first turn of any new session, call `refresh_session_context` and print a brief greeting to the user based on what it returns — today's date, their name from the profile, upcoming events / conflicts if any, a nudge if the profile is empty or stale. 1–3 lines, not a report. Two reasons: (1) if the client lazy-loads MCP servers, this is what actually triggers `initialize`; (2) the user sees kontexta is connected and knows what context you have. Skip if the user's first message is already a work request — do the work.
+
 **Search before reading.** Use `search`, `bundle_search`, or `regex_search` to find context first. Skipping straight to `read_file` on a guessed path wastes tokens and often misses the right file.
 
 **All KB writes go through kontexta.** Use `create_file` / `update_file` / `update_file_section` / `journal_note`. **Never** edit a KB file with raw filesystem tools (Edit/Write/cat) — the watcher and FTS index will diverge until `refresh_index` runs, and subsequent searches will return stale results.
