@@ -5,9 +5,10 @@ import { fileURLToPath } from "node:url";
 import { GET } from "./route";
 
 const FLAG_NAME = ".kontexta-manual-mcp";
-const HERE = dirname(fileURLToPath(import.meta.url)); // same dir as route.ts — checked first in its walk-up
-const LOCAL_FLAG_PATH = join(HERE, FLAG_NAME);
+const HERE = dirname(fileURLToPath(import.meta.url)); // walker starts here
 const REAL_MCP_ENTRYPOINT = join(process.cwd(), "..", "mcp", "dist", "index.js"); // must exist on disk for the flag to be trusted
+// Flag must live in a dir whose subtree includes the entrypoint — matches real bootstrap where the flag sits at repo root and points to apps/mcp/dist/index.js inside that same tree. `apps/` contains both this test file and apps/mcp/, so place the flag there.
+const LOCAL_FLAG_PATH = join(process.cwd(), "..", FLAG_NAME);
 
 // Mirrors route.ts's own search so tests never depend on ambient flags (e.g. CI's bootstrap step writes a real one at repo root).
 function findAmbientFlag(): string | null {
