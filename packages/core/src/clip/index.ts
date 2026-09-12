@@ -14,7 +14,7 @@ export interface ClipUrlOptions {
   headers?: Record<string, string>;
 }
 
-const URLCLIPS_FOLDER = "urlclips";
+const URLCLIPS_FOLDER = "knowledge/urlclips";
 
 export async function clipUrl(opts: ClipUrlOptions): Promise<FileRecordWithContent> {
   const { url, title: titleOverride, dataDir, headers } = opts;

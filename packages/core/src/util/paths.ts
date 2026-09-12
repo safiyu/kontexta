@@ -190,6 +190,9 @@ export function ensureDataDir(): void {
 
   const dirsToCreate = [
     path.join(dataDir, "knowledge"),
+    // Scaffold class-scoped subfolders so new installs see dictionary/notes in the tree from day one.
+    path.join(dataDir, "knowledge", "knowledge", "dictionary"),
+    path.join(dataDir, "knowledge", "knowledge", "notes"),
     path.join(dataDir, "backups"),
     path.join(dataDir, "projects")
   ];

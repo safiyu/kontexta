@@ -2,6 +2,8 @@
 
 import { Star } from "lucide-react";
 import { toast } from "sonner";
+import type { ContentClass } from "kxta-core";
+import { ContentClassIcon } from "./content-class-icon";
 
 interface FileItemProps {
   id: number;
@@ -15,6 +17,7 @@ interface FileItemProps {
   onToggleSelect?: () => void;
   favorite?: boolean;
   tags?: string[];
+  contentClass?: ContentClass | null;
 }
 
 function formatTokens(n: number): string {
@@ -42,13 +45,6 @@ function formatTimeAgo(dateString: string): string {
   return date.toLocaleDateString();
 }
 
-const FileIcon = ({ className }: { className?: string }) => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
-    <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
-    <polyline points="14 2 14 8 20 8" />
-  </svg>
-);
-
 const DownloadIcon = ({ className }: { className?: string }) => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -57,7 +53,7 @@ const DownloadIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
-export function FileItem({ id, title, updatedAt, active, onClick, estTokens, selectMode, selected, onToggleSelect, favorite, tags }: FileItemProps) {
+export function FileItem({ id, title, updatedAt, active, onClick, estTokens, selectMode, selected, onToggleSelect, favorite, tags, contentClass }: FileItemProps) {
   const handleRowClick = (e: React.MouseEvent) => {
     if (selectMode) {
       e.preventDefault();
@@ -91,7 +87,7 @@ export function FileItem({ id, title, updatedAt, active, onClick, estTokens, sel
             className="mt-1 cursor-pointer accent-amber-accent"
           />
         ) : (
-          <FileIcon className="w-4 h-4 mt-1 text-amber-accent shrink-0" />
+          <ContentClassIcon contentClass={contentClass ?? null} className="w-4 h-4 mt-1 text-amber-accent shrink-0" />
         )}
         <div className="min-w-0 flex-1">
           <div className={`text-sm font-semibold truncate transition-colors flex items-center gap-1.5 ${

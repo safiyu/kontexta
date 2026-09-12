@@ -66,8 +66,8 @@ describe("whatsNew", () => {
   });
 
   it("flags files with created_at >= since as 'created', others as 'modified'", async () => {
-    const old = await createFile({ title: "Old", content: "old body", destination: "knowledge", dataDir });
-    const fresh = await createFile({ title: "Fresh", content: "new body", destination: "knowledge", dataDir });
+    const old = await createFile({ title: "Old", content: "old body", destination: "knowledge", folder: "knowledge", dataDir });
+    const fresh = await createFile({ title: "Fresh", content: "new body", destination: "knowledge", folder: "knowledge", dataDir });
 
     // Backdate `old` to 2 days ago for both timestamps; touch its updated_at to "now-ish"
     // so it shows up as 'modified' in the window. `fresh` stays at default (now).
@@ -82,21 +82,21 @@ describe("whatsNew", () => {
   });
 
   it("excludes files whose updated_at is older than since", async () => {
-    const stale = await createFile({ title: "Stale", content: "x".repeat(50), destination: "knowledge", dataDir });
+    const stale = await createFile({ title: "Stale", content: "x".repeat(50), destination: "knowledge", folder: "knowledge", dataDir });
     setTimestamps(stale.id, "2026-01-01 00:00:00", "2026-01-01 00:00:00");
     const r = whatsNew({ since: "2026-04-01T00:00:00Z" });
     expect(r.files.find((f) => f.id === stale.id)).toBeUndefined();
   });
 
   it("filters by project_id when provided", async () => {
-    const kb = await createFile({ title: "K", content: "k", destination: "knowledge", dataDir });
+    const kb = await createFile({ title: "K", content: "k", destination: "knowledge", folder: "knowledge", dataDir });
     void kb;
     const r = whatsNew({ since: "1h", project_id: null });
     expect(r.files.every((f) => f.project_id === null)).toBe(true);
   });
 
   it("attaches tags[] when include_tags is true (default)", async () => {
-    const f = await createFile({ title: "Tagged", content: "body", destination: "knowledge", dataDir, tags: ["alpha", "beta"] });
+    const f = await createFile({ title: "Tagged", content: "body", destination: "knowledge", folder: "knowledge", dataDir, tags: ["alpha", "beta"] });
     void f;
     const r = whatsNew({ since: "1h" });
     const entry = r.files.find((x) => x.title === "Tagged");
@@ -104,22 +104,22 @@ describe("whatsNew", () => {
   });
 
   it("omits tags when include_tags is false", async () => {
-    await createFile({ title: "Tagged", content: "body", destination: "knowledge", dataDir, tags: ["x"] });
+    await createFile({ title: "Tagged", content: "body", destination: "knowledge", folder: "knowledge", dataDir, tags: ["x"] });
     const r = whatsNew({ since: "1h", include_tags: false });
     expect(r.files[0].tags).toBeUndefined();
   });
 
   it("respects limit", async () => {
     for (let i = 0; i < 5; i++) {
-      await createFile({ title: `F${i}`, content: `body ${i}`, destination: "knowledge", dataDir });
+      await createFile({ title: `F${i}`, content: `body ${i}`, destination: "knowledge", folder: "knowledge", dataDir });
     }
     const r = whatsNew({ since: "1h", limit: 2 });
     expect(r.files.length).toBe(2);
   });
 
   it("orders by updated_at DESC (newest first)", async () => {
-    const a = await createFile({ title: "A", content: "a", destination: "knowledge", dataDir });
-    const b = await createFile({ title: "B", content: "b", destination: "knowledge", dataDir });
+    const a = await createFile({ title: "A", content: "a", destination: "knowledge", folder: "knowledge", dataDir });
+    const b = await createFile({ title: "B", content: "b", destination: "knowledge", folder: "knowledge", dataDir });
     setTimestamps(a.id, "2026-04-30 10:00:00", "2026-04-30 10:00:00");
     setTimestamps(b.id, "2026-04-30 11:00:00", "2026-04-30 11:00:00");
     const r = whatsNew({ since: "2026-04-30T09:00:00Z" });
@@ -133,7 +133,7 @@ describe("whatsNew", () => {
   });
 
   it("includes files modified after a real updateFile() call", async () => {
-    const f = await createFile({ title: "Live", content: "first", destination: "knowledge", dataDir });
+    const f = await createFile({ title: "Live", content: "first", destination: "knowledge", folder: "knowledge", dataDir });
     setTimestamps(f.id, "2026-01-01 00:00:00", "2026-01-01 00:00:00");
     // Now update — this should bump updated_at to "now".
     await updateFile(f.id, "second pass content body", dataDir);
@@ -144,7 +144,7 @@ describe("whatsNew", () => {
   });
 
   it("addTags result is reflected when re-querying with include_tags", async () => {
-    const f = await createFile({ title: "TagMe", content: "body content here", destination: "knowledge", dataDir });
+    const f = await createFile({ title: "TagMe", content: "body content here", destination: "knowledge", folder: "knowledge", dataDir });
     addTags(f.id, ["fresh"]);
     const r = whatsNew({ since: "1h" });
     const entry = r.files.find((x) => x.id === f.id);

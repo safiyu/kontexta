@@ -19,8 +19,7 @@ const manrope = Manrope({
   variable: "--font-title",
   display: "swap",
 });
-// Title face for the opt-in Blueprint theme only (.blueprint overrides
-// --font-title to this variable in globals.css).
+// Title face for the Blueprint theme (.blueprint overrides --font-title in globals.css).
 const saira = Saira({
   subsets: ["latin"],
   variable: "--font-saira",

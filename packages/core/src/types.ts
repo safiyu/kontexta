@@ -5,12 +5,16 @@
 export type StorageType = "local" | "reference" | "backup";
 export type Destination = "knowledge" | "project" | "kontexta";
 
+// Authority-axis file class, orthogonal to StorageType — 'dictionary' here is unrelated to storage_type='reference'; legacy uncategorised KB files are null.
+export type ContentClass = "dictionary" | "note" | "journal" | "project";
+
 export interface FileRecord {
   id: number;
   path: string;
   title: string;
   project_id: number | null;
   storage_type: StorageType;
+  content_class: ContentClass | null;
   source_path: string | null;
   content_hash: string | null;
   created_at: string;
@@ -56,6 +60,7 @@ export interface FileFilters {
   favorite?: boolean;
   folder?: string;
   storage_type?: StorageType;
+  content_class?: ContentClass | null;
   untagged?: boolean;
   limit?: number;
   offset?: number;
@@ -67,9 +72,10 @@ export interface FileFilters {
 
 export interface SearchFilters {
   query: string;
-  project_id?: number;
+  project_id?: number | null;
   tags?: string[];
   favorite?: boolean;
+  content_class?: ContentClass | null;
   /**
    * Max number of FTS results to return. Defaults to 50 (the historical hard
    * cap). bundleSearch overrides this so a large token budget can include

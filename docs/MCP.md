@@ -16,6 +16,29 @@ The web UI and the MCP server can run against the same database simultaneously. 
 
 ---
 
+## Content class: dictionary vs note
+
+Every KB file carries a `content_class` — an authority axis, separate from tags and folders. This is the shortest explanation of what the four values mean and when each applies:
+
+| Class | What it is | Examples | Where on disk |
+|---|---|---|---|
+| **`dictionary`** | AUTHORITATIVE — the file IS a source of truth. Editing is rare; if it disagrees with something else, it wins. | System-ID / MANDT / mapping tables, glossaries, PR templates, canonical architecture descriptions, runbooks, clipped external reference material. | `knowledge/dictionary/**` and `knowledge/urlclips/**` (clipped articles) |
+| **`note`** | INFORMATIONAL — a snapshot, a viewpoint, or working knowledge. Useful context but not authoritative. May go stale. | Sprint reviews, meeting prep, PR review findings, session summaries, story stubs, incident post-mortems, working thoughts, current-state write-ups. | `knowledge/notes/**` — plus `mermaid/**` and `html/**` (rendered artifacts) |
+| **`journal`** | Time-bucketed log auto-written by the `journal_*` tools. Never manually classified. | Daily activity, hands runs, `journal_note` entries. | `journal/**` |
+| **`project`** | File that belongs to a registered project (lives in the project's repo, not the KB). Never manually classified. | Any file under a project's registered path. | Anywhere under a project root |
+
+**Ambiguity test.** For any file you're about to write, ask: *"if this file said something different from the code / the mapping table / the profile — who wins?"* If the file wins → `dictionary`. If the file loses (it's just describing a moment in time) → `note`.
+
+**Retrieval behavior.** Search ranks `dictionary` hits above everything else for the same query, regardless of BM25 score. This is the whole point of the distinction — factual look-ups prefer authoritative content; narrative queries still pick up notes but sort them below. Every read tool (`search`, `list_files`, `find_related`, `bundle_search`, `regex_search`) also accepts a `kind` filter to narrow to a single class.
+
+**Writing new files.** `create_file` and `create_files` REQUIRE `kind: "dictionary" | "note"` for KB destinations — agents must declare intent every time. There's no default fallback. The class routes the file to the right subfolder automatically: pass `kind: "dictionary"` and it lands in `knowledge/dictionary/...`; add an optional folder inside (e.g. `slt/`) to organize further.
+
+**Changing a class.** In the web UI, opening a KB file under `knowledge/{dictionary,notes,urlclips}` shows a small `Dictionary | Note` pill switch in the content-pane header — click the inactive side to move the file to the mirrored path in the other tree (subfolder preserved). From MCP: `move_file` with `kind: "dictionary" | "note"` and no `new_path` does the same server-side.
+
+**Clipping.** `clip_url` writes to `knowledge/urlclips/` and is auto-classified as `dictionary` — clipped external references are treated as authoritative by default. Move a clipped file into `knowledge/notes/` after the fact if it turned out to be informational.
+
+---
+
 ## Install via npm
 
 If you only need the MCP server (no web UI), install via npm — no Docker required:

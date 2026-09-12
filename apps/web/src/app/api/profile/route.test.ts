@@ -52,6 +52,8 @@ describe("profile API route", () => {
           vision: "Build great things",
           roadmap: "Step 1",
           preferences: "TypeScript",
+          sessionCodingStyle: "Terse comments, TDD.",
+          teamMembersAndRoles: "Team A: Alice (lead)",
           notes: "Some notes",
         }
       })

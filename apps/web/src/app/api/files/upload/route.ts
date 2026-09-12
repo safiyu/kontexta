@@ -2,12 +2,19 @@ import { checkAuth } from "@/lib/auth";
 import { NextRequest, NextResponse } from "next/server";
 import { createFile, listFiles, slugify, withLock } from "kxta-core";
 import { ensureDbInitialized, DATA_DIR } from "@/lib/db-init";
-import { basename, extname, dirname } from "node:path";
+import { basename, extname, dirname, join, resolve, sep } from "node:path";
+import { mkdirSync, writeFileSync, existsSync } from "node:fs";
+import { createHash } from "node:crypto";
 
 const MAX_BYTES = 5 * 1024 * 1024;
 const MAX_TOTAL_BYTES = Number(process.env.KONTEXTA_UPLOAD_MAX_TOTAL_BYTES ?? 50 * 1024 * 1024);
 const MAX_FILES = Number(process.env.KONTEXTA_UPLOAD_MAX_FILES ?? 200);
 const ALLOWED_EXT = new Set([".md", ".markdown", ".mmd", ".html"]);
+// html/resources/ accepts any extension (media store).
+function isResourcesFolder(folder: string): boolean {
+  const segs = folder.split(/[/\\]/).filter(Boolean);
+  return segs[0] === "html" && segs[1] === "resources";
+}
 
 interface UploadedItem {
   id: number;
@@ -160,10 +167,12 @@ export async function POST(req: NextRequest) {
 
     let runningTotal = 0;
 
+    const targetIsResources = destination === "knowledge" && folder && isResourcesFolder(folder);
+
     for (const file of files) {
     const original = file.name;
     const ext = extname(original).toLowerCase();
-    if (!ALLOWED_EXT.has(ext)) {
+    if (!targetIsResources && !ALLOWED_EXT.has(ext)) {
       rejected.push({ name: original, reason: "unsupported_extension" });
       continue;
     }
@@ -178,13 +187,47 @@ export async function POST(req: NextRequest) {
     }
     runningTotal += file.size;
 
+    // Media into html/resources/: bytes to disk, no createFile, no DB row.
+    if (targetIsResources && !ALLOWED_EXT.has(ext)) {
+      const buf = new Uint8Array(await file.arrayBuffer());
+      const safeStem = original.slice(0, -ext.length).toLowerCase().replace(/[^a-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "resource";
+      const desiredBasename = `${safeStem}${ext}`;
+      const finalBasename = nextAvailableName(existingBasenames, desiredBasename);
+      existingBasenames.add(finalBasename);
+      const kbRoot = resolve(DATA_DIR, "knowledge");
+      const targetDir = resolve(kbRoot, folder);
+      if (targetDir !== kbRoot && !targetDir.startsWith(kbRoot + sep)) {
+        rejected.push({ name: original, reason: "escapes_knowledge_root" });
+        continue;
+      }
+      const finalPath = join(targetDir, finalBasename);
+      try {
+        mkdirSync(targetDir, { recursive: true });
+        if (existsSync(finalPath)) {
+          // Paranoid disambiguation if the same basename won a race past the loop.
+          const hash = createHash("sha256").update(buf).digest("hex").slice(0, 8);
+          const disambiguated = `${safeStem}-${hash}${ext}`;
+          writeFileSync(join(targetDir, disambiguated), buf);
+          uploaded.push({ id: 0, path: join(targetDir, disambiguated), original_name: original, final_name: disambiguated });
+        } else {
+          writeFileSync(finalPath, buf);
+          uploaded.push({ id: 0, path: finalPath, original_name: original, final_name: finalBasename });
+        }
+      } catch (e: any) {
+        rejected.push({ name: original, reason: `write_failed: ${e?.message ?? String(e)}` });
+      }
+      continue;
+    }
+
     // Compute the on-disk basename createFile will actually use, then
     // pick a non-colliding stem. We hand createFile a *title* that will
     // re-slugify back to the same basename so what we promised matches
     // what gets written.
     const originalStem = original.slice(0, -ext.length);
     const slugStem = slugify(originalStem) || "untitled";
-    const desiredBasename = `${slugStem}${ext}`;
+    // createFile only knows md|mmd|html — collapse .markdown to .md so final_name reports the truth.
+    const writeExt = ext === ".markdown" ? ".md" : ext;
+    const desiredBasename = `${slugStem}${writeExt}`;
     const finalBasename = nextAvailableName(existingBasenames, desiredBasename);
     existingBasenames.add(finalBasename);
 
@@ -207,7 +250,7 @@ export async function POST(req: NextRequest) {
     // recover a title that re-slugifies back to finalBasename's stem.
     const finalStem = finalBasename.slice(0, -extname(finalBasename).length);
 
-    const format = ext === ".html" ? "html" : ext === ".mmd" ? "mmd" : "md";
+    const format = writeExt === ".html" ? "html" : writeExt === ".mmd" ? "mmd" : "md";
     try {
       const created = await createFile({
         title: finalStem,

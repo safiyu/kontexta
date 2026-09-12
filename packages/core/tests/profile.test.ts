@@ -12,8 +12,17 @@ describe("profile module", () => {
     expect(profileRelPath()).toBe("knowledge/profile.md");
   });
 
-  it("REQUIRED_SECTIONS contains all six sections", () => {
-    expect(REQUIRED_SECTIONS).toEqual(["Name", "Role", "Vision", "Roadmap", "Preferences", "Notes"]);
+  it("REQUIRED_SECTIONS contains all canonical sections", () => {
+    expect(REQUIRED_SECTIONS).toEqual([
+      "Name",
+      "Role",
+      "Vision",
+      "Roadmap",
+      "Preferences",
+      "Session coding style",
+      "Team members and roles",
+      "Notes",
+    ]);
   });
 
   describe("getMissingSections", () => {
@@ -25,7 +34,14 @@ describe("profile module", () => {
     it("returns missing sections when some are present", () => {
       const content = "## Name\n\nJohn Doe\n\n## Role\n\nDeveloper\n";
       const missing = getMissingSections(content);
-      expect(missing).toEqual(["Vision", "Roadmap", "Preferences", "Notes"]);
+      expect(missing).toEqual([
+        "Vision",
+        "Roadmap",
+        "Preferences",
+        "Session coding style",
+        "Team members and roles",
+        "Notes",
+      ]);
     });
 
     it("returns empty array when all sections present", () => {
@@ -49,7 +65,15 @@ describe("profile module", () => {
     it("inserts missing sections in canonical order", () => {
       const content = "## Name\n\nJohn Doe\n";
       const { content: repaired, repaired: added } = repairProfile(content);
-      expect(added).toEqual(["Role", "Vision", "Roadmap", "Preferences", "Notes"]);
+      expect(added).toEqual([
+        "Role",
+        "Vision",
+        "Roadmap",
+        "Preferences",
+        "Session coding style",
+        "Team members and roles",
+        "Notes",
+      ]);
       expect(repaired).toContain("## Name");
       expect(repaired).toContain("## Role");
       expect(repaired).toContain("## Vision");
@@ -77,6 +101,8 @@ describe("profile module", () => {
         vision: "Build great things",
         roadmap: "Step 1, Step 2",
         preferences: "TypeScript",
+        sessionCodingStyle: "one-line comments",
+        teamMembersAndRoles: "Alice — PM",
         notes: "Some notes",
       };
       const content = assembleProfile(sections);

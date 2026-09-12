@@ -5,13 +5,15 @@
  */
 import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync, unlinkSync, renameSync, mkdirSync, readdirSync, statSync, lstatSync, existsSync, rmSync } from "node:fs";
-import { join, dirname, resolve, sep, isAbsolute, basename } from "node:path";
+import { join, dirname, resolve, sep, isAbsolute, basename, relative } from "node:path";
 import { getDatabase } from "../db/index.js";
 import { commitFile, commitDelete } from "../git/index.js";
 import { assertPathInside, escapeLike, withLock, fileLockKey } from "../util/safety.js";
 import { profileRelPath, repairProfile } from "../profile/index.js";
 import { sanitizeHtml } from "../reports/sanitize.js";
 import { isIndexedFile } from "../util/extensions.js";
+import { validateKnowledgeWrite } from "./layout.js";
+import { computeContentClass } from "../content-class/index.js";
 import type { FileRecord, Destination, FileFilters, StorageType } from "../types.js";
 
 /**
@@ -166,6 +168,7 @@ export async function createFile(opts: CreateFileOptions): Promise<FileRecordWit
     filePath = folder
       ? assertPathInside(knowledgeDir, join(folder, filename))
       : assertPathInside(knowledgeDir, filename);
+    validateKnowledgeWrite(relative(knowledgeDir, filePath), "file");
     storageType = "local";
   } else if (destination === "kontexta") {
     if (!projectId) {
@@ -227,14 +230,17 @@ export async function createFile(opts: CreateFileOptions): Promise<FileRecordWit
   writeFileSync(filePath, content, "utf8");
   const contentHash = computeHash(content);
 
+  const contentClass = computeContentClass({ storageType, path: filePath, dataDir });
+
   // ON CONFLICT(path) absorbs the watcher's stub row if chokidar's `add` won the race.
   const upsertStmt = db.prepare(`
-    INSERT INTO files (path, title, project_id, storage_type, source_path, content_hash)
-    VALUES (?, ?, ?, ?, ?, ?)
+    INSERT INTO files (path, title, project_id, storage_type, content_class, source_path, content_hash)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(path) DO UPDATE SET
       title = excluded.title,
       project_id = excluded.project_id,
       storage_type = excluded.storage_type,
+      content_class = excluded.content_class,
       source_path = excluded.source_path,
       content_hash = excluded.content_hash,
       updated_at = datetime('now')
@@ -248,15 +254,15 @@ export async function createFile(opts: CreateFileOptions): Promise<FileRecordWit
 
   // Snapshot for rollback — upsert may overwrite an existing row.
   const priorRow = db
-    .prepare("SELECT id, title, project_id, storage_type, source_path, content_hash, updated_at FROM files WHERE path = ?")
+    .prepare("SELECT id, title, project_id, storage_type, content_class, source_path, content_hash, updated_at FROM files WHERE path = ?")
     .get(filePath) as
-    | { id: number; title: string; project_id: number | null; storage_type: string; source_path: string | null; content_hash: string; updated_at: string }
+    | { id: number; title: string; project_id: number | null; storage_type: string; content_class: string | null; source_path: string | null; content_hash: string; updated_at: string }
     | undefined;
 
   let fileId: number;
   try {
     fileId = db.transaction(() => {
-      upsertStmt.run(filePath, title, projectId || null, storageType, sourcePath || null, contentHash);
+      upsertStmt.run(filePath, title, projectId || null, storageType, contentClass, sourcePath || null, contentHash);
       const row = getIdByPathStmt.get(filePath) as { id: number } | undefined;
       if (!row) throw new Error(`createFile: row missing after upsert for ${filePath}`);
       const id = row.id;
@@ -287,8 +293,8 @@ export async function createFile(opts: CreateFileOptions): Promise<FileRecordWit
     try {
       if (priorRow) {
         db.prepare(
-          "UPDATE files SET title=?, project_id=?, storage_type=?, source_path=?, content_hash=?, updated_at=? WHERE id=?"
-        ).run(priorRow.title, priorRow.project_id, priorRow.storage_type, priorRow.source_path, priorRow.content_hash, priorRow.updated_at, priorRow.id);
+          "UPDATE files SET title=?, project_id=?, storage_type=?, content_class=?, source_path=?, content_hash=?, updated_at=? WHERE id=?"
+        ).run(priorRow.title, priorRow.project_id, priorRow.storage_type, priorRow.content_class, priorRow.source_path, priorRow.content_hash, priorRow.updated_at, priorRow.id);
       } else {
         db.prepare("DELETE FROM files WHERE path = ?").run(filePath);
       }
@@ -486,8 +492,14 @@ export async function deleteFile(id: number, dataDir?: string): Promise<void> {
 /**
  * Create a new folder in a project
  */
-export function createFolder(projectPath: string, folderName: string): string {
+export function createFolder(projectPath: string, folderName: string, opts?: { dataDir?: string }): string {
   const fullPath = assertPathInside(projectPath, folderName);
+  if (opts?.dataDir) {
+    const knowledgeDir = resolve(opts.dataDir, "knowledge");
+    if (resolve(projectPath) === knowledgeDir) {
+      validateKnowledgeWrite(folderName, "folder");
+    }
+  }
   mkdirSync(fullPath, { recursive: true });
   return fullPath;
 }
@@ -525,6 +537,15 @@ export function listFiles(opts: ListFilesOptions): FileRecord[] {
       params.push(filters.storage_type);
     }
 
+    if (filters.content_class !== undefined) {
+      if (filters.content_class === null) {
+        sql += " AND content_class IS NULL";
+      } else {
+        sql += " AND content_class = ?";
+        params.push(filters.content_class);
+      }
+    }
+
     if (filters.favorite !== undefined && filters.favorite) {
       sql += " AND EXISTS (SELECT 1 FROM favorites WHERE favorites.file_id = files.id)";
     }
@@ -548,23 +569,24 @@ export function listFiles(opts: ListFilesOptions): FileRecord[] {
     }
 
     if (filters.folder !== undefined) {
-      // Everything interpolated into a LIKE ... ESCAPE '\' pattern must be
-      // escaped — including project_path and the literal backslash
-      // separators. Unescaped, Windows paths (C:\Users\...) have every '\'
-      // consumed as an escape character and the pattern never matches.
-      const segment = escapeLike(filters.folder);
+      // Match both separator conventions so POSIX callers still match Windows on-disk paths.
+      const folderPosix = filters.folder.replace(/\\/g, "/");
+      const folderWin = filters.folder.replace(/\//g, "\\");
+      const segmentPosix = escapeLike(folderPosix);
+      const segmentWin = escapeLike(folderWin);
       const bs = "\\\\"; // literal backslash separator inside the pattern
       if (filters.project_path) {
         // Scope to files under the given project root.
-        const root = escapeLike(filters.project_path);
+        const rootRaw = escapeLike(filters.project_path);
+        const rootWin = escapeLike(filters.project_path.replace(/\//g, "\\"));
         sql += " AND (path LIKE ? ESCAPE '\\' OR path LIKE ? ESCAPE '\\')";
-        params.push(`${root}/${segment}/%`);
-        params.push(`${root}${bs}${segment}${bs}%`);
+        params.push(`${rootRaw}/${segmentPosix}/%`);
+        params.push(`${rootWin}${bs}${segmentWin}${bs}%`);
       } else {
         // Original behaviour: match any path segment named like folder.
         sql += " AND (path LIKE ? ESCAPE '\\' OR path LIKE ? ESCAPE '\\')";
-        params.push(`%/${segment}/%`);
-        params.push(`%${bs}${segment}${bs}%`);
+        params.push(`%/${segmentPosix}/%`);
+        params.push(`%${bs}${segmentWin}${bs}%`);
       }
     }
   }
@@ -630,6 +652,20 @@ export function moveFile(id: number, newPath: string, dataDir?: string): FileRec
       throw new Error(`moveFile: destination escapes allowed root ${allowedRoot}: ${newPath}`);
     }
   }
+  if (!fileRecord.project_id && dataDir) {
+    const knowledgeDir = resolve(dataDir, "knowledge");
+    const newRel = relative(knowledgeDir, resolve(newPath));
+    // In-place rename inside a legacy off-spec bucket stays allowed — matches "migrate at your own pace".
+    const srcRel = relative(knowledgeDir, resolve(fileRecord.path));
+    const topOf = (p: string) => p.split(/[/\\]/).filter(Boolean)[0] ?? "";
+    const ALLOWED_TOP = new Set(["journal", "knowledge", "mermaid", "html"]);
+    const srcTop = topOf(srcRel);
+    const newTop = topOf(newRel);
+    const isSameLegacyBucket = srcTop && !ALLOWED_TOP.has(srcTop) && srcTop === newTop;
+    if (!isSameLegacyBucket) {
+      validateKnowledgeWrite(newRel, "file");
+    }
+  }
 
   const oldPath = fileRecord.path;
   if (newPath !== oldPath && existsSync(newPath)) {
@@ -666,9 +702,14 @@ export function moveFile(id: number, newPath: string, dataDir?: string): FileRec
   // original move went EXDEV the rollback path may also need a copy
   // fallback, but in practice rollback is on the same device that just
   // hosted the file.)
-  const updateStmt = db.prepare("UPDATE files SET path = ?, updated_at = datetime('now') WHERE id = ?");
+  // Only touch content_class when dataDir is known — otherwise preserve the existing value rather than silently wiping it to null.
   try {
-    updateStmt.run(newPath, id);
+    if (dataDir) {
+      const newContentClass = computeContentClass({ storageType: fileRecord.storage_type, path: newPath, dataDir });
+      db.prepare("UPDATE files SET path = ?, content_class = ?, updated_at = datetime('now') WHERE id = ?").run(newPath, newContentClass, id);
+    } else {
+      db.prepare("UPDATE files SET path = ?, updated_at = datetime('now') WHERE id = ?").run(newPath, id);
+    }
   } catch (e) {
     try { renameSync(newPath, oldPath); } catch (rollbackErr) {
       throw new Error(

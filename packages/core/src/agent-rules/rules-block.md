@@ -19,6 +19,8 @@ This project is registered with kontexta. Honor these rules to keep the index, h
 
 ### Core rules
 
+**Print the session welcome as your first message.** On the very first turn of any new session, call `refresh_session_context` and print a brief greeting to the user based on what it returns — today's date, their name from the profile, upcoming events / conflicts if any, a nudge if the profile is empty or stale. 1–3 lines, not a report. Two reasons: (1) if the client lazy-loads MCP servers, this is what actually triggers `initialize`; (2) the user sees kontexta is connected and knows what context you have. Skip if the user's first message is already a work request — do the work.
+
 **Search before reading.** Use `search`, `bundle_search`, or `regex_search` to find context first. Skipping straight to `read_file` on a guessed path wastes tokens and often misses the right file.
 
 **All KB writes go through kontexta.** Use `create_file` / `update_file` / `update_file_section` / `journal_note`. **Never** edit a KB file with raw filesystem tools (Edit/Write/cat) — the watcher and FTS index will diverge until `refresh_index` runs, and subsequent searches will return stale results.
@@ -67,6 +69,14 @@ A KI that isn't maintained becomes noise — which is worse than no KI.
 **Use `whats_new` at session start after a gap.** If you haven't touched the 
 project in a while, run `whats_new(since: "7d")` to surface recently changed 
 files — including KIs updated by other agents or the user.
+
+### Content class
+
+`create_file` / `create_files` require `kind` for KB writes:
+- **`dictionary`** = source of truth (mappings, glossaries, runbooks, PR templates, architecture docs)
+- **`note`** = snapshot (meeting notes, PR findings, sprint reviews, post-mortems, working thoughts)
+
+Test: *if this file disagreed with the code, who wins?* File wins → dictionary; file loses → note. Search ranks dictionary hits above everything else; filter with `kind` on any read tool for one class. `journal`/`project` are auto-assigned — don't pass them to `create_file`.
 
 ### Tool reference
 
@@ -158,6 +168,7 @@ The matrix below is grouped by intent. For each tool: when to reach for it, the 
 | `project_map` | Folder/file tree for a project | Flat file list | `list_files` |
 | `stats` | Counts and health for a project | Per-file detail | `describe_file` |
 | `whats_new` | Files added/changed since a cutoff | Full-text search | `search` |
+| `refresh_session_context` | Re-fetch profile + upcoming events after mid-session edits | Reading a single profile field | `get_profile` |
 
 #### Calendar
 

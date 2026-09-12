@@ -30,6 +30,7 @@ interface File {
   est_tokens?: number | null;
   favorite?: boolean;
   tags?: string[] | null;
+  content_class?: "dictionary" | "note" | "journal" | "project" | null;
 }
 
 type SortBy = "name" | "updated_at" | "created_at";
@@ -42,7 +43,7 @@ interface FileListProps {
   onSortChange: (sortBy: SortBy) => void;
   selectedFolder: string | null;
   selectedProject: Project | null;
-  selectedSection?: "projects" | "knowledge" | "favorites" | null;
+  selectedSection?: "projects" | "knowledge" | "favorites" | "tags" | null;
   basePath?: string | null;
   onSync: () => void;
   onUnregisterProject?: () => void;
@@ -133,6 +134,9 @@ export function FileList({
       }
     } else if (selectedSection === "favorites") {
       // files is already pre-filtered by page.tsx, and favorites ignore folders
+      result = [...files];
+    } else if (selectedSection === "tags") {
+      // The parent already filtered `files` by the selected tag — show them as-is.
       result = [...files];
     } else if (selectedSection === "knowledge") {
       result = result.filter((f) => !f.project_id);
@@ -376,6 +380,7 @@ export function FileList({
               estTokens={file.est_tokens}
               favorite={file.favorite}
               tags={file.tags ?? undefined}
+              contentClass={file.content_class ?? null}
               selectMode={selectMode}
               selected={selectedIds.has(file.id)}
               onToggleSelect={() => {

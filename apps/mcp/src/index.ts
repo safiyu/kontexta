@@ -56,7 +56,7 @@ import {
 } from "kxta-core";
 import RE2Class from "./re2-compat.js";
 import type RE2 from "re2";
-import { isAbsolute, join, resolve, sep, dirname } from "node:path";
+import { isAbsolute, join, relative, resolve, sep, dirname } from "node:path";
 import os from "node:os";
 import { statSync, lstatSync, openSync, readSync, closeSync, readFileSync, readdirSync, existsSync, realpathSync } from "node:fs";
 import { createHash } from "node:crypto";
@@ -71,7 +71,7 @@ import { registerCommitUpgradesTool } from "./journal-commit-upgrades-tool.js";
 import { registerHousekeepTool } from "./journal-housekeep-tool.js";
 import { registerCalendarTools } from "./calendar-tools.js";
 import { handleGetProfile } from "./profile-tool.js";
-import { getDataDir } from "kxta-core";
+import { getDataDir, profileRelPath, getEmptySections, listEvents, findConflicts, getEntity } from "kxta-core";
 
 const dataDir = getDataDir();
 
@@ -187,10 +187,128 @@ if (!pkgVersionFound) {
   console.warn("Could not locate kontexta-mcp package.json by walking up from module dir; defaulting version to 0.0.0");
 }
 
-const server = new McpServer({
-  name: "kontexta",
-  version: pkgVersion,
-});
+// Resolve target folder for create_file / create_files, enforcing that
+// destination='knowledge' declares a `kind` (dictionary or note). If the
+// caller also supplied a folder that already targets a known class subfolder
+// we honor it verbatim and just flag a warning when it disagrees with kind.
+type ResolveKindArgs = { destination: string; folder: string | undefined; kind: "dictionary" | "note" | undefined };
+type ResolveKindResult = { folder: string | undefined; warning?: string } | { error: string };
+function resolveKindFolder({ destination, folder, kind }: ResolveKindArgs): ResolveKindResult {
+  if (destination !== "knowledge") return { folder };
+  if (!kind) return { error: "kind is required for destination='knowledge': must be 'dictionary' or 'note'" };
+
+  const norm = folder?.replace(/^\/+|\/+$/g, "") ?? "";
+  // Non-KB buckets (html/mermaid) also skip rewrite — their layout forbids nesting under knowledge/.
+  const CLASS_PREFIXES = ["knowledge/dictionary", "knowledge/notes", "knowledge/urlclips", "journal", "html", "mermaid"];
+  const alreadyClassScoped = CLASS_PREFIXES.some((p) => norm === p || norm.startsWith(p + "/"));
+
+  if (alreadyClassScoped) {
+    const impliedDict = norm.startsWith("knowledge/dictionary") || norm.startsWith("knowledge/urlclips");
+    const impliedNote = norm.startsWith("knowledge/notes");
+    const impliedClass = impliedDict ? "dictionary" : impliedNote ? "note" : null;
+    if (impliedClass && impliedClass !== kind) {
+      return { folder, warning: `kind='${kind}' but folder targets '${impliedClass}' tree — path wins; content_class will be '${impliedClass}'.` };
+    }
+    return { folder };
+  }
+
+  const classRoot = kind === "dictionary" ? "knowledge/dictionary" : "knowledge/notes";
+  return { folder: norm ? `${classRoot}/${norm}` : classRoot };
+}
+
+// Format as UTC — server/user timezone divergence would silently mislead otherwise.
+function fmtWhen(iso: string): string {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  const y = d.getUTCFullYear();
+  const mo = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(d.getUTCDate()).padStart(2, "0");
+  const hh = String(d.getUTCHours()).padStart(2, "0");
+  const mm = String(d.getUTCMinutes()).padStart(2, "0");
+  return `${y}-${mo}-${dd} ${hh}:${mm}Z`;
+}
+
+function buildCalendarSection(now: Date): string {
+  try {
+    const from = now.toISOString();
+    const to = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
+    const events = listEvents({ from, to, limit: 3 });
+    const conflicts = findConflicts({ from, to }).conflicts;
+    const entityName = (id: number) => getEntity(id)?.name ?? `#${id}`;
+
+    const lines: string[] = [];
+    lines.push("📅 UPCOMING (next 7 days, times in UTC)");
+    if (events.length === 0) {
+      lines.push("  (no events)");
+    } else {
+      for (const e of events) {
+        // strip trailing Z from the range endpoint since the header already labels the block UTC
+        const from = fmtWhen(e.starts_at).replace(/Z$/, "");
+        const to = fmtWhen(e.ends_at).replace(/Z$/, "").slice(11);
+        lines.push(`  ${from}–${to}  ${e.title}  (${entityName(e.entity_id)})`);
+      }
+    }
+    if (conflicts.length > 0) {
+      lines.push("");
+      lines.push(`⚠️ CONFLICTS (${conflicts.length})`);
+      for (const c of conflicts.slice(0, 5)) {
+        lines.push(`  ${c.kind}: "${c.event_a.title}" (${entityName(c.event_a.entity_id)}) vs "${c.event_b.title}" (${entityName(c.event_b.entity_id)}) — ${c.reason}`);
+      }
+    }
+    return lines.join("\n");
+  } catch (e) {
+    return `📅 (calendar unavailable: ${(e as Error).message})`;
+  }
+}
+
+function profileFreshnessNote(profilePath: string, empty: string[]): string {
+  const parts: string[] = [];
+  if (empty.length > 0) parts.push(`${empty.length} section(s) still empty: ${empty.join(", ")}`);
+  try {
+    const mtime = statSync(profilePath).mtime;
+    const days = Math.floor((Date.now() - mtime.getTime()) / (24 * 60 * 60 * 1000));
+    if (days >= 30) parts.push(`profile hasn't been updated in ${days} days`);
+  } catch {}
+  if (parts.length === 0) return "";
+  return `\n\n💡 Reminder: keep your profile current so I can act on it. ${parts.join("; ")}. Edit at knowledge/profile.md or via the dashboard's profile pane.`;
+}
+
+// Build the MCP session-instructions blob: welcome, profile, upcoming events, conflicts.
+function loadProfileInstructions(): string | undefined {
+  const now = new Date();
+  const today = now.toISOString().slice(0, 10);
+  const path = join(dataDir, profileRelPath());
+  const profileExists = existsSync(path);
+  const content = profileExists ? readFileSync(path, "utf8").trim() : "";
+  const empty = profileExists ? getEmptySections(content) : [];
+
+  const header =
+    `👋 Kontexta welcome — ${today}\n\n` +
+    `This is the user's session context. Read and honor it for the rest of this session — especially "Session coding style" (comment style, git etiquette, review-before-push) and "Team members and roles" (who's who when writing updates or referencing people).`;
+
+  const profileBlock = profileExists && content
+    ? `📋 PROFILE (knowledge/profile.md)\n${content}`
+    : `📋 PROFILE\n  (not set up yet — nudge the user to fill it in at knowledge/profile.md or the dashboard's profile pane)`;
+
+  const calendarBlock = buildCalendarSection(now);
+  const freshness = profileExists ? profileFreshnessNote(path, empty) : "";
+
+  return [header, "", profileBlock, "", calendarBlock, freshness].filter(Boolean).join("\n");
+}
+
+const server = new McpServer(
+  { name: "kontexta", version: pkgVersion },
+  { instructions: loadProfileInstructions() }
+);
+
+server.tool(
+  "refresh_session_context",
+  "Re-read the session context (profile, upcoming events within 7d, conflicts, freshness nudge) as it stands NOW. Call this when the user just edited their profile or added/moved calendar events and you want the current picture instead of the snapshot taken at session start. Read-only; no side effects. Returns the same block Kontexta sent as MCP instructions at session start.",
+  {},
+  async () => ({
+    content: [{ type: "text", text: loadProfileInstructions() ?? "(no session context available)" }],
+  })
+);
 
 const handsRegistry = new HandsRegistry(server);
 
@@ -312,7 +430,7 @@ server.tool(
 
 server.tool(
   "create_file",
-  "Create a new markdown, mermaid, or HTML file in the knowledge base or project. This operation writes a new file to disk and adds it to the local SQLite FTS5 index. Destination can be 'knowledge' (global KB), 'project' (reference file inside a project repo), or 'kontexta' (internal Kontexta schema file). If destination is 'project' or 'kontexta', project_id is strictly required. No external auth required. Rate limits do not apply (local operation). Returns the created file metadata including its new ID, path, and estimated tokens. If the destination directory does not exist, it will be created automatically. Use this tool to instantiate new contextual documents or notes. To modify an existing file, use 'update_file' instead. Parameters: 'destination' dictates required fields; if 'project' or 'kontexta', 'project_id' must be a valid integer. 'tags' and 'folder' are optional. Pass format='mmd' to create a Mermaid diagram file (.mmd) or format='html' for HTML reports; defaults to 'md'.",
+  "Create a new markdown, mermaid, or HTML file in the knowledge base or project. This operation writes a new file to disk and adds it to the local SQLite FTS5 index. Destination can be 'knowledge' (global KB), 'project' (reference file inside a project repo), or 'kontexta' (internal Kontexta schema file). If destination is 'project' or 'kontexta', project_id is strictly required. If destination is 'knowledge', 'kind' is strictly required — pick 'dictionary' (authoritative source-of-truth) or 'note' (informational snapshot); see the kind param for the rubric. No external auth required. Rate limits do not apply (local operation). Returns the created file metadata including its new ID, path, and estimated tokens. If the destination directory does not exist, it will be created automatically. Use this tool to instantiate new contextual documents or notes. To modify an existing file, use 'update_file' instead. Parameters: 'destination' dictates required fields; if 'project' or 'kontexta', 'project_id' must be a valid integer; if 'knowledge', 'kind' must be 'dictionary' or 'note'. 'tags' and 'folder' are optional. Pass format='mmd' to create a Mermaid diagram file (.mmd) or format='html' for HTML reports; defaults to 'md'.",
   {
     title: z.string().describe("Title of the file"),
     content: z.string().describe("Content of the file"),
@@ -321,20 +439,28 @@ server.tool(
     folder: z.string().optional().describe("Optional folder path"),
     tags: z.array(z.string()).optional().describe("Optional array of tags"),
     format: z.enum(["md", "mmd", "html"]).optional().describe("File extension to write. Defaults to 'md'. Use 'html' for HTML reports."),
+    kind: z.enum(["dictionary", "note"]).optional()
+      .describe("REQUIRED for destination='knowledge'. 'dictionary' = source of truth (mappings, glossaries, runbooks, PR templates). 'note' = snapshot (meeting notes, sprint reviews, PR findings, post-mortems). Test: if this file disagreed with the code, who wins? File wins → dictionary; file loses → note. Ignored for destination='project' or 'kontexta'."),
   },
-  async ({ title, content, destination, project_id, folder, tags, format }) => {
+  async ({ title, content, destination, project_id, folder, tags, format, kind }) => {
+    const resolved = resolveKindFolder({ destination, folder, kind });
+    if ("error" in resolved) {
+      return { isError: true, content: [{ type: "text", text: JSON.stringify({ error: resolved.error }, null, 2) }] };
+    }
     const result = await createFile({
       title,
       content,
       destination,
       projectId: project_id,
-      folder,
+      folder: resolved.folder,
       tags,
       dataDir,
       format,
     });
+    const payload: any = annotateTokens(result);
+    if (resolved.warning) payload.warning = resolved.warning;
     return {
-      content: [{ type: "text", text: JSON.stringify(annotateTokens(result), null, 2) }],
+      content: [{ type: "text", text: JSON.stringify(payload, null, 2) }],
     };
   }
 );
@@ -674,15 +800,17 @@ server.tool(
 
 server.tool(
   "regex_search",
-  "Match a JS regex against the body of every file in scope (project, KB, or all) and return per-file hits with line numbers. Slower than FTS `search` because it reads each file's content; use only when FTS misses substrings, URLs, or code identifiers. Read-only; no side effects, auth, or rate limits. Capped at 500 files / 10 hits per file by default; the response reports `files_truncated` and per-file truncation so the agent can re-scope. `project_id: null` = KB only; omit = everywhere. Invalid regex throws.",
+  "Match a JS regex against the body of every file in scope (project, KB, or all) and return per-file hits with line numbers. Slower than FTS `search` because it reads each file's content; use only when FTS misses substrings, URLs, or code identifiers. Read-only; no side effects, auth, or rate limits. Capped at 500 files / 10 hits per file by default; the response reports `files_truncated` and per-file truncation so the agent can re-scope. `project_id: null` = KB only; omit = everywhere; `kind` narrows to one content class. Invalid regex throws.",
   {
     pattern: z.string().describe("JavaScript RegExp source"),
     project_id: z.number().nullable().optional().describe("Scope to one project, null for KB-only, omit for everything"),
     case_insensitive: z.boolean().optional(),
     max_files: z.number().int().positive().max(2000).optional().describe("Cap on files scanned (default 500)"),
     max_matches_per_file: z.number().int().positive().max(100).optional().describe("Per-file hit cap (default 10)"),
+    kind: z.enum(["dictionary", "note", "journal", "project"]).optional()
+      .describe("Filter by content class before scanning."),
   },
-  async ({ pattern, project_id, case_insensitive, max_files, max_matches_per_file }) => {
+  async ({ pattern, project_id, case_insensitive, max_files, max_matches_per_file, kind }) => {
     try {
       let re: RE2;
       try {
@@ -694,14 +822,19 @@ server.tool(
       const perFileCap = max_matches_per_file ?? 10;
       const db = getDatabase();
 
-      let where = "";
+      const whereParts: string[] = [];
       const params: any[] = [];
       if (project_id === null) {
-        where = "WHERE project_id IS NULL";
+        whereParts.push("project_id IS NULL");
       } else if (typeof project_id === "number") {
-        where = "WHERE project_id = ?";
+        whereParts.push("project_id = ?");
         params.push(project_id);
       }
+      if (kind) {
+        whereParts.push("content_class = ?");
+        params.push(kind);
+      }
+      const where = whereParts.length ? `WHERE ${whereParts.join(" AND ")}` : "";
       const rows = db
         .prepare(`SELECT id, path, title FROM files ${where} LIMIT ?`)
         .all(...params, fileCap) as { id: number; path: string; title: string }[];
@@ -784,7 +917,7 @@ server.tool(
 
 server.tool(
   "list_files",
-  "List file metadata with optional filters (project_id, tag, favorite, folder, untagged) and pagination. Read-only; no side effects, auth, or rate limits. Each row is annotated with tags, est_tokens, and size_bytes; the response includes `total_est_tokens` so you can budget before reading bodies. `project_id: null` returns ONLY Knowledge Base files; omit the field to span everything. Use to browse known structure; for keyword/content lookup use `search`; for a denser whole-vault dump use `project_map`.",
+  "List file metadata with optional filters (project_id, tag, favorite, folder, untagged, kind) and pagination. Read-only; no side effects, auth, or rate limits. Each row is annotated with tags, est_tokens, size_bytes, and content_class; the response includes `total_est_tokens` so you can budget before reading bodies. `project_id: null` returns ONLY Knowledge Base files; omit the field to span everything; `kind` narrows to one content class. Use to browse known structure; for keyword/content lookup use `search`; for a denser whole-vault dump use `project_map`.",
   {
     project_id: z.number().nullable().optional().describe("Filter by project ID. Pass null to list ONLY Knowledge Base files (project_id IS NULL)."),
     tag: z.string().optional().describe("Filter by tag name"),
@@ -793,8 +926,10 @@ server.tool(
     untagged: z.boolean().optional().describe("If true, return only files that have no tags. Useful for bulk-tagging workflows."),
     limit: z.number().optional().describe("Maximum number of results"),
     offset: z.number().optional().describe("Offset for pagination"),
+    kind: z.enum(["dictionary", "note", "journal", "project"]).optional()
+      .describe("Filter by content class. dictionary = authoritative KB, note = informational KB, journal = time-log, project = project file."),
   },
-  async ({ project_id, tag, favorite, folder, untagged, limit, offset }) => {
+  async ({ project_id, tag, favorite, folder, untagged, limit, offset, kind }) => {
     const filters: any = {};
     if (project_id !== undefined) filters.project_id = project_id;
     if (tag !== undefined) filters.tag = tag;
@@ -803,6 +938,7 @@ server.tool(
     if (untagged !== undefined) filters.untagged = untagged;
     if (limit !== undefined) filters.limit = limit;
     if (offset !== undefined) filters.offset = offset;
+    if (kind !== undefined) filters.content_class = kind;
 
     const result = listFiles({ dataDir, filters });
     const annotated = attachTags(result.map(annotateTokens));
@@ -815,18 +951,21 @@ server.tool(
 
 server.tool(
   "search",
-  "Full-text (SQLite FTS5) keyword search across files. Returns ranked matches with inline match_excerpt and title_highlight (no follow-up `read_file` needed for snippets) plus tags, est_tokens, size_bytes, and aggregate `total_est_tokens`. Read-only; no side effects, auth, or rate limits. FTS is tokenised: it WILL miss URLs, hyphenated terms, and partial substrings — fall back to `regex_search` for those. `project_id: null` searches only the KB; omit the field to span everything; `tags[]` requires ALL listed tags to match. For prompt-ready bundled bodies use `bundle_search`.",
+  "Full-text (SQLite FTS5) keyword search across files. Returns ranked matches with inline match_excerpt and title_highlight (no follow-up `read_file` needed for snippets) plus tags, est_tokens, size_bytes, content_class, and aggregate `total_est_tokens`. Read-only; no side effects, auth, or rate limits. Ordering: dictionary hits sort above everything else for the same query (dictionary-wins on conflict), then BM25 rank. FTS is tokenised: it WILL miss URLs, hyphenated terms, and partial substrings — fall back to `regex_search` for those. `project_id: null` searches only the KB; omit the field to span everything; `tags[]` requires ALL listed tags to match; `kind` narrows to one content class. For prompt-ready bundled bodies use `bundle_search`.",
   {
     query: z.string().describe("Search query"),
     project_id: z.number().nullable().optional().describe("Filter by project ID. Pass null to search ONLY Knowledge Base files."),
     tags: z.array(z.string()).optional().describe("Filter by tags (all must match)"),
     favorite: z.boolean().optional().describe("Filter by favorite status"),
+    kind: z.enum(["dictionary", "note", "journal", "project"]).optional()
+      .describe("Filter by content class. dictionary = authoritative KB (system IDs, mappings, glossaries), note = informational KB, journal = time-log, project = project file. Omit to see all classes with dictionary-first ordering."),
   },
-  async ({ query, project_id, tags, favorite }) => {
+  async ({ query, project_id, tags, favorite, kind }) => {
     const filters: any = { query };
     if (project_id !== undefined) filters.project_id = project_id;
     if (tags !== undefined) filters.tags = tags;
     if (favorite !== undefined) filters.favorite = favorite;
+    if (kind !== undefined) filters.content_class = kind;
 
     let result;
     try {
@@ -847,7 +986,7 @@ server.tool(
 
 server.tool(
   "bundle_search",
-  "Run an FTS search and concatenate matched bodies into a single prompt-ready bundle (XML `<document>` blocks or markdown headers + fences) capped at `max_tokens`. Files are added in rank order until the next would exceed the budget; the rest go to `skipped[]`. Read-only; no side effects, auth, or rate limits. Use instead of `search` + N×`read_file` when you need several related files as one context blob. Defaults: format=xml, max_tokens=50000. `project_id: null` = KB only; `tags[]` requires ALL to match.",
+  "Run an FTS search and concatenate matched bodies into a single prompt-ready bundle (XML `<document>` blocks or markdown headers + fences) capped at `max_tokens`. Files are added in rank order (dictionary-wins first, then BM25) until the next would exceed the budget; the rest go to `skipped[]`. Read-only; no side effects, auth, or rate limits. Use instead of `search` + N×`read_file` when you need several related files as one context blob. Defaults: format=xml, max_tokens=50000. `project_id: null` = KB only; `tags[]` requires ALL to match; `kind` narrows to one content class.",
   {
     query: z.string().describe("Full-text search query"),
     project_id: z.number().nullable().optional().describe("Filter by project ID. Pass null to bundle ONLY Knowledge Base files."),
@@ -857,12 +996,15 @@ server.tool(
       .describe("Bundle format. xml = Anthropic-recommended <document> tags; markdown = ## headers + fenced blocks"),
     max_tokens: z.number().int().positive().default(50000)
       .describe("Token budget. Files added in rank order until the next would exceed; remainder go to skipped[]"),
+    kind: z.enum(["dictionary", "note", "journal", "project"]).optional()
+      .describe("Filter by content class. dictionary = authoritative KB, note = informational KB, journal = time-log, project = project file."),
   },
-  async ({ query, project_id, tags, favorite, format, max_tokens }) => {
+  async ({ query, project_id, tags, favorite, format, max_tokens, kind }) => {
     const filters: any = { query };
     if (project_id !== undefined) filters.project_id = project_id;
     if (tags !== undefined) filters.tags = tags;
     if (favorite !== undefined) filters.favorite = favorite;
+    if (kind !== undefined) filters.content_class = kind;
 
     let result;
     try {
@@ -1352,7 +1494,7 @@ server.tool(
 
 server.tool(
   "clip_url",
-  "SIDE-EFFECTFUL — fetches an EXTERNAL URL and writes a NEW KB file. Downloads the page, extracts the main article via Readability, converts to markdown, and saves it as a new clipping. NOT idempotent / no de-dup — re-clipping the same URL creates a second file. AUTH: anonymous by default; pass `headers` (e.g. `{Cookie: 'session=...'}` or `{Authorization: 'Bearer ...'}`) to clip behind logins. Kontexta does not rate-limit but the upstream may throttle. On auth-required pages returns isError with `code: AUTH_REQUIRED`, optional `login_url`, and a hint to retry with `headers`. Returns `{file_id, path, title, source}`. Use to ingest external docs into the KB.",
+  "SIDE-EFFECTFUL — fetches an EXTERNAL URL and writes a NEW KB file. Downloads the page, extracts the main article via Readability, converts to markdown, and saves it under `knowledge/urlclips/`. Auto-classified as content_class='dictionary' (clipped external references are treated as authoritative reference material). NOT idempotent / no de-dup — re-clipping the same URL creates a second file. AUTH: anonymous by default; pass `headers` (e.g. `{Cookie: 'session=...'}` or `{Authorization: 'Bearer ...'}`) to clip behind logins. Kontexta does not rate-limit but the upstream may throttle. On auth-required pages returns isError with `code: AUTH_REQUIRED`, optional `login_url`, and a hint to retry with `headers`. Returns `{file_id, path, title, source}`. Use to ingest external docs into the KB.",
   {
     url: z.string().url().describe("The URL to clip"),
     title: z.string().optional().describe("Optional title override (defaults to the page's <title>)"),
@@ -1637,7 +1779,8 @@ server.tool(
   async ({ project_id }) => {
     try {
       const base = resolveFolderBase(project_id);
-      const folders = listProjectFolders(base);
+      // Normalize to POSIX so the wire shape matches web /api/folders.
+      const folders = listProjectFolders(base).map((f) => f.replace(/\\/g, "/"));
       return {
         content: [{ type: "text", text: JSON.stringify({ folders, base_path: base }, null, 2) }],
       };
@@ -1661,7 +1804,7 @@ server.tool(
     try {
       validateFolderName(name);
       const base = resolveFolderBase(project_id);
-      const path = createFolder(base, name);
+      const path = createFolder(base, name, { dataDir });
       return {
         content: [{ type: "text", text: JSON.stringify({ path, base_path: base }, null, 2) }],
       };
@@ -1702,6 +1845,15 @@ server.tool(
           ],
         };
       }
+      // Refuse deleting a bare bucket name — would wipe the whole bucket and orphan DB rows.
+      const KB_BUCKETS_TOP = new Set(["journal", "knowledge", "mermaid", "html"]);
+      const segments = name.split(/[/\\]/).filter(Boolean);
+      if (segments.length === 1 && KB_BUCKETS_TOP.has(segments[0])) {
+        return {
+          isError: true,
+          content: [{ type: "text", text: JSON.stringify({ error: `Cannot delete the '${segments[0]}' bucket — part of the fixed KB layout.` }, null, 2) }],
+        };
+      }
       const base = resolveFolderBase(null);
       deleteFolder(base, name);
       return {
@@ -1718,20 +1870,37 @@ server.tool(
 
 server.tool(
   "move_file",
-  "Move/rename a file. Destination 'new_path' must be absolute and resolve INSIDE the file's owning project or global knowledge directory. Cross-project moves are rejected. Operates locally with no auth or limits. Parameters: 'file_id' is a valid file ID. 'new_path' is an absolute path.",
+  "Move/rename a file. Destination 'new_path' must be absolute and resolve INSIDE the file's owning project or global knowledge directory. Cross-project moves are rejected. Alternative: pass `kind='dictionary'|'note'` (with no `new_path`) to move a KB file into the mirrored path in the other class tree — subfolder path is preserved. Operates locally with no auth or limits.",
   {
     file_id: z.number().describe("File ID"),
-    new_path: z.string().describe("Absolute destination path"),
+    new_path: z.string().optional().describe("Absolute destination path"),
+    kind: z.enum(["dictionary", "note"]).optional()
+      .describe("Move the file to the mirrored path in the other class tree. Subfolder path is preserved: knowledge/dictionary/slt/ids.md ↔ knowledge/notes/slt/ids.md. Ignored if `new_path` is also provided."),
   },
-  async ({ file_id, new_path }) => {
+  async ({ file_id, new_path, kind }) => {
     try {
+      const file = readFile(file_id);
+
+      if (kind && !new_path) {
+        if (file.storage_type !== "local") {
+          throw new Error("move_file with kind is only supported for KB files (storage_type='local')");
+        }
+        const kbRoot = join(dataDir, "knowledge");
+        const currentRel = relative(kbRoot, file.path);
+        const parts = currentRel.split(sep);
+        const classIdx = parts.findIndex((p: string) => p === "dictionary" || p === "notes" || p === "urlclips");
+        if (classIdx === -1) {
+          throw new Error("move_file with kind requires the source to live under knowledge/{dictionary,notes,urlclips}");
+        }
+        parts[classIdx] = kind === "dictionary" ? "dictionary" : "notes";
+        new_path = join(kbRoot, ...parts);
+      }
+
       if (typeof new_path !== "string" || new_path.length === 0) {
-        throw new Error("new_path is required");
+        throw new Error("new_path or kind is required");
       }
       if (new_path.includes("\0")) throw new Error("new_path contains null byte");
       if (!isAbsolute(new_path)) throw new Error("new_path must be absolute");
-
-      const file = readFile(file_id);
       let base: string;
       if (file.storage_type === "reference" && file.project_id) {
         const project = getDatabase()
@@ -1780,7 +1949,7 @@ server.tool(
         throw new Error(`source path ${file.path} is no longer inside ${base}; refusing to move`);
       }
 
-      const updated = moveFile(file_id, new_path);
+      const updated = moveFile(file_id, new_path, dataDir);
       return {
         content: [{ type: "text", text: JSON.stringify(annotateTokens(updated as any), null, 2) }],
       };
@@ -1795,13 +1964,21 @@ server.tool(
 
 server.tool(
   "find_related",
-  "Find other files sharing tags with the given file, ranked by `shared_tag_count` descending. Read-only; no side effects, auth, or rate limits. Returns annotated file rows with `shared_tag_count` and `shared_tags`. Empty result means the file has no tags or no other file shares them — try `search`/`regex_search` for content-based discovery, or `suggest_tags` to bootstrap labels first. Default limit 10.",
+  "Find other files sharing tags with the given file, ranked by `shared_tag_count` descending. Read-only; no side effects, auth, or rate limits. Returns annotated file rows with `shared_tag_count` and `shared_tags`. Empty result means the file has no tags or no other file shares them — try `search`/`regex_search` for content-based discovery, or `suggest_tags` to bootstrap labels first. `kind` narrows to one content class. Default limit 10.",
   {
     file_id: z.number().describe("ID of the file to find relations for"),
     limit: z.number().optional().describe("Maximum number of related files to return (default 10)"),
+    kind: z.enum(["dictionary", "note", "journal", "project"]).optional()
+      .describe("Filter related results to a single content class."),
   },
-  async ({ file_id, limit }) => {
-    const related = findRelated(file_id, limit ?? 10);
+  async ({ file_id, limit, kind }) => {
+    // Post-filter by kind since findRelated has no class filter today; over-fetch
+    // when a filter is set so the final result honors `limit` after filtering.
+    const overfetch = kind ? Math.max((limit ?? 10) * 4, 40) : (limit ?? 10);
+    let related = findRelated(file_id, overfetch);
+    if (kind) {
+      related = related.filter((r) => r.content_class === kind).slice(0, limit ?? 10);
+    }
     const annotated = related.map((r) => ({ ...annotateTokens(r), shared_tag_count: r.shared_tag_count, shared_tags: r.shared_tags }));
     return {
       content: [
@@ -1817,7 +1994,7 @@ server.tool(
 
 server.tool(
   "create_files",
-  "Batch variant of `create_file` — create up to 200 markdown or mermaid files in one call. Each item follows the same rules (project_id required if destination is `project` or `kontexta`). SIDE EFFECTS: writes new files to disk and inserts FTS5 rows; missing folders are mkdir'd. Per-item failures are isolated to `errors[]` and the rest of the batch still commits — partial success is the norm, always inspect `error_count`. No external auth or rate limits. Returns `{created_count, error_count, created, errors}`. Use for bulk ingestion; for >200 items, page yourself. Pass format='mmd' on an item to create a Mermaid diagram file (.mmd); defaults to 'md'.",
+  "Batch variant of `create_file` — create up to 200 markdown, mermaid, or HTML files in one call. Each item follows the same rules: `project_id` required if `destination` is `project`/`kontexta`; `kind` ('dictionary' or 'note') required if `destination` is `knowledge`. SIDE EFFECTS: writes new files to disk and inserts FTS5 rows; missing folders are mkdir'd. Per-item failures are isolated to `errors[]` and the rest of the batch still commits — partial success is the norm, always inspect `error_count`. No external auth or rate limits. Returns `{created_count, error_count, created, errors}`. Use for bulk ingestion; for >200 items, page yourself. Pass format='mmd' on an item to create a Mermaid diagram file (.mmd) or 'html' for HTML reports; defaults to 'md'.",
   {
     files: z
       .array(
@@ -1828,7 +2005,9 @@ server.tool(
           project_id: z.number().optional(),
           folder: z.string().optional(),
           tags: z.array(z.string()).optional(),
-          format: z.enum(["md", "mmd"]).optional(),
+          format: z.enum(["md", "mmd", "html"]).optional(),
+          kind: z.enum(["dictionary", "note"]).optional()
+            .describe("REQUIRED per-item for destination='knowledge'. See create_file for the dictionary/note rubric."),
         })
       )
       .min(1)
@@ -1841,17 +2020,24 @@ server.tool(
     for (let i = 0; i < files.length; i++) {
       const f = files[i];
       try {
+        const resolved = resolveKindFolder({ destination: f.destination, folder: f.folder, kind: f.kind });
+        if ("error" in resolved) {
+          errors.push({ index: i, title: f.title, error: resolved.error });
+          continue;
+        }
         const result = await createFile({
           title: f.title,
           content: f.content,
           destination: f.destination,
           projectId: f.project_id,
-          folder: f.folder,
+          folder: resolved.folder,
           tags: f.tags,
           dataDir,
           format: f.format,
         });
-        created.push(annotateTokens(result));
+        const payload: any = annotateTokens(result);
+        if (resolved.warning) payload.warning = resolved.warning;
+        created.push(payload);
       } catch (e: any) {
         errors.push({ index: i, title: f.title, error: e?.message ?? String(e) });
       }

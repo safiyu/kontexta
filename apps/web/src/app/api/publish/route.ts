@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { runPipeline } from "kxta-publish/pipeline";
 import { mkdirSync, writeFileSync, existsSync, statSync } from "node:fs";
-import { join, basename } from "node:path";
+import { join, basename, dirname } from "node:path";
 import { getDataDir, getDatabase, createFile } from "kxta-core";
 import { checkAuth } from "@/lib/auth";
 import { assertSafeOutputPath } from "@/lib/safe-path";
@@ -96,12 +96,16 @@ export async function POST(request: NextRequest) {
         else if (ext === "md") format = "md";
         if (!format) continue;
         const title = basename(out.relPath, `.${ext}`);
+        // Preserve nested output paths so sectionA/page.html and sectionB/page.html get distinct KB rows — flat folder collapsed the two into one row via ON CONFLICT(path).
+        const relDir = dirname(out.relPath).replace(/\\/g, "/");
+        const nested = relDir === "." || relDir === "" ? "" : `/${relDir}`;
+        const folder = format === "html" ? `html/publish${nested}` : `knowledge/publish${nested}`;
         try {
           await createFile({
             title,
             content: out.content,
             destination: "knowledge",
-            folder: "publish",
+            folder,
             dataDir,
             format,
             skipHtmlSanitize: true,

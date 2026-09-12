@@ -31,10 +31,10 @@ afterEach(() => {
 });
 
 describe("clipUrl", () => {
-  it("creates a new file under knowledge/urlclips with frontmatter and source_path set", async () => {
+  it("creates a new file under knowledge/knowledge/urlclips with frontmatter and source_path set", async () => {
     vi.spyOn(extract, "fetchHtml").mockResolvedValue({ html: ARTICLE_HTML, finalUrl: "https://example.com/a" });
     const file = await clipUrl({ url: "https://example.com/a", dataDir });
-    expect(file.path).toContain(`knowledge${sep}urlclips${sep}`);
+    expect(file.path).toContain(`knowledge${sep}knowledge${sep}urlclips${sep}`);
     expect(file.source_path).toBe("https://example.com/a");
     expect(file.content).toContain("source: https://example.com/a");
     expect(file.content).toContain("# H");

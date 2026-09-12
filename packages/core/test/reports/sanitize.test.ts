@@ -23,8 +23,18 @@ describe("sanitizeHtml", () => {
     const out = await sanitizeHtml('<a href="data:text/html,<script>alert(1)</script>">x</a>');
     expect(out).not.toMatch(/data:text\/html/);
   });
-  it("keeps style tags and tables", async () => {
+  it("drops style tags but keeps tables — style is a covert exfil channel via url()/@import", async () => {
     const html = '<style>.a{color:red}</style><table><tr><td>x</td></tr></table>';
-    expect(await sanitizeHtml(html)).toBe('<style>.a{color:red}</style><table><tbody><tr><td>x</td></tr></tbody></table>');
+    expect(await sanitizeHtml(html)).toBe('<table><tbody><tr><td>x</td></tr></tbody></table>');
+  });
+  it("strips background: url() via the style attribute", async () => {
+    const out = await sanitizeHtml('<div style="background:url(https://evil.example/beacon)">x</div>');
+    expect(out).not.toMatch(/evil\.example/);
+    expect(out).not.toMatch(/style=/);
+  });
+  it("strips ping attributes carrying tracking URLs", async () => {
+    const out = await sanitizeHtml('<a href="/x" ping="https://evil.example/log">x</a>');
+    expect(out).not.toMatch(/evil\.example/);
+    expect(out).not.toMatch(/ping=/);
   });
 });

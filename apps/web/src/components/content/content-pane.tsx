@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { FolderOpen, AlertTriangle, Search } from "lucide-react";
+import { AlertTriangle, Search } from "lucide-react";
 import { toast } from "sonner";
 import { unified } from "unified";
 import remarkParse from "remark-parse";
@@ -13,6 +13,9 @@ import { MermaidViewer } from "./mermaid-viewer";
 import { HtmlViewer } from "./html-viewer";
 import { HtmlEditor } from "./html-editor";
 import { MarkdownEditor } from "./markdown-editor";
+import { ProfileEditor } from "./profile-editor";
+import { WelcomeBanner } from "./welcome-banner";
+import { BacklinksPanel } from "./backlinks-panel";
 import { DeleteConfirmDialog } from "./delete-confirm-dialog";
 import { GitErrorDialog } from "./git-error-dialog";
 import { DropdownMenu } from "@/components/ui/dropdown-menu";
@@ -53,6 +56,7 @@ interface File {
   content: string;
   path: string;
   storage_type: "db" | "git";
+  content_class: "dictionary" | "note" | "journal" | "project" | null;
   tags: string[];
   favorite: boolean;
   folder: string | null;
@@ -77,6 +81,8 @@ interface ContentPaneProps {
   // Lets the parent guard navigation handlers against discarding
   // in-progress edits (window.confirm before clearing selectedFileId).
   onDirtyChange?: (dirty: boolean) => void;
+  // Set from the parent so intra-pane navigation (backlinks click) can update selectedFileId.
+  onNavigateToFile?: (id: number) => void;
 }
 
 interface LoadError {
@@ -86,7 +92,7 @@ interface LoadError {
   path?: string;
 }
 
-export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: ContentPaneProps) {
+export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange, onNavigateToFile }: ContentPaneProps) {
   const [file, setFile] = useState<File | null>(null);
   const [loadError, setLoadError] = useState<LoadError | null>(null);
   const [editing, setEditing] = useState(false);
@@ -290,6 +296,34 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
     return () => controller.abort();
   }, [fileId]);
 
+  const [changingKind, setChangingKind] = useState(false);
+  const handleChangeKind = async (kind: "dictionary" | "note") => {
+    if (!file || changingKind) return;
+    if (file.content_class === kind) return;
+    setChangingKind(true);
+    try {
+      const res = await fetch(`/api/files/${file.id}/move`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        toast.error(body?.error ?? `Move failed: HTTP ${res.status}`);
+        return;
+      }
+      const updated = await res.json();
+      // Local optimistic update — path and content_class change, id stays the same.
+      setFile((prev) => (prev ? { ...prev, path: updated.path, content_class: updated.content_class ?? null } : prev));
+      onChanged?.();
+      toast.success(`Moved to ${kind === "dictionary" ? "dictionary" : "notes"}`);
+    } catch (e: any) {
+      toast.error(`Move failed: ${e?.message ?? "network error"}`);
+    } finally {
+      setChangingKind(false);
+    }
+  };
+
   const handleRemoveOrphanFromIndex = async () => {
     if (fileId == null) return;
     setRemovingOrphan(true);
@@ -470,15 +504,8 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
   };
 
   if (!fileId) {
-    return (
-      <div className="h-full flex flex-col items-center justify-center animate-fade-in">
-        <EmptyState
-          icon={<FolderOpen className="w-16 h-16 opacity-40 dark-icon" aria-hidden />}
-          title="Select a file to preview"
-          hint="Choose a file from the list on the left"
-        />
-      </div>
-    );
+    // Empty state = the daily briefing (matches what the MCP server hands the agent).
+    return <WelcomeBanner />;
   }
 
   if (loading) {
@@ -557,7 +584,20 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
     );
   }
 
-  const inPublishFolder = file.path.replace(/\\/g, "/").includes("/publish/");
+  // profile.md gets a dedicated structured editor — matches the 6-section shape enforced server-side.
+  const posixPath = file.path.replace(/\\/g, "/");
+  // Only the KB's canonical profile.md — a project file with the same suffix must not hijack the ProfileEditor.
+  const isKbProfile = file.project_id === null && /(^|\/)knowledge\/profile\.md$/.test(posixPath);
+  if (isKbProfile) {
+    return (
+      <div key={fileId} className="h-full flex flex-col">
+        <ProfileEditor onDirtyChange={onDirtyChange} onChanged={onChanged} />
+      </div>
+    );
+  }
+
+  // Only the KB's auto-generated publish buckets are read-only — a project's own `publish/` folder stays editable.
+  const inPublishFolder = file.project_id === null && /\/knowledge\/(html|knowledge)\/publish\//.test(posixPath);
   return (
     <div key={fileId} className="h-full flex flex-col animate-fade-in">
       <div className="h-10 px-4 border-b border-[var(--border)] flex items-center gap-4 text-[14px] sticky top-0 bg-[var(--bg-primary)] z-10">
@@ -594,6 +634,42 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
           <span className="inline-flex items-center px-2 py-0.5 rounded bg-amber-accent/10 border border-amber-accent/30 text-[10px] text-[var(--text-primary)] uppercase tracking-wider font-bold" title="Regenerated on publish">
             Read-only
           </span>
+        )}
+        {file.project_id === null && /\/knowledge\/knowledge\/(dictionary|notes|urlclips)\//.test(posixPath) && (
+          <div
+            className={`inline-flex items-center rounded-full border border-[var(--border)] bg-[var(--bg-secondary)] p-0.5 text-[10px] transition-opacity ${changingKind ? "opacity-60" : ""}`}
+            role="group"
+            aria-label="Content class"
+          >
+            <button
+              type="button"
+              onClick={() => handleChangeKind("dictionary")}
+              disabled={changingKind || file.content_class === "dictionary"}
+              aria-pressed={file.content_class === "dictionary"}
+              className={`px-2.5 py-0.5 rounded-full uppercase tracking-wider font-bold transition-all ${
+                file.content_class === "dictionary"
+                  ? "bg-amber-accent text-[var(--bg-primary)] cursor-default"
+                  : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer"
+              }`}
+              title="Authoritative — trusted over notes on conflict"
+            >
+              Dictionary
+            </button>
+            <button
+              type="button"
+              onClick={() => handleChangeKind("note")}
+              disabled={changingKind || file.content_class === "note"}
+              aria-pressed={file.content_class === "note"}
+              className={`px-2.5 py-0.5 rounded-full uppercase tracking-wider font-bold transition-all ${
+                file.content_class === "note"
+                  ? "bg-amber-accent text-[var(--bg-primary)] cursor-default"
+                  : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer"
+              }`}
+              title="Informational"
+            >
+              Note
+            </button>
+          </div>
         )}
         <div className="ml-auto flex items-center gap-3 text-[12px] text-[var(--text-secondary)] font-mono">
           {editing ? (
@@ -845,6 +921,10 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange }: Cont
               <HtmlViewer html={file.content} />
             ) : (
               <MarkdownViewer content={file.content} className="p-8" />
+            )}
+            {/* Backlinks: only meaningful for prose (.md). Component hides itself when there are none. */}
+            {!file.path.endsWith(".mmd") && !file.path.endsWith(".html") && onNavigateToFile && (
+              <BacklinksPanel fileId={file.id} onSelectFile={onNavigateToFile} />
             )}
           </div>
         )}

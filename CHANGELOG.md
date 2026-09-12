@@ -1,5 +1,58 @@
 # Changelog
 
+## 4.6.0 — Your agent starts every session already knowing you
+
+This release turns Kontexta into a workspace the agent walks into fully briefed. Your profile, your calendar, your rules, your team — surfaced once at session start, honored throughout, and mirrored in the dashboard so you and the agent see the same picture.
+
+### The agent shows up prepared
+
+- **A one-shot briefing at session start.** Every time you open an AI client, Kontexta hands it a summary: today's date, your profile, the next week's calendar, any conflicts, and a nudge if your profile is out of date. You don't have to remind it who you are or what you're working on.
+- **A profile that captures the parts that don't fit in code.** The user profile now has eight sections instead of six — the two new ones are **Session coding style** (your hard rules: comment style, git etiquette, review gates) and **Team members and roles** (so the agent names people correctly in summaries). Existing profiles auto-gain the new sections, empty and ready to fill.
+- **Ask for a refresh anytime.** A new `refresh_session_context` tool re-reads your profile and re-checks the calendar mid-session — for when you've just edited your notes and want the agent to catch up.
+
+### A dashboard you can live in
+
+- **A daily briefing on the home screen.** Open Kontexta with no file selected and you land on a greeting card: "Good morning, Safiyu" with the date, upcoming events, any conflicts front and center, and a profile nudge if things are stale.
+- **A real profile page.** Click `profile.md` and you get a structured editor with per-section fields, a completeness meter, and a hero avatar showing your name and role — instead of a raw markdown blob. Raw-mode toggle for power users.
+- **"Referenced by" on every note.** When you open a note, a panel at the bottom shows every other file that mentions it, with a preview snippet and click-to-jump. Discovery without a search bar.
+- **Tag browser in the sidebar.** All your tags with file counts, sorted by count, searchable. Click one to filter the file list.
+- **A calmer folder tree.** The four knowledge buckets (Journal, Knowledge, Mermaid, HTML) always show at the top with their own icons — even empty. Hover a bucket for a `+` button that adds a subfolder inside it.
+- **Blueprint theme is the new default** for fresh installs. Existing users keep whatever theme they picked.
+
+### Dictionary vs notes: search knows what to trust
+
+- **Every file has a content class now.** Two values you actively pick: `dictionary` (authoritative source-of-truth — mappings, glossaries, runbooks, PR templates, architecture docs) and `note` (informational snapshot — meeting notes, sprint reviews, PR review findings, post-mortems, working thoughts). Two more assigned automatically: `journal` for time-log entries and `project` for files that live in a registered project's repo.
+- **Search prefers dictionary.** When you or the agent search the KB, any file classified as `dictionary` sorts above everything else for the same query. Ambiguous look-ups now default to the authoritative answer instead of getting drowned by 20 sprint reviews that happened to mention the same term.
+- **Agents must declare intent on every KB write.** `create_file` / `create_files` require `kind: "dictionary" | "note"` — no silent default. The routing takes care of the folder: `dictionary` files land under `knowledge/dictionary/`, notes under `knowledge/notes/`. Clipped URLs auto-classify as dictionary.
+- **Switch a file's class from the header.** Open a KB file and there's a `Dictionary | Note` pill in the content-pane header. Click the inactive side to move the file to the mirrored path in the other tree — subfolder preserved.
+- **A `kind` filter on every read tool.** `search`, `list_files`, `find_related`, `bundle_search`, and `regex_search` all take an optional `kind` to narrow to a single class when you want only authoritative results or only working notes.
+- **Per-class icons in the tree and file list.** Distinct glyphs for dictionary, note, journal, and project so you see the shape of your KB at a glance.
+
+### A knowledge base with a shape
+
+- **The knowledge base now has a predictable layout.** Everything you save lives under one of four folders — `journal/`, `knowledge/`, `mermaid/`, or `html/` — plus a single `profile.md` at the root. Each folder holds one kind of file (markdown, mermaid, HTML) so the agent and the dashboard always know what to do with what's there. Media for HTML reports goes in `html/resources/`.
+- **`knowledge/dictionary/` and `knowledge/notes/` scaffold on install** so the class distinction is visible in the tree from day one, matching how `journal/` appears once populated.
+- **Bring your existing vault along.** A migration script (`scripts/migrate-kb-layout.mjs`) surveys an existing knowledge base, shows you what would move where in a dry run, and applies the changes on demand. Files that are already indexed move safely (paths and search index stay in sync).
+- **Existing off-spec files still work.** They stay readable, editable, and deletable — you can migrate on your own schedule. Only new writes need to follow the layout.
+
+### Smaller polish, big daily wins
+
+- **Uploading media just works.** Drop a `.png` or `.pdf` into `html/resources/` from the upload dialog — no more `unsupported extension` rejections.
+- **The upload dialog on a fresh install** gives you a text input with bucket suggestions when no subfolders exist yet, instead of a locked dropdown.
+- **In-place rename inside legacy folders** stays allowed, so you can tidy up without being forced to move everything at once.
+- **Profile edits are safer.** The editor no longer wipes what you're typing if something refreshes in the background.
+- **Cleaner error messages.** Layout mistakes on file moves surface as clear "wrong destination" errors instead of generic server crashes.
+- **`DELETE /api/folders` refuses to wipe a whole bucket by name** — a stray `?name=journal` used to erase every journal entry. Not anymore.
+
+### Fixed
+
+- Duplicate uploads on Windows could silently overwrite each other in certain folders — folder matching now works on both slash conventions.
+- The MCP `list_folders` response now uses the same path shape as the dashboard's folders API, so tools keying off folder names see one consistent value.
+
+### Breaking
+
+- **New writes must fit the layout.** Uploads, `create_file`, `create_files`, `create_folder`, and `move_file` all reject destinations outside the four-bucket structure. If your scripts write to `<dataDir>/knowledge/` directly, pick one of `journal`, `knowledge`, `mermaid`, or `html`.
+
 ## 4.5.2 — Default port moved to 23002
 
 ### Changed

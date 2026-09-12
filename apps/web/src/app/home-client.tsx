@@ -34,6 +34,7 @@ export default function HomePage() {
   const [docsOpen, setDocsOpen] = useState(false);
   const [newFileOpen, setNewFileOpen] = useState(false);
   const [newFolderOpen, setNewFolderOpen] = useState(false);
+  const [folderBucketPrefix, setFolderBucketPrefix] = useState<string | null>(null);
   const [deleteFolderConfirmOpen, setDeleteFolderConfirmOpen] = useState(false);
   const [unregisterConfirmOpen, setUnregisterConfirmOpen] = useState(false);
   const [publishOpen, setPublishOpen] = useState(false);
@@ -42,9 +43,11 @@ export default function HomePage() {
   const [deletingFolder, setDeletingFolder] = useState(false);
   const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
   const [targetProjectId, setTargetProjectId] = useState<number | null>(null);
-  const [selectedSection, setSelectedSection] = useState<"projects" | "knowledge" | "favorites" | null>(null);
+  const [selectedSection, setSelectedSection] = useState<"projects" | "knowledge" | "favorites" | "tags" | null>(null);
   const [selectedFileId, setSelectedFileId] = useState<number | null>(null);
   const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
+  const [selectedTag, setSelectedTag] = useState<string | null>(null);
+  const [tags, setTags] = useState<Array<{ id: number; name: string; count: number }>>([]);
   const [sortBy, setSortBy] = useState<SortBy>("updated_at");
   const [folderRefreshKey, setFolderRefreshKey] = useState(0);
 
@@ -64,7 +67,7 @@ export default function HomePage() {
 
   // Restore navigation state from sessionStorage after mount (avoids SSR hydration mismatch)
   useEffect(() => {
-    const storedSection = sessionStorage.getItem("selectedSection") as "projects" | "knowledge" | "favorites" | null;
+    const storedSection = sessionStorage.getItem("selectedSection") as "projects" | "knowledge" | "favorites" | "tags" | null;
     const storedProjectId = sessionStorage.getItem("selectedProjectId");
     if (storedSection) setSelectedSection(storedSection);
     if (storedProjectId) setSelectedProjectId(Number(storedProjectId));
@@ -121,15 +124,42 @@ export default function HomePage() {
   const { files: allFiles, loading: filesLoading, refresh: refreshAllFiles } = useFiles({});
   const refreshFiles = refreshAllFiles;
   const files = useMemo(() => {
-    if (selectedSection === "favorites") {
-      return allFiles.filter((f) => f.favorite);
-    }
-    if (selectedSection === "projects" && selectedProjectId !== null) {
-      return allFiles.filter((f) => f.project_id === selectedProjectId);
-    }
-    return allFiles;
-  }, [allFiles, selectedSection, selectedProjectId]);
+    // Hide profile.md from the middle file-list pane — it stays accessible from the folder tree (knowledgeFiles) as a dedicated UserCircle entry.
+    let base = allFiles.filter((f) => !(f.project_id === null && /(^|[\\/])knowledge[\\/]profile\.md$/i.test(f.path)));
+    if (selectedSection === "favorites") base = base.filter((f) => f.favorite);
+    else if (selectedSection === "projects" && selectedProjectId !== null) base = base.filter((f) => f.project_id === selectedProjectId);
+    if (selectedTag) base = base.filter((f) => (f.tags ?? []).includes(selectedTag));
+    return base;
+  }, [allFiles, selectedSection, selectedProjectId, selectedTag]);
   const knowledgeFiles = useMemo(() => allFiles.filter((f) => !f.project_id), [allFiles]);
+
+  // Refresh tags whenever the file set changes — counts depend on membership.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetch("/api/tags");
+        if (!r.ok) return;
+        const t = (await r.json()) as Array<{ id: number; name: string; color: string | null; count: number }>;
+        if (!cancelled) setTags(t);
+      } catch {}
+    })();
+    return () => { cancelled = true; };
+  }, [allFiles]);
+
+  // Tag is its own axis — clear the other filters so the file list only reflects the tag. Dirty check runs before any state change so a Cancel leaves the UI untouched.
+  const handleSelectTag = (tag: string | null) => {
+    if (tag && !confirmDiscardIfDirty()) return;
+    setSelectedTag(tag);
+    if (tag) {
+      setSelectedSection("tags");
+      setSelectedProjectId(null);
+      setSelectedFolder(null);
+      setSelectedFileId(null);
+      sessionStorage.setItem("selectedSection", "tags");
+      sessionStorage.removeItem("selectedProjectId");
+    }
+  };
   const { folders: knowledgeFolders, basePath: knowledgeBasePath } = useFolders(null, folderRefreshKey);
   // Fetch project-specific folders when a project is selected
   const { folders: projectFolders, basePath: projectBasePath } = useFolders(
@@ -188,6 +218,7 @@ export default function HomePage() {
     setSelectedSection("projects");
     setSelectedFileId(null);
     setSelectedFolder(null);
+    setSelectedTag(null);
     sessionStorage.setItem("selectedSection", "projects");
     sessionStorage.setItem("selectedProjectId", String(projectId));
   };
@@ -198,6 +229,7 @@ export default function HomePage() {
     setSelectedProjectId(null);
     setSelectedFileId(null);
     setSelectedFolder(null);
+    setSelectedTag(null);
     sessionStorage.setItem("selectedSection", "knowledge");
     sessionStorage.removeItem("selectedProjectId");
   };
@@ -208,6 +240,7 @@ export default function HomePage() {
     setSelectedProjectId(null);
     setSelectedFileId(null);
     setSelectedFolder(null);
+    setSelectedTag(null);
     sessionStorage.setItem("selectedSection", "favorites");
     sessionStorage.removeItem("selectedProjectId");
   };
@@ -220,6 +253,7 @@ export default function HomePage() {
     setSelectedProjectId(null);
     setSelectedFileId(null);
     setSelectedFolder(folderPath);
+    setSelectedTag(null);
     sessionStorage.setItem("selectedSection", "knowledge");
     sessionStorage.removeItem("selectedProjectId");
   };
@@ -381,7 +415,9 @@ export default function HomePage() {
     title: string,
     content: string,
     destination: "knowledge" | "project" | "kontexta",
-    folder?: string
+    folder?: string,
+    format?: "md" | "mmd" | "html",
+    kind?: "dictionary" | "note"
   ) => {
     try {
       const response = await fetch("/api/files", {
@@ -393,6 +429,8 @@ export default function HomePage() {
           destination,
           projectId: selectedProjectId,
           folder,
+          format,
+          kind,
         }),
       });
       const data = await response.json().catch(() => ({}));
@@ -518,6 +556,8 @@ export default function HomePage() {
       segs.push({ label: "Knowledge", onClick: handleSelectKnowledge });
     } else if (selectedSection === "projects" && selectedProject) {
       segs.push({ label: selectedProject.name, onClick: () => handleSelectProject(selectedProject.id) });
+    } else if (selectedSection === "tags" && selectedTag) {
+      segs.push({ label: `#${selectedTag}`, onClick: () => handleSelectTag(selectedTag) });
     }
 
     const file = selectedFileId
@@ -610,8 +650,12 @@ export default function HomePage() {
             onSelectKnowledgeFolder={handleSelectKnowledgeFolder}
             onSelectFolder={handleSelectFolder}
             onSelectFile={(id) => handleSelectFile(id, true)}
-            onCreateFolder={(id) => {
-              setTargetProjectId(id);
+            selectedTag={selectedTag}
+            tags={tags}
+            onSelectTag={handleSelectTag}
+            onCreateBucketFolder={(bucket) => {
+              setTargetProjectId(0);
+              setFolderBucketPrefix(bucket);
               setNewFolderOpen(true);
             }}
           />
@@ -638,7 +682,7 @@ export default function HomePage() {
             onNewFile={() => setNewFileOpen(true)}
           />
         }
-        right={<ContentPane fileId={selectedFileId} onDelete={handleDeleteFile} onChanged={refreshAllFiles} onDirtyChange={(d) => { isDirtyRef.current = d; }} />}
+        right={<ContentPane fileId={selectedFileId} onDelete={handleDeleteFile} onChanged={refreshAllFiles} onDirtyChange={(d) => { isDirtyRef.current = d; }} onNavigateToFile={(id) => handleSelectFile(id)} />}
       />
       <StatusBar
         globalRemoteUrl={globalRemoteUrl}
@@ -670,12 +714,14 @@ export default function HomePage() {
         onCreate={handleCreateFile}
         currentProjectId={selectedProjectId}
         availableFolders={selectedSection === "knowledge" ? knowledgeFolders : projectFolders}
+        defaultFolder={selectedSection === "knowledge" ? (selectedFolder ?? undefined) : undefined}
       />
 
       <NewFolderDialog
         open={newFolderOpen}
-        onClose={() => setNewFolderOpen(false)}
+        onClose={() => { setNewFolderOpen(false); setFolderBucketPrefix(null); }}
         onCreate={handleCreateFolder}
+        bucketPrefix={folderBucketPrefix}
       />
 
       <DeleteFolderDialog

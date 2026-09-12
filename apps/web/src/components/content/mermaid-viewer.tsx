@@ -76,9 +76,6 @@ export function MermaidViewer({ source, className, filename }: MermaidViewerProp
         const { svg: rendered } = await mermaid.render(renderId, source);
         if (!cancelled) {
           setSvg(rendered);
-          if (containerRef.current) {
-            containerRef.current.innerHTML = rendered;
-          }
         }
         // Even on success, mermaid sometimes leaves its measuring sandbox
         // attached. Cheap to sweep.
@@ -93,7 +90,6 @@ export function MermaidViewer({ source, className, filename }: MermaidViewerProp
           const msg = e instanceof Error ? e.message : String(e);
           setError(msg);
           setSvg(null);
-          if (containerRef.current) containerRef.current.innerHTML = "";
         }
       }
     })();
@@ -109,21 +105,29 @@ export function MermaidViewer({ source, className, filename }: MermaidViewerProp
 
   const stem = sanitizeFilename(filename);
 
+  // Parse the SVG string held in state into a detached document — avoids depending on the container's live innerHTML, which can be racy under React re-renders and previously produced spurious "rendered SVG not found" errors on click.
+  const parseSvg = (raw: string): SVGSVGElement | null => {
+    const doc = new DOMParser().parseFromString(raw, "image/svg+xml");
+    if (doc.getElementsByTagName("parsererror").length > 0) {
+      const container = document.createElement("div");
+      container.innerHTML = raw;
+      const el = container.querySelector("svg");
+      return el as SVGSVGElement | null;
+    }
+    return doc.documentElement.tagName.toLowerCase() === "svg" ? (doc.documentElement as unknown as SVGSVGElement) : null;
+  };
+
   const handleExportSvg = () => {
     if (!svg) return;
-    const svgEl = containerRef.current?.querySelector("svg") as SVGSVGElement | null;
+    const svgEl = parseSvg(svg);
     if (!svgEl) {
-      setError("SVG export failed: rendered SVG not found");
+      setError("SVG export failed: could not parse rendered SVG");
       return;
     }
-    // Serialise via XMLSerializer so HTML inside <foreignObject> (e.g. <br>)
-    // is emitted as valid XML (<br/>). Mermaid's raw render() output is not
-    // guaranteed to be well-formed XML and breaks XML viewers / browsers
-    // when opened directly.
-    const clone = svgEl.cloneNode(true) as SVGSVGElement;
-    clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
-    clone.setAttribute("xmlns:xlink", "http://www.w3.org/1999/xlink");
-    const serialised = new XMLSerializer().serializeToString(clone);
+    // Serialise via XMLSerializer so HTML inside <foreignObject> (e.g. <br>) is emitted as valid XML (<br/>) — mermaid's raw render() output isn't guaranteed well-formed XML.
+    svgEl.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+    svgEl.setAttribute("xmlns:xlink", "http://www.w3.org/1999/xlink");
+    const serialised = new XMLSerializer().serializeToString(svgEl);
     const withDecl = serialised.startsWith("<?xml")
       ? serialised
       : `<?xml version="1.0" encoding="UTF-8"?>\n${serialised}`;
@@ -140,9 +144,11 @@ export function MermaidViewer({ source, className, filename }: MermaidViewerProp
 
   const handleExportPng = () => {
     if (!svg) return;
-    const svgEl = containerRef.current?.querySelector("svg") as SVGSVGElement | null;
+    // Prefer the live DOM node when available (its layout is measured), fall back to a parsed copy so PNG export still works if the container was cleared between render and click.
+    const liveEl = containerRef.current?.querySelector("svg") as SVGSVGElement | null;
+    const svgEl = liveEl ?? parseSvg(svg);
     if (!svgEl) {
-      setError("PNG export failed: rendered SVG not found");
+      setError("PNG export failed: could not parse rendered SVG");
       return;
     }
 
@@ -153,9 +159,9 @@ export function MermaidViewer({ source, className, filename }: MermaidViewerProp
     if (viewBox && viewBox.width > 0 && viewBox.height > 0) {
       width = viewBox.width;
       height = viewBox.height;
-    } else {
+    } else if (liveEl) {
       try {
-        const bbox = svgEl.getBBox();
+        const bbox = liveEl.getBBox();
         if (bbox.width > 0 && bbox.height > 0) {
           width = bbox.width;
           height = bbox.height;
@@ -252,7 +258,8 @@ export function MermaidViewer({ source, className, filename }: MermaidViewerProp
           Mermaid render error: {error}
         </pre>
       )}
-      <div ref={containerRef} />
+      {/* Let React drive innerHTML via state so reconciliation of conditional siblings above can't wipe the diagram. Ref stays attached so PNG export can still read getBBox from the live node. */}
+      <div ref={containerRef} dangerouslySetInnerHTML={svg ? { __html: svg } : undefined} />
       {error && (
         <pre className="mt-2 p-3 bg-zinc-900 text-zinc-100 text-xs overflow-x-auto">
           {source}

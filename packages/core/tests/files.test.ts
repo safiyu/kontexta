@@ -63,6 +63,7 @@ describe("File Operations", () => {
       title: "My Knowledge",
       content: "This is my knowledge base content",
       destination: "knowledge",
+      folder: "knowledge",
       tags: ["test", "knowledge"],
       dataDir: TEST_DATA_DIR,
     });
@@ -73,7 +74,7 @@ describe("File Operations", () => {
     expect(file.content).toBe("This is my knowledge base content");
 
     // Verify file exists on disk
-    const expectedPath = join(TEST_DATA_DIR, "knowledge", "my-knowledge.md");
+    const expectedPath = join(TEST_DATA_DIR, "knowledge", "knowledge", "my-knowledge.md");
     expect(file.path).toBe(expectedPath);
     expect(existsSync(expectedPath)).toBe(true);
 
@@ -130,6 +131,7 @@ describe("File Operations", () => {
       title: "Test Read",
       content: "Content to read",
       destination: "knowledge",
+      folder: "knowledge",
       dataDir: TEST_DATA_DIR,
     });
 
@@ -145,6 +147,7 @@ describe("File Operations", () => {
       title: "Test Update",
       content: "Original content",
       destination: "knowledge",
+      folder: "knowledge",
       dataDir: TEST_DATA_DIR,
     });
 
@@ -172,6 +175,7 @@ describe("File Operations", () => {
       title: "Test Delete",
       content: "To be deleted",
       destination: "knowledge",
+      folder: "knowledge",
       dataDir: TEST_DATA_DIR,
     });
 
@@ -196,6 +200,7 @@ describe("File Operations", () => {
       title: "File 1",
       content: "Content 1",
       destination: "knowledge",
+      folder: "knowledge",
       dataDir: TEST_DATA_DIR,
     });
 
@@ -206,6 +211,7 @@ describe("File Operations", () => {
       title: "File 2",
       content: "Content 2",
       destination: "knowledge",
+      folder: "knowledge",
       dataDir: TEST_DATA_DIR,
     });
 
@@ -233,6 +239,7 @@ describe("File Operations", () => {
       title: "Knowledge File",
       content: "Knowledge",
       destination: "knowledge",
+      folder: "knowledge",
       dataDir: TEST_DATA_DIR,
     });
 
@@ -266,13 +273,14 @@ describe("File Operations", () => {
       title: "Test Move",
       content: "Move me",
       destination: "knowledge",
+      folder: "knowledge",
       dataDir: TEST_DATA_DIR,
     });
 
     const originalPath = created.path;
-    const newPath = join(TEST_DATA_DIR, "knowledge", "moved", "test-move.md");
+    const newPath = join(TEST_DATA_DIR, "knowledge", "knowledge", "moved", "test-move.md");
 
-    const moved = moveFile(created.id, newPath);
+    const moved = moveFile(created.id, newPath, TEST_DATA_DIR);
 
     expect(moved.path).toBe(newPath);
     expect(existsSync(newPath)).toBe(true);
@@ -288,6 +296,7 @@ describe("File Operations", () => {
       title: "Flow Diagram",
       content: "graph TD\nA-->B",
       destination: "knowledge",
+      folder: "mermaid",
       dataDir: TEST_DATA_DIR,
       format: "mmd",
     });
@@ -300,6 +309,7 @@ describe("File Operations", () => {
       title: "Plain Note",
       content: "hello",
       destination: "knowledge",
+      folder: "knowledge",
       dataDir: TEST_DATA_DIR,
     });
     expect(file.path.endsWith(".md")).toBe(true);
@@ -316,6 +326,98 @@ describe("File Operations", () => {
     expect(folders).toContain("src");
     // The symlink itself must be skipped — not recursed into
     expect(folders).not.toContain(join("src", "loop"));
+  });
+
+  test("createFile classifies file under knowledge/dictionary as 'dictionary'", async () => {
+    const rec = await createFile({
+      title: "SLT System IDs",
+      content: "# SLT System IDs\n",
+      destination: "knowledge",
+      folder: "knowledge/dictionary/slt",
+      dataDir: testDir,
+    });
+    expect(rec.content_class).toBe("dictionary");
+  });
+
+  test("createFile classifies file under knowledge/notes as 'note'", async () => {
+    const rec = await createFile({
+      title: "PPROD Cutover Notes",
+      content: "# Notes\n",
+      destination: "knowledge",
+      folder: "knowledge/notes/incidents",
+      dataDir: testDir,
+    });
+    expect(rec.content_class).toBe("note");
+  });
+
+  test("createFile classifies clip target (knowledge/urlclips) as 'dictionary'", async () => {
+    const rec = await createFile({
+      title: "Some Clip",
+      content: "clipped body",
+      destination: "knowledge",
+      folder: "knowledge/urlclips",
+      dataDir: testDir,
+    });
+    expect(rec.content_class).toBe("dictionary");
+  });
+
+  test("createFile leaves content_class null for legacy KB path (knowledge root)", async () => {
+    const rec = await createFile({
+      title: "profile",
+      content: "legacy",
+      destination: "knowledge",
+      dataDir: testDir,
+    });
+    // profile.md at knowledge root is legacy — not under any named subfolder
+    expect(rec.content_class).toBeNull();
+  });
+
+  test("moveFile updates content_class when crossing dictionary <-> notes", async () => {
+    const created = await createFile({
+      title: "Movable",
+      content: "hello",
+      destination: "knowledge",
+      folder: "knowledge/dictionary/misc",
+      dataDir: testDir,
+    });
+    expect(created.content_class).toBe("dictionary");
+
+    const targetPath = join(testDir, "knowledge", "knowledge", "notes", "misc", "movable.md");
+    mkdirSync(join(testDir, "knowledge", "knowledge", "notes", "misc"), { recursive: true });
+
+    const moved = moveFile(created.id, targetPath, testDir);
+    expect(moved.content_class).toBe("note");
+  });
+
+  test("moveFile sets content_class to null when moving into legacy path", async () => {
+    const created = await createFile({
+      title: "Movable2",
+      content: "hello",
+      destination: "knowledge",
+      folder: "knowledge/dictionary/misc",
+      dataDir: testDir,
+    });
+    const targetPath = join(testDir, "knowledge", "knowledge", "misc", "movable2.md");
+    mkdirSync(join(testDir, "knowledge", "knowledge", "misc"), { recursive: true });
+
+    const moved = moveFile(created.id, targetPath, testDir);
+    expect(moved.content_class).toBeNull();
+  });
+
+  test("migration 008: content_class column, index, and check constraint", () => {
+    const db = getDatabase();
+
+    const cols = db.prepare("PRAGMA table_info(files)").all() as Array<{ name: string; type: string }>;
+    expect(cols.map((c) => c.name)).toContain("content_class");
+
+    const indexes = db.prepare("PRAGMA index_list(files)").all() as Array<{ name: string }>;
+    expect(indexes.map((i) => i.name)).toContain("idx_files_content_class");
+
+    expect(() =>
+      db.prepare(
+        "INSERT INTO files (path, title, storage_type, content_class) VALUES (?, ?, ?, ?)"
+      ).run("/tmp/__ct_check__.md", "check", "local", "not-a-valid-class")
+    ).toThrow();
   });
 });
 

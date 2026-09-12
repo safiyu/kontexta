@@ -34,9 +34,40 @@ export async function PATCH(
   } catch {
     return NextResponse.json({ error: "Body must be JSON" }, { status: 400 });
   }
-  const newPath: unknown = body?.new_path;
+
+  const db = getDatabase();
+  const file = db
+    .prepare("SELECT id, path, project_id, storage_type FROM files WHERE id = ?")
+    .get(n) as { id: number; path: string; project_id: number | null; storage_type: string } | undefined;
+  if (!file) return NextResponse.json({ error: "File not found" }, { status: 404 });
+
+  const kind: unknown = body?.kind;
+  let newPath: unknown = body?.new_path;
+
+  // Kind-based move: derive the mirrored path in the other class tree.
+  if ((newPath === undefined || newPath === null || newPath === "") && (kind === "dictionary" || kind === "note")) {
+    if (file.storage_type !== "local") {
+      return NextResponse.json(
+        { error: "kind-based move is only supported for KB files (storage_type='local')" },
+        { status: 400 }
+      );
+    }
+    const kbRoot = join(DATA_DIR, "knowledge");
+    const currentRel = resolve(file.path).slice(resolve(kbRoot).length + 1);
+    const parts = currentRel.split(sep);
+    const classIdx = parts.findIndex((p) => p === "dictionary" || p === "notes" || p === "urlclips");
+    if (classIdx === -1) {
+      return NextResponse.json(
+        { error: "kind-based move requires source under knowledge/{dictionary,notes,urlclips}" },
+        { status: 400 }
+      );
+    }
+    parts[classIdx] = kind === "dictionary" ? "dictionary" : "notes";
+    newPath = join(kbRoot, ...parts);
+  }
+
   if (typeof newPath !== "string" || newPath.length === 0) {
-    return NextResponse.json({ error: "new_path is required" }, { status: 400 });
+    return NextResponse.json({ error: "new_path or kind is required" }, { status: 400 });
   }
   if (newPath.includes("\0")) {
     return NextResponse.json({ error: "new_path contains null byte" }, { status: 400 });
@@ -44,12 +75,6 @@ export async function PATCH(
   if (!isAbsolute(newPath)) {
     return NextResponse.json({ error: "new_path must be absolute" }, { status: 400 });
   }
-
-  const db = getDatabase();
-  const file = db
-    .prepare("SELECT id, path, project_id, storage_type FROM files WHERE id = ?")
-    .get(n) as { id: number; path: string; project_id: number | null; storage_type: string } | undefined;
-  if (!file) return NextResponse.json({ error: "File not found" }, { status: 404 });
 
   let base: string;
   // repoDir MUST match commitFile's lock key: project path for ref, DATA_DIR for KB.
@@ -82,9 +107,17 @@ export async function PATCH(
   }
 
   try {
-    const updated = await withLock(`git:${resolve(repoDir)}`, async () => moveFile(n, newPath));
+    const updated = await withLock(`git:${resolve(repoDir)}`, async () => moveFile(n, newPath, DATA_DIR));
     return NextResponse.json(updated);
   } catch (e: any) {
-    return NextResponse.json({ error: e?.message ?? "Failed to move file" }, { status: 500 });
+    const msg = e?.message ?? "Failed to move file";
+    // Client-caused validation (layout/containment/EEXIST/non-absolute) is 4xx, not 5xx.
+    const isClientError =
+      /^moveFile: /.test(msg) ||
+      / requires \.(md|mmd|html)/.test(msg) ||
+      /allowed at the knowledge root/.test(msg) ||
+      /Only these folders are allowed/.test(msg) ||
+      /destination already exists/.test(msg);
+    return NextResponse.json({ error: msg }, { status: isClientError ? 400 : 500 });
   }
 }

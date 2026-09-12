@@ -44,6 +44,15 @@ jobs:
       - name: Build all
         run: pnpm build
 
+      - name: Verify build outputs
+        run: |
+          test -f apps/mcp/dist/index.js || { echo "ERROR: apps/mcp/dist/index.js missing"; exit 1; }
+          test -d apps/publish/dist || { echo "ERROR: apps/publish/dist missing"; exit 1; }
+          test -d apps/web/.next || { echo "ERROR: apps/web/.next missing"; exit 1; }
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Docker meta
         id: meta
         uses: docker/metadata-action@v5

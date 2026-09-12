@@ -1,9 +1,22 @@
 import { describe, it, expect } from 'vitest';
 import { spawn } from 'node:child_process';
+import { mkdtempSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 
 describe('kontexta mcp', () => {
   it('responds to initialize handshake', async () => {
-    const child = spawn('node', ['dist/index.js', 'mcp'], { cwd: __dirname + '/..' });
+    // Isolated data dir so MCP init doesn't fight the ambient vault on the runner and migrations run against a fresh SQLite file.
+    const dataDir = mkdtempSync(join(tmpdir(), 'kxta-mcp-init-'));
+    const child = spawn('node', ['dist/index.js', 'mcp'], {
+      cwd: __dirname + '/..',
+      env: { ...process.env, KONTEXTA_DATA_DIR: dataDir },
+      shell: process.platform === 'win32',
+    });
+
+    let stderr = '';
+    child.stderr.on('data', (c) => { stderr += c.toString(); });
+
     const initReq = JSON.stringify({
       jsonrpc: '2.0', id: 1, method: 'initialize',
       params: { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 't', version: '1' } },
@@ -12,7 +25,8 @@ describe('kontexta mcp', () => {
 
     const response = await new Promise<string>((resolve, reject) => {
       let buf = '';
-      const timer = setTimeout(() => reject(new Error('timeout')), 10_000);
+      // 30s covers Windows-runner MCP boot cost (imports + 9 migrations + FTS index) — Linux typically responds in <2s.
+      const timer = setTimeout(() => reject(new Error(`timeout after 30s; stderr=${stderr.slice(-500)}`)), 30_000);
       child.stdout.on('data', (chunk) => {
         buf += chunk.toString();
         const nl = buf.indexOf('\n');
@@ -29,5 +43,5 @@ describe('kontexta mcp', () => {
     expect(parsed.jsonrpc).toBe('2.0');
     expect(parsed.id).toBe(1);
     expect(parsed.result?.capabilities).toBeDefined();
-  }, 20_000);
+  }, 45_000);
 });

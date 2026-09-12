@@ -24,15 +24,15 @@ describe("getTagsForFiles", () => {
   });
 
   it("returns tags for one file", async () => {
-    const f = await createFile({ title: "A", content: "body".repeat(20), destination: "knowledge", dataDir, tags: ["one", "two"] });
+    const f = await createFile({ title: "A", content: "body".repeat(20), destination: "knowledge", folder: "knowledge", dataDir, tags: ["one", "two"] });
     const map = getTagsForFiles([f.id]);
     expect(map.get(f.id)?.sort()).toEqual(["one", "two"]);
   });
 
   it("returns a single Map keyed by file_id for many files", async () => {
-    const a = await createFile({ title: "A", content: "a".repeat(50), destination: "knowledge", dataDir, tags: ["x"] });
-    const b = await createFile({ title: "B", content: "b".repeat(50), destination: "knowledge", dataDir, tags: ["y", "z"] });
-    const c = await createFile({ title: "C", content: "c".repeat(50), destination: "knowledge", dataDir });
+    const a = await createFile({ title: "A", content: "a".repeat(50), destination: "knowledge", folder: "knowledge", dataDir, tags: ["x"] });
+    const b = await createFile({ title: "B", content: "b".repeat(50), destination: "knowledge", folder: "knowledge", dataDir, tags: ["y", "z"] });
+    const c = await createFile({ title: "C", content: "c".repeat(50), destination: "knowledge", folder: "knowledge", dataDir });
     const map = getTagsForFiles([a.id, b.id, c.id]);
     expect(map.get(a.id)).toEqual(["x"]);
     expect(map.get(b.id)?.sort()).toEqual(["y", "z"]);
@@ -40,7 +40,7 @@ describe("getTagsForFiles", () => {
   });
 
   it("reflects tags added after createFile", async () => {
-    const f = await createFile({ title: "Late", content: "body".repeat(20), destination: "knowledge", dataDir });
+    const f = await createFile({ title: "Late", content: "body".repeat(20), destination: "knowledge", folder: "knowledge", dataDir });
     addTags(f.id, ["fresh", "another"]);
     const map = getTagsForFiles([f.id]);
     expect(map.get(f.id)?.sort()).toEqual(["another", "fresh"]);

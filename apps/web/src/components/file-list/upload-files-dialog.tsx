@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { X } from "lucide-react";
+import { KB_BUCKETS, bucketOf, acceptForFolder, fileFitsFolder, isHtmlResources } from "@/lib/kb-layout";
 
 interface Project { id: number; name: string }
 
@@ -55,9 +56,32 @@ export function UploadFilesDialog({ open, onClose, projects, defaultProjectId, d
     return () => { cancelled = true; };
   }, [projectId]);
 
+  // KB uploads (no project) must land in one of the four buckets. Compute
+  // the bucket-aware view of the folder options and file-input hints.
+  const isKb = projectId === "";
+  const kbBucket = isKb ? bucketOf(folder) : null;
+  const requireFolder = isKb;
+  const bucketFilteredFolders = isKb
+    ? folderOptions.filter((f) =>
+        KB_BUCKETS.some((b) => f === b || f.startsWith(`${b}/`) || f.startsWith(`${b}\\`))
+      )
+    : folderOptions;
+  const acceptAttr = isKb ? acceptForFolder(folder) : null;
+  const mismatched = isKb ? files.filter((f) => !fileFitsFolder(f.name, folder)) : [];
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (files.length === 0) return;
+    if (requireFolder && !folder) {
+      setError("Pick a KB folder (journal, knowledge, mermaid, or html — or a subfolder).");
+      return;
+    }
+    if (mismatched.length > 0) {
+      setError(
+        `${mismatched.length} file(s) don't fit ${kbBucket ? kbBucket + "/" : "this folder"}: ${mismatched.map((f) => f.name).join(", ")}`
+      );
+      return;
+    }
     setBusy(true);
     setError(null);
     setResult(null);
@@ -103,10 +127,15 @@ export function UploadFilesDialog({ open, onClose, projects, defaultProjectId, d
               <input
                 type="file"
                 multiple
-                accept=".md,.markdown,.mmd"
+                accept={acceptAttr === null ? ".md,.markdown,.mmd,.html,.htm" : acceptAttr || undefined}
                 onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
                 className="w-full text-sm text-[var(--text-primary)]"
               />
+              {isKb && kbBucket && !isHtmlResources(folder) && (
+                <p className="text-[10px] text-[var(--text-secondary)] mt-1 italic">
+                  {kbBucket}/ accepts {acceptAttr} only. Media goes in html/resources/.
+                </p>
+              )}
               {files.length > 0 && (
                 <ul className="mt-2 text-xs text-[var(--text-secondary)] max-h-32 overflow-auto">
                   {files.map((f, i) => (
@@ -137,16 +166,39 @@ export function UploadFilesDialog({ open, onClose, projects, defaultProjectId, d
               </div>
               <div>
                 <label className="block text-[10px] font-bold text-[var(--text-secondary)] tracking-widest mb-1.5">FOLDER</label>
-                <select
-                  value={folder}
-                  onChange={(e) => setFolder(e.target.value)}
-                  className="w-full bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-amber-accent/50 cursor-pointer"
-                >
-                  <option value="">— Root level —</option>
-                  {folderOptions.map((f) => (
-                    <option key={f} value={f}>{f}</option>
-                  ))}
-                </select>
+                {isKb && bucketFilteredFolders.length === 0 ? (
+                  // Fresh install has no subfolders yet — offer a text input hinting the four bucket names.
+                  <>
+                    <input
+                      type="text"
+                      value={folder}
+                      onChange={(e) => setFolder(e.target.value)}
+                      placeholder="e.g. knowledge or journal/2026"
+                      list="kb-bucket-hints"
+                      className="w-full bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-amber-accent/50"
+                      required
+                    />
+                    <datalist id="kb-bucket-hints">
+                      {KB_BUCKETS.map((b) => <option key={b} value={b} />)}
+                    </datalist>
+                  </>
+                ) : (
+                  <select
+                    value={folder}
+                    onChange={(e) => setFolder(e.target.value)}
+                    className="w-full bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-amber-accent/50 cursor-pointer"
+                    required={requireFolder}
+                  >
+                    {requireFolder ? (
+                      <option value="" disabled>— Pick a KB folder —</option>
+                    ) : (
+                      <option value="">— Root level —</option>
+                    )}
+                    {bucketFilteredFolders.map((f) => (
+                      <option key={f} value={f}>{f}</option>
+                    ))}
+                  </select>
+                )}
               </div>
             </div>
 
