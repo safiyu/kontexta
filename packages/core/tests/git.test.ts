@@ -52,9 +52,9 @@ describe("Git Operations", () => {
     };
 
     // Initialize git repository in TEST_DATA
-    // allowUnsafeConfigPaths required so simple-git's security plugin permits
-    // GIT_CONFIG_GLOBAL=/dev/null in the env we pass.
-    const git: SimpleGit = simpleGit(TEST_DATA_DIR, { allowUnsafeConfigPaths: true } as any);
+    // unsafe.allowUnsafeConfigPaths required so simple-git's security plugin permits
+    // GIT_CONFIG_GLOBAL in the env we pass.
+    const git: SimpleGit = simpleGit(TEST_DATA_DIR, { unsafe: { allowUnsafeConfigPaths: true } });
     await git.env(isolatedEnv).init();
     await git.addConfig("user.email", "test@example.com");
     await git.addConfig("user.name", "Test User");
@@ -84,7 +84,7 @@ describe("Git Operations", () => {
     await commitFile(TEST_DATA_DIR, filePath, "Add test file");
 
     // Verify commit exists in git log
-    const git: SimpleGit = simpleGit(TEST_DATA_DIR);
+    const git: SimpleGit = simpleGit(TEST_DATA_DIR, { unsafe: { allowUnsafeConfigPaths: true } });
     const log = await git.log();
 
     expect(log.latest?.message).toBe("Add test file");
@@ -221,7 +221,7 @@ describe("Git Operations", () => {
     expect(backupContent).toBe("External file content");
 
     // Verify git commit was made
-    const git: SimpleGit = simpleGit(TEST_DATA_DIR);
+    const git: SimpleGit = simpleGit(TEST_DATA_DIR, { unsafe: { allowUnsafeConfigPaths: true } });
     const log = await git.log();
 
     expect(log.latest?.message).toBe("Sync local changes for project: Test Project");

@@ -9,13 +9,13 @@ if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
   Fail 'Node is not installed. Install Node 22.x LTS (see .nvmrc) via nvm-windows/fnm/volta.'
 }
 $requiredMajor = (Get-Content .nvmrc).Trim().TrimStart('v').Split('.')[0]
-$currentMajor  = (node -p 'process.versions.node.split(".")[0]').Trim()
+$currentMajor  = (node -v).Trim().TrimStart('v').Split('.')[0]
 if ($currentMajor -ne $requiredMajor) {
   Fail "Node v$currentMajor detected; kontexta requires v$requiredMajor.x. Run 'nvm use' / 'fnm use' / 'volta pin node@$requiredMajor'."
 }
 
 Step 'Enabling corepack + pinned pnpm'
-$pnpmVersion = (node -p "require('./package.json').packageManager.split('@')[1]").Trim()
+$pnpmVersion = ((Get-Content package.json -Raw | ConvertFrom-Json).packageManager).Split('@')[1]
 if (-not (Get-Command corepack -ErrorAction SilentlyContinue)) {
   Fail 'corepack is missing. Reinstall Node or run: npm install -g corepack'
 }

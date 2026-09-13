@@ -93,7 +93,12 @@ describe("detectAgentContextFiles", () => {
   it("skips symlinked CLAUDE.md (defensive)", () => {
     const real = join(dir, "real.md");
     writeFileSync(real, "");
-    symlinkSync(real, join(dir, "CLAUDE.md"));
+    try {
+      symlinkSync(real, join(dir, "CLAUDE.md"));
+    } catch (err: any) {
+      if (err?.code === "EPERM" && process.platform === "win32") return;
+      throw err;
+    }
     expect(detectAgentContextFiles(dir)).toEqual([]);
   });
 
@@ -268,7 +273,12 @@ describe("syncAgentRules", () => {
   it("update mode: refuses symlinks", () => {
     const real = join(dir, "real.md");
     writeFileSync(real, "");
-    symlinkSync(real, join(dir, "CLAUDE.md"));
+    try {
+      symlinkSync(real, join(dir, "CLAUDE.md"));
+    } catch (err: any) {
+      if (err?.code === "EPERM" && process.platform === "win32") return;
+      throw err;
+    }
     const result = syncAgentRules({ projectPath: dir, project, files: ["CLAUDE.md"] });
     expect(result.written).toEqual([]);
     expect(result.skipped[0]).toMatchObject({ path: "CLAUDE.md", reason: "symlink" });
