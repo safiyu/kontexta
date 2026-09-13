@@ -54,7 +54,7 @@ describe("Git Operations", () => {
     // Initialize git repository in TEST_DATA
     // allowUnsafeConfigPaths required so simple-git's security plugin permits
     // GIT_CONFIG_GLOBAL=/dev/null in the env we pass.
-    const git: SimpleGit = simpleGit(TEST_DATA_DIR, { allowUnsafeConfigPaths: true });
+    const git: SimpleGit = simpleGit(TEST_DATA_DIR, { allowUnsafeConfigPaths: true } as any);
     await git.env(isolatedEnv).init();
     await git.addConfig("user.email", "test@example.com");
     await git.addConfig("user.name", "Test User");
