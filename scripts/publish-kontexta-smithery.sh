@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+ROOT_DIR=$(pwd)
 # Publish Kontexta MCP to Smithery as an MCPB stdio bundle (no public HTTPS needed).
 # Usage: ./scripts/publish-kontexta-smithery.sh [version] [namespace] [--dry-run]
 # Defaults: version from package.json or npm (kontexta-mcp latest), namespace safiyu.
@@ -45,10 +46,10 @@ if ! command -v smithery >/dev/null 2>&1; then
   npm install -g @smithery/cli
 fi
 
-# Manifest: no tools array (smithery-ai/cli#787 schema conflict); user_config is REQUIRED
-# because the deploy pipeline rejects stdio releases with zero config values ("No values to set").
-cat > "${WORK}/manifest.json" <<EOF
-{
+# Build the full Smithery bundle using the new builder script
+echo "==> Building full Smithery bundle"
+node "${ROOT_DIR}/scripts/build-smithery-bundle.mjs" "${VERSION}" "${ROOT_DIR}/kontexta-${VERSION}.mcpb"
+BUNDLE_PATH="${ROOT_DIR}/kontexta-${VERSION}.mcpb"
   "manifest_version": "0.3",
   "name": "kontexta",
   "version": "${VERSION}",
@@ -83,8 +84,7 @@ EOF
 # Keep the bundle a tiny wrapper (no package.json -> no node_modules)
 printf 'package.json\n' > "${WORK}/.mcpbignore"
 
-echo "==> Packing bundle"
-(cd "${WORK}" && mcpb pack . "${BUNDLE_NAME}" | tail -6)
+# Bundle is already packed by build-smithery-bundle.mjs
 
 if [ "$DRY_RUN" -eq 1 ]; then
   echo "==> DRY RUN: bundle built at ${WORK}/${BUNDLE_NAME} (not deleting; trap disabled)"
@@ -99,5 +99,5 @@ if [ -n "${CI:-}" ] && [ -z "${SMITHERY_API_KEY:-}" ]; then
 fi
 
 # Requires `smithery` CLI + prior login or SMITHERY_API_KEY
-smithery mcp publish "${WORK_NATIVE}/${BUNDLE_NAME}" -n "${QUALIFIED}"
+smithery mcp publish "${BUNDLE_PATH}" -n "${QUALIFIED}"
 echo "==> Done: https://smithery.ai/servers/${QUALIFIED}"
