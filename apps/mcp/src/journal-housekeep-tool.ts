@@ -5,7 +5,7 @@ import { getCurrentProjectSlug } from "./journal-capture.js";
 
 export function registerHousekeepTool(server: any): void {
   server.tool(
-    "housekeep_journal",
+    "journal.housekeep",
     "Run journal retention/archival for a project. Idempotent. Prunes old raw .jsonl files and archives cold tasks per the configured retention policy.",
     {
       project_slug: z.string().optional().describe("Project slug to housekeep. Defaults to the current active project."),
