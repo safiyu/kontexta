@@ -28,17 +28,8 @@ if [ -z "$VERSION" ]; then
 fi
 echo "==> Publishing ${QUALIFIED} v${VERSION} to Smithery"
 
-WORK="$(mktemp -d)"
-# The smithery CLI is a Node app: hand it a native Windows path, not MSYS /tmp/...
-WORK_NATIVE="$(cygpath -w "$WORK" 2>/dev/null || echo "$WORK")"
-trap 'rm -rf "$WORK"' EXIT
 BUNDLE_NAME="kontexta-${VERSION}.mcpb"
-
-# Packer (Anthropic MCPB CLI)
-if ! command -v mcpb >/dev/null 2>&1; then
-  echo "==> Installing @anthropic-ai/mcpb"
-  npm install -g @anthropic-ai/mcpb
-fi
+BUNDLE_PATH="${ROOT_DIR}/${BUNDLE_NAME}"
 
 # Smithery CLI
 if ! command -v smithery >/dev/null 2>&1; then
@@ -46,49 +37,12 @@ if ! command -v smithery >/dev/null 2>&1; then
   npm install -g @smithery/cli
 fi
 
-# Build the full Smithery bundle using the new builder script
+# Build the full Smithery bundle using the builder script
 echo "==> Building full Smithery bundle"
-node "${ROOT_DIR}/scripts/build-smithery-bundle.mjs" "${VERSION}" "${ROOT_DIR}/kontexta-${VERSION}.mcpb"
-BUNDLE_PATH="${ROOT_DIR}/kontexta-${VERSION}.mcpb"
-  "manifest_version": "0.3",
-  "name": "kontexta",
-  "version": "${VERSION}",
-  "description": "Local-first MCP server: persistent knowledge vault, governed sandbox, and journal loop for AI coding agents",
-  "author": { "name": "safiyu" },
-  "server": {
-    "type": "node",
-    "entry_point": "launcher.js",
-    "mcp_config": {
-      "command": "npx",
-      "args": ["-y", "kontexta-mcp"]
-    }
-  },
-  "user_config": {
-    "KONTEXTA_DATA_DIR": {
-      "type": "string",
-      "title": "Vault directory",
-      "description": "Absolute path where kontexta stores its vault (defaults to your OS data directory if left empty)",
-      "required": false
-    }
-  }
-}
-EOF
-
-# Entry point must exist even though hosts use mcp_config directly
-cat > "${WORK}/launcher.js" <<'EOF'
-const { spawn } = require("node:child_process");
-const child = spawn("npx", ["-y", "kontexta-mcp"], { stdio: "inherit" });
-child.on("exit", (code) => process.exit(code ?? 0));
-EOF
-
-# Keep the bundle a tiny wrapper (no package.json -> no node_modules)
-printf 'package.json\n' > "${WORK}/.mcpbignore"
-
-# Bundle is already packed by build-smithery-bundle.mjs
+node "${ROOT_DIR}/scripts/build-smithery-bundle.mjs" "${VERSION}" "${BUNDLE_PATH}"
 
 if [ "$DRY_RUN" -eq 1 ]; then
-  echo "==> DRY RUN: bundle built at ${WORK}/${BUNDLE_NAME} (not deleting; trap disabled)"
-  trap - EXIT
+  echo "==> DRY RUN: bundle built at ${BUNDLE_PATH}"
   exit 0
 fi
 
