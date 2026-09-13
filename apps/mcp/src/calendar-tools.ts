@@ -62,11 +62,11 @@ export function registerCalendarTools(server: any): void {
     "SIDE-EFFECTFUL. Patch an existing entity's fields, including `active` (set false to soft-retire it without losing its history). Idempotent per patch. Returns `{entity}`. For a hard delete see `calendar_delete_entity`.",
     {
       id: z.number().int().describe("Entity id (from `calendar_add_entity` or `calendar_list_entities`)."),
-      name: z.string().min(1).optional(),
-      kind: z.string().nullable().optional(),
-      notes: z.string().nullable().optional(),
-      timezone: z.string().nullable().optional(),
-      active: z.boolean().optional(),
+      name: z.string().min(1).optional().describe("New display name for the entity."),
+      kind: z.string().nullable().optional().describe("Freeform category, e.g. 'server', 'vehicle', 'location'."),
+      notes: z.string().nullable().optional().describe("Freeform notes."),
+      timezone: z.string().nullable().optional().describe("IANA timezone for display purposes (e.g. 'Europe/Berlin')."),
+      active: z.boolean().optional().describe("Set false to soft-retire the entity without losing history."),
     },
     async (input: { id: number; name?: string; kind?: string | null; notes?: string | null; timezone?: string | null; active?: boolean }) => {
       try {
@@ -139,7 +139,7 @@ export function registerCalendarTools(server: any): void {
       title: z.string().min(1).describe("Short title for the event."),
       starts_at: z.string().describe("ISO 8601 timestamp with explicit timezone, e.g. '2026-08-03T02:00:00+05:30'."),
       ends_at: z.string().describe("ISO 8601 timestamp with explicit timezone; must be after starts_at."),
-      notes: z.string().optional(),
+      notes: z.string().optional().describe("Optional free-text notes about the event."),
       original_timezone: z.string().optional().describe("IANA timezone the window was originally communicated in, for display."),
       source: z.string().optional().describe("Freeform provenance, e.g. 'email from ops team'."),
     },
@@ -160,13 +160,13 @@ export function registerCalendarTools(server: any): void {
     {
       id: z.number().int().describe("Event id."),
       entity: z.string().optional().describe("Move the event to a different entity — name or numeric id."),
-      type: z.string().min(1).optional(),
-      title: z.string().min(1).optional(),
+      type: z.string().min(1).optional().describe("Freeform event type, e.g. 'downtime', 'maintenance', 'delivery'."),
+      title: z.string().min(1).optional().describe("Short title for the event."),
       starts_at: z.string().optional().describe("ISO 8601 timestamp with explicit timezone."),
       ends_at: z.string().optional().describe("ISO 8601 timestamp with explicit timezone."),
-      notes: z.string().nullable().optional(),
-      original_timezone: z.string().nullable().optional(),
-      source: z.string().nullable().optional(),
+      notes: z.string().nullable().optional().describe("Optional free-text notes."),
+      original_timezone: z.string().nullable().optional().describe("IANA timezone the window was originally communicated in, for display."),
+      source: z.string().nullable().optional().describe("Freeform provenance, e.g. 'email from ops team'."),
     },
     async (input: { id: number; entity?: string; type?: string; title?: string; starts_at?: string; ends_at?: string; notes?: string | null; original_timezone?: string | null; source?: string | null }) => {
       try {

@@ -8,7 +8,7 @@ export function registerHousekeepTool(server: any): void {
     "housekeep_journal",
     "Run journal retention/archival for a project. Idempotent. Prunes old raw .jsonl files and archives cold tasks per the configured retention policy.",
     {
-      project_slug: z.string().optional(),
+      project_slug: z.string().optional().describe("Project slug to housekeep. Defaults to the current active project."),
     },
     async ({ project_slug }: { project_slug?: string }) => {
       const slug = project_slug ?? getCurrentProjectSlug();

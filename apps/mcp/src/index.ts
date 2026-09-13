@@ -491,7 +491,7 @@ server.tool(
 server.tool(
   "delete_report_resource",
   "Delete a file from reports/resources/. No-op if it doesn't exist.",
-  { filename: z.string() },
+  { filename: z.string().describe("Filename (relative) of the resource to delete from reports/resources/.") },
   async ({ filename }) => {
     deleteResource(dataDir, filename);
     return { content: [{ type: "text", text: JSON.stringify({ ok: true, filename }, null, 2) }] };
@@ -502,9 +502,9 @@ server.tool(
   "export_report",
   "Export an existing HTML report as PDF or PNG. Returns { url } for the web-served download (requires an authenticated dashboard request) by default. Set inline_bytes=true to render in-process and get { bytes_base64 } instead — only available when running via the full `kontexta` CLI, not the standalone kontexta-mcp package; falls back to { url } with a note if unavailable.",
   {
-    id: z.number(),
-    format: z.enum(["pdf", "png"]).default("pdf"),
-    inline_bytes: z.boolean().optional().default(false),
+    id: z.number().describe("File ID of the HTML report to export."),
+    format: z.enum(["pdf", "png"]).default("pdf").describe("Output format: 'pdf' or 'png'."),
+    inline_bytes: z.boolean().optional().default(false).describe("If true, render in-process and return raw bytes (base64). Only available in the full kontexta CLI bundle; falls back to {url} otherwise."),
   },
   async ({ id, format, inline_bytes }) => {
     const url = `/api/files/${id}/export-html?format=${format}`;
@@ -1999,13 +1999,13 @@ server.tool(
     files: z
       .array(
         z.object({
-          title: z.string(),
-          content: z.string(),
-          destination: z.enum(["knowledge", "project", "kontexta"]),
-          project_id: z.number().optional(),
-          folder: z.string().optional(),
-          tags: z.array(z.string()).optional(),
-          format: z.enum(["md", "mmd", "html"]).optional(),
+          title: z.string().describe("File title."),
+          content: z.string().describe("File body content (markdown, mermaid, or HTML depending on format)."),
+          destination: z.enum(["knowledge", "project", "kontexta"]).describe("Storage destination: 'knowledge' for KB, 'project' for a project, 'kontexta' for app-internal."),
+          project_id: z.number().optional().describe("Project ID — required when destination is 'project' or 'kontexta'."),
+          folder: z.string().optional().describe("Relative folder path within the destination (e.g. 'notes/daily')."),
+          tags: z.array(z.string()).optional().describe("Tags to apply to this file."),
+          format: z.enum(["md", "mmd", "html"]).optional().describe("File format: 'md' (default), 'mmd' (Mermaid diagram), or 'html' (report)."),
           kind: z.enum(["dictionary", "note"]).optional()
             .describe("REQUIRED per-item for destination='knowledge'. See create_file for the dictionary/note rubric."),
         })
@@ -2095,9 +2095,9 @@ server.tool(
   {
     query: z.string().describe("Full-text search query"),
     add_tags: z.array(z.string()).min(1).describe("Tags to add to every matching file"),
-    project_id: z.number().nullable().optional(),
+    project_id: z.number().nullable().optional().describe("Scope search to a specific project. Pass null for KB-only results."),
     tags: z.array(z.string()).optional().describe("Filter — only matches that already carry ALL of these tags"),
-    favorite: z.boolean().optional(),
+    favorite: z.boolean().optional().describe("If true, restrict to favorited files only."),
   },
   async ({ query, add_tags, project_id, tags, favorite }) => {
     const filters: any = { query };

@@ -52,8 +52,8 @@ export function registerJournalTools(server: any): void {
     "distill_journal",
     "Run the distillation pipeline: read raw events since the high-water mark, group by topic, write mechanical markdown entries, advance high-water. Idempotent. Auto-provisions a project row for orphan slugs (e.g. `default`) that have no registered project yet.",
     {
-      project_slug: z.string().optional(),
-      max_events: z.number().int().positive().max(2000).optional(),
+      project_slug: z.string().optional().describe("Project slug to distill. Defaults to the current active project."),
+      max_events: z.number().int().positive().max(2000).optional().describe("Maximum raw events to process per run (default 200, max 2000)."),
     },
     async ({ project_slug, max_events }: { project_slug?: string; max_events?: number }) => {
       const slug = project_slug ?? getCurrentProjectSlug();
@@ -76,7 +76,7 @@ export function registerJournalTools(server: any): void {
   server.tool(
     "journal_status",
     "Report the journal backlog and high-water mark for a project.",
-    { project_slug: z.string().optional() },
+    { project_slug: z.string().optional().describe("Project slug to check. Defaults to the current active project.") },
     async ({ project_slug }: { project_slug?: string }) => {
       const slug = project_slug ?? getCurrentProjectSlug();
       const hw = readHighWater(`${getDataDir()}/knowledge/journal`, slug);
