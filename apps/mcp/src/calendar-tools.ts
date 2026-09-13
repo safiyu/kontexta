@@ -59,9 +59,9 @@ export function registerCalendarTools(server: any): void {
 
   server.tool(
     "calendar.entities.update",
-    "SIDE-EFFECTFUL. Patch an existing entity's fields, including `active` (set false to soft-retire it without losing its history). Idempotent per patch. Returns `{entity}`. For a hard delete see `calendar_delete_entity`.",
+    "SIDE-EFFECTFUL. Patch an existing entity's fields, including `active` (set false to soft-retire it without losing its history). Idempotent per patch. Returns `{entity}`. For a hard delete see `calendar.entities.delete`.",
     {
-      id: z.number().int().describe("Entity id (from `calendar_add_entity` or `calendar_list_entities`)."),
+      id: z.number().int().describe("Entity id (from `calendar.entities.add` or `calendar.entities.list`)."),
       name: z.string().min(1).optional().describe("New display name for the entity."),
       kind: z.string().nullable().optional().describe("Freeform category, e.g. 'server', 'vehicle', 'location'."),
       notes: z.string().nullable().optional().describe("Freeform notes."),
@@ -80,7 +80,7 @@ export function registerCalendarTools(server: any): void {
 
   server.tool(
     "calendar.entities.delete",
-    "DESTRUCTIVE. Permanently delete an entity AND cascade-delete every event and link attached to it. Not idempotent — deleting an unknown id throws. Returns `{success, deleted_events, deleted_links}`. To deactivate without losing history, use `calendar_update_entity` with `active: false` instead.",
+    "DESTRUCTIVE. Permanently delete an entity AND cascade-delete every event and link attached to it. Not idempotent — deleting an unknown id throws. Returns `{success, deleted_events, deleted_links}`. To deactivate without losing history, use `calendar.entities.update` with `active: false` instead.",
     { id: z.number().int().describe("Entity id to delete.") },
     async ({ id }: { id: number }) => {
       try {
@@ -107,7 +107,7 @@ export function registerCalendarTools(server: any): void {
 
   server.tool(
     "calendar.entities.link",
-    "SIDE-EFFECTFUL. Create or update a directed dependency edge between two entities (e.g. \"A feeds B\"), or remove one with `remove: true`. Idempotent — upserts the label on repeat calls; removing an absent link is a no-op. Used by `calendar_conflicts`/`calendar_list_events` to flag overlaps across connected entities (one hop, either direction). Returns `{link}` or `{removed}`.",
+    "SIDE-EFFECTFUL. Create or update a directed dependency edge between two entities (e.g. \"A feeds B\"), or remove one with `remove: true`. Idempotent — upserts the label on repeat calls; removing an absent link is a no-op. Used by `calendar.events.conflicts`/`calendar.events.list` to flag overlaps across connected entities (one hop, either direction). Returns `{link}` or `{removed}`.",
     {
       from: z.string().describe("Source entity — name (case-insensitive) or numeric id."),
       to: z.string().describe("Target entity — name (case-insensitive) or numeric id."),
@@ -132,7 +132,7 @@ export function registerCalendarTools(server: any): void {
 
   server.tool(
     "calendar.events.add",
-    "SIDE-EFFECTFUL. Add a one-off time window (downtime, maintenance, a delivery, a shift, an inspection, etc.) to an entity. NOT idempotent — calling this twice creates two events. `starts_at`/`ends_at` must be ISO 8601 with an explicit timezone (`Z` or `±HH:MM`) — naive timestamps are rejected because their meaning would be ambiguous once stored as UTC. Returns `{event}`. Follow up with `calendar_conflicts` to check for overlaps.",
+    "SIDE-EFFECTFUL. Add a one-off time window (downtime, maintenance, a delivery, a shift, an inspection, etc.) to an entity. NOT idempotent — calling this twice creates two events. `starts_at`/`ends_at` must be ISO 8601 with an explicit timezone (`Z` or `±HH:MM`) — naive timestamps are rejected because their meaning would be ambiguous once stored as UTC. Returns `{event}`. Follow up with `calendar.events.conflicts` to check for overlaps.",
     {
       entity: z.string().describe("Entity the event applies to — name (case-insensitive) or numeric id."),
       type: z.string().min(1).describe("Freeform event type, e.g. 'downtime', 'maintenance', 'delivery', 'shift'."),
@@ -191,7 +191,7 @@ export function registerCalendarTools(server: any): void {
 
   server.tool(
     "calendar.events.list",
-    "Read-only; no side effects, auth, or rate limits. List events overlapping a window (half-open — an event ending exactly at `from` is excluded), optionally filtered by entity/type. Set `include_conflicts` to also run conflict detection over the same window and attach it. Returns `{events, count, conflicts?}`. For conflicts alone, prefer `calendar_conflicts`.",
+    "Read-only; no side effects, auth, or rate limits. List events overlapping a window (half-open — an event ending exactly at `from` is excluded), optionally filtered by entity/type. Set `include_conflicts` to also run conflict detection over the same window and attach it. Returns `{events, count, conflicts?}`. For conflicts alone, prefer `calendar.events.conflicts`.",
     {
       from: z.string().optional().describe("Window start, ISO 8601 with explicit timezone."),
       to: z.string().optional().describe("Window end, ISO 8601 with explicit timezone."),
@@ -224,7 +224,7 @@ export function registerCalendarTools(server: any): void {
 
   server.tool(
     "calendar.events.conflicts",
-    `Read-only; no side effects, auth, or rate limits. Report scheduling conflicts in a window: overlaps on the same entity (\`overlap\`), overlaps between linked entities one hop apart (\`linked_overlap\`), and gaps smaller than a minimum buffer (\`insufficient_buffer\`). Computed on demand — nothing is persisted. Buffer defaults to the \`${"calendar.min_buffer_minutes"}\` setting (0 = off); pass \`buffer_minutes\` to override for this call. Returns \`{conflicts, count, buffer_minutes, events_considered}\`. See also \`calendar_list_events\` with \`include_conflicts\`.`,
+    `Read-only; no side effects, auth, or rate limits. Report scheduling conflicts in a window: overlaps on the same entity (\`overlap\`), overlaps between linked entities one hop apart (\`linked_overlap\`), and gaps smaller than a minimum buffer (\`insufficient_buffer\`). Computed on demand — nothing is persisted. Buffer defaults to the \`${"calendar.min_buffer_minutes"}\` setting (0 = off); pass \`buffer_minutes\` to override for this call. Returns \`{conflicts, count, buffer_minutes, events_considered}\`. See also \`calendar.events.list\` with \`include_conflicts\`.`,
     {
       from: z.string().describe("Window start, ISO 8601 with explicit timezone."),
       to: z.string().describe("Window end, ISO 8601 with explicit timezone."),
