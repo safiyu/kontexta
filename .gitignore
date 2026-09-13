@@ -23,7 +23,6 @@ kontexta.db
 test_output.txt
 scratch/
 *.mcpb
-apps/web/src/lib/mcp-tools.json
 apps/web/.next/standalone/
 kontexta.json
 .kontexta-manual-mcp
