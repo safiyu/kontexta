@@ -1,4 +1,4 @@
-﻿// apps/mcp/src/calendar-tools.ts
+// apps/mcp/src/calendar-tools.ts
 import { z } from "zod";
 import {
   createEntity, updateEntity, deleteEntity, listEntities, getEntity, getEntityByName,

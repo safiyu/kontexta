@@ -1,4 +1,4 @@
-﻿// apps/mcp/src/journal-commit-upgrades-tool.ts
+// apps/mcp/src/journal-commit-upgrades-tool.ts
 import { z } from "zod";
 import { markUpgradeApplied, getDatabase } from "kxta-core";
 

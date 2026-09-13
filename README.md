@@ -1,4 +1,4 @@
-﻿<h1 align="center">
+<h1 align="center">
   <img src="docs/intro.png" alt="Kontexta Architecture and Features"><br>
   Kontexta
 </h1>

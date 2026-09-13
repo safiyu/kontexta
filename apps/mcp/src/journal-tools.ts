@@ -1,4 +1,4 @@
-﻿// apps/mcp/src/journal-tools.ts
+// apps/mcp/src/journal-tools.ts
 import { z } from "zod";
 import { distillJournal, ensureProjectRowForSlug, readHighWater, getDataDir } from "kxta-core";
 import type { RawEvent } from "kxta-core";

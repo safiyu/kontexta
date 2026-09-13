@@ -1,4 +1,4 @@
-﻿// apps/mcp/src/journal-housekeep-tool.ts
+// apps/mcp/src/journal-housekeep-tool.ts
 import { z } from "zod";
 import { housekeepJournal, getDataDir } from "kxta-core";
 import { getCurrentProjectSlug } from "./journal-capture.js";
