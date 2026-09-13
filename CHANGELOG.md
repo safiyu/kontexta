@@ -1,5 +1,11 @@
 # Changelog
 
+## 4.6.1 — Smithery registry badge and client install
+
+### Added
+
+- **Smithery registry badge.** Kontexta is now listed on [Smithery](https://smithery.ai/servers/safiyu/kontexta) with badge and client installation reference in the README.
+
 ## 4.6.0 — Your agent starts every session already knowing you
 
 This release turns Kontexta into a workspace the agent walks into fully briefed. Your profile, your calendar, your rules, your team — surfaced once at session start, honored throughout, and mirrored in the dashboard so you and the agent see the same picture.
