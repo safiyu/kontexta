@@ -1,0 +1,44 @@
+name: Publish to Smithery (Manual)
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to publish (leave empty to use package.json)"
+        required: false
+        default: ""
+      dry_run:
+        description: "Dry run (build MCPB bundle only, do not publish)"
+        type: boolean
+        required: false
+        default: false
+
+jobs:
+  publish-smithery:
+    name: Publish to Smithery
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Publish to Smithery
+        env:
+          SMITHERY_API_KEY: ${{ secrets.SMITHERY_API_KEY || secrets.SMITHERY_TOKEN }}
+        run: |
+          chmod +x ./scripts/publish-kontexta-smithery.sh
+          ARGS=()
+          if [ -n "${{ inputs.version }}" ]; then
+            ARGS+=("${{ inputs.version }}")
+          fi
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            ARGS+=("--dry-run")
+          fi
+          ./scripts/publish-kontexta-smithery.sh "${ARGS[@]}"

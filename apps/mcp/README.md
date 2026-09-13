@@ -2,6 +2,7 @@
 
 [![npm](https://img.shields.io/npm/v/kontexta-mcp.svg)](https://www.npmjs.com/package/kontexta-mcp)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+[![smithery badge](https://smithery.ai/badge/safiyu/kontexta)](https://smithery.ai/servers/safiyu/kontexta)
 
 > Want the dashboard too? Install [`kontexta`](https://www.npmjs.com/package/kontexta) instead — it includes this MCP server plus the WebUI. Run `npx kontexta start` for the full experience or `npx kontexta mcp` for MCP-only.
 
@@ -23,6 +24,12 @@ The server is launched on demand by your AI client; no global install needed.
     }
   }
 }
+```
+
+Or install automatically via [Smithery](https://smithery.ai/servers/safiyu/kontexta):
+
+```bash
+npx -y @smithery/cli install safiyu/kontexta --client claude
 ```
 
 `KONTEXTA_DATA_DIR` **must** be an absolute path. The directory is created on first run and holds your SQLite DB plus the markdown files the agent indexes.

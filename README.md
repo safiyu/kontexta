@@ -7,6 +7,7 @@
 
 <p align="center">
   <a href="https://glama.ai/mcp/servers/safiyu/kontexta"><img src="https://glama.ai/mcp/servers/safiyu/kontexta/badges/score.svg" alt="kontexta MCP server"></a>
+  <a href="https://smithery.ai/servers/safiyu/kontexta"><img src="https://smithery.ai/badge/safiyu/kontexta" alt="smithery badge"></a>
 </p>
 
 Kontexta is a local-first **Model Context Protocol (MCP)** server that gives your AI coding agents — **Claude Code**, **Cursor**, **Cline**, **GitHub Copilot**, **Gemini**, **Antigravity** — a persistent memory and a controlled command surface. [Learn more at kontexta.dev](https://kontexta.dev)
@@ -140,6 +141,12 @@ If you only want the MCP server (no dashboard), point your AI client at:
     }
   }
 }
+```
+
+Or install automatically via [Smithery](https://smithery.ai/servers/safiyu/kontexta):
+
+```bash
+npx -y @smithery/cli install safiyu/kontexta --client claude
 ```
 
 ### Alternative: Docker
