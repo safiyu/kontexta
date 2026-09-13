@@ -40,24 +40,28 @@ describe("Git Operations", () => {
     mkdirSync(join(TEST_DATA_DIR, "backups"), { recursive: true });
 
     // Isolate from any inaccessible system/global .gitconfig on CI runners
-    // (e.g. Windows GitHub Actions: 'C:/Users/runneradmin/.gitconfig: Permission denied')
+    // (e.g. Windows GitHub Actions: 'C:/Users/runneradmin/.gitconfig: Permission denied',
+    //  Linux runners: permission errors reading /root/.gitconfig)
+    const nullPath = platform() === "win32" ? "NUL" : "/dev/null";
     const isolatedEnv = {
       ...process.env,
       GIT_CONFIG_NOSYSTEM: "1",
-      HOME: TEST_DATA_DIR,         // points git's home lookup at our temp dir
-      USERPROFILE: TEST_DATA_DIR,  // Windows equivalent of HOME
+      GIT_CONFIG_GLOBAL: nullPath,  // skip ~/.gitconfig entirely
+      HOME: TEST_DATA_DIR,          // points git's home lookup at our temp dir
+      USERPROFILE: TEST_DATA_DIR,   // Windows equivalent of HOME
     };
 
     // Initialize git repository in TEST_DATA
-    const git: SimpleGit = simpleGit(TEST_DATA_DIR, { config: [] });
+    // allowUnsafeConfigPaths required so simple-git's security plugin permits
+    // GIT_CONFIG_GLOBAL=/dev/null in the env we pass.
+    const git: SimpleGit = simpleGit(TEST_DATA_DIR, { allowUnsafeConfigPaths: true });
     await git.env(isolatedEnv).init();
     await git.addConfig("user.email", "test@example.com");
     await git.addConfig("user.name", "Test User");
     // Disable GPG signing and hooks entirely in the local repo config
     await git.addConfig("commit.gpgsign", "false");
     // Use a cross-platform no-op hooks path
-    const hooksPath = platform() === "win32" ? "NUL" : "/dev/null";
-    execSync(`git config core.hooksPath ${hooksPath}`, { cwd: TEST_DATA_DIR, env: isolatedEnv });
+    execSync(`git config core.hooksPath ${nullPath}`, { cwd: TEST_DATA_DIR, env: isolatedEnv });
 
     // Initialize database
     createDatabase(TEST_DB_PATH);

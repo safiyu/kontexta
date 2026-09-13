@@ -55,7 +55,10 @@ function buildGitEnv(): Record<string, string | undefined> {
 }
 
 function gitFor(dir: string): SimpleGit {
-  return simpleGit(dir).env(buildGitEnv() as any);
+  // allowUnsafeConfigPaths is required so simple-git's security plugin permits
+  // GIT_CONFIG_GLOBAL pointing to /dev/null (Linux) or NUL (Windows) — the
+  // paths we use in buildGitEnv() to isolate git from inaccessible runner configs.
+  return simpleGit(dir, { allowUnsafeConfigPaths: true }).env(buildGitEnv() as any);
 }
 
 // Make sure the local repo's HEAD is on `main` before pushing to `origin main`.
