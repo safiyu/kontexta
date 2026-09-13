@@ -1,4 +1,4 @@
-// apps/mcp/src/journal-tools.ts
+﻿// apps/mcp/src/journal-tools.ts
 import { z } from "zod";
 import { distillJournal, ensureProjectRowForSlug, readHighWater, getDataDir } from "kxta-core";
 import type { RawEvent } from "kxta-core";
@@ -11,7 +11,7 @@ import {
 
 export function registerJournalTools(server: any): void {
   server.tool(
-    "journal_note",
+    "journal.note",
     "Record a free-form decision/abandonment/observation note in the current project's journal. Stored as an `agent_note` event in Layer 1; surfaces in distilled task entries.",
     {
       text: z.string().min(1).describe("Body of the note (markdown allowed)."),
@@ -32,7 +32,7 @@ export function registerJournalTools(server: any): void {
   );
 
   server.tool(
-    "journal_intent",
+    "journal.intent",
     "Record a topic/intent pivot. Use when the user redirects what you're working on; the distillation step uses this to split task buckets correctly.",
     { summary: z.string().min(1).describe("One-line summary of the new intent.") },
     async ({ summary }: { summary: string }) => {
@@ -49,7 +49,7 @@ export function registerJournalTools(server: any): void {
   );
 
   server.tool(
-    "distill_journal",
+    "journal.distill",
     "Run the distillation pipeline: read raw events since the high-water mark, group by topic, write mechanical markdown entries, advance high-water. Idempotent. Auto-provisions a project row for orphan slugs (e.g. `default`) that have no registered project yet.",
     {
       project_slug: z.string().optional().describe("Project slug to distill. Defaults to the current active project."),
@@ -74,7 +74,7 @@ export function registerJournalTools(server: any): void {
   );
 
   server.tool(
-    "journal_status",
+    "journal.status",
     "Report the journal backlog and high-water mark for a project.",
     { project_slug: z.string().optional().describe("Project slug to check. Defaults to the current active project.") },
     async ({ project_slug }: { project_slug?: string }) => {

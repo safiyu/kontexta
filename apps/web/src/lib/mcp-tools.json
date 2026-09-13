@@ -1,8 +1,8 @@
 {
-  "generatedAt": "2026-09-13T20:00:49.543Z",
+  "generatedAt": "2026-09-13T21:26:42.999Z",
   "tools": [
     {
-      "name": "refresh_session_context",
+      "name": "admin.refresh_session_context",
       "description": "Re-read the session context (profile, upcoming events within 7d, conflicts, freshness nudge) as it stands NOW. Call this when the user just edited their profile or added/moved calendar events and you want the current picture instead of the snapshot taken at session start. Read-only; no side effects. Returns the same block Kontexta sent as MCP instructions at session start.",
       "inputSchema": {
         "$schema": "http://json-schema.org/draft-07/schema#",
@@ -14,7 +14,7 @@
       }
     },
     {
-      "name": "journal_append",
+      "name": "journal.append",
       "description": "Append a timestamped text entry to today's daily journal file in the Knowledge Base. Creates the file if it doesn't already exist. Both calls on the same calendar day return the same file_id. Returns { file_id }.",
       "inputSchema": {
         "type": "object",
@@ -39,7 +39,7 @@
       }
     },
     {
-      "name": "create_file",
+      "name": "files.create",
       "description": "Create a new markdown, mermaid, or HTML file in the knowledge base or project. This operation writes a new file to disk and adds it to the local SQLite FTS5 index. Destination can be 'knowledge' (global KB), 'project' (reference file inside a project repo), or 'kontexta' (internal Kontexta schema file). If destination is 'project' or 'kontexta', project_id is strictly required. If destination is 'knowledge', 'kind' is strictly required — pick 'dictionary' (authoritative source-of-truth) or 'note' (informational snapshot); see the kind param for the rubric. No external auth required. Rate limits do not apply (local operation). Returns the created file metadata including its new ID, path, and estimated tokens. If the destination directory does not exist, it will be created automatically. Use this tool to instantiate new contextual documents or notes. To modify an existing file, use 'update_file' instead. Parameters: 'destination' dictates required fields; if 'project' or 'kontexta', 'project_id' must be a valid integer; if 'knowledge', 'kind' must be 'dictionary' or 'note'. 'tags' and 'folder' are optional. Pass format='mmd' to create a Mermaid diagram file (.mmd) or format='html' for HTML reports; defaults to 'md'.",
       "inputSchema": {
         "type": "object",
@@ -107,7 +107,7 @@
       }
     },
     {
-      "name": "add_report_resource",
+      "name": "resources.add_report",
       "description": "Write an image or other binary resource into the shared reports/resources/ folder. Returns { filename, size, src, url } — embed the report's <img>/<a> tags with `src` exactly as given (e.g. `<img src=\"resources/chart.png\">`); it is the only form that resolves correctly both in the dashboard viewer and in PDF/PNG export. Do not use `url` inside report HTML — it only works in the dashboard. Bytes are passed base64-encoded.",
       "inputSchema": {
         "type": "object",
@@ -133,7 +133,7 @@
       }
     },
     {
-      "name": "list_report_resources",
+      "name": "resources.list_reports",
       "description": "List all files currently stored under reports/resources/. Returns filename, size in bytes, and served URL.",
       "inputSchema": {
         "$schema": "http://json-schema.org/draft-07/schema#",
@@ -145,13 +145,14 @@
       }
     },
     {
-      "name": "delete_report_resource",
+      "name": "resources.delete_report",
       "description": "Delete a file from reports/resources/. No-op if it doesn't exist.",
       "inputSchema": {
         "type": "object",
         "properties": {
           "filename": {
-            "type": "string"
+            "type": "string",
+            "description": "Filename (relative) of the resource to delete from reports/resources/."
           }
         },
         "required": [
@@ -165,13 +166,14 @@
       }
     },
     {
-      "name": "export_report",
+      "name": "resources.export_report",
       "description": "Export an existing HTML report as PDF or PNG. Returns { url } for the web-served download (requires an authenticated dashboard request) by default. Set inline_bytes=true to render in-process and get { bytes_base64 } instead — only available when running via the full `kontexta` CLI, not the standalone kontexta-mcp package; falls back to { url } with a note if unavailable.",
       "inputSchema": {
         "type": "object",
         "properties": {
           "id": {
-            "type": "number"
+            "type": "number",
+            "description": "File ID of the HTML report to export."
           },
           "format": {
             "type": "string",
@@ -179,11 +181,13 @@
               "pdf",
               "png"
             ],
-            "default": "pdf"
+            "default": "pdf",
+            "description": "Output format: 'pdf' or 'png'."
           },
           "inline_bytes": {
             "type": "boolean",
-            "default": false
+            "default": false,
+            "description": "If true, render in-process and return raw bytes (base64). Only available in the full kontexta CLI bundle; falls back to {url} otherwise."
           }
         },
         "required": [
@@ -197,7 +201,7 @@
       }
     },
     {
-      "name": "read_file",
+      "name": "files.read",
       "description": "Read one file's full body and metadata by ID. Read-only; no side effects, auth, or rate limits. Returns title, path, content, tags, est_tokens (so you can budget context before opening more files), and timestamps. Throws if the ID is unknown. Use for a single known file. Prefer `describe_file` to inspect without paying body tokens; `read_files` for batches; `read_file_lines`/`read_section` for partial reads; `read_file_by_path` when you only have the absolute path.",
       "inputSchema": {
         "type": "object",
@@ -218,7 +222,7 @@
       }
     },
     {
-      "name": "read_files",
+      "name": "files.read_many",
       "description": "Batch read up to 200 files by ID in one call. Returns per-file annotated records, an aggregate `total_est_tokens`, and an isolated `errors[]` (one bad ID does NOT abort the batch). Read-only; no side effects, auth, or rate limits. Use instead of looping `read_file` to halve round-trips and get the combined token cost upfront. For >200 IDs, page yourself.",
       "inputSchema": {
         "type": "object",
@@ -244,7 +248,7 @@
       }
     },
     {
-      "name": "describe_file",
+      "name": "files.describe",
       "description": "Return everything ABOUT a file without pulling its content (no token cost from the body). Tags, size, est_tokens, history depth, related-file ids, backlinks, project, folder, last edited. Operates locally with no auth or rate limits. Use this when you'd otherwise chain read_file + list_tags + get_history + find_related just to decide whether to actually read the file. Parameters: 'id' must be a valid integer file ID.",
       "inputSchema": {
         "type": "object",
@@ -265,7 +269,7 @@
       }
     },
     {
-      "name": "read_file_lines",
+      "name": "files.read_lines",
       "description": "Return a 1-indexed inclusive line slice of a file. Out-of-range bounds clamp silently to the file's actual length; `to < from` throws. Read-only; no side effects, auth, or rate limits. Returns the snippet plus its size_bytes and est_tokens. Use to inspect a stack-trace region or a chunk of a large file without pulling the whole body. Prefer `read_section` if you know the heading, `grep_in_file` if you know a pattern but not the line number.",
       "inputSchema": {
         "type": "object",
@@ -298,7 +302,7 @@
       }
     },
     {
-      "name": "grep_in_file",
+      "name": "files.grep",
       "description": "Match a JS regex against one file's lines and return matched lines with line numbers (capped: default 100, max 500). Catches what FTS misses: URLs, hyphenated terms, code identifiers. Read-only; no side effects, auth, or rate limits. Invalid regex throws `invalid regex`. Returns `{matches, match_count, truncated}`. Use after `read_file_outline` when you know the file but need a specific reference; for cross-file regex use `regex_search`; for keyword/concept search use `search`.",
       "inputSchema": {
         "type": "object",
@@ -334,7 +338,7 @@
       }
     },
     {
-      "name": "regex_search",
+      "name": "files.regex_search",
       "description": "Match a JS regex against the body of every file in scope (project, KB, or all) and return per-file hits with line numbers. Slower than FTS `search` because it reads each file's content; use only when FTS misses substrings, URLs, or code identifiers. Read-only; no side effects, auth, or rate limits. Capped at 500 files / 10 hits per file by default; the response reports `files_truncated` and per-file truncation so the agent can re-scope. `project_id: null` = KB only; omit = everywhere; `kind` narrows to one content class. Invalid regex throws.",
       "inputSchema": {
         "type": "object",
@@ -387,7 +391,7 @@
       }
     },
     {
-      "name": "update_file",
+      "name": "files.update",
       "description": "Update the entire content of an existing file by its ID. This replaces the file's content on disk and triggers an FTS5 re-index. Returns the updated file metadata including new estimated token counts. Operates locally with no external auth or rate limits. If you only need to modify a single section without replacing the entire file, use 'update_file_section' instead to save context budget. Parameters: 'id' must be a valid integer file ID. 'content' is the complete markdown string that will replace the file.",
       "inputSchema": {
         "type": "object",
@@ -413,7 +417,7 @@
       }
     },
     {
-      "name": "delete_file",
+      "name": "files.delete",
       "description": "DESTRUCTIVE. Permanently delete one file by ID. KB files are unlinked from disk AND removed from the FTS5 index; project reference files only have their index entry removed (the file on disk is left alone so the watcher does not fight your editor). Not idempotent — deleting an unknown ID throws. No external auth or rate limits. Returns `{success: true}`. Use only when the file is truly obsolete; to deprioritise without losing data, untag (`remove_tags`) or unfavorite (`set_favorite`) instead. Bulk variant: `delete_files`.",
       "inputSchema": {
         "type": "object",
@@ -434,7 +438,7 @@
       }
     },
     {
-      "name": "list_files",
+      "name": "files.list",
       "description": "List file metadata with optional filters (project_id, tag, favorite, folder, untagged, kind) and pagination. Read-only; no side effects, auth, or rate limits. Each row is annotated with tags, est_tokens, size_bytes, and content_class; the response includes `total_est_tokens` so you can budget before reading bodies. `project_id: null` returns ONLY Knowledge Base files; omit the field to span everything; `kind` narrows to one content class. Use to browse known structure; for keyword/content lookup use `search`; for a denser whole-vault dump use `project_map`.",
       "inputSchema": {
         "type": "object",
@@ -489,7 +493,7 @@
       }
     },
     {
-      "name": "search",
+      "name": "files.search",
       "description": "Full-text (SQLite FTS5) keyword search across files. Returns ranked matches with inline match_excerpt and title_highlight (no follow-up `read_file` needed for snippets) plus tags, est_tokens, size_bytes, content_class, and aggregate `total_est_tokens`. Read-only; no side effects, auth, or rate limits. Ordering: dictionary hits sort above everything else for the same query (dictionary-wins on conflict), then BM25 rank. FTS is tokenised: it WILL miss URLs, hyphenated terms, and partial substrings — fall back to `regex_search` for those. `project_id: null` searches only the KB; omit the field to span everything; `tags[]` requires ALL listed tags to match; `kind` narrows to one content class. For prompt-ready bundled bodies use `bundle_search`.",
       "inputSchema": {
         "type": "object",
@@ -538,7 +542,7 @@
       }
     },
     {
-      "name": "bundle_search",
+      "name": "files.bundle_search",
       "description": "Run an FTS search and concatenate matched bodies into a single prompt-ready bundle (XML `<document>` blocks or markdown headers + fences) capped at `max_tokens`. Files are added in rank order (dictionary-wins first, then BM25) until the next would exceed the budget; the rest go to `skipped[]`. Read-only; no side effects, auth, or rate limits. Use instead of `search` + N×`read_file` when you need several related files as one context blob. Defaults: format=xml, max_tokens=50000. `project_id: null` = KB only; `tags[]` requires ALL to match; `kind` narrows to one content class.",
       "inputSchema": {
         "type": "object",
@@ -602,7 +606,7 @@
       }
     },
     {
-      "name": "add_tags",
+      "name": "tags.add",
       "description": "Append tags to ONE file. Additive — existing tags are preserved; re-adding an existing tag is a no-op (idempotent per tag). New tag names auto-create rows in the global `tags` table. Persists to local SQLite. No external auth or rate limits. Returns `{success: true}`; throws if file_id is unknown. Use to label a single file. To tag every file matching a query in one call use `tag_search_results`; to remove tags use `remove_tags`.",
       "inputSchema": {
         "type": "object",
@@ -631,7 +635,7 @@
       }
     },
     {
-      "name": "remove_tags",
+      "name": "tags.remove",
       "description": "Detach one or more tag IDs from ONE file. Destructive on the link only — does NOT delete the file or the global tag definition (orphan tags survive in `list_tags`). Idempotent: removing an already-absent tag is a no-op. No external auth or rate limits. Returns `{success: true}`. Note: takes tag IDs (integers), not names — fetch them via `list_tags`. To remove ALL tags from many files via a query, see `tag_search_results` (additive only) — there is no bulk-untag-by-query tool.",
       "inputSchema": {
         "type": "object",
@@ -660,7 +664,7 @@
       }
     },
     {
-      "name": "set_favorite",
+      "name": "tags.set_favorite",
       "description": "Set or clear the favorite flag on one file (idempotent — re-setting the same value is a no-op; not a toggle, you pass the desired state). Persists to local SQLite. No external auth or rate limits. Returns `{success: true}`. Use to curate quick-access pins; `list_files`/`search`/`bundle_search` accept `favorite: true` to filter to the pinned set.",
       "inputSchema": {
         "type": "object",
@@ -686,7 +690,7 @@
       }
     },
     {
-      "name": "list_tags",
+      "name": "tags.list",
       "description": "List every tag in the global SQLite database with id, name, and applied count. Read-only; no side effects, auth, or rate limits. Returns the entire taxonomy (not paginated). Use to discover existing labels before tagging (so you reuse rather than fork) or to find tag IDs to feed into `remove_tags`. For tags on a specific file, use `describe_file`.",
       "inputSchema": {
         "$schema": "http://json-schema.org/draft-07/schema#",
@@ -698,7 +702,7 @@
       }
     },
     {
-      "name": "list_projects",
+      "name": "projects.list",
       "description": "List every registered project with id, name, absolute path, and a derived `has_hands` flag (true when the path exists on disk AND contains a `kontexta.json`). Read-only; no side effects, auth, or rate limits. Use to find the project_id to pass to scoped tools (`search`, `list_files`, `commit_backup`, `refresh_index`, etc.). To register a new project use `register_project`; to inspect its Hands tools use `list_hands`.",
       "inputSchema": {
         "$schema": "http://json-schema.org/draft-07/schema#",
@@ -710,7 +714,7 @@
       }
     },
     {
-      "name": "register_project",
+      "name": "projects.register",
       "description": "Register a new project and link it to the Kontexta knowledge system.\n\nSIDE EFFECTS: Writes project metadata to disk (persisted in the Kontexta data directory). Scans the project root recursively to discover and index all markdown files into the local database. Registers any kontexta.json-declared Hands tools found in the project root. This operation is idempotent — re-registering an existing project updates its metadata without data loss.\n\nAUTH / RATE LIMITS: None. Operates entirely on the local file system.\n\nPARAMETERS:\n- name: Human-readable project name.\n- path: Absolute path to the project root. Required. DO NOT guess or assume the path based on the active editor workspace unless the user explicitly asks to register the \"current\" or \"open\" project. If the user provides a project name but no path, ask them for the absolute path before calling this tool. Fails with a descriptive error if the path does not exist or is inaccessible.\n- description: Optional free-text description stored with the project metadata.\n\nRETURNS: A JSON object containing:\n- project: { id, name, path, description, created_at }\n- discovered_files_count: number of markdown files indexed\n- discovered_files: array of { path, est_tokens, size_bytes } for each file\n- total_est_tokens: estimated total token cost of all discovered files\n- hands: { found, tools_registered, tools_disabled, warnings }\n- warnings: array of non-fatal issues (e.g. scan failures, token budget exceeded)\n\nERROR CONDITIONS: Returns isError=true if path is missing or unresolvable. Scan failures are non-fatal and reported in warnings rather than as errors.",
       "inputSchema": {
         "type": "object",
@@ -740,7 +744,7 @@
       }
     },
     {
-      "name": "onboard_agent",
+      "name": "admin.onboard_agent",
       "description": "Write or update the kontexta workflow rules block in a project's agent context file(s). Idempotent — uses fenced markers + version to skip no-op writes.\n\nMANDATORY: This tool modifies project configuration files. You MUST seek explicit user consent before calling this tool. Set 'confirm: true' only after the user has agreed.\n\nPARAMETERS:\n- project_id: number, required.\n- confirm: boolean, required. Must be true to proceed.\n- files: string[], optional. Paths relative to project root. For update mode, defaults to recommendation.target_files. Ignored when files is empty AND target_agent is provided (create mode).\n- target_agent: enum claude-code | codex | gemini | cursor | continue | aider | cline | copilot | generic. Required when files is empty AND no context file currently exists. Picks the canonical filename and the starter scaffold.\n\nRETURNS: { written: [{ path, action: created|updated|skipped, version }], skipped: [{ path, reason }] }",
       "inputSchema": {
         "type": "object",
@@ -789,7 +793,7 @@
       }
     },
     {
-      "name": "transfer_agent_context",
+      "name": "admin.transfer_agent_context",
       "description": "COPY existing agent context files (CLAUDE.md, AGENTS.md, .cursor/rules/*.mdc, etc.) from a project's repo into Kontexta's per-project knowledge base so they're indexed by FTS5 and can be git-synced through Kontexta's own backup engine.\n\nThis tool ONLY COPIES. It never deletes or modifies the originals in your repo. After a successful transfer, the response includes the list of source paths so the user can manually remove them if desired. No tool argument, no flag, and no code path in this tool ever calls a destructive filesystem operation against `project.path`.\n\nMANDATORY: This tool writes new files into Kontexta's data dir. You MUST seek explicit user consent before calling. Set 'confirm: true' only after the user has agreed.\n\nPARAMETERS:\n- project_id: number, required. Project ID returned from register_project.\n- confirm: boolean, required. Must be true.\n- files: string[], optional. Project-relative paths to transfer. Omit or pass [] to transfer all detected agent context files (uses the same detection list as register_project / onboard_agent).\n\nRETURNS: { transferred: [{ source_path, kb_id, kb_path, est_tokens }], skipped: [{ source_path, reason }], next_action }\nSkip reasons: \"missing\" | \"symlink\" | \"outside_project\" | \"already_transferred_same_content\" | \"read_error\" | \"write_error\".\n\nIDEMPOTENT: re-running with the same files copies nothing if the content is unchanged — duplicate transfers are detected via SHA-256 hash comparison against existing project KB rows.",
       "inputSchema": {
         "type": "object",
@@ -822,7 +826,7 @@
       }
     },
     {
-      "name": "commit_backup",
+      "name": "admin.commit_backup",
       "description": "SIDE-EFFECTFUL — TOUCHES THE NETWORK. Sync the project's KB data into its git backup directory, create a commit, and `git push` to `origin`. AUTH: relies on the local user's git credentials (SSH agent, credential helper, etc.) — there is no in-server auth. Kontexta does not rate-limit, but the remote may. Idempotent in steady state: a no-op commit is skipped, but the push still runs. Throws if the project has no configured backup repo or if push fails (network, auth, conflict). Returns `{success, copied_files_count, copied_paths}`. Use after a batch of KB writes to get changes off-machine.",
       "inputSchema": {
         "type": "object",
@@ -843,7 +847,7 @@
       }
     },
     {
-      "name": "clip_url",
+      "name": "resources.clip_url",
       "description": "SIDE-EFFECTFUL — fetches an EXTERNAL URL and writes a NEW KB file. Downloads the page, extracts the main article via Readability, converts to markdown, and saves it under `knowledge/urlclips/`. Auto-classified as content_class='dictionary' (clipped external references are treated as authoritative reference material). NOT idempotent / no de-dup — re-clipping the same URL creates a second file. AUTH: anonymous by default; pass `headers` (e.g. `{Cookie: 'session=...'}` or `{Authorization: 'Bearer ...'}`) to clip behind logins. Kontexta does not rate-limit but the upstream may throttle. On auth-required pages returns isError with `code: AUTH_REQUIRED`, optional `login_url`, and a hint to retry with `headers`. Returns `{file_id, path, title, source}`. Use to ingest external docs into the KB.",
       "inputSchema": {
         "type": "object",
@@ -876,7 +880,7 @@
       }
     },
     {
-      "name": "get_history",
+      "name": "files.get_history",
       "description": "Return the git commit history for one file (newest first), each entry with hash, message, date, and author. Reads the file's owning repo: the project's git repo for project files, the KB backup repo for KB files. Read-only; no side effects, auth, or rate limits. Returns `{file_id, path, history}`; an empty array means the file has not been committed yet. Use to understand a file's evolution before editing or restoring. Pair with `get_diff` to see exact line changes; use `restore_file` to roll back.",
       "inputSchema": {
         "type": "object",
@@ -897,7 +901,7 @@
       }
     },
     {
-      "name": "get_diff",
+      "name": "files.get_diff",
       "description": "Return the unified diff of one file between two commit hashes (typically obtained from `get_history` for the same file). Read-only; no side effects, auth, or rate limits. Order matters — `commit_a` is treated as the earlier side; reversing the args inverts the diff. Throws if either hash is unknown to the file's repo. Use after `get_history` to see WHAT changed, not just THAT it changed.",
       "inputSchema": {
         "type": "object",
@@ -928,7 +932,7 @@
       }
     },
     {
-      "name": "restore_file",
+      "name": "files.restore",
       "description": "DESTRUCTIVE. Overwrite a file's current on-disk content with the version recorded at a specific git commit, then re-index FTS. The hash MUST come from `get_history` for THIS file (foreign hashes throw). The current uncommitted content is lost unless it was already committed elsewhere. The file watcher may also pick up the change before this returns. No external auth or rate limits. Returns `{file_id, path, hash, success, message}`. Use only to undo accidental edits or recover a known-good version.",
       "inputSchema": {
         "type": "object",
@@ -954,7 +958,7 @@
       }
     },
     {
-      "name": "read_file_outline",
+      "name": "files.read_outline",
       "description": "Return a flat list of markdown headings for one file (level, text, line, byteStart, byteEnd). Read-only; no side effects, auth, or rate limits. Use as a cheap probe before `read_section` or `update_file_section` so you don't spend tokens on the full body just to learn what sections exist. Empty outline means the file has no markdown headings (it may still have content — fall back to `read_file` or `read_file_lines`).",
       "inputSchema": {
         "type": "object",
@@ -975,7 +979,7 @@
       }
     },
     {
-      "name": "read_section",
+      "name": "files.read_section",
       "description": "Return the body of ONE heading (the heading line itself is excluded) plus level, line, size_bytes, and est_tokens. Heading match is case-insensitive but exact-string after trim — fuzzy / partial matches do NOT resolve. Returns isError if the heading is absent. Read-only; no side effects, auth, or rate limits. Pair with `read_file_outline` when you are unsure which headings exist; for non-heading line ranges use `read_file_lines`.",
       "inputSchema": {
         "type": "object",
@@ -1001,7 +1005,7 @@
       }
     },
     {
-      "name": "update_file_section",
+      "name": "files.update_section",
       "description": "Surgical write — replace the body of ONE heading without touching siblings. The heading line itself is preserved verbatim; only its body is rewritten. Persists via the same path as `update_file` (writes to disk → FTS reindex → git commit). Throws if the heading does not exist (this tool will NOT create a new section — append the section text via `update_file` first). Heading match is case-insensitive exact-string. No external auth or rate limits. Returns the updated file metadata. Use to make targeted edits without re-sending the whole body; for full-file replacement use `update_file`.",
       "inputSchema": {
         "type": "object",
@@ -1032,7 +1036,7 @@
       }
     },
     {
-      "name": "list_folders",
+      "name": "folders.list",
       "description": "List folder paths under a project root (or the Knowledge Base when `project_id` is null/omitted). Returns `{folders: string[], base_path}` where `folders` are RELATIVE to `base_path`. Read-only; no side effects, auth, or rate limits. Throws if `project_id` references an unknown project. Use to discover where to drop a new file via `create_file`'s `folder` argument or to navigate vault structure; to actually create one use `create_folder`.",
       "inputSchema": {
         "type": "object",
@@ -1053,7 +1057,7 @@
       }
     },
     {
-      "name": "create_folder",
+      "name": "folders.create",
       "description": "Create a folder under a project root or the KB. Idempotent — creating an existing folder succeeds. Nested paths like `notes/inbox` create intermediates. REJECTS: empty names, null bytes, leading path separators, and any segment equal to `..` (the call returns isError, no folder is touched). Side effect: a directory is mkdir'd on disk; no DB rows are written until a file lands inside. No external auth or rate limits. Returns `{path, base_path}`.",
       "inputSchema": {
         "type": "object",
@@ -1081,7 +1085,7 @@
       }
     },
     {
-      "name": "delete_folder",
+      "name": "folders.delete",
       "description": "DESTRUCTIVE — recursively delete a folder under the KB AND every file inside it (disk + FTS rows). REFUSES (returns isError) when `project_id` is supplied: deleting inside a registered project would race the file watcher and re-ingest the contents — remove project content via your editor instead. Same name validation as `create_folder`. Not recoverable from Kontexta after the call (only the git backup, if configured, retains it). No external auth or rate limits. Returns `{success: true}`.",
       "inputSchema": {
         "type": "object",
@@ -1109,7 +1113,7 @@
       }
     },
     {
-      "name": "move_file",
+      "name": "files.move",
       "description": "Move/rename a file. Destination 'new_path' must be absolute and resolve INSIDE the file's owning project or global knowledge directory. Cross-project moves are rejected. Alternative: pass `kind='dictionary'|'note'` (with no `new_path`) to move a KB file into the mirrored path in the other class tree — subfolder path is preserved. Operates locally with no auth or limits.",
       "inputSchema": {
         "type": "object",
@@ -1142,7 +1146,7 @@
       }
     },
     {
-      "name": "find_related",
+      "name": "files.find_related",
       "description": "Find other files sharing tags with the given file, ranked by `shared_tag_count` descending. Read-only; no side effects, auth, or rate limits. Returns annotated file rows with `shared_tag_count` and `shared_tags`. Empty result means the file has no tags or no other file shares them — try `search`/`regex_search` for content-based discovery, or `suggest_tags` to bootstrap labels first. `kind` narrows to one content class. Default limit 10.",
       "inputSchema": {
         "type": "object",
@@ -1177,7 +1181,7 @@
       }
     },
     {
-      "name": "create_files",
+      "name": "files.create_many",
       "description": "Batch variant of `create_file` — create up to 200 markdown, mermaid, or HTML files in one call. Each item follows the same rules: `project_id` required if `destination` is `project`/`kontexta`; `kind` ('dictionary' or 'note') required if `destination` is `knowledge`. SIDE EFFECTS: writes new files to disk and inserts FTS5 rows; missing folders are mkdir'd. Per-item failures are isolated to `errors[]` and the rest of the batch still commits — partial success is the norm, always inspect `error_count`. No external auth or rate limits. Returns `{created_count, error_count, created, errors}`. Use for bulk ingestion; for >200 items, page yourself. Pass format='mmd' on an item to create a Mermaid diagram file (.mmd) or 'html' for HTML reports; defaults to 'md'.",
       "inputSchema": {
         "type": "object",
@@ -1188,10 +1192,12 @@
               "type": "object",
               "properties": {
                 "title": {
-                  "type": "string"
+                  "type": "string",
+                  "description": "File title."
                 },
                 "content": {
-                  "type": "string"
+                  "type": "string",
+                  "description": "File body content (markdown, mermaid, or HTML depending on format)."
                 },
                 "destination": {
                   "type": "string",
@@ -1199,19 +1205,23 @@
                     "knowledge",
                     "project",
                     "kontexta"
-                  ]
+                  ],
+                  "description": "Storage destination: 'knowledge' for KB, 'project' for a project, 'kontexta' for app-internal."
                 },
                 "project_id": {
-                  "type": "number"
+                  "type": "number",
+                  "description": "Project ID — required when destination is 'project' or 'kontexta'."
                 },
                 "folder": {
-                  "type": "string"
+                  "type": "string",
+                  "description": "Relative folder path within the destination (e.g. 'notes/daily')."
                 },
                 "tags": {
                   "type": "array",
                   "items": {
                     "type": "string"
-                  }
+                  },
+                  "description": "Tags to apply to this file."
                 },
                 "format": {
                   "type": "string",
@@ -1219,7 +1229,8 @@
                     "md",
                     "mmd",
                     "html"
-                  ]
+                  ],
+                  "description": "File format: 'md' (default), 'mmd' (Mermaid diagram), or 'html' (report)."
                 },
                 "kind": {
                   "type": "string",
@@ -1253,7 +1264,7 @@
       }
     },
     {
-      "name": "delete_files",
+      "name": "files.delete_many",
       "description": "DESTRUCTIVE batch — delete up to 500 files by ID in one call. Same physical-deletion rules as `delete_file` (KB files unlinked from disk; project reference files only de-indexed). Per-ID failures isolated to `errors[]`; the batch keeps going — partial success is the norm. Not idempotent — unknown IDs surface as per-item errors. No external auth or rate limits. Returns `{deleted_count, error_count, deleted, errors}`. To preview the set before deleting, run `list_files` with the same filter and confirm the IDs.",
       "inputSchema": {
         "type": "object",
@@ -1279,7 +1290,7 @@
       }
     },
     {
-      "name": "tag_search_results",
+      "name": "tags.search",
       "description": "Bulk-tag — run an FTS `search` and append `add_tags` to every matching file in one call. Side effect: each match gets `addTags` applied (additive, idempotent per tag); the matched files themselves are NOT modified beyond their tag links. Per-file failures isolated to `errors[]`. No external auth or rate limits. There is NO dry-run flag, so ALWAYS run `search` with the same query first to verify the match set before tagging. The `tags[]` filter requires existing tags to ALL match (it scopes the search; it does not control which tags get added). Returns `{matched_count, tagged_count, tags_applied, tagged_ids, errors}`.",
       "inputSchema": {
         "type": "object",
@@ -1300,7 +1311,8 @@
             "type": [
               "number",
               "null"
-            ]
+            ],
+            "description": "Scope search to a specific project. Pass null for KB-only results."
           },
           "tags": {
             "type": "array",
@@ -1310,7 +1322,8 @@
             "description": "Filter — only matches that already carry ALL of these tags"
           },
           "favorite": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "If true, restrict to favorited files only."
           }
         },
         "required": [
@@ -1325,7 +1338,7 @@
       }
     },
     {
-      "name": "read_file_by_path",
+      "name": "files.read_by_path",
       "description": "Look up a file by its absolute on-disk path and return the same shape as `read_file`. The path must EXACTLY match what Kontexta indexed — no symlink resolution, no path normalisation beyond what the OS does, no trailing-slash tolerance. Returns isError if no row matches (the file may exist on disk but not be indexed — try `refresh_index`). Read-only; no side effects, auth, or rate limits. Use when an agent has a path from its working directory but no file ID; if you have the ID, prefer `read_file`.",
       "inputSchema": {
         "type": "object",
@@ -1346,7 +1359,7 @@
       }
     },
     {
-      "name": "stats",
+      "name": "admin.stats",
       "description": "Aggregate counts for a scope: `file_count`, `untagged_count`, `favorite_count`, `top_tags`. With `project_id` omitted (everything), also returns `by_project` breakdown. `include_token_total: true` stat()s every matching file on disk to compute a body-size estimate — measurably slower on large vaults; default false. `project_id: null` = KB only; omit = all. Read-only; no side effects, auth, or rate limits. Use as a cheap dashboard or to spot untagged content for cleanup; for live disk-vs-index drift use `diff_against_disk`.",
       "inputSchema": {
         "type": "object",
@@ -1377,7 +1390,7 @@
       }
     },
     {
-      "name": "suggest_tags",
+      "name": "tags.suggest",
       "description": "Propose tags for a file by mining the existing tag corpus via FTS — picks distinctive terms from the file (≥4 chars, stopword-filtered) and returns tags applied to other files that score high on those terms. No LLM, no network. Already-applied tags are excluded so the suggestions are net-new. Read-only; no side effects, auth, or rate limits. Returns `{file_id, path, existing_tags, suggestions: [{tag, score, sources}]}`. Empty suggestions = no distinctive terms or no overlap with the existing taxonomy yet — bootstrap with `add_tags` first. Default limit 10, max 50. Suggestions are NOT auto-applied.",
       "inputSchema": {
         "type": "object",
@@ -1404,7 +1417,7 @@
       }
     },
     {
-      "name": "diff_against_disk",
+      "name": "files.diff_against_disk",
       "description": "Diagnose drift between one file's disk content and its FTS index. Status is one of `in_sync`, `diverged`, `disk_unreadable`, or `no_index_row`. On divergence returns sizes, line counts, the first divergent line number, and the disk vs index sample for that line — NOT a full diff (use `get_diff` for full diffs between commits). Read-only; no side effects, auth, or rate limits. Use when search results look stale; if status is `diverged` or `no_index_row`, run `refresh_index` to fix.",
       "inputSchema": {
         "type": "object",
@@ -1425,7 +1438,7 @@
       }
     },
     {
-      "name": "refresh_index",
+      "name": "projects.refresh_index",
       "description": "Reconcile the FTS index against disk. For a project (`project_id` set), re-runs `discoverFiles`. For the KB (`project_id` null/omitted), walks `knowledge/`, ingests new .md files, reindexes any whose content hash drifted, and PRUNES rows for files no longer on disk. SIDE-EFFECTFUL: writes/updates/deletes file and FTS rows (the prune is destructive on stale index rows but never deletes files from disk). Idempotent — running twice is a near no-op. Skips files >5MB and standard junk dirs (`node_modules`, `.git`, `dist`, `build`, etc.). No external auth or rate limits. Returns `{scope, newly_indexed, refreshed, pruned}`. Use after editing files outside Kontexta, or when `diff_against_disk` reports drift.",
       "inputSchema": {
         "type": "object",
@@ -1446,7 +1459,7 @@
       }
     },
     {
-      "name": "whats_new",
+      "name": "admin.whats_new",
       "description": "List files created or modified since a checkpoint. `since` accepts ISO-8601 (`2025-01-15T00:00:00Z`) or relative durations (`1h`, `7d`, `2w`); invalid formats throw. Read-only; no side effects, auth, or rate limits. Returns annotated rows plus aggregate `total_est_tokens` so you can decide what to read next. CAVEAT: hard-deleted files are NOT surfaced — only mtime-driven changes. Defaults: include_tags=true, limit=200. `project_id: null` = KB only; omit = everything. Use at session start to catch up.",
       "inputSchema": {
         "type": "object",
@@ -1482,7 +1495,7 @@
       }
     },
     {
-      "name": "project_map",
+      "name": "projects.map",
       "description": "Return a compact indented outline of folders, file titles, tags, and IDs in a single dense block — substantially fewer tokens than the equivalent `list_files` JSON for the same scope. Read-only; no side effects, auth, or rate limits. Capped at `max_lines` (default 5000); the response reports `est_tokens` and emits a `warning` field if it exceeds `KONTEXTA_PROJECT_TOKEN_WARN`. `project_id: null` = KB only; omit = everything. Defaults: include_tags=true, show_titles=true. Use to orient yourself in an unfamiliar vault or project; for keyword lookup use `search`.",
       "inputSchema": {
         "type": "object",
@@ -1515,7 +1528,7 @@
       }
     },
     {
-      "name": "list_hands",
+      "name": "hands.list",
       "description": "List every Hands command tool currently registered, with project scope, tool name, danger level, confirmation flag, and description. Hands tools come from per-project `kontexta.json` files loaded at register time. Read-only; no side effects, auth, or rate limits. Use to discover what side-effectful project commands the agent is permitted to run; for the `kontexta.json` schema see `describe_hands_schema`; reload after editing one with `reload_hands`.",
       "inputSchema": {
         "$schema": "http://json-schema.org/draft-07/schema#",
@@ -1527,7 +1540,7 @@
       }
     },
     {
-      "name": "reload_hands",
+      "name": "hands.reload",
       "description": "Re-scan every registered project's `kontexta.json` and rebuild the live Hands tool registry — newly-declared tools become callable immediately, removed tools disappear from `tools/list`. SIDE EFFECT is on the running MCP session's tool inventory only (no disk writes). Idempotent. No external auth or rate limits. Takes no parameters. Returns per-project load results (counts of registered/disabled tools and any validation warnings). Use after editing a `kontexta.json` mid-session; for the schema see `describe_hands_schema`.",
       "inputSchema": {
         "$schema": "http://json-schema.org/draft-07/schema#",
@@ -1539,7 +1552,7 @@
       }
     },
     {
-      "name": "confirm_hand",
+      "name": "hands.confirm",
       "description": "Approve and EXECUTE a previously-issued Hands invocation by its single-use approval token. The token is returned by any confirm-required Hands tool; tokens expire after 60 seconds and CANNOT be reused. Side effect equals whatever the underlying Hand does — this can be highly destructive (running arbitrary shell commands, modifying files, etc.), so only call when the user has authorised the pending action. The token IS the auth (no external auth, no rate limits). Invalid, expired, or already-consumed tokens return an inert text response, NOT an error.",
       "inputSchema": {
         "type": "object",
@@ -1560,7 +1573,7 @@
       }
     },
     {
-      "name": "describe_hands_schema",
+      "name": "hands.describe_schema",
       "description": "Return the complete authoring reference for `kontexta.json`: JSON schema, validation rules, security guarantees, limitations, and an annotated example. Static document — does not read any project file or DB row. Read-only; no side effects, auth, or rate limits. Takes no parameters. Use when helping a user write or fix a `kontexta.json`; to see the loaded tools themselves use `list_hands`; to apply edits use `reload_hands`.",
       "inputSchema": {
         "$schema": "http://json-schema.org/draft-07/schema#",
@@ -1572,7 +1585,7 @@
       }
     },
     {
-      "name": "get_profile",
+      "name": "admin.get_profile",
       "description": "Return the user profile stored in the Knowledge Base. The profile helps AI agents understand the user's context, role, preferences, and goals. Read-only; no side effects, auth, or rate limits. Returns existence status, full content, list of missing required sections, and a hint for new users. Use at session start to understand who you're working with.",
       "inputSchema": {
         "$schema": "http://json-schema.org/draft-07/schema#",
@@ -1584,7 +1597,7 @@
       }
     },
     {
-      "name": "journal_note",
+      "name": "journal.note",
       "description": "Record a free-form decision/abandonment/observation note in the current project's journal. Stored as an `agent_note` event in Layer 1; surfaces in distilled task entries.",
       "inputSchema": {
         "type": "object",
@@ -1613,7 +1626,7 @@
       }
     },
     {
-      "name": "journal_intent",
+      "name": "journal.intent",
       "description": "Record a topic/intent pivot. Use when the user redirects what you're working on; the distillation step uses this to split task buckets correctly.",
       "inputSchema": {
         "type": "object",
@@ -1635,18 +1648,20 @@
       }
     },
     {
-      "name": "distill_journal",
+      "name": "journal.distill",
       "description": "Run the distillation pipeline: read raw events since the high-water mark, group by topic, write mechanical markdown entries, advance high-water. Idempotent. Auto-provisions a project row for orphan slugs (e.g. `default`) that have no registered project yet.",
       "inputSchema": {
         "type": "object",
         "properties": {
           "project_slug": {
-            "type": "string"
+            "type": "string",
+            "description": "Project slug to distill. Defaults to the current active project."
           },
           "max_events": {
             "type": "integer",
             "exclusiveMinimum": 0,
-            "maximum": 2000
+            "maximum": 2000,
+            "description": "Maximum raw events to process per run (default 200, max 2000)."
           }
         },
         "additionalProperties": false,
@@ -1657,13 +1672,14 @@
       }
     },
     {
-      "name": "journal_status",
+      "name": "journal.status",
       "description": "Report the journal backlog and high-water mark for a project.",
       "inputSchema": {
         "type": "object",
         "properties": {
           "project_slug": {
-            "type": "string"
+            "type": "string",
+            "description": "Project slug to check. Defaults to the current active project."
           }
         },
         "additionalProperties": false,
@@ -1674,7 +1690,7 @@
       }
     },
     {
-      "name": "distill_journal_commit_upgrades",
+      "name": "journal.commit_upgrades",
       "description": "After dispatching subagents to upgrade mechanical journal entries to LLM-narrative, call this with the affected task slugs. Updates journal_meta.status_latest to mark the entries as upgraded.",
       "inputSchema": {
         "type": "object",
@@ -1699,13 +1715,14 @@
       }
     },
     {
-      "name": "housekeep_journal",
+      "name": "journal.housekeep",
       "description": "Run journal retention/archival for a project. Idempotent. Prunes old raw .jsonl files and archives cold tasks per the configured retention policy.",
       "inputSchema": {
         "type": "object",
         "properties": {
           "project_slug": {
-            "type": "string"
+            "type": "string",
+            "description": "Project slug to housekeep. Defaults to the current active project."
           }
         },
         "additionalProperties": false,
@@ -1716,7 +1733,7 @@
       }
     },
     {
-      "name": "calendar_add_entity",
+      "name": "calendar.entities.add",
       "description": "SIDE-EFFECTFUL. Create a new tracked entity — any named thing you schedule events against (a server, a delivery van, a store location, a piece of equipment, a room, etc.). Not idempotent: a duplicate name (case-insensitive) throws. Returns `{entity}`. Use `calendar_link_entities` afterwards to record dependencies for conflict detection.",
       "inputSchema": {
         "type": "object",
@@ -1750,7 +1767,7 @@
       }
     },
     {
-      "name": "calendar_update_entity",
+      "name": "calendar.entities.update",
       "description": "SIDE-EFFECTFUL. Patch an existing entity's fields, including `active` (set false to soft-retire it without losing its history). Idempotent per patch. Returns `{entity}`. For a hard delete see `calendar_delete_entity`.",
       "inputSchema": {
         "type": "object",
@@ -1761,28 +1778,33 @@
           },
           "name": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "description": "New display name for the entity."
           },
           "kind": {
             "type": [
               "string",
               "null"
-            ]
+            ],
+            "description": "Freeform category, e.g. 'server', 'vehicle', 'location'."
           },
           "notes": {
             "type": [
               "string",
               "null"
-            ]
+            ],
+            "description": "Freeform notes."
           },
           "timezone": {
             "type": [
               "string",
               "null"
-            ]
+            ],
+            "description": "IANA timezone for display purposes (e.g. 'Europe/Berlin')."
           },
           "active": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "Set false to soft-retire the entity without losing history."
           }
         },
         "required": [
@@ -1796,7 +1818,7 @@
       }
     },
     {
-      "name": "calendar_delete_entity",
+      "name": "calendar.entities.delete",
       "description": "DESTRUCTIVE. Permanently delete an entity AND cascade-delete every event and link attached to it. Not idempotent — deleting an unknown id throws. Returns `{success, deleted_events, deleted_links}`. To deactivate without losing history, use `calendar_update_entity` with `active: false` instead.",
       "inputSchema": {
         "type": "object",
@@ -1817,7 +1839,7 @@
       }
     },
     {
-      "name": "calendar_list_entities",
+      "name": "calendar.entities.list",
       "description": "Read-only; no side effects, auth, or rate limits. List tracked entities, each annotated with its outgoing and incoming dependency links. Returns `{entities, count}`.",
       "inputSchema": {
         "type": "object",
@@ -1839,7 +1861,7 @@
       }
     },
     {
-      "name": "calendar_link_entities",
+      "name": "calendar.entities.link",
       "description": "SIDE-EFFECTFUL. Create or update a directed dependency edge between two entities (e.g. \"A feeds B\"), or remove one with `remove: true`. Idempotent — upserts the label on repeat calls; removing an absent link is a no-op. Used by `calendar_conflicts`/`calendar_list_events` to flag overlaps across connected entities (one hop, either direction). Returns `{link}` or `{removed}`.",
       "inputSchema": {
         "type": "object",
@@ -1873,7 +1895,7 @@
       }
     },
     {
-      "name": "calendar_add_event",
+      "name": "calendar.events.add",
       "description": "SIDE-EFFECTFUL. Add a one-off time window (downtime, maintenance, a delivery, a shift, an inspection, etc.) to an entity. NOT idempotent — calling this twice creates two events. `starts_at`/`ends_at` must be ISO 8601 with an explicit timezone (`Z` or `±HH:MM`) — naive timestamps are rejected because their meaning would be ambiguous once stored as UTC. Returns `{event}`. Follow up with `calendar_conflicts` to check for overlaps.",
       "inputSchema": {
         "type": "object",
@@ -1901,7 +1923,8 @@
             "description": "ISO 8601 timestamp with explicit timezone; must be after starts_at."
           },
           "notes": {
-            "type": "string"
+            "type": "string",
+            "description": "Optional free-text notes about the event."
           },
           "original_timezone": {
             "type": "string",
@@ -1927,7 +1950,7 @@
       }
     },
     {
-      "name": "calendar_update_event",
+      "name": "calendar.events.update",
       "description": "SIDE-EFFECTFUL. Patch an existing event (move it, retitle it, re-home it to a different entity, etc.). The merged result is re-validated — shrinking `ends_at` below `starts_at` throws. Returns `{event}`.",
       "inputSchema": {
         "type": "object",
@@ -1942,11 +1965,13 @@
           },
           "type": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "description": "Freeform event type, e.g. 'downtime', 'maintenance', 'delivery'."
           },
           "title": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "description": "Short title for the event."
           },
           "starts_at": {
             "type": "string",
@@ -1960,19 +1985,22 @@
             "type": [
               "string",
               "null"
-            ]
+            ],
+            "description": "Optional free-text notes."
           },
           "original_timezone": {
             "type": [
               "string",
               "null"
-            ]
+            ],
+            "description": "IANA timezone the window was originally communicated in, for display."
           },
           "source": {
             "type": [
               "string",
               "null"
-            ]
+            ],
+            "description": "Freeform provenance, e.g. 'email from ops team'."
           }
         },
         "required": [
@@ -1986,7 +2014,7 @@
       }
     },
     {
-      "name": "calendar_delete_event",
+      "name": "calendar.events.delete",
       "description": "DESTRUCTIVE. Delete one event by id. Idempotent — deleting an already-absent id is a no-op. Returns `{success, existed}`.",
       "inputSchema": {
         "type": "object",
@@ -2007,7 +2035,7 @@
       }
     },
     {
-      "name": "calendar_list_events",
+      "name": "calendar.events.list",
       "description": "Read-only; no side effects, auth, or rate limits. List events overlapping a window (half-open — an event ending exactly at `from` is excluded), optionally filtered by entity/type. Set `include_conflicts` to also run conflict detection over the same window and attach it. Returns `{events, count, conflicts?}`. For conflicts alone, prefer `calendar_conflicts`.",
       "inputSchema": {
         "type": "object",
@@ -2046,7 +2074,7 @@
       }
     },
     {
-      "name": "calendar_conflicts",
+      "name": "calendar.events.conflicts",
       "description": "Read-only; no side effects, auth, or rate limits. Report scheduling conflicts in a window: overlaps on the same entity (`overlap`), overlaps between linked entities one hop apart (`linked_overlap`), and gaps smaller than a minimum buffer (`insufficient_buffer`). Computed on demand — nothing is persisted. Buffer defaults to the `calendar.min_buffer_minutes` setting (0 = off); pass `buffer_minutes` to override for this call. Returns `{conflicts, count, buffer_minutes, events_considered}`. See also `calendar_list_events` with `include_conflicts`.",
       "inputSchema": {
         "type": "object",
@@ -2081,7 +2109,7 @@
       }
     },
     {
-      "name": "calendar_export_ics",
+      "name": "calendar.export_ics",
       "description": "Read-only; no side effects, auth, or rate limits. Export events in a window as an RFC 5545 ICS calendar (UTC times, no VTIMEZONE needed) for import into Outlook/Calendar apps. Returns `{ics, event_count}` with the calendar text as a JSON string field.",
       "inputSchema": {
         "type": "object",

@@ -21,12 +21,12 @@ describe("agent-rules constants", () => {
       "All KB writes go through kontexta",
       "Batch reads",
       "Address `journal.suggested_action`",
-      "Use `journal_note(text, tags)`",
-      "Use `journal_intent(summary)`",
+      "Use `journal.note(text, tags)`",
+      "Use `journal.intent(summary)`",
       "Confirm Hands tokens within 60 seconds",
       "Save specs to a canonical location",
       "Tag new KB files",
-      "`whats_new` early",
+      "`admin.whats_new` early",
     ]) {
       expect(RULES_BLOCK_BODY).toContain(phrase);
     }
@@ -339,7 +339,7 @@ describe("rules-block.md structural integrity", () => {
 
   it("every routing row has exactly 4 cells", () => {
     const lines = raw.split("\n");
-    const toolRowRe = /^\|\s*`([a-z_]+)`\s*\|/;
+    const toolRowRe = /^\|\s*`([a-z][a-z0-9_.]*)`\s*\|/;
     let rowsChecked = 0;
     for (const line of lines) {
       if (!toolRowRe.test(line)) continue;
@@ -350,14 +350,15 @@ describe("rules-block.md structural integrity", () => {
     expect(rowsChecked, "should find at least one routing row").toBeGreaterThan(40);
   });
 
-  it("tool names in column 1 are unique and lowercase_snake_case", () => {
-    const toolRowRe = /^\|\s*`([a-z_]+)`\s*\|/;
+  it("tool names in column 1 are unique and dot-notation", () => {
+    const toolRowRe = /^\|\s*`([a-z][a-z0-9_.]*)`\s*\|/;
     const seen = new Set<string>();
     for (const line of raw.split("\n")) {
       const m = line.match(toolRowRe);
       if (!m) continue;
       const name = m[1];
-      expect(name).toMatch(/^[a-z][a-z0-9_]*$/);
+      expect(name).toMatch(/^[a-z][a-z0-9_.]*$/);
+      expect(name).toContain(".");
       expect(seen.has(name), `duplicate tool row: ${name}`).toBe(false);
       seen.add(name);
     }
@@ -377,7 +378,7 @@ describe("rules-block.md structural integrity", () => {
       "calendar-tools.ts",
     ];
 
-    const toolNameRe = /server\.tool\(\s*"([a-z_][a-z0-9_]*)"/g;
+    const toolNameRe = /server\.tool\(\s*"([a-z][a-z0-9_.]*)"/g;
     const registeredTools = new Set<string>();
     for (const file of toolFiles) {
       const src = readFileSync(join(mcpSrcDir, file), "utf8");
@@ -389,7 +390,7 @@ describe("rules-block.md structural integrity", () => {
     expect(registeredTools.size, "should find registered tools in apps/mcp/src").toBeGreaterThan(0);
 
     const documentedTools = new Set<string>();
-    const docRowRe = /^\|\s*`([a-z_][a-z0-9_]*)`\s*\|/gm;
+    const docRowRe = /^\|\s*`([a-z][a-z0-9_.]*)`\s*\|/gm;
     let dm: RegExpExecArray | null;
     while ((dm = docRowRe.exec(raw)) !== null) {
       documentedTools.add(dm[1]);

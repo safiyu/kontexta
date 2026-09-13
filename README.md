@@ -1,4 +1,4 @@
-<h1 align="center">
+﻿<h1 align="center">
   <img src="docs/intro.png" alt="Kontexta Architecture and Features"><br>
   Kontexta
 </h1>
@@ -25,7 +25,7 @@ Most AI tools trap context inside their own chat window. Kontexta moves that con
 - **Switch agents mid-project**: Claude Code journals a decision; Cursor reads it 5 minutes later.
 - **Unified command surface**: Author your `kontexta.json` once; every agent uses the same validated tools and approval gates.
 - **Multi-agent collaboration**: Different agents working on different tasks contribute to the same indexed knowledge base.
-- **Zero-touch onboarding**: `register_project` + `onboard_agent` injects a fenced, version-stamped workflow rules block into `CLAUDE.md` / `AGENTS.md` / `GEMINI.md` / `.cursor/rules` / `.continue/rules` / `.clinerules` / `.github/copilot-instructions.md` so every new conversation — on any agent — wakes up already knowing how to use kontexta.
+- **Zero-touch onboarding**: `projects.register` + `admin.onboard_agent` injects a fenced, version-stamped workflow rules block into `CLAUDE.md` / `AGENTS.md` / `GEMINI.md` / `.cursor/rules` / `.continue/rules` / `.clinerules` / `.github/copilot-instructions.md` so every new conversation — on any agent — wakes up already knowing how to use kontexta.
 
 ### 2. Cross-Project Awareness
 - **Global reach**: An agent working in Project A can instantly search and read the documentation, context, and states of Project B.
@@ -75,8 +75,8 @@ A project-defined command surface that replaces "unrestricted shell access" with
 
 ### 3. Eyes — The Feedback Engine
 Closes the loop by capturing Hands' output and journaling learnings back into the Brain.
-- **Live Observation**: Tools like `whats_new` and `diff_against_disk` let agents see what actually changed.
-- **Automatic journaling**: Every MCP tool call is captured to a per-project, append-only event log (Layer 1). The `distill_journal` tool — or the lenient-mode auto-fallback — collapses raw events into per-topic markdown summaries (Layer 2) indexed alongside the rest of the knowledge base. `journal_note` and `journal_intent` let agents enrich the log with decisions and topic pivots. Phase 2 also adds `housekeep_journal` (retention/archival), `distill_journal_commit_upgrades` (closes the subagent dispatch loop), strict mode (configurable per project — blocks read tools when backlog exists), and an opt-in WebUI scheduler that runs mechanical distillation on a 15-minute clock when the dashboard is installed. **[Learn more about Journaling modes and configuration in docs/JOURNAL.md](docs/JOURNAL.md).**
+- **Live Observation**: Tools like `admin.whats_new` and `files.diff_against_disk` let agents see what actually changed.
+- **Automatic journaling**: Every MCP tool call is captured to a per-project, append-only event log (Layer 1). The `journal.distill` tool — or the lenient-mode auto-fallback — collapses raw events into per-topic markdown summaries (Layer 2) indexed alongside the rest of the knowledge base. `journal.note` and `journal.intent` let agents enrich the log with decisions and topic pivots. Phase 2 also adds `journal.housekeep` (retention/archival), `journal.commit_upgrades` (closes the subagent dispatch loop), strict mode (configurable per project — blocks read tools when backlog exists), and an opt-in WebUI scheduler that runs mechanical distillation on a 15-minute clock when the dashboard is installed. **[Learn more about Journaling modes and configuration in docs/JOURNAL.md](docs/JOURNAL.md).**
 
 ---
 
@@ -91,7 +91,7 @@ Imagine you are switching from **Claude Code** to **Cursor** mid-way through a f
 
 ### The Kontexta Solution
 1. **Journaling**: As Claude Code works, kontexta automatically captures every tool invocation and decision to a structured event log.
-2. **Persistence**: Those logs are saved in your local Kontexta brain, not the chat window. The `distill_journal` tool consolidates raw events into per-topic markdown entries that are searchable alongside your knowledge base.
+2. **Persistence**: Those logs are saved in your local Kontexta brain, not the chat window. The `journal.distill` tool consolidates raw events into per-topic markdown entries that are searchable alongside your knowledge base.
 3. **Seamless Handoff**: When you open Cursor, it immediately sees the recent journal entries and architectural state via the Kontexta MCP. 
 4. **Zero Re-explanation**: Cursor "wakes up" with the exact same context Claude had.
 
@@ -210,8 +210,8 @@ What's deliberately deferred and what triggers will pull it forward lives in [`d
 - 66 MCP tools tuned for context economy.
 - Batch operations (up to 500 files/call), grep, and regex support.
 - Web clipping with auth-wall detection.
-- Full git-backed versioning: `get_history`, `get_diff`, `restore_file`.
-- **Agent context rules onboarding:** `register_project` detects existing `CLAUDE.md` / `AGENTS.md` / `GEMINI.md` / `.cursor/rules/*.mdc` / `.continue/rules/*.md` / `.clinerules` / `.github/copilot-instructions.md` and recommends a follow-up. The `onboard_agent` tool injects an idempotent, version-fenced workflow rules block (or scaffolds one for the right agent) so every new conversation starts already aware of kontexta's conventions.
+- Full git-backed versioning: `files.get_history`, `files.get_diff`, `files.restore`.
+- **Agent context rules onboarding:** `projects.register` detects existing `CLAUDE.md` / `AGENTS.md` / `GEMINI.md` / `.cursor/rules/*.mdc` / `.continue/rules/*.md` / `.clinerules` / `.github/copilot-instructions.md` and recommends a follow-up. The `admin.onboard_agent` tool injects an idempotent, version-fenced workflow rules block (or scaffolds one for the right agent) so every new conversation starts already aware of kontexta's conventions.
 
 ### Hands
 - Project-specific `kontexta.json` tools map.

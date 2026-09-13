@@ -1,10 +1,10 @@
-// apps/mcp/src/journal-commit-upgrades-tool.ts
+﻿// apps/mcp/src/journal-commit-upgrades-tool.ts
 import { z } from "zod";
 import { markUpgradeApplied, getDatabase } from "kxta-core";
 
 export function registerCommitUpgradesTool(server: any): void {
   server.tool(
-    "distill_journal_commit_upgrades",
+    "journal.commit_upgrades",
     "After dispatching subagents to upgrade mechanical journal entries to LLM-narrative, call this with the affected task slugs. Updates journal_meta.status_latest to mark the entries as upgraded.",
     {
       task_slugs: z.array(z.string()).min(1).describe("Task slugs whose entries were upgraded by subagents."),

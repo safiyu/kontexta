@@ -1,4 +1,4 @@
-// apps/mcp/src/calendar-tools.ts
+﻿// apps/mcp/src/calendar-tools.ts
 import { z } from "zod";
 import {
   createEntity, updateEntity, deleteEntity, listEntities, getEntity, getEntityByName,
@@ -40,7 +40,7 @@ function withLinks(entity: CalendarEntity) {
 
 export function registerCalendarTools(server: any): void {
   server.tool(
-    "calendar_add_entity",
+    "calendar.entities.add",
     "SIDE-EFFECTFUL. Create a new tracked entity — any named thing you schedule events against (a server, a delivery van, a store location, a piece of equipment, a room, etc.). Not idempotent: a duplicate name (case-insensitive) throws. Returns `{entity}`. Use `calendar_link_entities` afterwards to record dependencies for conflict detection.",
     {
       name: z.string().min(1).describe("Unique display name for the entity (case-insensitive)."),
@@ -58,7 +58,7 @@ export function registerCalendarTools(server: any): void {
   );
 
   server.tool(
-    "calendar_update_entity",
+    "calendar.entities.update",
     "SIDE-EFFECTFUL. Patch an existing entity's fields, including `active` (set false to soft-retire it without losing its history). Idempotent per patch. Returns `{entity}`. For a hard delete see `calendar_delete_entity`.",
     {
       id: z.number().int().describe("Entity id (from `calendar_add_entity` or `calendar_list_entities`)."),
@@ -79,7 +79,7 @@ export function registerCalendarTools(server: any): void {
   );
 
   server.tool(
-    "calendar_delete_entity",
+    "calendar.entities.delete",
     "DESTRUCTIVE. Permanently delete an entity AND cascade-delete every event and link attached to it. Not idempotent — deleting an unknown id throws. Returns `{success, deleted_events, deleted_links}`. To deactivate without losing history, use `calendar_update_entity` with `active: false` instead.",
     { id: z.number().int().describe("Entity id to delete.") },
     async ({ id }: { id: number }) => {
@@ -93,7 +93,7 @@ export function registerCalendarTools(server: any): void {
   );
 
   server.tool(
-    "calendar_list_entities",
+    "calendar.entities.list",
     "Read-only; no side effects, auth, or rate limits. List tracked entities, each annotated with its outgoing and incoming dependency links. Returns `{entities, count}`.",
     {
       active_only: z.boolean().optional().describe("If true, exclude retired (active=false) entities."),
@@ -106,7 +106,7 @@ export function registerCalendarTools(server: any): void {
   );
 
   server.tool(
-    "calendar_link_entities",
+    "calendar.entities.link",
     "SIDE-EFFECTFUL. Create or update a directed dependency edge between two entities (e.g. \"A feeds B\"), or remove one with `remove: true`. Idempotent — upserts the label on repeat calls; removing an absent link is a no-op. Used by `calendar_conflicts`/`calendar_list_events` to flag overlaps across connected entities (one hop, either direction). Returns `{link}` or `{removed}`.",
     {
       from: z.string().describe("Source entity — name (case-insensitive) or numeric id."),
@@ -131,7 +131,7 @@ export function registerCalendarTools(server: any): void {
   );
 
   server.tool(
-    "calendar_add_event",
+    "calendar.events.add",
     "SIDE-EFFECTFUL. Add a one-off time window (downtime, maintenance, a delivery, a shift, an inspection, etc.) to an entity. NOT idempotent — calling this twice creates two events. `starts_at`/`ends_at` must be ISO 8601 with an explicit timezone (`Z` or `±HH:MM`) — naive timestamps are rejected because their meaning would be ambiguous once stored as UTC. Returns `{event}`. Follow up with `calendar_conflicts` to check for overlaps.",
     {
       entity: z.string().describe("Entity the event applies to — name (case-insensitive) or numeric id."),
@@ -155,7 +155,7 @@ export function registerCalendarTools(server: any): void {
   );
 
   server.tool(
-    "calendar_update_event",
+    "calendar.events.update",
     "SIDE-EFFECTFUL. Patch an existing event (move it, retitle it, re-home it to a different entity, etc.). The merged result is re-validated — shrinking `ends_at` below `starts_at` throws. Returns `{event}`.",
     {
       id: z.number().int().describe("Event id."),
@@ -180,7 +180,7 @@ export function registerCalendarTools(server: any): void {
   );
 
   server.tool(
-    "calendar_delete_event",
+    "calendar.events.delete",
     "DESTRUCTIVE. Delete one event by id. Idempotent — deleting an already-absent id is a no-op. Returns `{success, existed}`.",
     { id: z.number().int().describe("Event id to delete.") },
     async ({ id }: { id: number }) => {
@@ -190,7 +190,7 @@ export function registerCalendarTools(server: any): void {
   );
 
   server.tool(
-    "calendar_list_events",
+    "calendar.events.list",
     "Read-only; no side effects, auth, or rate limits. List events overlapping a window (half-open — an event ending exactly at `from` is excluded), optionally filtered by entity/type. Set `include_conflicts` to also run conflict detection over the same window and attach it. Returns `{events, count, conflicts?}`. For conflicts alone, prefer `calendar_conflicts`.",
     {
       from: z.string().optional().describe("Window start, ISO 8601 with explicit timezone."),
@@ -223,7 +223,7 @@ export function registerCalendarTools(server: any): void {
   );
 
   server.tool(
-    "calendar_conflicts",
+    "calendar.events.conflicts",
     `Read-only; no side effects, auth, or rate limits. Report scheduling conflicts in a window: overlaps on the same entity (\`overlap\`), overlaps between linked entities one hop apart (\`linked_overlap\`), and gaps smaller than a minimum buffer (\`insufficient_buffer\`). Computed on demand — nothing is persisted. Buffer defaults to the \`${"calendar.min_buffer_minutes"}\` setting (0 = off); pass \`buffer_minutes\` to override for this call. Returns \`{conflicts, count, buffer_minutes, events_considered}\`. See also \`calendar_list_events\` with \`include_conflicts\`.`,
     {
       from: z.string().describe("Window start, ISO 8601 with explicit timezone."),
@@ -248,7 +248,7 @@ export function registerCalendarTools(server: any): void {
   );
 
   server.tool(
-    "calendar_export_ics",
+    "calendar.export_ics",
     "Read-only; no side effects, auth, or rate limits. Export events in a window as an RFC 5545 ICS calendar (UTC times, no VTIMEZONE needed) for import into Outlook/Calendar apps. Returns `{ics, event_count}` with the calendar text as a JSON string field.",
     {
       from: z.string().describe("Window start, ISO 8601 with explicit timezone."),
