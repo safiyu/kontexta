@@ -19,10 +19,10 @@ export const refactorDetector: PatternDetector = {
   name: "refactor",
   detect(events) {
     const moves = events.filter(
-      (e) => e.event === "tool_call" && e.tool === "move_file"
+      (e) => e.event === "tool_call" && (e.tool === "move_file" || e.tool === "files.move")
     );
     const updates = events.filter(
-      (e) => e.event === "tool_call" && (e.tool ?? "").startsWith("update_")
+      (e) => e.event === "tool_call" && ((e.tool ?? "").startsWith("update_") || (e.tool ?? "").startsWith("files.update"))
     );
     const refactorCommits = events.filter(
       (e) => e.event === "git_commit" && REFACTOR_COMMIT_RE.test(e.msg ?? "")

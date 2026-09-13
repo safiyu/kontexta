@@ -196,7 +196,7 @@ export function JournalPanel() {
                 <><strong>Lenient mode</strong> is unobtrusive. If undistilled events accumulate, the MCP server automatically runs a fast, background distillation to maintain memory without blocking the agent.</>
               )}
               {config.mode === "strict" && (
-                <><strong>Strict mode</strong> enforces memory hygiene. It blocks read tools (like <code>search</code> or <code>read_file</code>) with a <code>JOURNAL_BACKLOG</code> error if undistilled events exist, forcing the agent to summarize its work first. Pass <code>journal_bypass: true</code> to override.</>
+                <><strong>Strict mode</strong> enforces memory hygiene. It blocks read tools (like <code>files.search</code> or <code>files.read</code>) with a <code>JOURNAL_BACKLOG</code> error if undistilled events exist, forcing the agent to summarize its work first. Pass <code>journal_bypass: true</code> to override.</>
               )}
               {config.mode === "mechanical-only" && (
                 <><strong>Mechanical-only mode</strong> functions like lenient mode but disables LLM processing. It prevents subagents from upgrading basic markdown logs into richer narratives, saving token costs on large projects.</>

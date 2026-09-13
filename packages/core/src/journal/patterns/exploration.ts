@@ -1,10 +1,17 @@
 import type { PatternDetector } from "./index.js";
 
 const READ_TOOLS = new Set([
+  // dot-notation
+  "files.search", "files.regex_search", "files.grep", "files.bundle_search",
+  "files.read", "files.read_many", "files.read_section", "files.read_outline", "files.describe",
+  // legacy
   "search", "regex_search", "grep_in_file", "bundle_search",
   "read_file", "read_files", "read_section", "read_file_outline", "describe_file",
 ]);
-const WRITE_TOOLS_PREFIX = ["update_", "create_", "delete_", "move_"];
+const WRITE_TOOLS_PREFIX = [
+  "update_", "create_", "delete_", "move_",
+  "files.update", "files.create", "files.delete", "files.move"
+];
 
 export const explorationDetector: PatternDetector = {
   name: "exploration",

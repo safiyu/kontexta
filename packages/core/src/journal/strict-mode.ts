@@ -1,5 +1,13 @@
 // packages/core/src/journal/strict-mode.ts
 const READ_ONLY_TOOLS = new Set([
+  // dot-notation
+  "files.search", "files.regex_search", "files.grep", "files.bundle_search",
+  "files.read", "files.read_many", "files.read_section", "files.read_outline", "files.read_lines",
+  "files.read_by_path", "files.describe",
+  "files.list", "folders.list", "projects.list", "tags.list", "hands.list",
+  "admin.stats", "admin.whats_new", "files.find_related", "projects.map", "tags.suggest",
+  "files.get_history", "files.get_diff", "calendar.entities.list", "calendar.events.list", "calendar.events.conflicts",
+  // legacy snake_case
   "search", "regex_search", "grep_in_file", "bundle_search",
   "read_file", "read_files", "read_section", "read_file_outline", "read_file_lines",
   "read_file_by_path", "describe_file",
@@ -35,7 +43,7 @@ export function backlogErrorPayload(status: {
       status.backlog_oldest_age_hours
         ? ` (oldest: ${status.backlog_oldest_age_hours.toFixed(1)}h ago)`
         : ""
-    }. Call distill_journal before search/read, or pass journal_bypass: true to override.`,
-    next_action: "distill_journal",
+    }. Call journal.distill before search/read, or pass journal_bypass: true to override.`,
+    next_action: "journal.distill",
   };
 }
