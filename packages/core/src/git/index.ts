@@ -8,6 +8,7 @@ import simpleGit, { SimpleGit, LogResult } from "simple-git";
 import { readFileSync, writeFileSync, copyFileSync, mkdirSync, existsSync, rmSync, readdirSync, statSync, lstatSync, unlinkSync, renameSync } from "node:fs";
 import { join, relative, dirname, isAbsolute, resolve, sep } from "node:path";
 import { spawnSync } from "node:child_process";
+import { platform } from "node:os";
 import { getDatabase } from "../db/index.js";
 import { withLock } from "../util/safety.js";
 import type { ProjectRecord, FileRecord } from "../types.js";
@@ -25,7 +26,14 @@ function redactCredentials(s: string): string {
 // any of those would hang a server-side request. Also strips vars that could
 // redirect git operations (SSH commands, exec paths, external diffs).
 function buildGitEnv(): Record<string, string | undefined> {
-  const env: Record<string, string | undefined> = { ...process.env, GIT_TERMINAL_PROMPT: "0" };
+  const env: Record<string, string | undefined> = {
+    ...process.env,
+    GIT_TERMINAL_PROMPT: "0",
+    // Skip system and global gitconfig so CI runners with inaccessible
+    // ~/.gitconfig (e.g. Windows GitHub Actions) don't blow up.
+    GIT_CONFIG_NOSYSTEM: "1",
+    GIT_CONFIG_GLOBAL: platform() === "win32" ? "NUL" : "/dev/null",
+  };
   for (const k of [
     "PAGER", "EDITOR", "VISUAL",
     "GIT_EDITOR", "GIT_PAGER", "GIT_SEQUENCE_EDITOR",
@@ -37,8 +45,6 @@ function buildGitEnv(): Record<string, string | undefined> {
     "GIT_EXEC_PATH",
     // Prevent credential helper injection
     "GIT_CONFIG_COUNT", // clears GIT_CONFIG_COUNT + GIT_CONFIG_KEY_N/VALUE_N pairs
-    // Prevent host env from pointing git at attacker-controlled config files.
-    "GIT_CONFIG_GLOBAL", "GIT_CONFIG_SYSTEM", "GIT_CONFIG_NOSYSTEM",
     // Prevent trace logs from leaking sensitive data (and from being a side-channel).
     "GIT_TRACE", "GIT_TRACE_PACK_ACCESS", "GIT_TRACE_PACKET",
     "GIT_TRACE_PERFORMANCE", "GIT_TRACE_SETUP", "GIT_TRACE_CURL",
