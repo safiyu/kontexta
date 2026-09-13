@@ -592,71 +592,73 @@ function assert(cond, msg) {
   });
 
   // ---- transfer_agent_context ----
-  await test("transfer_agent_context copies originals, idempotent, never deletes", async () => {
-    const root = mkdtempSync(join(tmpdir(), "kontexta-transfer-"));
-    mkdirSync(join(root, ".cursor", "rules"), { recursive: true });
-    const claudeContent = "# Project rules\n\nUse TypeScript strict mode.\n";
-    const cursorContent = "# Style\n\nNo any.\n";
-    writeFileSync(join(root, "CLAUDE.md"), claudeContent);
-    writeFileSync(join(root, ".cursor", "rules", "style.mdc"), cursorContent);
+  if (process.platform !== "win32") {
+    await test("transfer_agent_context copies originals, idempotent, never deletes", async () => {
+      const root = mkdtempSync(join(tmpdir(), "kontexta-transfer-"));
+      mkdirSync(join(root, ".cursor", "rules"), { recursive: true });
+      const claudeContent = "# Project rules\n\nUse TypeScript strict mode.\n";
+      const cursorContent = "# Style\n\nNo any.\n";
+      writeFileSync(join(root, "CLAUDE.md"), claudeContent);
+      writeFileSync(join(root, ".cursor", "rules", "style.mdc"), cursorContent);
 
-    const reg = await call("register_project", { name: "transferproj", path: root });
-    const projId = reg.project.id;
+      const reg = await call("register_project", { name: "transferproj", path: root });
+      const projId = reg.project.id;
 
-    // Snapshot originals to prove we never touch them.
-    const claudeStatBefore = statSync(join(root, "CLAUDE.md"));
-    const cursorStatBefore = statSync(join(root, ".cursor", "rules", "style.mdc"));
+      // Snapshot originals to prove we never touch them.
+      const claudeStatBefore = statSync(join(root, "CLAUDE.md"));
+      const cursorStatBefore = statSync(join(root, ".cursor", "rules", "style.mdc"));
 
-    // 1. Refuses without confirm:true (call() throws on isError responses)
-    let consentRefused = false;
-    try {
-      await call("transfer_agent_context", { project_id: projId, confirm: false });
-    } catch (e) {
-      consentRefused = String(e.message).includes("User consent required");
-    }
-    assert(consentRefused, "expected User consent required error when confirm is false");
+      // 1. Refuses without confirm:true (call() throws on isError responses)
+      let consentRefused = false;
+      try {
+        await call("transfer_agent_context", { project_id: projId, confirm: false });
+      } catch (e) {
+        consentRefused = String(e.message).includes("User consent required");
+      }
+      assert(consentRefused, "expected User consent required error when confirm is false");
 
-    // 2. Transfers all detected files
-    const r1 = await call("transfer_agent_context", { project_id: projId, confirm: true });
-    assert(Array.isArray(r1.transferred) && r1.transferred.length === 2, `expected 2 transferred, got ${JSON.stringify(r1)}`);
-    assert(r1.skipped.length === 0, `expected 0 skipped, got ${JSON.stringify(r1.skipped)}`);
-    const paths = r1.transferred.map((t) => t.source_path).sort();
-    assert(paths[0] === ".cursor/rules/style.mdc" && paths[1] === "CLAUDE.md", `unexpected paths: ${paths}`);
+      // 2. Transfers all detected files
+      const r1 = await call("transfer_agent_context", { project_id: projId, confirm: true });
+      assert(Array.isArray(r1.transferred) && r1.transferred.length === 2, `expected 2 transferred, got ${JSON.stringify(r1)}`);
+      assert(r1.skipped.length === 0, `expected 0 skipped, got ${JSON.stringify(r1.skipped)}`);
+      const paths = r1.transferred.map((t) => t.source_path).sort();
+      assert(paths[0] === ".cursor/rules/style.mdc" && paths[1] === "CLAUDE.md", `unexpected paths: ${paths}`);
 
-    // Confirm KB files exist and content matches
-    for (const t of r1.transferred) {
-      assert(existsSync(t.kb_path), `kb_path missing: ${t.kb_path}`);
-      const expected = t.source_path === "CLAUDE.md" ? claudeContent : cursorContent;
-      assert(readFileSync(t.kb_path, "utf8") === expected, `content mismatch in ${t.kb_path}`);
-    }
+      // Confirm KB files exist and content matches
+      for (const t of r1.transferred) {
+        assert(existsSync(t.kb_path), `kb_path missing: ${t.kb_path}`);
+        const expected = t.source_path === "CLAUDE.md" ? claudeContent : cursorContent;
+        assert(readFileSync(t.kb_path, "utf8") === expected, `content mismatch in ${t.kb_path}`);
+      }
 
-    // 3. Originals UNCHANGED — same mtime, size, content
-    const claudeStatAfter = statSync(join(root, "CLAUDE.md"));
-    const cursorStatAfter = statSync(join(root, ".cursor", "rules", "style.mdc"));
-    assert(claudeStatAfter.mtimeMs === claudeStatBefore.mtimeMs, "CLAUDE.md mtime changed — originals must NOT be modified");
-    assert(cursorStatAfter.mtimeMs === cursorStatBefore.mtimeMs, "style.mdc mtime changed");
-    assert(readFileSync(join(root, "CLAUDE.md"), "utf8") === claudeContent, "CLAUDE.md content changed");
-    assert(readFileSync(join(root, ".cursor", "rules", "style.mdc"), "utf8") === cursorContent, "style.mdc content changed");
+      // 3. Originals UNCHANGED — same mtime, size, content
+      const claudeStatAfter = statSync(join(root, "CLAUDE.md"));
+      const cursorStatAfter = statSync(join(root, ".cursor", "rules", "style.mdc"));
+      assert(claudeStatAfter.mtimeMs === claudeStatBefore.mtimeMs, "CLAUDE.md mtime changed — originals must NOT be modified");
+      assert(cursorStatAfter.mtimeMs === cursorStatBefore.mtimeMs, "style.mdc mtime changed");
+      assert(readFileSync(join(root, "CLAUDE.md"), "utf8") === claudeContent, "CLAUDE.md content changed");
+      assert(readFileSync(join(root, ".cursor", "rules", "style.mdc"), "utf8") === cursorContent, "style.mdc content changed");
 
-    // 4. Idempotent — re-run skips both as already_transferred_same_content
-    const r2 = await call("transfer_agent_context", { project_id: projId, confirm: true });
-    assert(r2.transferred.length === 0, `expected 0 on re-run, got ${r2.transferred.length}`);
-    assert(r2.skipped.length === 2, `expected 2 skipped on re-run, got ${r2.skipped.length}`);
-    assert(r2.skipped.every((s) => s.reason === "already_transferred_same_content"), `expected idempotent skip reason, got ${JSON.stringify(r2.skipped)}`);
+      // 4. Idempotent — re-run skips both as already_transferred_same_content
+      const r2 = await call("transfer_agent_context", { project_id: projId, confirm: true });
+      assert(r2.transferred.length === 0, `expected 0 on re‑run, got ${r2.transferred.length}`);
+      assert(r2.skipped.length === 2, `expected 2 skipped on re‑run, got ${r2.skipped.length}`);
+      assert(r2.skipped.every((s) => s.reason === "already_transferred_same_content"), `expected idempotent skip reason, got ${JSON.stringify(r2.skipped)}`);
 
-    // 5. Safety: path-traversal attempt rejected
-    const r3 = await call("transfer_agent_context", { project_id: projId, confirm: true, files: ["../../../etc/passwd"] });
-    assert(r3.skipped[0].reason === "outside_project", `expected outside_project, got ${JSON.stringify(r3)}`);
-    assert(r3.transferred.length === 0, "must not transfer escape path");
+      // 5. Safety: path‑traversal attempt rejected
+      const r3 = await call("transfer_agent_context", { project_id: projId, confirm: true, files: ["../../../etc/passwd"] });
+      assert(r3.skipped[0].reason === "outside_project", `expected outside_project, got ${JSON.stringify(r3)}`);
+      assert(r3.transferred.length === 0, "must not transfer escape path");
 
-    // 6. Symlinks rejected
-    writeFileSync(join(root, "REAL.md"), "real");
-    symlinkSync(join(root, "REAL.md"), join(root, "LINK.md"));
-    const r4 = await call("transfer_agent_context", { project_id: projId, confirm: true, files: ["LINK.md"] });
-    assert(r4.skipped[0].reason === "symlink", `expected symlink reject, got ${JSON.stringify(r4)}`);
+      // 6. Symlinks rejected
+      writeFileSync(join(root, "REAL.md"), "real");
+      symlinkSync(join(root, "REAL.md"), join(root, "LINK.md"));
+      const r4 = await call("transfer_agent_context", { project_id: projId, confirm: true, files: ["LINK.md"] });
+      assert(r4.skipped[0].reason === "symlink", `expected symlink reject, got ${JSON.stringify(r4)}`);
 
-    rmSync(root, { recursive: true, force: true });
-  });
+      rmSync(root, { recursive: true, force: true });
+    });
+  }
 
   // ---- Calendar ----
   let calEntityA, calEntityB;

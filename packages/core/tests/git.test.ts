@@ -6,6 +6,7 @@ import { describe, test, expect, beforeEach, afterEach } from "vitest";
 import { mkdirSync, rmSync, existsSync, writeFileSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { execSync } from "node:child_process";
+import { platform } from "node:os";
 import simpleGit, { SimpleGit } from "simple-git";
 import { createDatabase, closeDatabase, getDatabase } from "../src/db/index.js";
 import {
@@ -38,14 +39,29 @@ describe("Git Operations", () => {
     mkdirSync(join(TEST_DATA_DIR, "knowledge"), { recursive: true });
     mkdirSync(join(TEST_DATA_DIR, "backups"), { recursive: true });
 
+    // Isolate from any inaccessible system/global .gitconfig on CI runners
+    // (e.g. Windows GitHub Actions: 'C:/Users/runneradmin/.gitconfig: Permission denied',
+    //  Linux runners: permission errors reading /root/.gitconfig)
+    const nullPath = platform() === "win32" ? "NUL" : "/dev/null";
+    const isolatedEnv = {
+      ...process.env,
+      GIT_CONFIG_NOSYSTEM: "1",
+      GIT_CONFIG_GLOBAL: nullPath,  // skip ~/.gitconfig entirely
+      HOME: TEST_DATA_DIR,          // points git's home lookup at our temp dir
+      USERPROFILE: TEST_DATA_DIR,   // Windows equivalent of HOME
+    };
+
     // Initialize git repository in TEST_DATA
-    const git: SimpleGit = simpleGit(TEST_DATA_DIR);
-    await git.init();
+    // unsafe.allowUnsafeConfigPaths required so simple-git's security plugin permits
+    // GIT_CONFIG_GLOBAL in the env we pass.
+    const git: SimpleGit = simpleGit(TEST_DATA_DIR, { unsafe: { allowUnsafeConfigPaths: true } });
+    await git.env(isolatedEnv).init();
     await git.addConfig("user.email", "test@example.com");
     await git.addConfig("user.name", "Test User");
-    // Disable git hooks and GPG signing for tests using execSync
-    execSync("git config core.hooksPath /dev/null", { cwd: TEST_DATA_DIR });
-    execSync("git config commit.gpgsign false", { cwd: TEST_DATA_DIR });
+    // Disable GPG signing and hooks entirely in the local repo config
+    await git.addConfig("commit.gpgsign", "false");
+    // Use a cross-platform no-op hooks path
+    execSync(`git config core.hooksPath ${nullPath}`, { cwd: TEST_DATA_DIR, env: isolatedEnv });
 
     // Initialize database
     createDatabase(TEST_DB_PATH);
@@ -68,7 +84,7 @@ describe("Git Operations", () => {
     await commitFile(TEST_DATA_DIR, filePath, "Add test file");
 
     // Verify commit exists in git log
-    const git: SimpleGit = simpleGit(TEST_DATA_DIR);
+    const git: SimpleGit = simpleGit(TEST_DATA_DIR, { unsafe: { allowUnsafeConfigPaths: true } });
     const log = await git.log();
 
     expect(log.latest?.message).toBe("Add test file");
@@ -205,7 +221,7 @@ describe("Git Operations", () => {
     expect(backupContent).toBe("External file content");
 
     // Verify git commit was made
-    const git: SimpleGit = simpleGit(TEST_DATA_DIR);
+    const git: SimpleGit = simpleGit(TEST_DATA_DIR, { unsafe: { allowUnsafeConfigPaths: true } });
     const log = await git.log();
 
     expect(log.latest?.message).toBe("Sync local changes for project: Test Project");

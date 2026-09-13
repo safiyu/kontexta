@@ -320,7 +320,12 @@ describe("File Operations", () => {
     const projDir = join(TEST_DATA_DIR, "symloop-proj");
     mkdirSync(join(projDir, "src"), { recursive: true });
     // Create a circular symlink: src/loop -> src
-    symlinkSync(join(projDir, "src"), join(projDir, "src", "loop"), "dir");
+    try {
+      symlinkSync(join(projDir, "src"), join(projDir, "src", "loop"), "dir");
+    } catch (err: any) {
+      if (err?.code === "EPERM" && process.platform === "win32") return;
+      throw err;
+    }
 
     const folders = listProjectFolders(projDir);
     expect(folders).toContain("src");
