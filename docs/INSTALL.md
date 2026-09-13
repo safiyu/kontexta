@@ -163,7 +163,7 @@ docker compose down -v                           # also removes volumes (does NO
 
 ## Onboarding a project: agent context rules
 
-When you register a project with kontexta (via the MCP `register_project` tool), the server inspects the project root for known agent context files and recommends a follow-up so your agent learns kontexta's conventions on day one. Without this, a fresh conversation starts ignorant of which writes belong in the KB, when to journal, how to search, and where specs live.
+When you register a project with kontexta (via the MCP `projects.register` tool), the server inspects the project root for known agent context files and recommends a follow-up so your agent learns kontexta's conventions on day one. Without this, a fresh conversation starts ignorant of which writes belong in the KB, when to journal, how to search, and where specs live.
 
 ### What gets detected
 
@@ -180,16 +180,16 @@ Multiple matches are all surfaced — a repo with both `CLAUDE.md` and `AGENTS.m
 
 ### The recommendation flow
 
-`register_project` returns a `recommendation` field in its response:
+`projects.register` returns a `recommendation` field in its response:
 
-- **Update mode** — one or more context files were detected. The agent surfaces the recommendation, asks the user, and on Yes calls `onboard_agent` with `{ project_id, files: [...] }`.
-- **Create mode** — no context file exists. The agent asks which client you want to scaffold for (`claude-code` | `codex` | `gemini` | `cursor` | `continue` | `aider` | `cline` | `copilot` | `generic`) and calls `onboard_agent` with `{ project_id, target_agent }`. The right canonical filename is created with a starter scaffold plus the rules block.
+- **Update mode** — one or more context files were detected. The agent surfaces the recommendation, asks the user, and on Yes calls `admin.onboard_agent` with `{ project_id, files: [...] }`.
+- **Create mode** — no context file exists. The agent asks which client you want to scaffold for (`claude-code` | `codex` | `gemini` | `cursor` | `continue` | `aider` | `cline` | `copilot` | `generic`) and calls `admin.onboard_agent` with `{ project_id, target_agent }`. The right canonical filename is created with a starter scaffold plus the rules block.
 
 No file is ever written without explicit user consent — the recommendation is plain JSON; the agent must surface it and act on the user's reply.
 
 ### The injected block
 
-`onboard_agent` writes a version-fenced block bracketed by HTML comments:
+`admin.onboard_agent` writes a version-fenced block bracketed by HTML comments:
 
 ```markdown
 <!-- BEGIN kontexta:rules v1.0.0 -->
@@ -211,7 +211,7 @@ You can refresh the block any time without re-registering the project:
 ```jsonc
 // MCP tool call
 {
-  "name": "onboard_agent",
+  "name": "admin.onboard_agent",
   "arguments": {
     "project_id": 42,
     "files": ["CLAUDE.md"]   // or omit + pass target_agent for create mode
@@ -344,7 +344,7 @@ With `pnpm dev` running:
 1. **UI loads:** open `http://localhost:23002` — the three-pane layout (folder tree / file list / content) renders.
 2. **Health endpoint:** `curl http://localhost:23002/api/health` returns `{"status":"ok"}`.
 3. **WebSocket connected:** open browser DevTools → Network → WS — a connection to `ws://localhost:23002/_kontexta_ws` (status 101) is open. Footer status bar shows `synced` or `idle` (not red).
-4. **Calendar loads:** open `http://localhost:23002/calendar` — the month view renders with the toolbar. No entities exist yet, so the grid will be empty until you add one via the **Entities** button or the `calendar_add_entity` MCP tool.
+4. **Calendar loads:** open `http://localhost:23002/calendar` — the month view renders with the toolbar. No entities exist yet, so the grid will be empty until you add one via the **Entities** button or the `calendar.entities.add` MCP tool.
 
 ### Run in production (standalone, without Docker)
 
@@ -418,7 +418,7 @@ You can customize Kontexta behavior using the following environment variables:
 | `KONTEXTA_WS_ORIGINS` | (Legacy / programmatic.) Comma-separated allowed `Origin` headers for non-browser WS clients. Browsers authenticate via the session cookie and don't need this. | unset |
 | `KONTEXTA_WS_TOKEN` | (Legacy / programmatic.) Shared-secret bypass token required as `?token=…` on the WS handshake. Browsers use the short-lived session token from `/api/auth/token` and don't need this. | unset |
 | `NEXT_PUBLIC_WS_TOKEN` | Same token, baked into the client bundle at build time. Only set if you've explicitly chosen the static-token auth path. | unset |
-| `KONTEXTA_PROJECT_TOKEN_WARN` | Soft cap (in estimated tokens) above which `register_project` and `project_map` add a `warning` to their response. Set to `0` to disable. | `100000` |
+| `KONTEXTA_PROJECT_TOKEN_WARN` | Soft cap (in estimated tokens) above which `projects.register` and `projects.map` add a `warning` to their response. Set to `0` to disable. | `100000` |
 
 The WebSocket file-watcher does not bind its own port — it attaches to Next.js's HTTP server on the same port as the web UI and only handles upgrades to `/_kontexta_ws`. Auth piggybacks on the unified system: browsers send the `kontexta_session` cookie (same-origin, automatic); programmatic clients can use the IP bypass list, the legacy `KONTEXTA_WS_ORIGINS` allowlist, or the legacy `KONTEXTA_WS_TOKEN` shared secret. Connections that don't pass any of these checks are dropped with a `1008` close code. File-path leakage onto the LAN is bounded by the same auth surface that protects the dashboard.
 

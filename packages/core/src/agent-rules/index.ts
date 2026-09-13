@@ -31,7 +31,7 @@ export const SESSION_START_HOOK_SNIPPET = JSON.stringify({
           {
             type: "command",
             command:
-              "echo 'kontexta: distill_journal recommended at session start' && true",
+              "echo 'kontexta: journal.distill recommended at session start' && true",
           },
         ],
       },
@@ -48,7 +48,7 @@ export const STOP_HOOK_SNIPPET = JSON.stringify({
           {
             type: "command",
             command:
-              "echo 'kontexta: end-of-session distill_journal recommended' && true",
+              "echo 'kontexta: end-of-session journal.distill recommended' && true",
           },
         ],
       },
@@ -60,7 +60,7 @@ export const POST_TOOL_USE_HOOK_SNIPPET = JSON.stringify({
   hooks: {
     PostToolUse: [
       {
-        matcher: "Bash(git*)|mcp__kontexta__commit_backup|mcp__kontexta__move_file",
+        matcher: "Bash(git*)|mcp__kontexta__admin.commit_backup|mcp__kontexta__files.move|mcp__kontexta__commit_backup|mcp__kontexta__move_file",
         hooks: [
           {
             type: "command",

@@ -10,14 +10,14 @@ You can control how strictly Kontexta enforces this journaling via the **Journal
 
 ### 1. `lenient` (Recommended Default)
 In lenient mode, Kontexta is unobtrusive. It never blocks an agent from working.
-- If there are undistilled raw events in the backlog, it injects a subtle "nag" envelope into the tool responses, suggesting the agent call `distill_journal`.
+- If there are undistilled raw events in the backlog, it injects a subtle "nag" envelope into the tool responses, suggesting the agent call `journal.distill`.
 - If the backlog grows too large (e.g., > 500 events or > 7 days old), the MCP server will run a fast, mechanical distillation automatically in the background to ensure memory isn't lost.
 
 ### 2. `strict`
 Strict mode forces agents to maintain a clean journal before they are allowed to read new information.
-- It **blocks all read tools** (`search`, `read_file`, `list_files`, etc.) with a `JOURNAL_BACKLOG` error if there are undistilled events pending.
+- It **blocks all read tools** (`files.search`, `files.read`, `files.list`, etc.) with a `JOURNAL_BACKLOG` error if there are undistilled events pending.
 - Write tools and journaling tools remain unaffected.
-- This forces the agent to stop and run `distill_journal` to summarize its recent work before moving on to new files.
+- This forces the agent to stop and run `journal.distill` to summarize its recent work before moving on to new files.
 - You can override this on a per-call basis by passing `journal_bypass: true` in the tool arguments (which is logged for audit purposes).
 
 ### 3. `mechanical-only`

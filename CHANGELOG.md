@@ -1,5 +1,20 @@
 # Changelog
 
+## 4.7.1 — Hierarchical dot-notation MCP tools and 100% parameter descriptions
+
+### Changed
+
+- **Hierarchical dot-notation for all MCP tools.** All 71 tools now form a clean, navigable tree using dot-notation namespacing (`files.*`, `tags.*`, `folders.*`, `projects.*`, `journal.*`, `calendar.*`, `hands.*`, `resources.*`, `admin.*`). This eliminates flat-list clutter and aligns with MCP design guidelines and Smithery Capability Quality standards.
+- **Rules block routing matrix.** Updated `rules-block.md` and agent context rules (`.clinerules`, `CLAUDE.md`, `AGENTS.md`) with the new dot-notation hierarchy.
+- **Web UI & documentation alignment.** Updated the Web UI tool categories, API endpoints, configure docs, and test fixtures to reflect dot-notation names.
+
+### Fixed
+
+- **Complete parameter descriptions.** Added all missing parameter descriptions across tools (including `files.regex_search.case_insensitive`, `calendar.*`, and `journal.*`), reaching 71/71 (100%) parameter descriptions for full quality score coverage.
+- **Smithery bundle annotations.** Enhanced `classifyAnnotations` to classify `readOnlyHint` and `destructiveHint` across dot-notation tool names.
+- **Clean shebang compilation.** Stripped UTF-8 BOM characters from TypeScript/ESM sources to prevent `tsup`/`esbuild` shebang syntax errors during CI builds.
+- **Strict-mode and pattern detectors.** Updated journal strict-mode blocking and heuristics (`read-only-investigation`, `exploration`, `refactor`, `tagging-pass`) to recognize dot-notation tool calls while retaining legacy aliases for backward compatibility.
+
 ## 4.6.1 — Smithery registry badge and client install
 
 ### Added

@@ -31,23 +31,40 @@ const rawTools = JSON.parse(readFileSync(mcpToolsPath, "utf8")).tools;
 function classifyAnnotations(name) {
   const isReadOnly =
     name.startsWith("read_") ||
+    name.startsWith("files.read") ||
     name.startsWith("list_") ||
+    name.includes(".list") ||
     name.startsWith("get_") ||
+    name.includes(".get_") ||
     name.startsWith("search") ||
+    name.includes(".search") ||
     name.startsWith("find_") ||
+    name.includes(".find_") ||
     name.startsWith("diff_") ||
+    name.includes(".diff_") ||
     name.startsWith("describe_") ||
+    name.includes(".describe") ||
     name.startsWith("grep_") ||
+    name.includes(".grep") ||
     name.startsWith("whats_new") ||
+    name.includes(".whats_new") ||
     name.startsWith("bundle_search") ||
     name.startsWith("regex_search") ||
+    name.includes(".regex_search") ||
     name.startsWith("suggest_") ||
-    name.startsWith("stats");
+    name.includes(".suggest") ||
+    name.startsWith("stats") ||
+    name.includes(".stats") ||
+    name.includes(".conflicts") ||
+    name.includes(".export_");
 
   const isDestructive =
     name.startsWith("delete_") ||
+    name.includes(".delete") ||
     name.startsWith("remove_") ||
-    name.startsWith("housekeep_");
+    name.includes(".remove") ||
+    name.startsWith("housekeep_") ||
+    name.includes(".housekeep");
 
   return {
     readOnlyHint: isReadOnly,

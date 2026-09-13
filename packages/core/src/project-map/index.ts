@@ -214,7 +214,7 @@ export function projectMap(opts: ProjectMapOptions): ProjectMapResult {
 
   const truncated = out.length >= maxLines && (totalFiles < files.length);
   if (truncated) {
-    out.push(`... (truncated at ${maxLines} lines; use list_files for full enumeration)`);
+    out.push(`... (truncated at ${maxLines} lines; use files.list for full enumeration)`);
   }
 
   const outline = out.join("\n");

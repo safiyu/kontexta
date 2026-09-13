@@ -76,98 +76,98 @@ The 53 tools are organized into these groups:
 
 | Tool | Purpose |
 |---|---|
-| `search` | Natural-language keyword search across the knowledge base (FTS5) |
-| `regex_search` | Substring/regex search across all indexed files |
-| `grep_in_file` | Substring/regex search within a single known file |
-| `bundle_search` | Search hits + file bodies in a single token-budgeted call |
-| `find_related` | Discover sibling files via tag overlap |
-| `suggest_tags` | Propose tags for an existing file |
+| `files.search` | Natural-language keyword search across the knowledge base (FTS5) |
+| `files.regex_search` | Substring/regex search across all indexed files |
+| `files.grep` | Substring/regex search within a single known file |
+| `files.bundle_search` | Search hits + file bodies in a single token-budgeted call |
+| `files.find_related` | Discover sibling files via tag overlap |
+| `tags.suggest` | Propose tags for an existing file |
 
 ### Read
 
 | Tool | Purpose |
 |---|---|
-| `read_file` | Read one file's full body and metadata by ID |
-| `read_files` | Batch read up to 200 files by ID in one call |
-| `read_file_by_path` | Read a file by absolute path (no ID needed) |
-| `read_file_lines` | Read a specific line range from a file |
-| `read_section` | Read a section by heading within a file |
-| `read_file_outline` | Get a compact outline of a file's structure |
-| `describe_file` | Metadata-only inspection (tags, size, history, related) — no body tokens |
+| `files.read` | Read one file's full body and metadata by ID |
+| `files.read_many` | Batch read up to 200 files by ID in one call |
+| `files.read_by_path` | Read a file by absolute path (no ID needed) |
+| `files.read_lines` | Read a specific line range from a file |
+| `files.read_section` | Read a section by heading within a file |
+| `files.read_outline` | Get a compact outline of a file's structure |
+| `files.describe` | Metadata-only inspection (tags, size, history, related) — no body tokens |
 
 ### Write
 
 | Tool | Purpose |
 |---|---|
-| `create_file` | Create a new markdown or mermaid file in the KB or project |
-| `create_files` | Create multiple new files in one call |
-| `update_file` | Replace the entire body of a file |
-| `update_file_section` | Surgical edit at a known heading |
-| `delete_file` | Delete a single file |
-| `delete_files` | Delete multiple files in one call |
-| `move_file` | Rename or relocate a file |
+| `files.create` | Create a new markdown or mermaid file in the KB or project |
+| `files.create_many` | Create multiple new files in one call |
+| `files.update` | Replace the entire body of a file |
+| `files.update_section` | Surgical edit at a known heading |
+| `files.delete` | Delete a single file |
+| `files.delete_many` | Delete multiple files in one call |
+| `files.move` | Rename or relocate a file |
 
 ### Organize
 
 | Tool | Purpose |
 |---|---|
-| `add_tags` | Add tags to an existing file |
-| `remove_tags` | Remove tags from a file |
-| `list_tags` | Enumerate all tags in the vault |
-| `set_favorite` | Pin / unpin a file |
-| `tag_search_results` | Bulk-tag every hit from a search |
-| `list_folders` | Enumerate folders in a project |
-| `create_folder` | Create a new (possibly nested) folder |
-| `delete_folder` | Remove an empty folder |
-| `list_files` | List files in a project (filterable) |
+| `tags.add` | Add tags to an existing file |
+| `tags.remove` | Remove tags from a file |
+| `tags.list` | Enumerate all tags in the vault |
+| `tags.set_favorite` | Pin / unpin a file |
+| `tags.search` | Bulk-tag every hit from a search |
+| `folders.list` | Enumerate folders in a project |
+| `folders.create` | Create a new (possibly nested) folder |
+| `folders.delete` | Remove an empty folder |
+| `files.list` | List files in a project (filterable) |
 
 ### History & Recovery
 
 | Tool | Purpose |
 |---|---|
-| `get_history` | List a file's revisions |
-| `get_diff` | Compare two specific revisions |
-| `restore_file` | Roll back a KB file to an earlier revision |
-| `diff_against_disk` | Detect drift after out-of-band filesystem edits |
-| `refresh_index` | Rescan the vault after external changes |
+| `files.get_history` | List a file's revisions |
+| `files.get_diff` | Compare two specific revisions |
+| `files.restore` | Roll back a KB file to an earlier revision |
+| `files.diff_against_disk` | Detect drift after out-of-band filesystem edits |
+| `projects.refresh_index` | Rescan the vault after external changes |
 
 ### Discover
 
 | Tool | Purpose |
 |---|---|
-| `list_projects` | Enumerate registered projects |
-| `register_project` | Register a new project root with kontexta |
-| `project_map` | Compact folder/file tree with titles and tags |
-| `stats` | Counts and health metrics for a project |
-| `whats_new` | Files added/changed since a cutoff timestamp |
+| `projects.list` | Enumerate registered projects |
+| `projects.register` | Register a new project root with kontexta |
+| `projects.map` | Compact folder/file tree with titles and tags |
+| `admin.stats` | Counts and health metrics for a project |
+| `admin.whats_new` | Files added/changed since a cutoff timestamp |
 
 ### Journaling
 
 | Tool | Purpose |
 |---|---|
-| `journal_note` | Record a free-form decision/abandonment/observation note |
-| `journal_intent` | Record a topic/intent pivot |
-| `journal_status` | Report journal backlog and high-water mark |
-| `distill_journal` | Run the distillation pipeline (raw events → markdown summaries) |
-| `distill_journal_commit_upgrades` | Mark mechanical entries as upgraded after subagent dispatch |
-| `housekeep_journal` | Run journal retention/archival (prune old raw files, archive cold tasks) |
+| `journal.note` | Record a free-form decision/abandonment/observation note |
+| `journal.intent` | Record a topic/intent pivot |
+| `journal.status` | Report journal backlog and high-water mark |
+| `journal.distill` | Run the distillation pipeline (raw events → markdown summaries) |
+| `journal.commit_upgrades` | Mark mechanical entries as upgraded after subagent dispatch |
+| `journal.housekeep` | Run journal retention/archival (prune old raw files, archive cold tasks) |
 
 ### Hands (sandboxed commands)
 
 | Tool | Purpose |
 |---|---|
-| `list_hands` | List every Hands command tool currently registered |
-| `reload_hands` | Re-scan projects and rebuild the Hands tool registry |
-| `confirm_hand` | Approve a pending Hands invocation by its approval token |
-| `describe_hands_schema` | Return the complete `kontexta.json` authoring reference |
+| `hands.list` | List every Hands command tool currently registered |
+| `hands.reload` | Re-scan projects and rebuild the Hands tool registry |
+| `hands.confirm` | Approve a pending Hands invocation by its approval token |
+| `hands.describe_schema` | Return the complete `kontexta.json` authoring reference |
 
 ### Onboarding
 
 | Tool | Purpose |
 |---|---|
-| `onboard_agent` | Write/update kontexta workflow rules in agent context files |
-| `clip_url` | Clip a web URL into the knowledge base |
-| `commit_backup` | Push KB changes to the project's remote git |
+| `admin.onboard_agent` | Write/update kontexta workflow rules in agent context files |
+| `resources.clip_url` | Clip a web URL into the knowledge base |
+| `admin.commit_backup` | Push KB changes to the project's remote git |
 
 ## MCP Resources
 
@@ -185,7 +185,7 @@ Kontexta's journaling subsystem has three modes, configurable per project in `ko
 | Mode | Behavior |
 |---|---|
 | `lenient` (default) | Never blocks; injects a `journal` envelope on tool responses when backlog exists; auto-distills at 500 events or 7 days |
-| `strict` | Blocks read tools (`search`, `read_*`, `list_*`, `describe_*`) with a `JOURNAL_BACKLOG` error when undistilled events exist. Override with `journal_bypass: true` |
+| `strict` | Blocks read tools (`files.search`, `read_*`, `list_*`, `describe_*`) with a `JOURNAL_BACKLOG` error when undistilled events exist. Override with `journal_bypass: true` |
 | `mechanical-only` | Disables LLM-upgrade tier guidance; mechanical distillation runs every N tool calls in-process |
 
 ## Hands — sandboxed command orchestration
@@ -208,7 +208,7 @@ This lets agents budget their context window before deciding to fetch more files
 
 ## Agent rules
 
-Kontexta injects a version-stamped workflow rules block into agent context files (`CLAUDE.md`, `AGENTS.md`, `.cursor/rules/*.mdc`, `.github/copilot-instructions.md`, etc.) via `onboard_agent`. The server checks for outdated rules on every tool call and surfaces a warning when a newer `rulesVersion` is available.
+Kontexta injects a version-stamped workflow rules block into agent context files (`CLAUDE.md`, `AGENTS.md`, `.cursor/rules/*.mdc`, `.github/copilot-instructions.md`, etc.) via `admin.onboard_agent`. The server checks for outdated rules on every tool call and surfaces a warning when a newer `rulesVersion` is available.
 
 Supported agents: Claude Code, Cursor, Cline, GitHub Copilot, Gemini, Antigravity, Continue, Cline.
 

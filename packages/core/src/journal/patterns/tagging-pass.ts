@@ -1,6 +1,9 @@
 import type { PatternDetector } from "./index.js";
 
-const TAG_TOOLS = new Set(["add_tags", "remove_tags", "tag_search_results"]);
+const TAG_TOOLS = new Set([
+  "add_tags", "remove_tags", "tag_search_results",
+  "tags.add", "tags.remove", "tags.search"
+]);
 
 export const taggingPassDetector: PatternDetector = {
   name: "tagging-pass",
@@ -10,7 +13,11 @@ export const taggingPassDetector: PatternDetector = {
     const tagCalls = calls.filter((e) => TAG_TOOLS.has(e.tool ?? ""));
     if (tagCalls.length < 3) return null;
     const writeCalls = calls.filter(
-      (e) => (e.tool ?? "").startsWith("update_") || (e.tool ?? "").startsWith("create_")
+      (e) =>
+        (e.tool ?? "").startsWith("update_") ||
+        (e.tool ?? "").startsWith("create_") ||
+        (e.tool ?? "").startsWith("files.update") ||
+        (e.tool ?? "").startsWith("files.create")
     );
     if (writeCalls.length > tagCalls.length) return null;
     return {
