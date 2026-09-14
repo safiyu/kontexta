@@ -193,7 +193,7 @@ The Hands command-orchestration layer adds these top-level MCP tools, plus N dyn
 
 ## Brain tools
 
-The MCP server exposes 49 tools designed for agents that care about context-window economy. Every file-returning response is annotated with `est_tokens` and `size_bytes`; list/search responses also inline `tags` and `match_excerpt` so a single call usually replaces 3-5.
+The MCP server exposes 71 tools designed for agents that care about context-window economy. Every file-returning response is annotated with `est_tokens` and `size_bytes`; list/search responses also inline `tags` and `match_excerpt` so a single call usually replaces 3-5.
 
 ### Reading
 

@@ -207,7 +207,7 @@ What's deliberately deferred and what triggers will pull it forward lives in [`d
 
 ### Brain
 - Global vault with two-way git sync.
-- 66 MCP tools tuned for context economy.
+- 71 MCP tools tuned for context economy.
 - Batch operations (up to 500 files/call), grep, and regex support.
 - Web clipping with auth-wall detection.
 - Full git-backed versioning: `files.get_history`, `files.get_diff`, `files.restore`.

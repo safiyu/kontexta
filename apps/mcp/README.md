@@ -6,7 +6,7 @@
 
 > Want the dashboard too? Install [`kontexta`](https://www.npmjs.com/package/kontexta) instead — it includes this MCP server plus the WebUI. Run `npx kontexta start` for the full experience or `npx kontexta mcp` for MCP-only.
 
-MCP server for [Kontexta](https://kontexta.dev) — **53 tools** that let AI coding agents search, read, edit (section-level), tag, version, clip web content, and run sandboxed commands through a local SQLite-backed knowledge base. Designed for context-window economy: every file-returning response is annotated with `est_tokens` and `size_bytes`.
+MCP server for [Kontexta](https://kontexta.dev) — **71 tools** that let AI coding agents search, read, edit (section-level), tag, version, clip web content, and run sandboxed commands through a local SQLite-backed knowledge base. Designed for context-window economy: every file-returning response is annotated with `est_tokens` and `size_bytes`.
 
 ## Install
 
@@ -70,7 +70,7 @@ Open `http://localhost:23002`.
 
 ## Tool categories
 
-The 53 tools are organized into these groups:
+The 71 tools are organized into these groups:
 
 ### Find
 

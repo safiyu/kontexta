@@ -60,7 +60,7 @@ export const POST_TOOL_USE_HOOK_SNIPPET = JSON.stringify({
   hooks: {
     PostToolUse: [
       {
-        matcher: "Bash(git*)|mcp__kontexta__admin.commit_backup|mcp__kontexta__files.move|mcp__kontexta__commit_backup|mcp__kontexta__move_file",
+        matcher: "Bash(git*)|mcp__kontexta__admin[._]commit_backup|mcp__kontexta__files[._]move",
         hooks: [
           {
             type: "command",

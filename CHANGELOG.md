@@ -1,5 +1,17 @@
 # Changelog
 
+## 4.7.2 — Bugfix follow-up to the dot-notation rename
+
+### Fixed
+
+- **Smithery classifier correctness.** Replaced the string-heuristic `classifyAnnotations` in `scripts/build-smithery-bundle.mjs` with explicit per-tool sets. Previous heuristics mislabelled `tags.search` as read-only (it is a bulk-tag mutation) and left `files.restore` without `destructiveHint`; `files.bundle_search`, `admin.refresh_session_context`, `projects.map`, and `journal.status` were silently missed. Unknown tools now throw at build time so future additions can't ship mis-annotated.
+- **Legacy tool references in MCP descriptions.** Rewrote 14 backtick refs in `apps/mcp/src/index.ts` and `apps/mcp/src/calendar-tools.ts` that still pointed at pre-4.7.1 names (`read_section`, `get_history`, `tag_search_results`, `calendar_link_entities`, etc.). Agents reading those descriptions would have been directed at tools that no longer exist.
+- **Journal pattern classifiers.** Extracted a single source of truth (`packages/core/src/journal/patterns/tool-classes.ts`) for read-only and write tool names covering every dotted namespace plus legacy aliases. `read-only-investigation`, `exploration`, and `strict-mode` now share it — previously `exploration` only recognised `files.*` writes, and `read-only-investigation` missed most `admin.*`, `tags.*`, `calendar.*`, and `hands.*` reads.
+- **PostToolUse hook matcher.** The generated hook regex referenced `mcp__kontexta__admin.commit_backup|mcp__kontexta__files.move` plus dead legacy fallbacks (`commit_backup`, `move_file`) that no longer exist as tools. Rewrote to `mcp__kontexta__admin[._]commit_backup|mcp__kontexta__files[._]move` so it fires regardless of how Claude Code renders dotted MCP tool names, and dropped the dead fallbacks. `rulesVersion` bumped to 2.6.1 so the new snippet re-injects on next `admin.onboard_agent` call.
+- **Documented tool counts.** `README.md` (66→71), `apps/mcp/README.md` (53→71), and `docs/MCP.md` (49→71) now agree with CHANGELOG and the actual registered surface.
+- **Repository hygiene.** Untracked `kontexta-1.2.3.mcpb` and `test-bundle.mcpb` — the `*.mcpb` gitignore rule added in 4.6.1 was being contradicted by two committed bundle blobs, one of which advertised a nonexistent v1.2.3.
+- **Smithery publish script.** `scripts/publish-kontexta-smithery.sh` now resolves `ROOT_DIR` from the script location (via `${BASH_SOURCE[0]}`) instead of the caller's `pwd`, so it works regardless of where it's invoked from.
+
 ## 4.7.1 — Hierarchical dot-notation MCP tools and 100% parameter descriptions
 
 ### Changed

@@ -1,6 +1,6 @@
 {
   "name": "kxta-publish",
-  "version": "4.7.1",
+  "version": "4.7.2",
   "private": true,
   "type": "module",
   "bin": {
@@ -39,5 +39,5 @@
     "typescript": "^5.7.0",
     "vitest": "^3.0.0"
   },
-  "rulesVersion": "2.6.0"
+  "rulesVersion": "2.6.1"
 }

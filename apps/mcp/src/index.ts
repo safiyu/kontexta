@@ -358,8 +358,9 @@ let _shutdownInFlight = false;
 process.on("SIGINT", () => { if (!_shutdownInFlight) { _shutdownInFlight = true; void handleShutdownSignal("SIGINT"); } });
 process.on("SIGTERM", () => { if (!_shutdownInFlight) { _shutdownInFlight = true; void handleShutdownSignal("SIGTERM"); } });
 
-// Auto-wrap every tool registration that follows. journal_append (legacy) is excluded
-// because it will be removed in Task 15. Auto-wrap covers all current and future tools.
+// Auto-wrap every tool registration that follows. journal.append is excluded
+// because the auto-wrap re-enters journal recording, and journal.append itself
+// records journal events — including it would loop.
 const _origServerTool = server.tool.bind(server);
 (server as any).tool = function (name: string, ...rest: any[]): any {
   if (name === "journal.append") {
@@ -699,7 +700,7 @@ server.tool(
 
 server.tool(
   "files.read_lines",
-  "Return a 1-indexed inclusive line slice of a file. Out-of-range bounds clamp silently to the file's actual length; `to < from` throws. Read-only; no side effects, auth, or rate limits. Returns the snippet plus its size_bytes and est_tokens. Use to inspect a stack-trace region or a chunk of a large file without pulling the whole body. Prefer `read_section` if you know the heading, `grep_in_file` if you know a pattern but not the line number.",
+  "Return a 1-indexed inclusive line slice of a file. Out-of-range bounds clamp silently to the file's actual length; `to < from` throws. Read-only; no side effects, auth, or rate limits. Returns the snippet plus its size_bytes and est_tokens. Use to inspect a stack-trace region or a chunk of a large file without pulling the whole body. Prefer `files.read_section` if you know the heading, `files.grep` if you know a pattern but not the line number.",
   {
     id: z.number().describe("File ID"),
     from: z.number().int().positive().describe("First line (1-indexed, inclusive)"),
@@ -800,7 +801,7 @@ server.tool(
 
 server.tool(
   "files.regex_search",
-  "Match a JS regex against the body of every file in scope (project, KB, or all) and return per-file hits with line numbers. Slower than FTS `search` because it reads each file's content; use only when FTS misses substrings, URLs, or code identifiers. Read-only; no side effects, auth, or rate limits. Capped at 500 files / 10 hits per file by default; the response reports `files_truncated` and per-file truncation so the agent can re-scope. `project_id: null` = KB only; omit = everywhere; `kind` narrows to one content class. Invalid regex throws.",
+  "Match a JS regex against the body of every file in scope (project, KB, or all) and return per-file hits with line numbers. Slower than FTS `files.search` because it reads each file's content; use only when FTS misses substrings, URLs, or code identifiers. Read-only; no side effects, auth, or rate limits. Capped at 500 files / 10 hits per file by default; the response reports `files_truncated` and per-file truncation so the agent can re-scope. `project_id: null` = KB only; omit = everywhere; `kind` narrows to one content class. Invalid regex throws.",
   {
     pattern: z.string().describe("JavaScript RegExp source"),
     project_id: z.number().nullable().optional().describe("Scope to one project, null for KB-only, omit for everything"),
@@ -917,7 +918,7 @@ server.tool(
 
 server.tool(
   "files.list",
-  "List file metadata with optional filters (project_id, tag, favorite, folder, untagged, kind) and pagination. Read-only; no side effects, auth, or rate limits. Each row is annotated with tags, est_tokens, size_bytes, and content_class; the response includes `total_est_tokens` so you can budget before reading bodies. `project_id: null` returns ONLY Knowledge Base files; omit the field to span everything; `kind` narrows to one content class. Use to browse known structure; for keyword/content lookup use `search`; for a denser whole-vault dump use `project_map`.",
+  "List file metadata with optional filters (project_id, tag, favorite, folder, untagged, kind) and pagination. Read-only; no side effects, auth, or rate limits. Each row is annotated with tags, est_tokens, size_bytes, and content_class; the response includes `total_est_tokens` so you can budget before reading bodies. `project_id: null` returns ONLY Knowledge Base files; omit the field to span everything; `kind` narrows to one content class. Use to browse known structure; for keyword/content lookup use `files.search`; for a denser whole-vault dump use `projects.map`.",
   {
     project_id: z.number().nullable().optional().describe("Filter by project ID. Pass null to list ONLY Knowledge Base files (project_id IS NULL)."),
     tag: z.string().optional().describe("Filter by tag name"),
@@ -951,7 +952,7 @@ server.tool(
 
 server.tool(
   "files.search",
-  "Full-text (SQLite FTS5) keyword search across files. Returns ranked matches with inline match_excerpt and title_highlight (no follow-up `read_file` needed for snippets) plus tags, est_tokens, size_bytes, content_class, and aggregate `total_est_tokens`. Read-only; no side effects, auth, or rate limits. Ordering: dictionary hits sort above everything else for the same query (dictionary-wins on conflict), then BM25 rank. FTS is tokenised: it WILL miss URLs, hyphenated terms, and partial substrings — fall back to `files.regex_search` for those. `project_id: null` searches only the KB; omit the field to span everything; `tags[]` requires ALL listed tags to match; `kind` narrows to one content class. For prompt-ready bundled bodies use `files.bundle_search`.",
+  "Full-text (SQLite FTS5) keyword search across files. Returns ranked matches with inline match_excerpt and title_highlight (no follow-up `files.read` needed for snippets) plus tags, est_tokens, size_bytes, content_class, and aggregate `total_est_tokens`. Read-only; no side effects, auth, or rate limits. Ordering: dictionary hits sort above everything else for the same query (dictionary-wins on conflict), then BM25 rank. FTS is tokenised: it WILL miss URLs, hyphenated terms, and partial substrings — fall back to `files.regex_search` for those. `project_id: null` searches only the KB; omit the field to span everything; `tags[]` requires ALL listed tags to match; `kind` narrows to one content class. For prompt-ready bundled bodies use `files.bundle_search`.",
   {
     query: z.string().describe("Search query"),
     project_id: z.number().nullable().optional().describe("Filter by project ID. Pass null to search ONLY Knowledge Base files."),
@@ -1023,7 +1024,7 @@ server.tool(
 
 server.tool(
   "tags.add",
-  "Append tags to ONE file. Additive — existing tags are preserved; re-adding an existing tag is a no-op (idempotent per tag). New tag names auto-create rows in the global `tags` table. Persists to local SQLite. No external auth or rate limits. Returns `{success: true}`; throws if file_id is unknown. Use to label a single file. To tag every file matching a query in one call use `tag_search_results`; to remove tags use `remove_tags`.",
+  "Append tags to ONE file. Additive — existing tags are preserved; re-adding an existing tag is a no-op (idempotent per tag). New tag names auto-create rows in the global `tags` table. Persists to local SQLite. No external auth or rate limits. Returns `{success: true}`; throws if file_id is unknown. Use to label a single file. To tag every file matching a query in one call use `tags.search`; to remove tags use `tags.remove`.",
   {
     file_id: z.number().describe("File ID"),
     tags: z.array(z.string()).describe("Array of tag names to add"),
@@ -1038,7 +1039,7 @@ server.tool(
 
 server.tool(
   "tags.remove",
-  "Detach one or more tag IDs from ONE file. Destructive on the link only — does NOT delete the file or the global tag definition (orphan tags survive in `list_tags`). Idempotent: removing an already-absent tag is a no-op. No external auth or rate limits. Returns `{success: true}`. Note: takes tag IDs (integers), not names — fetch them via `list_tags`. To remove ALL tags from many files via a query, see `tag_search_results` (additive only) — there is no bulk-untag-by-query tool.",
+  "Detach one or more tag IDs from ONE file. Destructive on the link only — does NOT delete the file or the global tag definition (orphan tags survive in `tags.list`). Idempotent: removing an already-absent tag is a no-op. No external auth or rate limits. Returns `{success: true}`. Note: takes tag IDs (integers), not names — fetch them via `tags.list`. To remove ALL tags from many files via a query, see `tags.search` (additive only) — there is no bulk-untag-by-query tool.",
   {
     file_id: z.number().describe("File ID"),
     tag_ids: z.array(z.number()).describe("Array of tag IDs to remove"),
@@ -1053,7 +1054,7 @@ server.tool(
 
 server.tool(
   "tags.set_favorite",
-  "Set or clear the favorite flag on one file (idempotent — re-setting the same value is a no-op; not a toggle, you pass the desired state). Persists to local SQLite. No external auth or rate limits. Returns `{success: true}`. Use to curate quick-access pins; `list_files`/`search`/`bundle_search` accept `favorite: true` to filter to the pinned set.",
+  "Set or clear the favorite flag on one file (idempotent — re-setting the same value is a no-op; not a toggle, you pass the desired state). Persists to local SQLite. No external auth or rate limits. Returns `{success: true}`. Use to curate quick-access pins; `files.list` / `files.search` / `files.bundle_search` accept `favorite: true` to filter to the pinned set.",
   {
     file_id: z.number().describe("File ID"),
     favorite: z.boolean().describe("Favorite status"),
@@ -1068,7 +1069,7 @@ server.tool(
 
 server.tool(
   "tags.list",
-  "List every tag in the global SQLite database with id, name, and applied count. Read-only; no side effects, auth, or rate limits. Returns the entire taxonomy (not paginated). Use to discover existing labels before tagging (so you reuse rather than fork) or to find tag IDs to feed into `remove_tags`. For tags on a specific file, use `describe_file`.",
+  "List every tag in the global SQLite database with id, name, and applied count. Read-only; no side effects, auth, or rate limits. Returns the entire taxonomy (not paginated). Use to discover existing labels before tagging (so you reuse rather than fork) or to find tag IDs to feed into `tags.remove`. For tags on a specific file, use `files.describe`.",
   {},
   async () => {
     const result = listTags();
@@ -1080,7 +1081,7 @@ server.tool(
 
 server.tool(
   "projects.list",
-  "List every registered project with id, name, absolute path, and a derived `has_hands` flag (true when the path exists on disk AND contains a `kontexta.json`). Read-only; no side effects, auth, or rate limits. Use to find the project_id to pass to scoped tools (`search`, `list_files`, `commit_backup`, `refresh_index`, etc.). To register a new project use `register_project`; to inspect its Hands tools use `list_hands`.",
+  "List every registered project with id, name, absolute path, and a derived `has_hands` flag (true when the path exists on disk AND contains a `kontexta.json`). Read-only; no side effects, auth, or rate limits. Use to find the project_id to pass to scoped tools (`files.search`, `files.list`, `admin.commit_backup`, `projects.refresh_index`, etc.). To register a new project use `projects.register`; to inspect its Hands tools use `hands.list`.",
   {},
   async () => {
     const result = listProjects();
@@ -1554,7 +1555,7 @@ function repoDirForFile(file: { storage_type: string; project_id: number | null 
 
 server.tool(
   "files.get_history",
-  "Return the git commit history for one file (newest first), each entry with hash, message, date, and author. Reads the file's owning repo: the project's git repo for project files, the KB backup repo for KB files. Read-only; no side effects, auth, or rate limits. Returns `{file_id, path, history}`; an empty array means the file has not been committed yet. Use to understand a file's evolution before editing or restoring. Pair with `get_diff` to see exact line changes; use `restore_file` to roll back.",
+  "Return the git commit history for one file (newest first), each entry with hash, message, date, and author. Reads the file's owning repo: the project's git repo for project files, the KB backup repo for KB files. Read-only; no side effects, auth, or rate limits. Returns `{file_id, path, history}`; an empty array means the file has not been committed yet. Use to understand a file's evolution before editing or restoring. Pair with `files.get_diff` to see exact line changes; use `files.restore` to roll back.",
   {
     file_id: z.number().describe("ID of the file"),
   },
@@ -1574,7 +1575,7 @@ server.tool(
 
 server.tool(
   "files.get_diff",
-  "Return the unified diff of one file between two commit hashes (typically obtained from `get_history` for the same file). Read-only; no side effects, auth, or rate limits. Order matters — `commit_a` is treated as the earlier side; reversing the args inverts the diff. Throws if either hash is unknown to the file's repo. Use after `get_history` to see WHAT changed, not just THAT it changed.",
+  "Return the unified diff of one file between two commit hashes (typically obtained from `files.get_history` for the same file). Read-only; no side effects, auth, or rate limits. Order matters — `commit_a` is treated as the earlier side; reversing the args inverts the diff. Throws if either hash is unknown to the file's repo. Use after `files.get_history` to see WHAT changed, not just THAT it changed.",
   {
     file_id: z.number().describe("ID of the file"),
     commit_a: z.string().describe("Earlier commit hash (from get_history)"),
@@ -1596,7 +1597,7 @@ server.tool(
 
 server.tool(
   "files.restore",
-  "DESTRUCTIVE. Overwrite a file's current on-disk content with the version recorded at a specific git commit, then re-index FTS. The hash MUST come from `get_history` for THIS file (foreign hashes throw). The current uncommitted content is lost unless it was already committed elsewhere. The file watcher may also pick up the change before this returns. No external auth or rate limits. Returns `{file_id, path, hash, success, message}`. Use only to undo accidental edits or recover a known-good version.",
+  "DESTRUCTIVE. Overwrite a file's current on-disk content with the version recorded at a specific git commit, then re-index FTS. The hash MUST come from `files.get_history` for THIS file (foreign hashes throw). The current uncommitted content is lost unless it was already committed elsewhere. The file watcher may also pick up the change before this returns. No external auth or rate limits. Returns `{file_id, path, hash, success, message}`. Use only to undo accidental edits or recover a known-good version.",
   {
     file_id: z.number().describe("ID of the file"),
     hash: z.string().describe("Commit hash to restore from (from get_history)"),
@@ -1635,7 +1636,7 @@ server.tool(
 
 server.tool(
   "files.read_outline",
-  "Return a flat list of markdown headings for one file (level, text, line, byteStart, byteEnd). Read-only; no side effects, auth, or rate limits. Use as a cheap probe before `read_section` or `update_file_section` so you don't spend tokens on the full body just to learn what sections exist. Empty outline means the file has no markdown headings (it may still have content — fall back to `read_file` or `read_file_lines`).",
+  "Return a flat list of markdown headings for one file (level, text, line, byteStart, byteEnd). Read-only; no side effects, auth, or rate limits. Use as a cheap probe before `files.read_section` or `files.update_section` so you don't spend tokens on the full body just to learn what sections exist. Empty outline means the file has no markdown headings (it may still have content — fall back to `files.read` or `files.read_lines`).",
   {
     file_id: z.number().describe("File ID"),
   },
@@ -1672,7 +1673,7 @@ server.tool(
 
 server.tool(
   "files.read_section",
-  "Return the body of ONE heading (the heading line itself is excluded) plus level, line, size_bytes, and est_tokens. Heading match is case-insensitive but exact-string after trim — fuzzy / partial matches do NOT resolve. Returns isError if the heading is absent. Read-only; no side effects, auth, or rate limits. Pair with `read_file_outline` when you are unsure which headings exist; for non-heading line ranges use `read_file_lines`.",
+  "Return the body of ONE heading (the heading line itself is excluded) plus level, line, size_bytes, and est_tokens. Heading match is case-insensitive but exact-string after trim — fuzzy / partial matches do NOT resolve. Returns isError if the heading is absent. Read-only; no side effects, auth, or rate limits. Pair with `files.read_outline` when you are unsure which headings exist; for non-heading line ranges use `files.read_lines`.",
   {
     file_id: z.number().describe("File ID"),
     heading: z.string().describe("Heading text to extract (case-insensitive)"),
@@ -1721,7 +1722,7 @@ server.tool(
 
 server.tool(
   "files.update_section",
-  "Surgical write — replace the body of ONE heading without touching siblings. The heading line itself is preserved verbatim; only its body is rewritten. Persists via the same path as `update_file` (writes to disk → FTS reindex → git commit). Throws if the heading does not exist (this tool will NOT create a new section — append the section text via `update_file` first). Heading match is case-insensitive exact-string. No external auth or rate limits. Returns the updated file metadata. Use to make targeted edits without re-sending the whole body; for full-file replacement use `update_file`.",
+  "Surgical write — replace the body of ONE heading without touching siblings. The heading line itself is preserved verbatim; only its body is rewritten. Persists via the same path as `files.update` (writes to disk → FTS reindex → git commit). Throws if the heading does not exist (this tool will NOT create a new section — append the section text via `files.update` first). Heading match is case-insensitive exact-string. No external auth or rate limits. Returns the updated file metadata. Use to make targeted edits without re-sending the whole body; for full-file replacement use `files.update`.",
   {
     file_id: z.number().describe("File ID"),
     heading: z.string().describe("Heading whose body to replace (case-insensitive)"),
@@ -1772,7 +1773,7 @@ function validateFolderName(name: string): void {
 
 server.tool(
   "folders.list",
-  "List folder paths under a project root (or the Knowledge Base when `project_id` is null/omitted). Returns `{folders: string[], base_path}` where `folders` are RELATIVE to `base_path`. Read-only; no side effects, auth, or rate limits. Throws if `project_id` references an unknown project. Use to discover where to drop a new file via `create_file`'s `folder` argument or to navigate vault structure; to actually create one use `create_folder`.",
+  "List folder paths under a project root (or the Knowledge Base when `project_id` is null/omitted). Returns `{folders: string[], base_path}` where `folders` are RELATIVE to `base_path`. Read-only; no side effects, auth, or rate limits. Throws if `project_id` references an unknown project. Use to discover where to drop a new file via `files.create`'s `folder` argument or to navigate vault structure; to actually create one use `folders.create`.",
   {
     project_id: z.number().nullable().optional().describe("Project ID. Pass null or omit to list KB folders."),
   },
@@ -1819,7 +1820,7 @@ server.tool(
 
 server.tool(
   "folders.delete",
-  "DESTRUCTIVE — recursively delete a folder under the KB AND every file inside it (disk + FTS rows). REFUSES (returns isError) when `project_id` is supplied: deleting inside a registered project would race the file watcher and re-ingest the contents — remove project content via your editor instead. Same name validation as `create_folder`. Not recoverable from Kontexta after the call (only the git backup, if configured, retains it). No external auth or rate limits. Returns `{success: true}`.",
+  "DESTRUCTIVE — recursively delete a folder under the KB AND every file inside it (disk + FTS rows). REFUSES (returns isError) when `project_id` is supplied: deleting inside a registered project would race the file watcher and re-ingest the contents — remove project content via your editor instead. Same name validation as `folders.create`. Not recoverable from Kontexta after the call (only the git backup, if configured, retains it). No external auth or rate limits. Returns `{success: true}`.",
   {
     project_id: z.number().nullable().optional().describe("Project ID. Pass null or omit to delete from the KB. Project IDs are rejected."),
     name: z.string().describe("Folder name (relative)"),

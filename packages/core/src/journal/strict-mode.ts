@@ -1,23 +1,8 @@
 // packages/core/src/journal/strict-mode.ts
-const READ_ONLY_TOOLS = new Set([
-  // dot-notation
-  "files.search", "files.regex_search", "files.grep", "files.bundle_search",
-  "files.read", "files.read_many", "files.read_section", "files.read_outline", "files.read_lines",
-  "files.read_by_path", "files.describe",
-  "files.list", "folders.list", "projects.list", "tags.list", "hands.list",
-  "admin.stats", "admin.whats_new", "files.find_related", "projects.map", "tags.suggest",
-  "files.get_history", "files.get_diff", "calendar.entities.list", "calendar.events.list", "calendar.events.conflicts",
-  // legacy snake_case
-  "search", "regex_search", "grep_in_file", "bundle_search",
-  "read_file", "read_files", "read_section", "read_file_outline", "read_file_lines",
-  "read_file_by_path", "describe_file",
-  "list_files", "list_folders", "list_projects", "list_tags", "list_hands",
-  "stats", "whats_new", "find_related", "project_map", "suggest_tags",
-  "get_history", "get_diff",
-]);
+import { READ_ONLY_TOOL_NAMES } from "./patterns/tool-classes.js";
 
 export function isReadOnlyTool(toolName: string): boolean {
-  return READ_ONLY_TOOLS.has(toolName);
+  return READ_ONLY_TOOL_NAMES.has(toolName);
 }
 
 export function shouldBlock(

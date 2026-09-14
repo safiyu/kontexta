@@ -1,27 +1,13 @@
 import type { PatternDetector } from "./index.js";
-
-const READ_TOOLS = new Set([
-  // dot-notation
-  "files.search", "files.regex_search", "files.grep", "files.bundle_search",
-  "files.read", "files.read_many", "files.read_section", "files.read_outline", "files.describe",
-  // legacy
-  "search", "regex_search", "grep_in_file", "bundle_search",
-  "read_file", "read_files", "read_section", "read_file_outline", "describe_file",
-]);
-const WRITE_TOOLS_PREFIX = [
-  "update_", "create_", "delete_", "move_",
-  "files.update", "files.create", "files.delete", "files.move"
-];
+import { READ_ONLY_TOOL_NAMES, isWriteToolName } from "./tool-classes.js";
 
 export const explorationDetector: PatternDetector = {
   name: "exploration",
   detect(events) {
     const calls = events.filter((e) => e.event === "tool_call" && e.tool);
     if (calls.length < 5) return null;
-    const reads = calls.filter((e) => READ_TOOLS.has(e.tool!));
-    const writes = calls.filter((e) =>
-      WRITE_TOOLS_PREFIX.some((p) => e.tool!.startsWith(p))
-    );
+    const reads = calls.filter((e) => READ_ONLY_TOOL_NAMES.has(e.tool!));
+    const writes = calls.filter((e) => isWriteToolName(e.tool!));
     if (reads.length < 5 || writes.length > 0) return null;
     const filesTouched = new Set<string>();
     for (const e of calls) for (const f of e.touched ?? []) filesTouched.add(f);
