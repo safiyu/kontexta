@@ -1,5 +1,22 @@
 # Changelog
 
+## 5.0.0 — MCP tool surface consolidation (breaking)
+
+Glama flagged the 71-tool surface as too large for agents to navigate reliably. This release collapses 13 tools into their siblings via mode/kind/union parameters — no aliases, no backward compatibility. Existing agent context files re-onboard automatically on next `admin.onboard_agent` call (triggered by the `rulesVersion` bump to 3.0.0).
+
+### Breaking
+
+- **Tool count 71 → 58 (13 removed).** Every removed name is gone from the server; calling it returns tool-not-found.
+- **Read family unified.** `files.read_many`, `files.read_by_path`, `files.read_section`, `files.read_lines` are gone. `files.read` now accepts `id` (single), `path` (by absolute path), `ids` (batch, ≤200), and the partial-read modifiers `section` / `lines` (mutually exclusive, require a single-file identifier). `files.read_outline` is unchanged — its headings-only shape didn't fit the merge.
+- **Bulk file ops folded into their singular siblings.** `files.create_many` → `files.create({ files: [...] })` (single-element array = one-file case, same per-item error isolation as before). `files.delete_many` → `files.delete({ ids: [...] })`.
+- **Section edits folded into `files.update`.** `files.update_section` is gone; pass `section` to `files.update` for a surgical single-heading rewrite, omit it for full-body replacement.
+- **Search variants folded into `files.search`.** `files.bundle_search` is gone; pass `include_bodies: true` (plus optional `format` / `max_tokens`) to `files.search` for the same token-budgeted prompt-ready bundle. `files.grep` is gone; pass `file_id` to `files.regex_search` to scope to one known file instead of scanning the whole vault.
+- **Journal write tools merged into `journal.write`.** `journal.append`, `journal.note`, and `journal.intent` are gone. Call `journal.write({ kind: "append" | "note" | "intent", ... })` — required fields depend on `kind` (`text` for append/note, `summary` for intent).
+- **Hands schema folded into `hands.list`.** `hands.describe_schema` is gone; pass `schema: true` to `hands.list` for the `kontexta.json` authoring reference instead of the registered-hands enumeration.
+- **Discovery snapshots merged into `admin.overview`.** `admin.stats` and `admin.whats_new` are gone; call `admin.overview({ mode: "stats" | "whats_new", ... })`. `mode: "whats_new"` requires `since`.
+- **Journal pattern classifiers and Smithery annotations updated** for every new/removed tool name; legacy 4.7.x names stay in `packages/core/src/journal/patterns/tool-classes.ts`'s legacy blocks so historical journal entries still classify correctly.
+- **Rules-block routing matrix, `apps/mcp/README.md`, `docs/MCP.md`, and `README.md` rewritten** to reference only the current 58-tool surface — no stale tool names in agent-facing docs.
+
 ## 4.7.2 — Bugfix follow-up to the dot-notation rename
 
 ### Fixed

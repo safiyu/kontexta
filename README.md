@@ -75,8 +75,8 @@ A project-defined command surface that replaces "unrestricted shell access" with
 
 ### 3. Eyes — The Feedback Engine
 Closes the loop by capturing Hands' output and journaling learnings back into the Brain.
-- **Live Observation**: Tools like `admin.whats_new` and `files.diff_against_disk` let agents see what actually changed.
-- **Automatic journaling**: Every MCP tool call is captured to a per-project, append-only event log (Layer 1). The `journal.distill` tool — or the lenient-mode auto-fallback — collapses raw events into per-topic markdown summaries (Layer 2) indexed alongside the rest of the knowledge base. `journal.note` and `journal.intent` let agents enrich the log with decisions and topic pivots. Phase 2 also adds `journal.housekeep` (retention/archival), `journal.commit_upgrades` (closes the subagent dispatch loop), strict mode (configurable per project — blocks read tools when backlog exists), and an opt-in WebUI scheduler that runs mechanical distillation on a 15-minute clock when the dashboard is installed. **[Learn more about Journaling modes and configuration in docs/JOURNAL.md](docs/JOURNAL.md).**
+- **Live Observation**: Tools like `admin.overview({mode: "whats_new"})` and `files.diff_against_disk` let agents see what actually changed.
+- **Automatic journaling**: Every MCP tool call is captured to a per-project, append-only event log (Layer 1). The `journal.distill` tool — or the lenient-mode auto-fallback — collapses raw events into per-topic markdown summaries (Layer 2) indexed alongside the rest of the knowledge base. `journal.write` (`kind: "note"` / `"intent"`) lets agents enrich the log with decisions and topic pivots. Phase 2 also adds `journal.housekeep` (retention/archival), `journal.commit_upgrades` (closes the subagent dispatch loop), strict mode (configurable per project — blocks read tools when backlog exists), and an opt-in WebUI scheduler that runs mechanical distillation on a 15-minute clock when the dashboard is installed. **[Learn more about Journaling modes and configuration in docs/JOURNAL.md](docs/JOURNAL.md).**
 
 ---
 
@@ -207,7 +207,7 @@ What's deliberately deferred and what triggers will pull it forward lives in [`d
 
 ### Brain
 - Global vault with two-way git sync.
-- 71 MCP tools tuned for context economy.
+- 58 MCP tools tuned for context economy.
 - Batch operations (up to 500 files/call), grep, and regex support.
 - Web clipping with auth-wall detection.
 - Full git-backed versioning: `files.get_history`, `files.get_diff`, `files.restore`.

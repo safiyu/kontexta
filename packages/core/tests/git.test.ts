@@ -43,13 +43,20 @@ describe("Git Operations", () => {
     // (e.g. Windows GitHub Actions: 'C:/Users/runneradmin/.gitconfig: Permission denied',
     //  Linux runners: permission errors reading /root/.gitconfig)
     const nullPath = platform() === "win32" ? "NUL" : "/dev/null";
-    const isolatedEnv = {
+    const isolatedEnv: Record<string, string | undefined> = {
       ...process.env,
       GIT_CONFIG_NOSYSTEM: "1",
       GIT_CONFIG_GLOBAL: nullPath,  // skip ~/.gitconfig entirely
       HOME: TEST_DATA_DIR,          // points git's home lookup at our temp dir
       USERPROFILE: TEST_DATA_DIR,   // Windows equivalent of HOME
     };
+    // Strip vars simple-git's block-unsafe-operations-plugin rejects unless
+    // explicitly allowlisted (we only allowlist allowUnsafeConfigPaths above).
+    // A dev shell that exports GIT_EDITOR/GIT_PAGER/etc. would otherwise make
+    // this suite fail outside CI, since we spread process.env above.
+    for (const k of ["GIT_EDITOR", "GIT_SEQUENCE_EDITOR", "GIT_PAGER", "EDITOR", "PAGER", "GIT_ASKPASS", "SSH_ASKPASS", "GIT_PROXY_COMMAND", "GIT_EXTERNAL_DIFF", "GIT_SSH", "GIT_SSH_COMMAND", "GIT_EXEC_PATH", "GIT_CONFIG_COUNT"]) {
+      delete isolatedEnv[k];
+    }
 
     // Initialize git repository in TEST_DATA
     // unsafe.allowUnsafeConfigPaths required so simple-git's security plugin permits

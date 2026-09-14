@@ -37,14 +37,13 @@ const rawTools = JSON.parse(readFileSync(mcpToolsPath, "utf8")).tools;
 // the source of truth; a tool that lands here without a classification
 // throws in enrichedTools below so the mismatch can't ship.
 const READ_ONLY_TOOLS = new Set([
-  "admin.get_profile", "admin.refresh_session_context", "admin.stats", "admin.whats_new",
+  "admin.get_profile", "admin.overview", "admin.refresh_session_context",
   "calendar.entities.list", "calendar.events.conflicts", "calendar.events.list", "calendar.export_ics",
-  "files.bundle_search", "files.describe", "files.diff_against_disk", "files.find_related",
-  "files.get_diff", "files.get_history", "files.grep", "files.list",
-  "files.read", "files.read_by_path", "files.read_lines", "files.read_many",
-  "files.read_outline", "files.read_section", "files.regex_search", "files.search",
+  "files.describe", "files.diff_against_disk", "files.find_related",
+  "files.get_diff", "files.get_history", "files.list",
+  "files.read", "files.read_outline", "files.regex_search", "files.search",
   "folders.list",
-  "hands.describe_schema", "hands.list",
+  "hands.list",
   "journal.status",
   "projects.list", "projects.map",
   "resources.export_report", "resources.list_reports",
@@ -53,7 +52,7 @@ const READ_ONLY_TOOLS = new Set([
 
 const DESTRUCTIVE_TOOLS = new Set([
   "calendar.entities.delete", "calendar.events.delete",
-  "files.delete", "files.delete_many", "files.restore",
+  "files.delete", "files.restore",
   "folders.delete",
   "journal.housekeep",
   "resources.delete_report",
@@ -64,10 +63,10 @@ const NEUTRAL_TOOLS = new Set([
   "admin.commit_backup", "admin.onboard_agent", "admin.transfer_agent_context",
   "calendar.entities.add", "calendar.entities.link", "calendar.entities.update",
   "calendar.events.add", "calendar.events.update",
-  "files.create", "files.create_many", "files.move", "files.update", "files.update_section",
+  "files.create", "files.move", "files.update",
   "folders.create",
   "hands.confirm", "hands.reload",
-  "journal.append", "journal.commit_upgrades", "journal.distill", "journal.intent", "journal.note",
+  "journal.commit_upgrades", "journal.distill", "journal.write",
   "projects.refresh_index", "projects.register",
   "resources.add_report", "resources.clip_url",
   "tags.add", "tags.search", "tags.set_favorite",

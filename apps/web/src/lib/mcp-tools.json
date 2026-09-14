@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-14T08:33:34.836Z",
+  "generatedAt": "2026-09-14T09:57:10.258Z",
   "tools": [
     {
       "name": "admin.refresh_session_context",
@@ -14,22 +14,42 @@
       }
     },
     {
-      "name": "journal.append",
-      "description": "Append a timestamped text entry to today's daily journal file in the Knowledge Base. Creates the file if it doesn't already exist. Both calls on the same calendar day return the same file_id. Returns { file_id }.",
+      "name": "journal.write",
+      "description": "Write one event to the current project's journal. `kind: 'append'` = timestamped entry in today's daily journal file in the Knowledge Base (creates the file if it doesn't exist; both calls on the same calendar day return the same file_id; returns `{file_id}`). `kind: 'note'` = free-form decision/abandonment/observation, stored as an `agent_note` event in Layer 1 (surfaces in distilled task entries; returns `{ok, recorded_at}`). `kind: 'intent'` = topic/intent pivot — use when the user redirects what you're working on so the distillation step splits task buckets correctly (returns `{ok, recorded_at}`). Required fields depend on `kind`: 'append'/'note' need `text`; 'intent' needs `summary`.",
       "inputSchema": {
         "type": "object",
         "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "append",
+              "note",
+              "intent"
+            ],
+            "description": "Event kind. Selects which body fields are required and how the event is stored."
+          },
           "text": {
             "type": "string",
-            "description": "Text to append to today's journal entry"
+            "description": "Required for kind='append' or kind='note'. Body of the entry."
+          },
+          "summary": {
+            "type": "string",
+            "description": "Required for kind='intent'. One-line summary of the new intent."
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Optional for kind='note'. Tags for the note."
           },
           "project_id": {
             "type": "number",
-            "description": "Optional project ID context"
+            "description": "Optional for kind='append'. Project ID context."
           }
         },
         "required": [
-          "text"
+          "kind"
         ],
         "additionalProperties": false,
         "$schema": "http://json-schema.org/draft-07/schema#"
@@ -40,64 +60,79 @@
     },
     {
       "name": "files.create",
-      "description": "Create a new markdown, mermaid, or HTML file in the knowledge base or project. This operation writes a new file to disk and adds it to the local SQLite FTS5 index. Destination can be 'knowledge' (global KB), 'project' (reference file inside a project repo), or 'kontexta' (internal Kontexta schema file). If destination is 'project' or 'kontexta', project_id is strictly required. If destination is 'knowledge', 'kind' is strictly required — pick 'dictionary' (authoritative source-of-truth) or 'note' (informational snapshot); see the kind param for the rubric. No external auth required. Rate limits do not apply (local operation). Returns the created file metadata including its new ID, path, and estimated tokens. If the destination directory does not exist, it will be created automatically. Use this tool to instantiate new contextual documents or notes. To modify an existing file, use 'files.update' instead. Parameters: 'destination' dictates required fields; if 'project' or 'kontexta', 'project_id' must be a valid integer; if 'knowledge', 'kind' must be 'dictionary' or 'note'. 'tags' and 'folder' are optional. Pass format='mmd' to create a Mermaid diagram file (.mmd) or format='html' for HTML reports; defaults to 'md'.",
+      "description": "Create one or more markdown, mermaid, or HTML files in the knowledge base or project (up to 200 per call). Pass a single-element `files` array for the one-file case. This operation writes each file to disk and adds it to the local SQLite FTS5 index. Destination can be 'knowledge' (global KB), 'project' (reference file inside a project repo), or 'kontexta' (internal Kontexta schema file). If destination is 'project' or 'kontexta', project_id is strictly required. If destination is 'knowledge', 'kind' is strictly required — pick 'dictionary' (authoritative source-of-truth) or 'note' (informational snapshot); see the kind param for the rubric. No external auth required. Rate limits do not apply (local operation). Per-item failures are isolated to `errors[]` — the rest of the batch still commits; a single-item call still reports its failure the same way. Returns `{created_count, error_count, created, errors}`. If a destination directory does not exist, it will be created automatically. To modify an existing file, use 'files.update' instead. Pass format='mmd' on an item to create a Mermaid diagram file (.mmd) or format='html' for HTML reports; defaults to 'md'.",
       "inputSchema": {
         "type": "object",
         "properties": {
-          "title": {
-            "type": "string",
-            "description": "Title of the file"
-          },
-          "content": {
-            "type": "string",
-            "description": "Content of the file"
-          },
-          "destination": {
-            "type": "string",
-            "enum": [
-              "knowledge",
-              "project",
-              "kontexta"
-            ],
-            "description": "Destination type"
-          },
-          "project_id": {
-            "type": "number",
-            "description": "Project ID (required for project/kontexta destinations)"
-          },
-          "folder": {
-            "type": "string",
-            "description": "Optional folder path"
-          },
-          "tags": {
+          "files": {
             "type": "array",
             "items": {
-              "type": "string"
+              "type": "object",
+              "properties": {
+                "title": {
+                  "type": "string",
+                  "description": "Title of the file"
+                },
+                "content": {
+                  "type": "string",
+                  "description": "Content of the file"
+                },
+                "destination": {
+                  "type": "string",
+                  "enum": [
+                    "knowledge",
+                    "project",
+                    "kontexta"
+                  ],
+                  "description": "Destination type"
+                },
+                "project_id": {
+                  "type": "number",
+                  "description": "Project ID (required for project/kontexta destinations)"
+                },
+                "folder": {
+                  "type": "string",
+                  "description": "Optional folder path"
+                },
+                "tags": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "Optional array of tags"
+                },
+                "format": {
+                  "type": "string",
+                  "enum": [
+                    "md",
+                    "mmd",
+                    "html"
+                  ],
+                  "description": "File extension to write. Defaults to 'md'. Use 'html' for HTML reports."
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "dictionary",
+                    "note"
+                  ],
+                  "description": "REQUIRED for destination='knowledge'. 'dictionary' = source of truth (mappings, glossaries, runbooks, PR templates). 'note' = snapshot (meeting notes, sprint reviews, PR findings, post-mortems). Test: if this file disagreed with the code, who wins? File wins → dictionary; file loses → note. Ignored for destination='project' or 'kontexta'."
+                }
+              },
+              "required": [
+                "title",
+                "content",
+                "destination"
+              ],
+              "additionalProperties": false
             },
-            "description": "Optional array of tags"
-          },
-          "format": {
-            "type": "string",
-            "enum": [
-              "md",
-              "mmd",
-              "html"
-            ],
-            "description": "File extension to write. Defaults to 'md'. Use 'html' for HTML reports."
-          },
-          "kind": {
-            "type": "string",
-            "enum": [
-              "dictionary",
-              "note"
-            ],
-            "description": "REQUIRED for destination='knowledge'. 'dictionary' = source of truth (mappings, glossaries, runbooks, PR templates). 'note' = snapshot (meeting notes, sprint reviews, PR findings, post-mortems). Test: if this file disagreed with the code, who wins? File wins → dictionary; file loses → note. Ignored for destination='project' or 'kontexta'."
+            "minItems": 1,
+            "maxItems": 200,
+            "description": "Files to create. Single-element array = one-file case. Max 200 per call."
           }
         },
         "required": [
-          "title",
-          "content",
-          "destination"
+          "files"
         ],
         "additionalProperties": false,
         "$schema": "http://json-schema.org/draft-07/schema#"
@@ -202,31 +237,19 @@
     },
     {
       "name": "files.read",
-      "description": "Read one file's full body and metadata by ID. Read-only; no side effects, auth, or rate limits. Returns title, path, content, tags, est_tokens (so you can budget context before opening more files), and timestamps. Throws if the ID is unknown. Use for a single known file. Prefer `files.describe` to inspect without paying body tokens; `files.read_many` for batches; `files.read_lines`/`files.read_section` for partial reads; `files.read_by_path` when you only have the absolute path.",
+      "description": "Read one or more files, in full or in part. Modes: single-by-id (`id`), single-by-path (`path`, absolute on-disk path — must be exactly as indexed), batch-by-id (`ids`, up to 200), partial-by-heading (`id`+`section`), partial-by-line-range (`id`+`lines`). Exactly one of `id`/`path`/`ids` is required. `section` and `lines` are mutually exclusive and only valid with `id` (not `ids` or `path`). Read-only; no side effects, auth, or rate limits. Response shape: a single file object (with `content`, tags, est_tokens) for `id`/`path`; a partial-content object for `section`/`lines`; `{files, total_est_tokens, error_count, errors}` for `ids` (per-ID failures isolated, batch never partial-throws). Prefer `files.describe` to inspect without paying body tokens.",
       "inputSchema": {
         "type": "object",
         "properties": {
           "id": {
-            "type": "number",
-            "description": "File ID"
-          }
-        },
-        "required": [
-          "id"
-        ],
-        "additionalProperties": false,
-        "$schema": "http://json-schema.org/draft-07/schema#"
-      },
-      "execution": {
-        "taskSupport": "forbidden"
-      }
-    },
-    {
-      "name": "files.read_many",
-      "description": "Batch read up to 200 files by ID in one call. Returns per-file annotated records, an aggregate `total_est_tokens`, and an isolated `errors[]` (one bad ID does NOT abort the batch). Read-only; no side effects, auth, or rate limits. Use instead of looping `files.read` to halve round-trips and get the combined token cost upfront. For >200 IDs, page yourself.",
-      "inputSchema": {
-        "type": "object",
-        "properties": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "description": "Single file by ID."
+          },
+          "path": {
+            "type": "string",
+            "description": "Single file by absolute on-disk path (must match exactly what Kontexta indexed)."
+          },
           "ids": {
             "type": "array",
             "items": {
@@ -234,12 +257,34 @@
             },
             "minItems": 1,
             "maxItems": 200,
-            "description": "File IDs to read (max 200 per call)"
+            "description": "Batch mode: multiple file IDs (max 200 per call); returns an array plus aggregate token cost."
+          },
+          "section": {
+            "type": "string",
+            "description": "Partial read: return only this heading's body (case-insensitive exact-string after trim). Requires `id`; mutually exclusive with `lines`."
+          },
+          "lines": {
+            "type": "object",
+            "properties": {
+              "from": {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "description": "First line (1-indexed, inclusive)"
+              },
+              "to": {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "description": "Last line (1-indexed, inclusive)"
+              }
+            },
+            "required": [
+              "from",
+              "to"
+            ],
+            "additionalProperties": false,
+            "description": "Partial read: 1-indexed inclusive line range. Requires `id`; mutually exclusive with `section`."
           }
         },
-        "required": [
-          "ids"
-        ],
         "additionalProperties": false,
         "$schema": "http://json-schema.org/draft-07/schema#"
       },
@@ -269,77 +314,8 @@
       }
     },
     {
-      "name": "files.read_lines",
-      "description": "Return a 1-indexed inclusive line slice of a file. Out-of-range bounds clamp silently to the file's actual length; `to < from` throws. Read-only; no side effects, auth, or rate limits. Returns the snippet plus its size_bytes and est_tokens. Use to inspect a stack-trace region or a chunk of a large file without pulling the whole body. Prefer `files.read_section` if you know the heading, `files.grep` if you know a pattern but not the line number.",
-      "inputSchema": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "number",
-            "description": "File ID"
-          },
-          "from": {
-            "type": "integer",
-            "exclusiveMinimum": 0,
-            "description": "First line (1-indexed, inclusive)"
-          },
-          "to": {
-            "type": "integer",
-            "exclusiveMinimum": 0,
-            "description": "Last line (1-indexed, inclusive)"
-          }
-        },
-        "required": [
-          "id",
-          "from",
-          "to"
-        ],
-        "additionalProperties": false,
-        "$schema": "http://json-schema.org/draft-07/schema#"
-      },
-      "execution": {
-        "taskSupport": "forbidden"
-      }
-    },
-    {
-      "name": "files.grep",
-      "description": "Match a JS regex against one file's lines and return matched lines with line numbers (capped: default 100, max 500). Catches what FTS misses: URLs, hyphenated terms, code identifiers. Read-only; no side effects, auth, or rate limits. Invalid regex throws `invalid regex`. Returns `{matches, match_count, truncated}`. Use after `files.read_outline` when you know the file but need a specific reference; for cross-file regex use `files.regex_search`; for keyword/concept search use `files.search`.",
-      "inputSchema": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "number",
-            "description": "File ID"
-          },
-          "pattern": {
-            "type": "string",
-            "description": "Pattern to match. Treated as a JavaScript RegExp source."
-          },
-          "case_insensitive": {
-            "type": "boolean",
-            "description": "Add the 'i' flag (default false)"
-          },
-          "max_matches": {
-            "type": "integer",
-            "exclusiveMinimum": 0,
-            "maximum": 500,
-            "description": "Cap on returned hits (default 100)"
-          }
-        },
-        "required": [
-          "id",
-          "pattern"
-        ],
-        "additionalProperties": false,
-        "$schema": "http://json-schema.org/draft-07/schema#"
-      },
-      "execution": {
-        "taskSupport": "forbidden"
-      }
-    },
-    {
       "name": "files.regex_search",
-      "description": "Match a JS regex against the body of every file in scope (project, KB, or all) and return per-file hits with line numbers. Slower than FTS `files.search` because it reads each file's content; use only when FTS misses substrings, URLs, or code identifiers. Read-only; no side effects, auth, or rate limits. Capped at 500 files / 10 hits per file by default; the response reports `files_truncated` and per-file truncation so the agent can re-scope. `project_id: null` = KB only; omit = everywhere; `kind` narrows to one content class. Invalid regex throws.",
+      "description": "Match a JS regex against file bodies. Default mode scans every file in scope (project, KB, or all) and returns per-file hits with line numbers — slower than FTS `files.search` because it reads each file's content; use only when FTS misses substrings, URLs, or code identifiers. Pass `file_id` to instead scan just that one file (catches what FTS misses within a single known file); response shape changes to `{file_id, path, pattern, match_count, truncated, matches}`. Read-only; no side effects, auth, or rate limits. Multi-file mode capped at 500 files / 10 hits per file by default (`files_truncated` reports the cap); single-file mode capped at 100 hits by default, max 500. `project_id`/`kind` are ignored when `file_id` is set. Invalid regex throws.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -347,12 +323,16 @@
             "type": "string",
             "description": "JavaScript RegExp source"
           },
+          "file_id": {
+            "type": "number",
+            "description": "Scan only this file instead of every file in scope. When set, `project_id`/`kind`/`max_files`/`max_matches_per_file` are ignored in favor of `max_matches`."
+          },
           "project_id": {
             "type": [
               "number",
               "null"
             ],
-            "description": "Scope to one project, null for KB-only, omit for everything"
+            "description": "Scope to one project, null for KB-only, omit for everything. Ignored when `file_id` is set."
           },
           "case_insensitive": {
             "type": "boolean",
@@ -362,13 +342,19 @@
             "type": "integer",
             "exclusiveMinimum": 0,
             "maximum": 2000,
-            "description": "Cap on files scanned (default 500)"
+            "description": "Cap on files scanned (default 500). Ignored when `file_id` is set."
           },
           "max_matches_per_file": {
             "type": "integer",
             "exclusiveMinimum": 0,
             "maximum": 100,
-            "description": "Per-file hit cap (default 10)"
+            "description": "Per-file hit cap in multi-file mode (default 10). Ignored when `file_id` is set."
+          },
+          "max_matches": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 500,
+            "description": "Cap on returned hits in single-file mode (default 100). Only used when `file_id` is set."
           },
           "kind": {
             "type": "string",
@@ -378,7 +364,7 @@
               "journal",
               "project"
             ],
-            "description": "Filter by content class before scanning."
+            "description": "Filter by content class before scanning. Ignored when `file_id` is set."
           }
         },
         "required": [
@@ -393,7 +379,7 @@
     },
     {
       "name": "files.update",
-      "description": "Update the entire content of an existing file by its ID. This replaces the file's content on disk and triggers an FTS5 re-index. Returns the updated file metadata including new estimated token counts. Operates locally with no external auth or rate limits. If you only need to modify a single section without replacing the entire file, use 'files.update_section' instead to save context budget. Parameters: 'id' must be a valid integer file ID. 'content' is the complete markdown string that will replace the file.",
+      "description": "Rewrite a file. Default = full-body replacement: `content` becomes the entire file, triggering disk write + FTS5 re-index. Pass `section` to instead rewrite ONLY that heading's body (case-insensitive exact-string after trim; the heading line itself is preserved, siblings untouched) — saves context budget vs resending the whole file. Throws if `section` is set but the heading doesn't exist (this mode will NOT create a new section — append the section text via a full-body update first). Operates locally with no external auth or rate limits. Returns the updated file metadata including new estimated token counts.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -403,7 +389,11 @@
           },
           "content": {
             "type": "string",
-            "description": "New content"
+            "description": "New content. With `section` set, this replaces just that heading's body; otherwise it becomes the entire file body."
+          },
+          "section": {
+            "type": "string",
+            "description": "Case-insensitive exact-string heading. When set, only this heading's body is rewritten instead of the whole file."
           }
         },
         "required": [
@@ -419,17 +409,22 @@
     },
     {
       "name": "files.delete",
-      "description": "DESTRUCTIVE. Permanently delete one file by ID. KB files are unlinked from disk AND removed from the FTS5 index; project reference files only have their index entry removed (the file on disk is left alone so the watcher does not fight your editor). Not idempotent — deleting an unknown ID throws. No external auth or rate limits. Returns `{success: true}`. Use only when the file is truly obsolete; to deprioritise without losing data, untag (`tags.remove`) or unfavorite (`tags.set_favorite`) instead. Bulk variant: `files.delete_many`.",
+      "description": "DESTRUCTIVE. Permanently delete one or more files by ID (up to 500 per call). Pass a single-element `ids` array for the one-file case. KB files are unlinked from disk AND removed from the FTS5 index; project reference files only have their index entry removed (the file on disk is left alone so the watcher does not fight your editor). Not idempotent — deleting an unknown ID surfaces as a per-item error. No external auth or rate limits. Per-ID failures are isolated to `errors[]` and the rest of the batch still commits — partial success is the norm, always inspect `error_count`. Returns `{deleted_count, error_count, deleted, errors}`. Use only when the file is truly obsolete; to deprioritise without losing data, untag (`tags.remove`) or unfavorite (`tags.set_favorite`) instead. To preview the set before deleting, run `files.list` with the same filter and confirm the IDs.",
       "inputSchema": {
         "type": "object",
         "properties": {
-          "id": {
-            "type": "number",
-            "description": "File ID"
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 1,
+            "maxItems": 500,
+            "description": "File IDs to delete. Single-element array = one-file case. Max 500 per call."
           }
         },
         "required": [
-          "id"
+          "ids"
         ],
         "additionalProperties": false,
         "$schema": "http://json-schema.org/draft-07/schema#"
@@ -495,7 +490,7 @@
     },
     {
       "name": "files.search",
-      "description": "Full-text (SQLite FTS5) keyword search across files. Returns ranked matches with inline match_excerpt and title_highlight (no follow-up `files.read` needed for snippets) plus tags, est_tokens, size_bytes, content_class, and aggregate `total_est_tokens`. Read-only; no side effects, auth, or rate limits. Ordering: dictionary hits sort above everything else for the same query (dictionary-wins on conflict), then BM25 rank. FTS is tokenised: it WILL miss URLs, hyphenated terms, and partial substrings — fall back to `files.regex_search` for those. `project_id: null` searches only the KB; omit the field to span everything; `tags[]` requires ALL listed tags to match; `kind` narrows to one content class. For prompt-ready bundled bodies use `files.bundle_search`.",
+      "description": "Full-text (SQLite FTS5) keyword search across files. Default mode returns ranked matches with inline match_excerpt and title_highlight (no follow-up `files.read` needed for snippets) plus tags, est_tokens, size_bytes, content_class, and aggregate `total_est_tokens`. Pass `include_bodies: true` to instead get a single prompt-ready bundle: matched bodies concatenated into XML `<document>` blocks or markdown headers + fences (see `format`/`max_tokens`), capped at the token budget — files are added in rank order until the next would exceed it, the rest going to `meta.skipped[]`. Use `include_bodies` instead of `files.search` + N×`files.read` when you need several related files as one context blob. Read-only; no side effects, auth, or rate limits. Ordering: dictionary hits sort above everything else for the same query (dictionary-wins on conflict), then BM25 rank. FTS is tokenised: it WILL miss URLs, hyphenated terms, and partial substrings — fall back to `files.regex_search` for those. `project_id: null` searches only the KB; omit the field to span everything; `tags[]` requires ALL listed tags to match; `kind` narrows to one content class.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -530,45 +525,10 @@
               "project"
             ],
             "description": "Filter by content class. dictionary = authoritative KB (system IDs, mappings, glossaries), note = informational KB, journal = time-log, project = project file. Omit to see all classes with dictionary-first ordering."
-          }
-        },
-        "required": [
-          "query"
-        ],
-        "additionalProperties": false,
-        "$schema": "http://json-schema.org/draft-07/schema#"
-      },
-      "execution": {
-        "taskSupport": "forbidden"
-      }
-    },
-    {
-      "name": "files.bundle_search",
-      "description": "Run an FTS search and concatenate matched bodies into a single prompt-ready bundle (XML `<document>` blocks or markdown headers + fences) capped at `max_tokens`. Files are added in rank order (dictionary-wins first, then BM25) until the next would exceed the budget; the rest go to `skipped[]`. Read-only; no side effects, auth, or rate limits. Use instead of `files.search` + N×`files.read` when you need several related files as one context blob. Defaults: format=xml, max_tokens=50000. `project_id: null` = KB only; `tags[]` requires ALL to match; `kind` narrows to one content class.",
-      "inputSchema": {
-        "type": "object",
-        "properties": {
-          "query": {
-            "type": "string",
-            "description": "Full-text search query"
           },
-          "project_id": {
-            "type": [
-              "number",
-              "null"
-            ],
-            "description": "Filter by project ID. Pass null to bundle ONLY Knowledge Base files."
-          },
-          "tags": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "Filter by tags (all must match)"
-          },
-          "favorite": {
+          "include_bodies": {
             "type": "boolean",
-            "description": "Filter by favorite status"
+            "description": "If true, return a single prompt-ready bundle of matched bodies instead of a match list. Response shape changes to `{bundle, meta: {included, skipped, ...}}`. Default false."
           },
           "format": {
             "type": "string",
@@ -576,24 +536,12 @@
               "xml",
               "markdown"
             ],
-            "default": "xml",
-            "description": "Bundle format. xml = Anthropic-recommended <document> tags; markdown = ## headers + fenced blocks"
+            "description": "Bundle format when `include_bodies` is true. xml = Anthropic-recommended <document> tags (default); markdown = ## headers + fenced blocks. Ignored otherwise."
           },
           "max_tokens": {
             "type": "integer",
             "exclusiveMinimum": 0,
-            "default": 50000,
-            "description": "Token budget. Files added in rank order until the next would exceed; remainder go to skipped[]"
-          },
-          "kind": {
-            "type": "string",
-            "enum": [
-              "dictionary",
-              "note",
-              "journal",
-              "project"
-            ],
-            "description": "Filter by content class. dictionary = authoritative KB, note = informational KB, journal = time-log, project = project file."
+            "description": "Token budget when `include_bodies` is true (default 50000). Files added in rank order until the next would exceed; remainder go to `meta.skipped[]`. Ignored otherwise."
           }
         },
         "required": [
@@ -666,7 +614,7 @@
     },
     {
       "name": "tags.set_favorite",
-      "description": "Set or clear the favorite flag on one file (idempotent — re-setting the same value is a no-op; not a toggle, you pass the desired state). Persists to local SQLite. No external auth or rate limits. Returns `{success: true}`. Use to curate quick-access pins; `files.list` / `files.search` / `files.bundle_search` accept `favorite: true` to filter to the pinned set.",
+      "description": "Set or clear the favorite flag on one file (idempotent — re-setting the same value is a no-op; not a toggle, you pass the desired state). Persists to local SQLite. No external auth or rate limits. Returns `{success: true}`. Use to curate quick-access pins; `files.list` / `files.search` accept `favorite: true` to filter to the pinned set.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -960,7 +908,7 @@
     },
     {
       "name": "files.read_outline",
-      "description": "Return a flat list of markdown headings for one file (level, text, line, byteStart, byteEnd). Read-only; no side effects, auth, or rate limits. Use as a cheap probe before `files.read_section` or `files.update_section` so you don't spend tokens on the full body just to learn what sections exist. Empty outline means the file has no markdown headings (it may still have content — fall back to `files.read` or `files.read_lines`).",
+      "description": "Return a flat list of markdown headings for one file (level, text, line, byteStart, byteEnd). Read-only; no side effects, auth, or rate limits. Use as a cheap probe before `files.read({ id, section })` or `files.update({ file_id, section, content })` so you don't spend tokens on the full body just to learn what sections exist. Empty outline means the file has no markdown headings (it may still have content — fall back to `files.read` in full or `files.read({ id, lines })`).",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -971,63 +919,6 @@
         },
         "required": [
           "file_id"
-        ],
-        "additionalProperties": false,
-        "$schema": "http://json-schema.org/draft-07/schema#"
-      },
-      "execution": {
-        "taskSupport": "forbidden"
-      }
-    },
-    {
-      "name": "files.read_section",
-      "description": "Return the body of ONE heading (the heading line itself is excluded) plus level, line, size_bytes, and est_tokens. Heading match is case-insensitive but exact-string after trim — fuzzy / partial matches do NOT resolve. Returns isError if the heading is absent. Read-only; no side effects, auth, or rate limits. Pair with `files.read_outline` when you are unsure which headings exist; for non-heading line ranges use `files.read_lines`.",
-      "inputSchema": {
-        "type": "object",
-        "properties": {
-          "file_id": {
-            "type": "number",
-            "description": "File ID"
-          },
-          "heading": {
-            "type": "string",
-            "description": "Heading text to extract (case-insensitive)"
-          }
-        },
-        "required": [
-          "file_id",
-          "heading"
-        ],
-        "additionalProperties": false,
-        "$schema": "http://json-schema.org/draft-07/schema#"
-      },
-      "execution": {
-        "taskSupport": "forbidden"
-      }
-    },
-    {
-      "name": "files.update_section",
-      "description": "Surgical write — replace the body of ONE heading without touching siblings. The heading line itself is preserved verbatim; only its body is rewritten. Persists via the same path as `files.update` (writes to disk → FTS reindex → git commit). Throws if the heading does not exist (this tool will NOT create a new section — append the section text via `files.update` first). Heading match is case-insensitive exact-string. No external auth or rate limits. Returns the updated file metadata. Use to make targeted edits without re-sending the whole body; for full-file replacement use `files.update`.",
-      "inputSchema": {
-        "type": "object",
-        "properties": {
-          "file_id": {
-            "type": "number",
-            "description": "File ID"
-          },
-          "heading": {
-            "type": "string",
-            "description": "Heading whose body to replace (case-insensitive)"
-          },
-          "content": {
-            "type": "string",
-            "description": "New body content (heading line is preserved automatically)"
-          }
-        },
-        "required": [
-          "file_id",
-          "heading",
-          "content"
         ],
         "additionalProperties": false,
         "$schema": "http://json-schema.org/draft-07/schema#"
@@ -1182,115 +1073,6 @@
       }
     },
     {
-      "name": "files.create_many",
-      "description": "Batch variant of `files.create` — create up to 200 markdown, mermaid, or HTML files in one call. Each item follows the same rules: `project_id` required if `destination` is `project`/`kontexta`; `kind` ('dictionary' or 'note') required if `destination` is `knowledge`. SIDE EFFECTS: writes new files to disk and inserts FTS5 rows; missing folders are mkdir'd. Per-item failures are isolated to `errors[]` and the rest of the batch still commits — partial success is the norm, always inspect `error_count`. No external auth or rate limits. Returns `{created_count, error_count, created, errors}`. Use for bulk ingestion; for >200 items, page yourself. Pass format='mmd' on an item to create a Mermaid diagram file (.mmd) or 'html' for HTML reports; defaults to 'md'.",
-      "inputSchema": {
-        "type": "object",
-        "properties": {
-          "files": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "properties": {
-                "title": {
-                  "type": "string",
-                  "description": "File title."
-                },
-                "content": {
-                  "type": "string",
-                  "description": "File body content (markdown, mermaid, or HTML depending on format)."
-                },
-                "destination": {
-                  "type": "string",
-                  "enum": [
-                    "knowledge",
-                    "project",
-                    "kontexta"
-                  ],
-                  "description": "Storage destination: 'knowledge' for KB, 'project' for a project, 'kontexta' for app-internal."
-                },
-                "project_id": {
-                  "type": "number",
-                  "description": "Project ID — required when destination is 'project' or 'kontexta'."
-                },
-                "folder": {
-                  "type": "string",
-                  "description": "Relative folder path within the destination (e.g. 'notes/daily')."
-                },
-                "tags": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  },
-                  "description": "Tags to apply to this file."
-                },
-                "format": {
-                  "type": "string",
-                  "enum": [
-                    "md",
-                    "mmd",
-                    "html"
-                  ],
-                  "description": "File format: 'md' (default), 'mmd' (Mermaid diagram), or 'html' (report)."
-                },
-                "kind": {
-                  "type": "string",
-                  "enum": [
-                    "dictionary",
-                    "note"
-                  ],
-                  "description": "REQUIRED per-item for destination='knowledge'. See files.create for the dictionary/note rubric."
-                }
-              },
-              "required": [
-                "title",
-                "content",
-                "destination"
-              ],
-              "additionalProperties": false
-            },
-            "minItems": 1,
-            "maxItems": 200,
-            "description": "Files to create (max 200 per call)"
-          }
-        },
-        "required": [
-          "files"
-        ],
-        "additionalProperties": false,
-        "$schema": "http://json-schema.org/draft-07/schema#"
-      },
-      "execution": {
-        "taskSupport": "forbidden"
-      }
-    },
-    {
-      "name": "files.delete_many",
-      "description": "DESTRUCTIVE batch — delete up to 500 files by ID in one call. Same physical-deletion rules as `files.delete` (KB files unlinked from disk; project reference files only de-indexed). Per-ID failures isolated to `errors[]`; the batch keeps going — partial success is the norm. Not idempotent — unknown IDs surface as per-item errors. No external auth or rate limits. Returns `{deleted_count, error_count, deleted, errors}`. To preview the set before deleting, run `files.list` with the same filter and confirm the IDs.",
-      "inputSchema": {
-        "type": "object",
-        "properties": {
-          "ids": {
-            "type": "array",
-            "items": {
-              "type": "number"
-            },
-            "minItems": 1,
-            "maxItems": 500,
-            "description": "File IDs to delete (max 500 per call)"
-          }
-        },
-        "required": [
-          "ids"
-        ],
-        "additionalProperties": false,
-        "$schema": "http://json-schema.org/draft-07/schema#"
-      },
-      "execution": {
-        "taskSupport": "forbidden"
-      }
-    },
-    {
       "name": "tags.search",
       "description": "Bulk-tag — run an FTS `search` and append `add_tags` to every matching file in one call. Side effect: each match gets `addTags` applied (additive, idempotent per tag); the matched files themselves are NOT modified beyond their tag links. Per-file failures isolated to `errors[]`. No external auth or rate limits. There is NO dry-run flag, so ALWAYS run `files.search` with the same query first to verify the match set before tagging. The `tags[]` filter requires existing tags to ALL match (it scopes the search; it does not control which tags get added). Returns `{matched_count, tagged_count, tags_applied, tagged_ids, errors}`.",
       "inputSchema": {
@@ -1339,32 +1121,19 @@
       }
     },
     {
-      "name": "files.read_by_path",
-      "description": "Look up a file by its absolute on-disk path and return the same shape as `files.read`. The path must EXACTLY match what Kontexta indexed — no symlink resolution, no path normalisation beyond what the OS does, no trailing-slash tolerance. Returns isError if no row matches (the file may exist on disk but not be indexed — try `projects.refresh_index`). Read-only; no side effects, auth, or rate limits. Use when an agent has a path from its working directory but no file ID; if you have the ID, prefer `files.read`.",
+      "name": "admin.overview",
+      "description": "Vault-state snapshot. `mode: 'stats'` = aggregate counts for a scope: `file_count`, `untagged_count`, `favorite_count`, `top_tags`. With `project_id` omitted (everything), also returns `by_project` breakdown. `include_token_total: true` stat()s every matching file on disk to compute a body-size estimate — measurably slower on large vaults; default false. `mode: 'whats_new'` = list files created or modified since a checkpoint (`since`, REQUIRED for this mode — ISO-8601 like `2025-01-15T00:00:00Z` or relative durations like `1h`/`7d`/`2w`; invalid formats throw); CAVEAT: hard-deleted files are NOT surfaced, only mtime-driven changes. Both modes: `project_id: null` = KB only; omit = everything. Read-only; no side effects, auth, or rate limits. Use `stats` as a cheap dashboard or to spot untagged content for cleanup (for live disk-vs-index drift use `files.diff_against_disk`); use `whats_new` at session start to catch up.",
       "inputSchema": {
         "type": "object",
         "properties": {
-          "path": {
+          "mode": {
             "type": "string",
-            "description": "Absolute path on disk (must match the path stored in Kontexta)"
-          }
-        },
-        "required": [
-          "path"
-        ],
-        "additionalProperties": false,
-        "$schema": "http://json-schema.org/draft-07/schema#"
-      },
-      "execution": {
-        "taskSupport": "forbidden"
-      }
-    },
-    {
-      "name": "admin.stats",
-      "description": "Aggregate counts for a scope: `file_count`, `untagged_count`, `favorite_count`, `top_tags`. With `project_id` omitted (everything), also returns `by_project` breakdown. `include_token_total: true` stat()s every matching file on disk to compute a body-size estimate — measurably slower on large vaults; default false. `project_id: null` = KB only; omit = all. Read-only; no side effects, auth, or rate limits. Use as a cheap dashboard or to spot untagged content for cleanup; for live disk-vs-index drift use `files.diff_against_disk`.",
-      "inputSchema": {
-        "type": "object",
-        "properties": {
+            "enum": [
+              "stats",
+              "whats_new"
+            ],
+            "description": "Which snapshot to return. 'whats_new' requires `since`."
+          },
           "project_id": {
             "type": [
               "number",
@@ -1376,13 +1145,28 @@
             "type": "integer",
             "exclusiveMinimum": 0,
             "maximum": 100,
-            "description": "How many top tags to return (default 10)"
+            "description": "mode='stats' only: how many top tags to return (default 10)"
           },
           "include_token_total": {
             "type": "boolean",
-            "description": "If true, stat every matching file on disk to compute total est_tokens. Default false (cheap)."
+            "description": "mode='stats' only: if true, stat every matching file on disk to compute total est_tokens. Default false (cheap)."
+          },
+          "since": {
+            "type": "string",
+            "description": "REQUIRED for mode='whats_new'. ISO 8601 timestamp or relative duration (e.g. \"1h\", \"7d\", \"2w\")."
+          },
+          "include_tags": {
+            "type": "boolean",
+            "description": "mode='whats_new' only: attach tags[] to each file. Default true."
+          },
+          "limit": {
+            "type": "number",
+            "description": "mode='whats_new' only: max files returned. Default 200."
           }
         },
+        "required": [
+          "mode"
+        ],
         "additionalProperties": false,
         "$schema": "http://json-schema.org/draft-07/schema#"
       },
@@ -1460,42 +1244,6 @@
       }
     },
     {
-      "name": "admin.whats_new",
-      "description": "List files created or modified since a checkpoint. `since` accepts ISO-8601 (`2025-01-15T00:00:00Z`) or relative durations (`1h`, `7d`, `2w`); invalid formats throw. Read-only; no side effects, auth, or rate limits. Returns annotated rows plus aggregate `total_est_tokens` so you can decide what to read next. CAVEAT: hard-deleted files are NOT surfaced — only mtime-driven changes. Defaults: include_tags=true, limit=200. `project_id: null` = KB only; omit = everything. Use at session start to catch up.",
-      "inputSchema": {
-        "type": "object",
-        "properties": {
-          "since": {
-            "type": "string",
-            "description": "ISO 8601 timestamp or relative duration (e.g. \"1h\", \"7d\", \"2w\")."
-          },
-          "project_id": {
-            "type": [
-              "number",
-              "null"
-            ],
-            "description": "Filter to a single project. Pass null for knowledge-base-only files. Omit for all."
-          },
-          "include_tags": {
-            "type": "boolean",
-            "description": "Attach tags[] to each file. Default true."
-          },
-          "limit": {
-            "type": "number",
-            "description": "Max files returned. Default 200."
-          }
-        },
-        "required": [
-          "since"
-        ],
-        "additionalProperties": false,
-        "$schema": "http://json-schema.org/draft-07/schema#"
-      },
-      "execution": {
-        "taskSupport": "forbidden"
-      }
-    },
-    {
       "name": "projects.map",
       "description": "Return a compact indented outline of folders, file titles, tags, and IDs in a single dense block — substantially fewer tokens than the equivalent `files.list` JSON for the same scope. Read-only; no side effects, auth, or rate limits. Capped at `max_lines` (default 5000); the response reports `est_tokens` and emits a `warning` field if it exceeds `KONTEXTA_PROJECT_TOKEN_WARN`. `project_id: null` = KB only; omit = everything. Defaults: include_tags=true, show_titles=true. Use to orient yourself in an unfamiliar vault or project; for keyword lookup use `files.search`.",
       "inputSchema": {
@@ -1530,11 +1278,17 @@
     },
     {
       "name": "hands.list",
-      "description": "List every Hands command tool currently registered, with project scope, tool name, danger level, confirmation flag, and description. Hands tools come from per-project `kontexta.json` files loaded at register time. Read-only; no side effects, auth, or rate limits. Use to discover what side-effectful project commands the agent is permitted to run; for the `kontexta.json` schema see `hands.describe_schema`; reload after editing one with `hands.reload`.",
+      "description": "List every Hands command tool currently registered, with project scope, tool name, danger level, confirmation flag, and description. Hands tools come from per-project `kontexta.json` files loaded at register time. Pass `schema: true` to instead get the complete `kontexta.json` authoring reference (JSON schema, validation rules, security guarantees, limitations, annotated example) — a static document, unrelated to any specific registered hand. Read-only; no side effects, auth, or rate limits. Use the default list mode to discover what side-effectful project commands the agent is permitted to run; use `schema: true` when helping a user write or fix a `kontexta.json`; reload after editing one with `hands.reload`.",
       "inputSchema": {
-        "$schema": "http://json-schema.org/draft-07/schema#",
         "type": "object",
-        "properties": {}
+        "properties": {
+          "schema": {
+            "type": "boolean",
+            "description": "If true, return the kontexta.json authoring reference document instead of the registered-hands list. Default false."
+          }
+        },
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
       },
       "execution": {
         "taskSupport": "forbidden"
@@ -1542,7 +1296,7 @@
     },
     {
       "name": "hands.reload",
-      "description": "Re-scan every registered project's `kontexta.json` and rebuild the live Hands tool registry — newly-declared tools become callable immediately, removed tools disappear from `tools/list`. SIDE EFFECT is on the running MCP session's tool inventory only (no disk writes). Idempotent. No external auth or rate limits. Takes no parameters. Returns per-project load results (counts of registered/disabled tools and any validation warnings). Use after editing a `kontexta.json` mid-session; for the schema see `hands.describe_schema`.",
+      "description": "Re-scan every registered project's `kontexta.json` and rebuild the live Hands tool registry — newly-declared tools become callable immediately, removed tools disappear from `tools/list`. SIDE EFFECT is on the running MCP session's tool inventory only (no disk writes). Idempotent. No external auth or rate limits. Takes no parameters. Returns per-project load results (counts of registered/disabled tools and any validation warnings). Use after editing a `kontexta.json` mid-session; for the schema see `hands.list({ schema: true })`.",
       "inputSchema": {
         "$schema": "http://json-schema.org/draft-07/schema#",
         "type": "object",
@@ -1574,75 +1328,12 @@
       }
     },
     {
-      "name": "hands.describe_schema",
-      "description": "Return the complete authoring reference for `kontexta.json`: JSON schema, validation rules, security guarantees, limitations, and an annotated example. Static document — does not read any project file or DB row. Read-only; no side effects, auth, or rate limits. Takes no parameters. Use when helping a user write or fix a `kontexta.json`; to see the loaded tools themselves use `hands.list`; to apply edits use `hands.reload`.",
-      "inputSchema": {
-        "$schema": "http://json-schema.org/draft-07/schema#",
-        "type": "object",
-        "properties": {}
-      },
-      "execution": {
-        "taskSupport": "forbidden"
-      }
-    },
-    {
       "name": "admin.get_profile",
       "description": "Return the user profile stored in the Knowledge Base. The profile helps AI agents understand the user's context, role, preferences, and goals. Read-only; no side effects, auth, or rate limits. Returns existence status, full content, list of missing required sections, and a hint for new users. Use at session start to understand who you're working with.",
       "inputSchema": {
         "$schema": "http://json-schema.org/draft-07/schema#",
         "type": "object",
         "properties": {}
-      },
-      "execution": {
-        "taskSupport": "forbidden"
-      }
-    },
-    {
-      "name": "journal.note",
-      "description": "Record a free-form decision/abandonment/observation note in the current project's journal. Stored as an `agent_note` event in Layer 1; surfaces in distilled task entries.",
-      "inputSchema": {
-        "type": "object",
-        "properties": {
-          "text": {
-            "type": "string",
-            "minLength": 1,
-            "description": "Body of the note (markdown allowed)."
-          },
-          "tags": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "Optional tags for the note."
-          }
-        },
-        "required": [
-          "text"
-        ],
-        "additionalProperties": false,
-        "$schema": "http://json-schema.org/draft-07/schema#"
-      },
-      "execution": {
-        "taskSupport": "forbidden"
-      }
-    },
-    {
-      "name": "journal.intent",
-      "description": "Record a topic/intent pivot. Use when the user redirects what you're working on; the distillation step uses this to split task buckets correctly.",
-      "inputSchema": {
-        "type": "object",
-        "properties": {
-          "summary": {
-            "type": "string",
-            "minLength": 1,
-            "description": "One-line summary of the new intent."
-          }
-        },
-        "required": [
-          "summary"
-        ],
-        "additionalProperties": false,
-        "$schema": "http://json-schema.org/draft-07/schema#"
       },
       "execution": {
         "taskSupport": "forbidden"
