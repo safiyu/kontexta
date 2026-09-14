@@ -1,6 +1,6 @@
 import { checkAuth } from "@/lib/auth";
 import { NextRequest, NextResponse } from "next/server";
-import { listProjects, registerProject, discoverFiles } from "kxta-core";
+import { listProjects, registerProject, discoverFiles, detectAgentContextFiles, checkAgentRulesStatus, RULE_BLOCK_VERSION } from "kxta-core";
 import { DATA_DIR, ensureDbInitialized } from "@/lib/db-init";
 import { existsSync, statSync } from "node:fs";
 import { assertSafeUserPath } from "@/lib/safe-path";
@@ -10,10 +10,21 @@ export async function GET(req: NextRequest) {
 
   ensureDbInitialized();
   const projects = listProjects();
-  const augmented = projects.map((p) => ({
-    ...p,
-    has_hands: !!(p.path && existsSync(`${p.path}/kontexta.json`)),
-  }));
+  const augmented = projects.map((p) => {
+    // Mirrors the MCP server's projects.list handler (apps/mcp/src/index.ts)
+    // so the dashboard and any connected agent agree on onboarding status.
+    const contextFiles = p.path ? detectAgentContextFiles(p.path) : [];
+    const statuses = p.path ? checkAgentRulesStatus(p.path, contextFiles) : [];
+    const outdated = statuses.filter((s) => !s.upToDate);
+    return {
+      ...p,
+      has_hands: !!(p.path && existsSync(`${p.path}/kontexta.json`)),
+      agent_rules: {
+        status: outdated.length > 0 ? "outdated" : contextFiles.length > 0 ? "up_to_date" : "none",
+        latest_version: RULE_BLOCK_VERSION,
+      },
+    };
+  });
   return NextResponse.json(augmented);
 }
 

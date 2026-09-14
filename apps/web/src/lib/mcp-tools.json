@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-14T09:57:10.258Z",
+  "generatedAt": "2026-09-14T15:32:56.159Z",
   "tools": [
     {
       "name": "admin.refresh_session_context",
@@ -60,7 +60,7 @@
     },
     {
       "name": "files.create",
-      "description": "Create one or more markdown, mermaid, or HTML files in the knowledge base or project (up to 200 per call). Pass a single-element `files` array for the one-file case. This operation writes each file to disk and adds it to the local SQLite FTS5 index. Destination can be 'knowledge' (global KB), 'project' (reference file inside a project repo), or 'kontexta' (internal Kontexta schema file). If destination is 'project' or 'kontexta', project_id is strictly required. If destination is 'knowledge', 'kind' is strictly required — pick 'dictionary' (authoritative source-of-truth) or 'note' (informational snapshot); see the kind param for the rubric. No external auth required. Rate limits do not apply (local operation). Per-item failures are isolated to `errors[]` — the rest of the batch still commits; a single-item call still reports its failure the same way. Returns `{created_count, error_count, created, errors}`. If a destination directory does not exist, it will be created automatically. To modify an existing file, use 'files.update' instead. Pass format='mmd' on an item to create a Mermaid diagram file (.mmd) or format='html' for HTML reports; defaults to 'md'.",
+      "description": "Create one or more markdown, mermaid, or HTML files in the knowledge base or project (up to 200 per call). Pass a single-element `files` array for the one-file case. This operation writes each file to disk and adds it to the local SQLite FTS5 index. Destination can be 'knowledge' (global KB), 'project' (reference file inside a project repo), or 'kontexta' (internal Kontexta schema file). If destination is 'project' or 'kontexta', project_id is strictly required. If destination is 'knowledge', 'kind' is strictly required for md files — pick 'dictionary' (authoritative source-of-truth) or 'note' (informational snapshot); see the kind param for the rubric. No external auth required. Rate limits do not apply (local operation). Per-item failures are isolated to `errors[]` — the rest of the batch still commits; a single-item call still reports its failure the same way. Returns `{created_count, error_count, created, errors}`. If a destination directory does not exist, it will be created automatically. To modify an existing file, use 'files.update' instead. Pass format='mmd' on an item to create a Mermaid diagram file (.mmd) — for destination='knowledge' it's auto-routed to the KB's `mermaid/` bucket (`kind` ignored, not required); for destination='project' it's written wherever `folder` says, same as any project file. Pass format='html' for an HTML report — `destination` MUST be 'knowledge' (html reports are auto-routed to the KB's `html/` bucket; `kind` is ignored and not required for html). Format defaults to 'md'.",
       "inputSchema": {
         "type": "object",
         "properties": {

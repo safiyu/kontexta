@@ -92,22 +92,40 @@ function getAgentRulesWarning(projectId?: number | null): string | null {
       projects = db.prepare("SELECT id, path, name FROM projects").all();
     }
 
+    // Projects with zero detected context files have NEVER been onboarded —
+    // distinct from "outdated" (a file exists but predates the current
+    // rulesVersion). Both need admin.onboard_agent, so both are surfaced
+    // here; without this, a project that skipped its one-shot
+    // projects.register nudge would never get flagged again.
+    const missingProjects: string[] = [];
     const outdatedProjects: string[] = [];
     for (const p of projects) {
       if (!p || !p.path || !existsSync(p.path)) continue;
       const contextFiles = detectAgentContextFiles(p.path);
-      if (contextFiles.length === 0) continue;
+      if (contextFiles.length === 0) {
+        missingProjects.push(p.name);
+        continue;
+      }
       const statuses = checkAgentRulesStatus(p.path, contextFiles);
       if (statuses.some((s) => !s.upToDate)) {
         outdatedProjects.push(p.name);
       }
     }
 
-    if (outdatedProjects.length === 0) return null;
-    if (outdatedProjects.length === 1) {
-      return `Project "${outdatedProjects[0]}" has outdated agent rules (v${RULE_BLOCK_VERSION} available). Run onboard_agent to update.`;
+    const sentences: string[] = [];
+    if (missingProjects.length === 1) {
+      sentences.push(`Project "${missingProjects[0]}" has no agent instructions file yet.`);
+    } else if (missingProjects.length > 1) {
+      sentences.push(`${missingProjects.length} projects have no agent instructions file yet.`);
     }
-    return `${outdatedProjects.length} projects have outdated agent rules (v${RULE_BLOCK_VERSION} available). Run onboard_agent for each to update.`;
+    if (outdatedProjects.length === 1) {
+      sentences.push(`Project "${outdatedProjects[0]}" has outdated agent rules (v${RULE_BLOCK_VERSION} available).`);
+    } else if (outdatedProjects.length > 1) {
+      sentences.push(`${outdatedProjects.length} projects have outdated agent rules (v${RULE_BLOCK_VERSION} available).`);
+    }
+    if (sentences.length === 0) return null;
+    sentences.push("Run admin.onboard_agent to fix.");
+    return sentences.join(" ");
   } catch (e) {
     console.error("Error checking agent rules status:", e);
     return null;
@@ -192,13 +210,56 @@ if (!pkgVersionFound) {
 // destination='knowledge' declares a `kind` (dictionary or note). If the
 // caller also supplied a folder that already targets a known class subfolder
 // we honor it verbatim and just flag a warning when it disagrees with kind.
-type ResolveKindArgs = { destination: string; folder: string | undefined; kind: "dictionary" | "note" | undefined };
+type ResolveKindArgs = {
+  destination: string;
+  folder: string | undefined;
+  kind: "dictionary" | "note" | undefined;
+  format?: "md" | "mmd" | "html";
+  title?: string;
+};
 type ResolveKindResult = { folder: string | undefined; warning?: string } | { error: string };
-function resolveKindFolder({ destination, folder, kind }: ResolveKindArgs): ResolveKindResult {
-  if (destination !== "knowledge") return { folder };
-  if (!kind) return { error: "kind is required for destination='knowledge': must be 'dictionary' or 'note'" };
+function resolveKindFolder({ destination, folder, kind, format, title }: ResolveKindArgs): ResolveKindResult {
+  if (destination !== "knowledge") {
+    // HTML reports only make sense in the KB's html/ bucket (see
+    // resources.export_report) — silently allowing destination='project'
+    // here means a report lands inside the user's own repo instead, with
+    // no error and no way to find it via the reports UI.
+    if (format === "html") {
+      return { error: "format='html' requires destination='knowledge' — HTML reports must live in the KB's html/ bucket, not a project or kontexta destination." };
+    }
+    return { folder };
+  }
 
   const norm = folder?.replace(/^\/+|\/+$/g, "") ?? "";
+
+  // Escape hatch: a bare `profile.md` at KB root bypasses kind-routing.
+  // It's the one file layout.ts permits directly under knowledge/, and
+  // otherwise there is no way to reach KB root through this tool.
+  if (norm === "" && title?.trim().toLowerCase() === "profile") {
+    return { folder: undefined };
+  }
+
+  // HTML reports always live under html/, never nested inside
+  // knowledge/dictionary or knowledge/notes (layout.ts requires .md
+  // there). `kind` doesn't apply — content_class for html/ paths is
+  // inferred as "note" from the path alone (see computeContentClass).
+  if (format === "html") {
+    const alreadyHtmlScoped = norm === "html" || norm.startsWith("html/");
+    return { folder: alreadyHtmlScoped ? folder : (norm ? `html/${norm}` : "html") };
+  }
+
+  // Same gap, same fix, for mermaid diagrams: knowledge/ requires .md
+  // (layout.ts), so an unrouted .mmd file would always fail at write
+  // time. Unlike html, mermaid diagrams committed inside a project's own
+  // repo are a legitimate use case, so this only applies to destination
+  // === "knowledge" — no destination restriction like html has.
+  if (format === "mmd") {
+    const alreadyMermaidScoped = norm === "mermaid" || norm.startsWith("mermaid/");
+    return { folder: alreadyMermaidScoped ? folder : (norm ? `mermaid/${norm}` : "mermaid") };
+  }
+
+  if (!kind) return { error: "kind is required for destination='knowledge': must be 'dictionary' or 'note'" };
+
   // Non-KB buckets (html/mermaid) also skip rewrite — their layout forbids nesting under knowledge/.
   const CLASS_PREFIXES = ["knowledge/dictionary", "knowledge/notes", "knowledge/urlclips", "journal", "html", "mermaid"];
   const alreadyClassScoped = CLASS_PREFIXES.some((p) => norm === p || norm.startsWith(p + "/"));
@@ -293,8 +354,14 @@ function loadProfileInstructions(): string | undefined {
 
   const calendarBlock = buildCalendarSection(now);
   const freshness = profileExists ? profileFreshnessNote(path, empty) : "";
+  // Recurring nudge — projects.register's onboarding prompt fires once, at
+  // register time; if the calling agent doesn't relay it in the moment
+  // there was previously no second chance to see it. Surfacing it here
+  // means it comes back every session until admin.onboard_agent is run.
+  const rulesWarning = getAgentRulesWarning();
+  const rulesBlock = rulesWarning ? `\n⚠️  ${rulesWarning}` : "";
 
-  return [header, "", profileBlock, "", calendarBlock, freshness].filter(Boolean).join("\n");
+  return [header, "", profileBlock, "", calendarBlock, freshness, rulesBlock].filter(Boolean).join("\n");
 }
 
 const server = new McpServer(
@@ -470,7 +537,7 @@ server.tool(
 
 server.tool(
   "files.create",
-  "Create one or more markdown, mermaid, or HTML files in the knowledge base or project (up to 200 per call). Pass a single-element `files` array for the one-file case. This operation writes each file to disk and adds it to the local SQLite FTS5 index. Destination can be 'knowledge' (global KB), 'project' (reference file inside a project repo), or 'kontexta' (internal Kontexta schema file). If destination is 'project' or 'kontexta', project_id is strictly required. If destination is 'knowledge', 'kind' is strictly required — pick 'dictionary' (authoritative source-of-truth) or 'note' (informational snapshot); see the kind param for the rubric. No external auth required. Rate limits do not apply (local operation). Per-item failures are isolated to `errors[]` — the rest of the batch still commits; a single-item call still reports its failure the same way. Returns `{created_count, error_count, created, errors}`. If a destination directory does not exist, it will be created automatically. To modify an existing file, use 'files.update' instead. Pass format='mmd' on an item to create a Mermaid diagram file (.mmd) or format='html' for HTML reports; defaults to 'md'.",
+  "Create one or more markdown, mermaid, or HTML files in the knowledge base or project (up to 200 per call). Pass a single-element `files` array for the one-file case. This operation writes each file to disk and adds it to the local SQLite FTS5 index. Destination can be 'knowledge' (global KB), 'project' (reference file inside a project repo), or 'kontexta' (internal Kontexta schema file). If destination is 'project' or 'kontexta', project_id is strictly required. If destination is 'knowledge', 'kind' is strictly required for md files — pick 'dictionary' (authoritative source-of-truth) or 'note' (informational snapshot); see the kind param for the rubric. No external auth required. Rate limits do not apply (local operation). Per-item failures are isolated to `errors[]` — the rest of the batch still commits; a single-item call still reports its failure the same way. Returns `{created_count, error_count, created, errors}`. If a destination directory does not exist, it will be created automatically. To modify an existing file, use 'files.update' instead. Pass format='mmd' on an item to create a Mermaid diagram file (.mmd) — for destination='knowledge' it's auto-routed to the KB's `mermaid/` bucket (`kind` ignored, not required); for destination='project' it's written wherever `folder` says, same as any project file. Pass format='html' for an HTML report — `destination` MUST be 'knowledge' (html reports are auto-routed to the KB's `html/` bucket; `kind` is ignored and not required for html). Format defaults to 'md'.",
   {
     files: z
       .array(
@@ -496,7 +563,7 @@ server.tool(
     for (let i = 0; i < files.length; i++) {
       const f = files[i];
       try {
-        const resolved = resolveKindFolder({ destination: f.destination, folder: f.folder, kind: f.kind });
+        const resolved = resolveKindFolder({ destination: f.destination, folder: f.folder, kind: f.kind, format: f.format, title: f.title });
         if ("error" in resolved) {
           errors.push({ index: i, title: f.title, error: resolved.error });
           continue;
