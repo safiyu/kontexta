@@ -19,6 +19,15 @@ describe("profile API route", () => {
   });
 
   it("GET returns exists:false when profile doesn't exist", async () => {
+    // ensureDataDir() now auto-scaffolds knowledge/profile.md on the first DB
+    // touch (see packages/core/src/util/paths.ts), and checkAuth() triggers
+    // exactly that before this handler ever checks existsSync — so a fresh
+    // data dir alone no longer reaches the exists:false branch. Delete the
+    // auto-scaffolded file after the auth-triggered DB init to still exercise it.
+    await GET(new NextRequest("http://localhost/api/profile"));
+    const profilePath = join(tmpDir, "knowledge/profile.md");
+    rmSync(profilePath, { force: true });
+
     const res = await GET(new NextRequest("http://localhost/api/profile"));
     expect(res.status).toBe(200);
     const data = await res.json();

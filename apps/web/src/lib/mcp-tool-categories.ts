@@ -24,11 +24,7 @@ export const CATEGORY_ORDER: ToolCategory[] = [
 export const TOOL_CATEGORIES: Record<string, ToolCategory> = {
   // Read
   "files.read": "Read",
-  "files.read_many": "Read",
-  "files.read_lines": "Read",
   "files.read_outline": "Read",
-  "files.read_section": "Read",
-  "files.read_by_path": "Read",
   "files.describe": "Read",
   "files.list": "Read",
   "admin.get_profile": "Read",
@@ -38,20 +34,15 @@ export const TOOL_CATEGORIES: Record<string, ToolCategory> = {
   "tags.list": "Tags & Favorites",
   // Write
   "files.create": "Write",
-  "files.create_many": "Write",
   "files.update": "Write",
-  "files.update_section": "Write",
   "files.delete": "Write",
-  "files.delete_many": "Write",
   "files.move": "Write",
   "folders.create": "Folders & Projects",
   "folders.delete": "Folders & Projects",
   "projects.register": "Folders & Projects",
   "admin.onboard_agent": "Folders & Projects",
   "admin.transfer_agent_context": "Folders & Projects",
-  "journal.note": "Write",
-  "journal.intent": "Write",
-  "journal.append": "Write",
+  "journal.write": "Write",
   "journal.distill": "Write",
   "journal.status": "Discovery",
   "journal.housekeep": "Write",
@@ -63,9 +54,7 @@ export const TOOL_CATEGORIES: Record<string, ToolCategory> = {
   "resources.export_report": "Discovery",
   // Search
   "files.search": "Search",
-  "files.bundle_search": "Search",
   "files.regex_search": "Search",
-  "files.grep": "Search",
   "files.find_related": "Search",
   // Tags & Favorites
   "tags.add": "Tags & Favorites",
@@ -79,8 +68,7 @@ export const TOOL_CATEGORIES: Record<string, ToolCategory> = {
   "files.restore": "Versioning",
   "admin.commit_backup": "Versioning",
   // Discovery
-  "admin.stats": "Discovery",
-  "admin.whats_new": "Discovery",
+  "admin.overview": "Discovery",
   "projects.map": "Discovery",
   "files.diff_against_disk": "Discovery",
   "projects.refresh_index": "Discovery",
@@ -100,5 +88,4 @@ export const TOOL_CATEGORIES: Record<string, ToolCategory> = {
   "hands.list": "Hands",
   "hands.reload": "Hands",
   "hands.confirm": "Hands",
-  "hands.describe_schema": "Hands",
 };

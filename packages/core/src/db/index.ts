@@ -202,10 +202,22 @@ export function runMigrations(): void {
       console.error(`[Database] Running migration: ${file}`);
 
       // Execute the migration in a transaction
-      db.transaction(() => {
-        db!.exec(sql);
-        insertMigrationStmt.run(file);
-      })();
+      try {
+        db.transaction(() => {
+          db!.exec(sql);
+          insertMigrationStmt.run(file);
+        })();
+      } catch (e: any) {
+        // SQLite has no ADD COLUMN IF NOT EXISTS, so if this migration's column already exists (e.g. its _migrations row was lost) it would crash forever — record it applied instead; idempotent later migrations (e.g. 009) still converge any missed backfill.
+        if (typeof e?.message === "string" && /duplicate column name/i.test(e.message)) {
+          console.error(
+            `[Database] Migration ${file} skipped its ALTER TABLE (column already exists) — recording as applied. ${e.message}`
+          );
+          insertMigrationStmt.run(file);
+        } else {
+          throw e;
+        }
+      }
     }
   }
 }

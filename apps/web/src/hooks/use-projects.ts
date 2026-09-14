@@ -9,6 +9,7 @@ interface Project {
   remote_url: string | null;
   created_at: string;
   has_hands?: boolean;
+  agent_rules?: { status: "none" | "outdated" | "up_to_date"; latest_version: string };
 }
 
 interface UseProjectsReturn {

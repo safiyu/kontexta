@@ -17,6 +17,7 @@ interface Project {
   name: string;
   path: string;
   remote_url: string | null;
+  agent_rules?: { status: "none" | "outdated" | "up_to_date"; latest_version: string };
 }
 
 interface File {
@@ -256,6 +257,22 @@ export function FileList({
           {refreshing ? "..." : <RotateCw className="w-4 h-4" aria-hidden />}
         </button>
       </div>
+      {selectedSection === "projects" && selectedProject && selectedProject.agent_rules && selectedProject.agent_rules.status !== "up_to_date" && (
+        <div className="px-3 py-2 flex items-center justify-between gap-3 text-[11px] bg-amber-500/5 border-b border-amber-500/20 text-amber-600 dark:text-amber-400">
+          <span>
+            {selectedProject.agent_rules.status === "none"
+              ? "This project has no agent instructions file yet — your AI agent won't know Kontexta is registered."
+              : `This project's agent rules are outdated (v${selectedProject.agent_rules.latest_version} available).`}
+          </span>
+          <button
+            type="button"
+            onClick={() => setOnboardOpen(true)}
+            className="btn btn-sm shrink-0"
+          >
+            Onboard Agent
+          </button>
+        </div>
+      )}
       <div className="bp-annotation bp-dashed px-3 py-2 flex items-center justify-between text-[11px] uppercase tracking-wider text-[var(--text-secondary)] border-b border-[var(--border)]">
         <span>
           {filteredAndSorted.length} {filteredAndSorted.length === 1 ? "file" : "files"}

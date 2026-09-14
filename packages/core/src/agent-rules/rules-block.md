@@ -21,17 +21,17 @@ This project is registered with kontexta. Honor these rules to keep the index, h
 
 **Print the session welcome as your first message.** On the very first turn of any new session, call `admin.refresh_session_context` and print a brief greeting to the user based on what it returns — today's date, their name from the profile, upcoming events / conflicts if any, a nudge if the profile is empty or stale. 1–3 lines, not a report. Two reasons: (1) if the client lazy-loads MCP servers, this is what actually triggers `initialize`; (2) the user sees kontexta is connected and knows what context you have. Skip if the user's first message is already a work request — do the work.
 
-**Search before reading.** Use `files.search`, `files.bundle_search`, or `files.regex_search` to find context first. Skipping straight to `files.read` on a guessed path wastes tokens and often misses the right file.
+**Search before reading.** Use `files.search` (pass `include_bodies: true` for token-budgeted bodies) or `files.regex_search` to find context first. Skipping straight to `files.read` on a guessed path wastes tokens and often misses the right file.
 
-**All KB writes go through kontexta.** Use `files.create` / `files.update` / `files.update_section` / `journal.note`. **Never** edit a KB file with raw filesystem tools (Edit/Write/cat) — the watcher and FTS index will diverge until `projects.refresh_index` runs, and subsequent searches will return stale results.
+**All KB writes go through kontexta.** Use `files.create` / `files.update` (pass `section` for a surgical single-heading edit) / `journal.write`. **Never** edit a KB file with raw filesystem tools (Edit/Write/cat) — the watcher and FTS index will diverge until `projects.refresh_index` runs, and subsequent searches will return stale results.
 
-**Batch reads. Don't loop `files.read`.** Need ≥2 files? Call `files.read_many` (one round-trip, up to 200 IDs) or `files.bundle_search` (token-budgeted blob). Looping `files.read` wastes round-trips and inflates response overhead.
+**Batch reads. Don't loop `files.read`.** Need ≥2 files? Call `files.read` with `ids: [...]` (one round-trip, up to 200 IDs) or `files.search` with `include_bodies: true` (token-budgeted blob). Looping single-ID `files.read` calls wastes round-trips and inflates response overhead.
 
 **Address `journal.suggested_action` before the next tool call.** Many tool responses include a `journal` envelope. If `journal.suggested_action` is set (e.g., `"journal.distill"`), call that tool before issuing your next tool. To dismiss for the rest of the session, pass `journal_acknowledge: true` on your next tool call.
 
-**Use `journal.note(text, tags)` for decisions and abandonments.** When you make a non-obvious call, try something that doesn't work, or capture a workaround, log it. Hands runs are auto-captured now.
+**Use `journal.write({kind: "note", text, tags})` for decisions and abandonments.** When you make a non-obvious call, try something that doesn't work, or capture a workaround, log it. Hands runs are auto-captured now.
 
-**Use `journal.intent(summary)` when the user pivots.** One short sentence so the distillation step knows the topic shifted.
+**Use `journal.write({kind: "intent", summary})` when the user pivots.** One short sentence so the distillation step knows the topic shifted.
 
 **Strict mode awareness.** If a project sets `journal.mode = "strict"` in its `kontexta.json`, the MCP server returns a `JOURNAL_BACKLOG` error on read tools (search/read_*/list_*) when undistilled events exist. The error includes `next_action: "journal.distill"`. Either run `journal.distill` first, OR pass `journal_bypass: true` on the read call to override (logged for audit).
 
@@ -41,7 +41,7 @@ This project is registered with kontexta. Honor these rules to keep the index, h
 
 **Tag new KB files at creation time.** Pass `tags` on `files.create`, or call `tags.add` immediately after. Untagged files are recoverable but invisible to `files.find_related`.
 
-**`admin.whats_new` early. `admin.commit_backup` late.** Run `admin.whats_new` at session start if you've been away — it returns files added/changed since a cutoff. End the session with `admin.commit_backup` if you mutated KB files and the project has a remote.
+**`admin.overview({mode: "whats_new"})` early. `admin.commit_backup` late.** Run it at session start if you've been away — it returns files added/changed since a cutoff. End the session with `admin.commit_backup` if you mutated KB files and the project has a remote.
 
 **Use `.mmd` for diagrams, not fenced code in `.md`.** When creating an architecture / flow / sequence diagram, call `files.create` with `format: "mmd"` and put the raw mermaid source as the body (no ```` ```mermaid ```` fence). The web UI renders `.mmd` files as live diagrams with SVG/PNG export; mermaid embedded in markdown is just text. Default folder: `mermaid/` (or `<project>/mermaid/` for project-scoped diagrams).
 
@@ -52,7 +52,7 @@ KIs are curated, distilled KB files — the highest-signal context in the vault.
 They save tokens and prevent redundant research when used correctly.
 
 **Check KIs before independent research.** At the start of any task, run 
-`files.search` or `files.bundle_search` over the KB for the task topic. If a matching KI 
+`files.search` (optionally `include_bodies: true`) over the KB for the task topic. If a matching KI 
 exists, read it before writing code, designing architecture, or forming a plan. 
 Skipping this step is the single most common source of duplicated work.
 
@@ -62,17 +62,17 @@ cross-reference a KI's API patterns, file paths, and config values against the
 
 **Close the loop: update the KI after significant changes.** When you ship a 
 meaningful change (new API, config schema change, architecture shift), update 
-the relevant KI via `files.update` or `files.update_section`. If no KI exists 
+the relevant KI via `files.update` (whole file or, with `section`, one heading). If no KI exists 
 yet, create one with `files.create` under `knowledge/` with appropriate tags. 
 A KI that isn't maintained becomes noise — which is worse than no KI.
 
-**Use `admin.whats_new` at session start after a gap.** If you haven't touched the 
-project in a while, run `whats_new(since: "7d")` to surface recently changed 
+**Use `admin.overview({mode: "whats_new"})` at session start after a gap.** If you haven't touched the 
+project in a while, run it with `since: "7d"` to surface recently changed 
 files — including KIs updated by other agents or the user.
 
 ### Content class
 
-`files.create` / `files.create_many` require `kind` for KB writes:
+`files.create` requires `kind` for KB writes (single file or `files` array, both):
 - **`dictionary`** = source of truth (mappings, glossaries, runbooks, PR templates, architecture docs)
 - **`note`** = snapshot (meeting notes, PR findings, sprint reviews, post-mortems, working thoughts)
 
@@ -86,10 +86,8 @@ The matrix below is grouped by intent. For each tool: when to reach for it, the 
 
 | Tool | When | Not when | Use instead |
 |---|---|---|---|
-| `files.search` | Natural-language keyword across KB (FTS) | Substrings, URLs, code idents | `files.regex_search` |
-| `files.regex_search` | Substrings, URLs, code identifiers | Natural-language queries | `files.search` |
-| `files.grep` | Substring/regex within ONE known file | Searching across files | `files.regex_search` |
-| `files.bundle_search` | Need search hits + bodies in a token budget | Only need IDs | `files.search` |
+| `files.search` | Natural-language keyword across KB (FTS); pass `include_bodies: true` for a token-budgeted bundle of hits + bodies | Substrings, URLs, code idents | `files.regex_search` |
+| `files.regex_search` | Substrings, URLs, code identifiers across files; pass `file_id` to scan just one known file | Natural-language queries | `files.search` |
 | `files.find_related` | Discover siblings via tag overlap | Text content matching | `files.search` |
 | `tags.suggest` | Propose tags for an existing file | Finding files by tag | `files.find_related` |
 
@@ -97,11 +95,7 @@ The matrix below is grouped by intent. For each tool: when to reach for it, the 
 
 | Tool | When | Not when | Use instead |
 |---|---|---|---|
-| `files.read` | One file ID, full body | ≥2 file IDs | `files.read_many` |
-| `files.read_many` | 2–200 file IDs in one call | Only need a section of one file | `files.read_section` |
-| `files.read_by_path` | Known absolute path, no ID handy | You already have the ID | `files.read` |
-| `files.read_lines` | Known line range | Guessing line numbers | `files.read_section` |
-| `files.read_section` | Known heading | Need the whole file | `files.read` |
+| `files.read` | One file (`id` or `path`), a batch (`ids`), or a partial read (`section` or `lines`) | Only metadata needed | `files.describe` |
 | `files.read_outline` | Triaging an unfamiliar file's structure | Structure already known | `files.describe` |
 | `files.describe` | Metadata only (size, tags, mtime) | Need content | `files.read` |
 | `admin.get_profile` | Read user profile/context at session start | Reading normal files | `files.read` |
@@ -110,12 +104,9 @@ The matrix below is grouped by intent. For each tool: when to reach for it, the 
 
 | Tool | When | Not when | Use instead |
 |---|---|---|---|
-| `files.create` | One new file (md, mmd, or html via `format`) | Bulk-creating ≥2 files | `files.create_many` |
-| `files.create_many` | 2+ new files in one call | Single file | `files.create` |
-| `files.update` | Replacing the whole body | Editing one section | `files.update_section` |
-| `files.update_section` | Surgical edit at a known heading | Replacing the whole file | `files.update` |
-| `files.delete` | One file | Bulk delete | `files.delete_many` |
-| `files.delete_many` | 2+ files in one call | Single file | `files.delete` |
+| `files.create` | One new file, or a `files` array for bulk-creating ≥2 (md, mmd, or html via `format`) | File already exists | `files.update` |
+| `files.update` | Replacing the whole body, or a surgical edit at a known heading via `section` | File doesn't exist yet | `files.create` |
+| `files.delete` | One file, or an `ids` array for bulk delete | Want to keep the file but hide it | `tags.remove` / `tags.set_favorite` |
 | `files.move` | Rename or relocate a file | File content needs changing | `files.update` |
 
 #### Organize
@@ -127,17 +118,15 @@ The matrix below is grouped by intent. For each tool: when to reach for it, the 
 | `tags.list` | Enumerate all tags in the vault | Want files for a given tag | `files.find_related` |
 | `tags.set_favorite` | Pin / unpin a file | Semantic categorization | `tags.add` |
 | `tags.search` | Bulk-tag every hit from a search | Tagging a single file | `tags.add` |
-| `journal.note` | Log a decision, workaround, or abandonment | Editing regular content | `files.update` |
-| `journal.intent` | Record a user-initiated topic pivot | Auto-captured tool calls | `journal.note` |
-| `journal.append` | Append timestamped text to today's daily KB journal file | Structured notes | `journal.note` |
-| `journal.distill` | Summarize accumulated journal events | Individual events | `journal.note` |
+| `journal.write` | Log an event: `kind: "note"` (decision/workaround), `kind: "intent"` (topic pivot), or `kind: "append"` (timestamped daily journal entry) | Summarizing accumulated events | `journal.distill` |
+| `journal.distill` | Summarize accumulated journal events | Individual events | `journal.write` |
 | `journal.status` | Check backlog size and high-water mark before distilling | Need the raw events themselves | `journal.distill` |
 | `journal.commit_upgrades` | Mark journal entries upgraded after a subagent rewrites them | Running the initial distillation | `journal.distill` |
 | `journal.housekeep` | Prune old raw journal files and archive cold tasks | Need to distill new events first | `journal.distill` |
 | `resources.clip_url` | Capture a web URL into the KB | Saving a local file | `files.create` |
 | `folders.list` | Enumerate folders in the project | Finding files | `files.list` |
 | `folders.create` | Create a new (possibly nested) folder | Files don't need explicit folders | |
-| `folders.delete` | Remove an empty folder | Folder still has files | `files.delete_many` first |
+| `folders.delete` | Remove an empty folder | Folder still has files | `files.delete` (bulk) first |
 
 #### Reports
 
@@ -166,8 +155,7 @@ The matrix below is grouped by intent. For each tool: when to reach for it, the 
 | `projects.list` | Enumerate registered projects | Files within one project | `files.list` |
 | `files.list` | Files in a project (filterable) | Full-text content matters | `files.search` |
 | `projects.map` | Folder/file tree for a project | Flat file list | `files.list` |
-| `admin.stats` | Counts and health for a project | Per-file detail | `files.describe` |
-| `admin.whats_new` | Files added/changed since a cutoff | Full-text search | `files.search` |
+| `admin.overview` | `mode: "stats"` for counts/health, `mode: "whats_new"` for files changed since a cutoff | Per-file detail or full-text search | `files.describe` / `files.search` |
 | `admin.refresh_session_context` | Re-fetch profile + upcoming events after mid-session edits | Reading a single profile field | `admin.get_profile` |
 
 #### Calendar
@@ -190,8 +178,7 @@ The matrix below is grouped by intent. For each tool: when to reach for it, the 
 
 | Tool | When | Not when | Use instead |
 |---|---|---|---|
-| `hands.list` | Enumerate Hands tools available in this project | Want the YAML schema | `hands.describe_schema` |
-| `hands.describe_schema` | Explain the `hands.yaml` format | Listing tools | `hands.list` |
+| `hands.list` | Enumerate Hands tools; pass `schema: true` for the `kontexta.json` authoring reference | Neither list nor schema needed | |
 | `hands.confirm` | Approve a Hands token within 60s of issue | Normal MCP tool calls | |
 | `hands.reload` | Re-read `hands.yaml` after editing it | First-time use (auto-loads) | |
 

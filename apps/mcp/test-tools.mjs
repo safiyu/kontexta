@@ -132,27 +132,33 @@ function assert(cond, msg) {
   // ---- Seed via the indexed write path so files actually land in the DB ----
   await test("files.create (seed 1)", async () => {
     const r = await call("files.create", {
-      title: SEED_TITLE_1,
-      content: "# Authentication notes\n\nWe use OAuth and JWT tokens.\n\n## Setup\n\nInstall the auth middleware.\n\n## Rotation\n\nKeys rotate weekly.\n",
-      destination: "knowledge",
-      folder: "knowledge/notes",
-      kind: "note",
+      files: [{
+        title: SEED_TITLE_1,
+        content: "# Authentication notes\n\nWe use OAuth and JWT tokens.\n\n## Setup\n\nInstall the auth middleware.\n\n## Rotation\n\nKeys rotate weekly.\n",
+        destination: "knowledge",
+        folder: "knowledge/notes",
+        kind: "note",
+      }],
     });
-    seedFile1 = r;
-    assert(r.path === SEED_PATH_1, `wrong path: ${r.path}`);
-    assert(typeof r.est_tokens === "number", "missing est_tokens");
+    assert(r.created_count === 1, `expected 1 created, got ${r.created_count}`);
+    seedFile1 = r.created[0];
+    assert(seedFile1.path === SEED_PATH_1, `wrong path: ${seedFile1.path}`);
+    assert(typeof seedFile1.est_tokens === "number", "missing est_tokens");
   });
 
   await test("files.create (seed 2)", async () => {
     const r = await call("files.create", {
-      title: SEED_TITLE_2,
-      content: "# Deployment checklist\n\n## Pre-flight\n\nRun migrations.\n\n## Post-flight\n\nVerify health.\n",
-      destination: "knowledge",
-      folder: "knowledge/notes",
-      kind: "note",
+      files: [{
+        title: SEED_TITLE_2,
+        content: "# Deployment checklist\n\n## Pre-flight\n\nRun migrations.\n\n## Post-flight\n\nVerify health.\n",
+        destination: "knowledge",
+        folder: "knowledge/notes",
+        kind: "note",
+      }],
     });
-    seedFile2 = r;
-    assert(r.path === SEED_PATH_2, `wrong path: ${r.path}`);
+    assert(r.created_count === 1, `expected 1 created, got ${r.created_count}`);
+    seedFile2 = r.created[0];
+    assert(seedFile2.path === SEED_PATH_2, `wrong path: ${seedFile2.path}`);
   });
 
   // ---- Read / list ----
@@ -173,11 +179,38 @@ function assert(cond, msg) {
     assert(typeof r.est_tokens === "number", "missing est_tokens");
   });
 
-  await test("files.read_many batch", async () => {
-    const r = await call("files.read_many", { ids: [seedFile1.id, seedFile2.id, 999999] });
+  await test("files.read batch (ids)", async () => {
+    const r = await call("files.read", { ids: [seedFile1.id, seedFile2.id, 999999] });
     assert(r.files.length === 2, `expected 2 files, got ${r.files.length}`);
     assert(r.error_count === 1, `expected 1 error for missing id, got ${r.error_count}`);
     assert(r.errors[0].id === 999999, "wrong error id");
+  });
+
+  await test("files.read rejects id+path together", async () => {
+    try {
+      await call("files.read", { id: seedFile1.id, path: SEED_PATH_1 });
+      throw new Error("should have errored");
+    } catch (e) {
+      assert(e.message.includes("Exactly one of"), `wrong error: ${e.message}`);
+    }
+  });
+
+  await test("files.read rejects section+lines together", async () => {
+    try {
+      await call("files.read", { id: seedFile1.id, section: "Setup", lines: { from: 1, to: 2 } });
+      throw new Error("should have errored");
+    } catch (e) {
+      assert(e.message.includes("mutually exclusive"), `wrong error: ${e.message}`);
+    }
+  });
+
+  await test("files.read rejects section+ids together", async () => {
+    try {
+      await call("files.read", { ids: [seedFile1.id], section: "Setup" });
+      throw new Error("should have errored");
+    } catch (e) {
+      assert(e.message.includes("require `id`"), `wrong error: ${e.message}`);
+    }
   });
 
   await test("files.describe (no content, full metadata)", async () => {
@@ -191,27 +224,27 @@ function assert(cond, msg) {
     assert(!("content" in r), "should NOT include content (that's the whole point)");
   });
 
-  await test("files.read_lines (range)", async () => {
-    const r = await call("files.read_lines", { id: seedFile1.id, from: 1, to: 2 });
+  await test("files.read (lines range)", async () => {
+    const r = await call("files.read", { id: seedFile1.id, lines: { from: 1, to: 2 } });
     assert(r.from === 1 && r.to === 2, `wrong range: ${r.from}-${r.to}`);
     assert(r.content.includes("Authentication notes"), "first line missing");
     assert(typeof r.total_lines === "number", "missing total_lines");
   });
 
-  await test("files.read_lines (out-of-range clamps)", async () => {
-    const r = await call("files.read_lines", { id: seedFile1.id, from: 1, to: 9999 });
+  await test("files.read (lines out-of-range clamps)", async () => {
+    const r = await call("files.read", { id: seedFile1.id, lines: { from: 1, to: 9999 } });
     assert(r.to === r.total_lines, `to should clamp to ${r.total_lines}, got ${r.to}`);
   });
 
-  await test("files.grep (literal match)", async () => {
-    const r = await call("files.grep", { id: seedFile1.id, pattern: "OAuth" });
+  await test("files.regex_search (file_id: literal match)", async () => {
+    const r = await call("files.regex_search", { file_id: seedFile1.id, pattern: "OAuth" });
     assert(r.match_count >= 1, `expected ≥1 match, got ${r.match_count}`);
     assert(typeof r.matches[0].line === "number", "missing line number");
   });
 
-  await test("files.grep (invalid regex errors)", async () => {
+  await test("files.regex_search (file_id: invalid regex errors)", async () => {
     try {
-      await call("files.grep", { id: seedFile1.id, pattern: "[unclosed" });
+      await call("files.regex_search", { file_id: seedFile1.id, pattern: "[unclosed" });
       throw new Error("should have errored");
     } catch (e) {
       assert(e.message.includes("invalid regex"), `wrong error: ${e.message}`);
@@ -234,13 +267,13 @@ function assert(cond, msg) {
     assert(typeof m.title_highlight === "string", "title_highlight missing");
   });
 
-  await test("files.bundle_search", async () => {
-    const r = await call("files.bundle_search", { query: "deployment", max_tokens: 5000 });
+  await test("files.search (include_bodies)", async () => {
+    const r = await call("files.search", { query: "deployment", include_bodies: true, max_tokens: 5000 });
     assert(typeof r.bundle === "string", "bundle missing");
     assert(r.bundle.length > 0, "bundle empty");
   });
 
-  // ---- Section ops (NEW) ----
+  // ---- Section ops ----
   await test("files.read_outline", async () => {
     const r = await call("files.read_outline", { file_id: seedFile1.id });
     assert(Array.isArray(r.outline), "outline not array");
@@ -250,26 +283,26 @@ function assert(cond, msg) {
     assert(headings.includes("Rotation"), `missing Rotation in ${headings}`);
   });
 
-  await test("files.read_section returns just that body", async () => {
-    const r = await call("files.read_section", { file_id: seedFile1.id, heading: "Setup" });
+  await test("files.read (section: returns just that body)", async () => {
+    const r = await call("files.read", { id: seedFile1.id, section: "Setup" });
     assert(r.content.includes("auth middleware"), `wrong section content: ${r.content}`);
     assert(!r.content.includes("rotate weekly"), "section bled into next");
     assert(!r.content.startsWith("## Setup"), "section included its own heading");
   });
 
-  await test("files.read_section: missing heading errors cleanly", async () => {
+  await test("files.read (section: missing heading errors cleanly)", async () => {
     try {
-      await call("files.read_section", { file_id: seedFile1.id, heading: "Nonexistent" });
+      await call("files.read", { id: seedFile1.id, section: "Nonexistent" });
       throw new Error("should have errored");
     } catch (e) {
       assert(e.message.includes("Section not found"), `wrong error: ${e.message}`);
     }
   });
 
-  await test("files.update_section preserves siblings", async () => {
-    await call("files.update_section", {
-      file_id: seedFile1.id,
-      heading: "Setup",
+  await test("files.update (section: preserves siblings)", async () => {
+    await call("files.update", {
+      id: seedFile1.id,
+      section: "Setup",
       content: "Run `npm install` and configure middleware.\n",
     });
     const r = await call("files.read", { id: seedFile1.id });
@@ -323,10 +356,10 @@ function assert(cond, msg) {
     }
   });
 
-  // ---- Batch ops (NEW) ----
+  // ---- Batch ops ----
   let batchIds = [];
-  await test("files.create_many batch", async () => {
-    const r = await call("files.create_many", {
+  await test("files.create batch (multi-element files array)", async () => {
+    const r = await call("files.create", {
       files: [
         { title: "batch-a", content: "alpha", destination: "knowledge", folder: "knowledge/notes", kind: "note" },
         { title: "batch-b", content: "beta", destination: "knowledge", folder: "knowledge/notes", kind: "note" },
@@ -338,8 +371,16 @@ function assert(cond, msg) {
     batchIds = r.created.map((f) => f.id);
   });
 
-  await test("files.delete_many batch", async () => {
-    const r = await call("files.delete_many", { ids: batchIds });
+  await test("files.create (single-element files array)", async () => {
+    const r = await call("files.create", {
+      files: [{ title: "single-item", content: "solo", destination: "knowledge", folder: "knowledge/notes", kind: "note" }],
+    });
+    assert(r.created_count === 1, `expected 1 created, got ${r.created_count}`);
+    batchIds.push(r.created[0].id);
+  });
+
+  await test("files.delete batch (multi-element ids array)", async () => {
+    const r = await call("files.delete", { ids: batchIds });
     assert(r.deleted_count === batchIds.length, `expected ${batchIds.length} deleted, got ${r.deleted_count}`);
   });
 
@@ -356,33 +397,42 @@ function assert(cond, msg) {
     assert(r.tagged_count >= 1, `expected ≥1 tagged, got ${r.tagged_count}`);
   });
 
-  // ---- Path lookup (NEW) ----
-  await test("files.read_by_path", async () => {
-    const r = await call("files.read_by_path", { path: SEED_PATH_2 });
+  // ---- Path lookup ----
+  await test("files.read (path)", async () => {
+    const r = await call("files.read", { path: SEED_PATH_2 });
     assert(r.id === seedFile2.id, `wrong id: ${r.id}`);
     assert(r.content.includes("Run migrations"), "content missing");
   });
 
-  await test("files.read_by_path: missing path errors", async () => {
+  await test("files.read (path): missing path errors", async () => {
     try {
-      await call("files.read_by_path", { path: "/nonexistent/file.md" });
+      await call("files.read", { path: "/nonexistent/file.md" });
       throw new Error("should have errored");
     } catch (e) {
       assert(e.message.includes("No file indexed"), `wrong error: ${e.message}`);
     }
   });
 
-  // ---- Stats (NEW) ----
-  await test("admin.stats KB scope", async () => {
-    const r = await call("admin.stats", { project_id: null });
+  // ---- Overview (stats mode) ----
+  await test("admin.overview (mode: stats) KB scope", async () => {
+    const r = await call("admin.overview", { mode: "stats", project_id: null });
     assert(r.scope === "knowledge_base", `wrong scope: ${r.scope}`);
     assert(typeof r.file_count === "number", "missing file_count");
     assert(Array.isArray(r.top_tags), "missing top_tags");
   });
 
-  await test("admin.stats with token total", async () => {
-    const r = await call("admin.stats", { project_id: null, include_token_total: true });
+  await test("admin.overview (mode: stats) with token total", async () => {
+    const r = await call("admin.overview", { mode: "stats", project_id: null, include_token_total: true });
     assert(typeof r.total_est_tokens === "number", "missing total_est_tokens");
+  });
+
+  await test("admin.overview (mode: whats_new) requires since", async () => {
+    try {
+      await call("admin.overview", { mode: "whats_new" });
+      throw new Error("should have errored");
+    } catch (e) {
+      assert(e.message.includes("requires `since`"), `wrong error: ${e.message}`);
+    }
   });
 
   // ---- QoL (NEW) ----
@@ -416,12 +466,12 @@ function assert(cond, msg) {
     // refresh_index it would never be indexed in MCP-only mode.
     const sneakyPath = join(DATA_DIR, "knowledge", "sneaked-in.md");
     writeFileSync(sneakyPath, "# Sneaked\n\nThis file was added behind Kontexta's back.\n");
-    const before = await call("files.read_by_path", { path: sneakyPath }).catch((e) => e.message);
+    const before = await call("files.read", { path: sneakyPath }).catch((e) => e.message);
     assert(typeof before === "string" && before.includes("No file indexed"), "file should not be indexed yet");
     const r = await call("projects.refresh_index", { project_id: null });
     assert(r.scope === "knowledge_base", `wrong scope: ${r.scope}`);
     assert(r.newly_indexed >= 1, `expected ≥1 newly indexed, got ${r.newly_indexed}`);
-    const after = await call("files.read_by_path", { path: sneakyPath });
+    const after = await call("files.read", { path: sneakyPath });
     assert(after.content.includes("Sneaked"), "file content missing after refresh");
   });
 
@@ -431,7 +481,7 @@ function assert(cond, msg) {
     writeFileSync(sneakyPath, "# Sneaked v2\n\nEdited behind the index's back.\n");
     const r = await call("projects.refresh_index", { project_id: null });
     assert(r.refreshed >= 1, `expected ≥1 refreshed, got ${r.refreshed}`);
-    const after = await call("files.read_by_path", { path: sneakyPath });
+    const after = await call("files.read", { path: sneakyPath });
     assert(after.content.includes("v2"), `expected v2 content, got: ${after.content}`);
   });
 
@@ -440,18 +490,47 @@ function assert(cond, msg) {
     rmSync(sneakyPath, { force: true });
     const r = await call("projects.refresh_index", { project_id: null });
     assert(r.pruned >= 1, `expected ≥1 pruned, got ${r.pruned}`);
-    const after = await call("files.read_by_path", { path: sneakyPath }).catch((e) => e.message);
+    const after = await call("files.read", { path: sneakyPath }).catch((e) => e.message);
     assert(typeof after === "string" && after.includes("No file indexed"), "row should be pruned");
   });
 
-  await test("journal.append creates + appends", async () => {
-    const r1 = await call("journal.append", { text: "First thought of the day." });
+  await test("journal.write (kind: append) creates + appends", async () => {
+    const r1 = await call("journal.write", { kind: "append", text: "First thought of the day." });
     assert(typeof r1.file_id === "number", "missing file_id");
-    const r2 = await call("journal.append", { text: "Second thought, same day." });
+    const r2 = await call("journal.write", { kind: "append", text: "Second thought, same day." });
     assert(r2.file_id === r1.file_id, `expected same file, got ${r2.file_id} vs ${r1.file_id}`);
     const file = await call("files.read", { id: r1.file_id });
     assert(file.content.includes("First thought"), "first entry missing");
     assert(file.content.includes("Second thought"), "second entry missing");
+  });
+
+  await test("journal.write (kind: note)", async () => {
+    const r = await call("journal.write", { kind: "note", text: "Decided to use SQLite FTS5.", tags: ["decision"] });
+    assert(r.ok === true, "expected ok: true");
+    assert(typeof r.recorded_at === "string", "missing recorded_at");
+  });
+
+  await test("journal.write (kind: intent)", async () => {
+    const r = await call("journal.write", { kind: "intent", summary: "Switching focus to search ranking." });
+    assert(r.ok === true, "expected ok: true");
+  });
+
+  await test("journal.write (kind: append) requires text", async () => {
+    try {
+      await call("journal.write", { kind: "append" });
+      throw new Error("should have errored");
+    } catch (e) {
+      assert(e.message.includes("requires `text`"), `wrong error: ${e.message}`);
+    }
+  });
+
+  await test("journal.write (kind: intent) requires summary", async () => {
+    try {
+      await call("journal.write", { kind: "intent" });
+      throw new Error("should have errored");
+    } catch (e) {
+      assert(e.message.includes("requires `summary`"), `wrong error: ${e.message}`);
+    }
   });
 
   // ---- Project ops ----
@@ -478,8 +557,8 @@ function assert(cond, msg) {
   });
 
   // ---- whats_new / find_related / get_history ----
-  await test("admin.whats_new", async () => {
-    const r = await call("admin.whats_new", { since: "1d" });
+  await test("admin.overview (mode: whats_new)", async () => {
+    const r = await call("admin.overview", { mode: "whats_new", since: "1d" });
     assert(Array.isArray(r.files), "missing files");
   });
 
@@ -533,10 +612,10 @@ function assert(cond, msg) {
     const confirmedText = confirmedResp.content[0].text;
     assert(confirmedText.includes("approved"), `confirm_hand result missing 'approved':\n${confirmedText}`);
 
-    // describe_hands_schema returns substantive doc (as raw text, not JSON)
-    const docResp = await rpc("tools/call", { name: "hands.describe_schema", arguments: {} });
+    // hands.list({ schema: true }) returns substantive doc (as raw text, not JSON)
+    const docResp = await rpc("tools/call", { name: "hands.list", arguments: { schema: true } });
     const docText = docResp.content[0].text;
-    assert(docText.includes("Authoring Reference"), "describe_hands_schema missing expected content");
+    assert(docText.includes("Authoring Reference"), "hands.list({ schema: true }) missing expected content");
 
     rmSync(handsRoot, { recursive: true, force: true });
   });

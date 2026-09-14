@@ -1,6 +1,7 @@
 import * as os from "node:os";
 import * as path from "node:path";
 import * as fs from "node:fs";
+import { profileRelPath, repairProfile } from "../profile/index.js";
 
 // @vercel/nft — Next's build-time file tracer — statically evaluates
 // os.homedir() and process.env.* inside fs-call arguments and expands any
@@ -200,6 +201,21 @@ export function ensureDataDir(): void {
   for (const dir of dirsToCreate) {
     if (!fs.existsSync(dir)) {
       safeMkdir(dir);
+    }
+  }
+
+  // Scaffold an empty profile.md at the KB root on fresh installs. Without
+  // this, the only way to get one was via the web UI's PUT /api/profile
+  // (which writes here directly) — CLI/MCP-only users had no discoverable
+  // path to a working profile, and files.create can't reach KB root itself
+  // (kind-based routing always nests under knowledge/dictionary or notes).
+  const profilePath = path.join(dataDir, profileRelPath());
+  if (!fs.existsSync(profilePath)) {
+    try {
+      fs.writeFileSync(profilePath, repairProfile("").content, "utf8");
+    } catch {
+      // Best-effort — a missing profile.md degrades to the existing
+      // "no profile" UX rather than blocking server startup.
     }
   }
 }

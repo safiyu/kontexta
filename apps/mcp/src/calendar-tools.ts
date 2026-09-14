@@ -41,7 +41,7 @@ function withLinks(entity: CalendarEntity) {
 export function registerCalendarTools(server: any): void {
   server.tool(
     "calendar.entities.add",
-    "SIDE-EFFECTFUL. Create a new tracked entity — any named thing you schedule events against (a server, a delivery van, a store location, a piece of equipment, a room, etc.). Not idempotent: a duplicate name (case-insensitive) throws. Returns `{entity}`. Use `calendar_link_entities` afterwards to record dependencies for conflict detection.",
+    "SIDE-EFFECTFUL. Create a new tracked entity — any named thing you schedule events against (a server, a delivery van, a store location, a piece of equipment, a room, etc.). Not idempotent: a duplicate name (case-insensitive) throws. Returns `{entity}`. Use `calendar.entities.link` afterwards to record dependencies for conflict detection.",
     {
       name: z.string().min(1).describe("Unique display name for the entity (case-insensitive)."),
       kind: z.string().optional().describe("Freeform category, e.g. 'server', 'vehicle', 'location', 'equipment'."),

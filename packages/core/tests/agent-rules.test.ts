@@ -21,12 +21,12 @@ describe("agent-rules constants", () => {
       "All KB writes go through kontexta",
       "Batch reads",
       "Address `journal.suggested_action`",
-      "Use `journal.note(text, tags)`",
-      "Use `journal.intent(summary)`",
+      'Use `journal.write({kind: "note"',
+      'Use `journal.write({kind: "intent"',
       "Confirm Hands tokens within 60 seconds",
       "Save specs to a canonical location",
       "Tag new KB files",
-      "`admin.whats_new` early",
+      '`admin.overview({mode: "whats_new"})` early',
     ]) {
       expect(RULES_BLOCK_BODY).toContain(phrase);
     }

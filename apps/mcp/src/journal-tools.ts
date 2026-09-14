@@ -1,53 +1,9 @@
 // apps/mcp/src/journal-tools.ts
 import { z } from "zod";
 import { distillJournal, ensureProjectRowForSlug, readHighWater, getDataDir } from "kxta-core";
-import type { RawEvent } from "kxta-core";
-import {
-  appendVoluntaryEvent,
-  getCurrentProjectSlug,
-  getCurrentAgent,
-  getCurrentSid,
-} from "./journal-capture.js";
+import { getCurrentProjectSlug } from "./journal-capture.js";
 
 export function registerJournalTools(server: any): void {
-  server.tool(
-    "journal.note",
-    "Record a free-form decision/abandonment/observation note in the current project's journal. Stored as an `agent_note` event in Layer 1; surfaces in distilled task entries.",
-    {
-      text: z.string().min(1).describe("Body of the note (markdown allowed)."),
-      tags: z.array(z.string()).optional().describe("Optional tags for the note."),
-    },
-    async ({ text, tags }: { text: string; tags?: string[] }) => {
-      const ev: RawEvent = {
-        ts: new Date().toISOString(),
-        agent: getCurrentAgent(),
-        sid: getCurrentSid(),
-        event: "agent_note",
-        summary: text,
-        tags: tags ?? [],
-      };
-      appendVoluntaryEvent(ev);
-      return { content: [{ type: "text", text: JSON.stringify({ ok: true, recorded_at: ev.ts }) }] };
-    },
-  );
-
-  server.tool(
-    "journal.intent",
-    "Record a topic/intent pivot. Use when the user redirects what you're working on; the distillation step uses this to split task buckets correctly.",
-    { summary: z.string().min(1).describe("One-line summary of the new intent.") },
-    async ({ summary }: { summary: string }) => {
-      const ev: RawEvent = {
-        ts: new Date().toISOString(),
-        agent: getCurrentAgent(),
-        sid: getCurrentSid(),
-        event: "user_intent",
-        summary,
-      };
-      appendVoluntaryEvent(ev);
-      return { content: [{ type: "text", text: JSON.stringify({ ok: true, recorded_at: ev.ts }) }] };
-    },
-  );
-
   server.tool(
     "journal.distill",
     "Run the distillation pipeline: read raw events since the high-water mark, group by topic, write mechanical markdown entries, advance high-water. Idempotent. Auto-provisions a project row for orphan slugs (e.g. `default`) that have no registered project yet.",

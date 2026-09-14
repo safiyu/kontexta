@@ -53,6 +53,7 @@ import {
   listResources,
   deleteResource,
   type AgentId,
+  type RawEvent,
 } from "kxta-core";
 import RE2Class from "./re2-compat.js";
 import type RE2 from "re2";
@@ -65,7 +66,7 @@ import { HandsRegistry } from "./hands/registry.js";
 import { buildSchemaDoc } from "./hands/schema-doc.js";
 import { formatExecResult } from "./hands/formatter.js";
 import { killAllActiveChildren } from "./hands/executor.js";
-import { initCapture, shutdownCapture, wrapHandler, startGitPoller } from "./journal-capture.js";
+import { initCapture, shutdownCapture, wrapHandler, startGitPoller, appendVoluntaryEvent, getCurrentAgent, getCurrentSid } from "./journal-capture.js";
 import { registerJournalTools } from "./journal-tools.js";
 import { registerCommitUpgradesTool } from "./journal-commit-upgrades-tool.js";
 import { registerHousekeepTool } from "./journal-housekeep-tool.js";
@@ -91,22 +92,40 @@ function getAgentRulesWarning(projectId?: number | null): string | null {
       projects = db.prepare("SELECT id, path, name FROM projects").all();
     }
 
+    // Projects with zero detected context files have NEVER been onboarded —
+    // distinct from "outdated" (a file exists but predates the current
+    // rulesVersion). Both need admin.onboard_agent, so both are surfaced
+    // here; without this, a project that skipped its one-shot
+    // projects.register nudge would never get flagged again.
+    const missingProjects: string[] = [];
     const outdatedProjects: string[] = [];
     for (const p of projects) {
       if (!p || !p.path || !existsSync(p.path)) continue;
       const contextFiles = detectAgentContextFiles(p.path);
-      if (contextFiles.length === 0) continue;
+      if (contextFiles.length === 0) {
+        missingProjects.push(p.name);
+        continue;
+      }
       const statuses = checkAgentRulesStatus(p.path, contextFiles);
       if (statuses.some((s) => !s.upToDate)) {
         outdatedProjects.push(p.name);
       }
     }
 
-    if (outdatedProjects.length === 0) return null;
-    if (outdatedProjects.length === 1) {
-      return `Project "${outdatedProjects[0]}" has outdated agent rules (v${RULE_BLOCK_VERSION} available). Run onboard_agent to update.`;
+    const sentences: string[] = [];
+    if (missingProjects.length === 1) {
+      sentences.push(`Project "${missingProjects[0]}" has no agent instructions file yet.`);
+    } else if (missingProjects.length > 1) {
+      sentences.push(`${missingProjects.length} projects have no agent instructions file yet.`);
     }
-    return `${outdatedProjects.length} projects have outdated agent rules (v${RULE_BLOCK_VERSION} available). Run onboard_agent for each to update.`;
+    if (outdatedProjects.length === 1) {
+      sentences.push(`Project "${outdatedProjects[0]}" has outdated agent rules (v${RULE_BLOCK_VERSION} available).`);
+    } else if (outdatedProjects.length > 1) {
+      sentences.push(`${outdatedProjects.length} projects have outdated agent rules (v${RULE_BLOCK_VERSION} available).`);
+    }
+    if (sentences.length === 0) return null;
+    sentences.push("Run admin.onboard_agent to fix.");
+    return sentences.join(" ");
   } catch (e) {
     console.error("Error checking agent rules status:", e);
     return null;
@@ -191,13 +210,56 @@ if (!pkgVersionFound) {
 // destination='knowledge' declares a `kind` (dictionary or note). If the
 // caller also supplied a folder that already targets a known class subfolder
 // we honor it verbatim and just flag a warning when it disagrees with kind.
-type ResolveKindArgs = { destination: string; folder: string | undefined; kind: "dictionary" | "note" | undefined };
+type ResolveKindArgs = {
+  destination: string;
+  folder: string | undefined;
+  kind: "dictionary" | "note" | undefined;
+  format?: "md" | "mmd" | "html";
+  title?: string;
+};
 type ResolveKindResult = { folder: string | undefined; warning?: string } | { error: string };
-function resolveKindFolder({ destination, folder, kind }: ResolveKindArgs): ResolveKindResult {
-  if (destination !== "knowledge") return { folder };
-  if (!kind) return { error: "kind is required for destination='knowledge': must be 'dictionary' or 'note'" };
+function resolveKindFolder({ destination, folder, kind, format, title }: ResolveKindArgs): ResolveKindResult {
+  if (destination !== "knowledge") {
+    // HTML reports only make sense in the KB's html/ bucket (see
+    // resources.export_report) — silently allowing destination='project'
+    // here means a report lands inside the user's own repo instead, with
+    // no error and no way to find it via the reports UI.
+    if (format === "html") {
+      return { error: "format='html' requires destination='knowledge' — HTML reports must live in the KB's html/ bucket, not a project or kontexta destination." };
+    }
+    return { folder };
+  }
 
   const norm = folder?.replace(/^\/+|\/+$/g, "") ?? "";
+
+  // Escape hatch: a bare `profile.md` at KB root bypasses kind-routing.
+  // It's the one file layout.ts permits directly under knowledge/, and
+  // otherwise there is no way to reach KB root through this tool.
+  if (norm === "" && title?.trim().toLowerCase() === "profile") {
+    return { folder: undefined };
+  }
+
+  // HTML reports always live under html/, never nested inside
+  // knowledge/dictionary or knowledge/notes (layout.ts requires .md
+  // there). `kind` doesn't apply — content_class for html/ paths is
+  // inferred as "note" from the path alone (see computeContentClass).
+  if (format === "html") {
+    const alreadyHtmlScoped = norm === "html" || norm.startsWith("html/");
+    return { folder: alreadyHtmlScoped ? folder : (norm ? `html/${norm}` : "html") };
+  }
+
+  // Same gap, same fix, for mermaid diagrams: knowledge/ requires .md
+  // (layout.ts), so an unrouted .mmd file would always fail at write
+  // time. Unlike html, mermaid diagrams committed inside a project's own
+  // repo are a legitimate use case, so this only applies to destination
+  // === "knowledge" — no destination restriction like html has.
+  if (format === "mmd") {
+    const alreadyMermaidScoped = norm === "mermaid" || norm.startsWith("mermaid/");
+    return { folder: alreadyMermaidScoped ? folder : (norm ? `mermaid/${norm}` : "mermaid") };
+  }
+
+  if (!kind) return { error: "kind is required for destination='knowledge': must be 'dictionary' or 'note'" };
+
   // Non-KB buckets (html/mermaid) also skip rewrite — their layout forbids nesting under knowledge/.
   const CLASS_PREFIXES = ["knowledge/dictionary", "knowledge/notes", "knowledge/urlclips", "journal", "html", "mermaid"];
   const alreadyClassScoped = CLASS_PREFIXES.some((p) => norm === p || norm.startsWith(p + "/"));
@@ -292,8 +354,14 @@ function loadProfileInstructions(): string | undefined {
 
   const calendarBlock = buildCalendarSection(now);
   const freshness = profileExists ? profileFreshnessNote(path, empty) : "";
+  // Recurring nudge — projects.register's onboarding prompt fires once, at
+  // register time; if the calling agent doesn't relay it in the moment
+  // there was previously no second chance to see it. Surfacing it here
+  // means it comes back every session until admin.onboard_agent is run.
+  const rulesWarning = getAgentRulesWarning();
+  const rulesBlock = rulesWarning ? `\n⚠️  ${rulesWarning}` : "";
 
-  return [header, "", profileBlock, "", calendarBlock, freshness].filter(Boolean).join("\n");
+  return [header, "", profileBlock, "", calendarBlock, freshness, rulesBlock].filter(Boolean).join("\n");
 }
 
 const server = new McpServer(
@@ -358,11 +426,12 @@ let _shutdownInFlight = false;
 process.on("SIGINT", () => { if (!_shutdownInFlight) { _shutdownInFlight = true; void handleShutdownSignal("SIGINT"); } });
 process.on("SIGTERM", () => { if (!_shutdownInFlight) { _shutdownInFlight = true; void handleShutdownSignal("SIGTERM"); } });
 
-// Auto-wrap every tool registration that follows. journal_append (legacy) is excluded
-// because it will be removed in Task 15. Auto-wrap covers all current and future tools.
+// Auto-wrap every tool registration that follows. journal.write is excluded
+// because the auto-wrap re-enters journal recording, and journal.write itself
+// records journal events — including it would loop.
 const _origServerTool = server.tool.bind(server);
 (server as any).tool = function (name: string, ...rest: any[]): any {
-  if (name === "journal.append") {
+  if (name === "journal.write") {
     return (_origServerTool as any)(name, ...rest);
   }
   const handler = rest[rest.length - 1];
@@ -372,95 +441,161 @@ const _origServerTool = server.tool.bind(server);
   return (_origServerTool as any)(name, ...rest);
 };
 
-// Legacy journal_append tool — excluded from wrapHandler (line 223) so it
-// does NOT get the journal-backlog envelope injected. Kept for backward-compat.
+// Excluded from wrapHandler (see above) so it does NOT get the
+// journal-backlog envelope injected — it IS the journal write path.
 server.tool(
-  "journal.append",
-  "Append a timestamped text entry to today's daily journal file in the Knowledge Base. Creates the file if it doesn't already exist. Both calls on the same calendar day return the same file_id. Returns { file_id }.",
+  "journal.write",
+  "Write one event to the current project's journal. `kind: 'append'` = timestamped entry in today's daily journal file in the Knowledge Base (creates the file if it doesn't exist; both calls on the same calendar day return the same file_id; returns `{file_id}`). `kind: 'note'` = free-form decision/abandonment/observation, stored as an `agent_note` event in Layer 1 (surfaces in distilled task entries; returns `{ok, recorded_at}`). `kind: 'intent'` = topic/intent pivot — use when the user redirects what you're working on so the distillation step splits task buckets correctly (returns `{ok, recorded_at}`). Required fields depend on `kind`: 'append'/'note' need `text`; 'intent' needs `summary`.",
   {
-    text: z.string().describe("Text to append to today's journal entry"),
-    project_id: z.number().optional().describe("Optional project ID context"),
+    kind: z.enum(["append", "note", "intent"]).describe("Event kind. Selects which body fields are required and how the event is stored."),
+    text: z.string().optional().describe("Required for kind='append' or kind='note'. Body of the entry."),
+    summary: z.string().optional().describe("Required for kind='intent'. One-line summary of the new intent."),
+    tags: z.array(z.string()).optional().describe("Optional for kind='note'. Tags for the note."),
+    project_id: z.number().optional().describe("Optional for kind='append'. Project ID context."),
   },
-  async ({ text }: { text: string; project_id?: number }) => {
-    try {
-      const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
-      const journalFolder = "journal";
-      const title = `journal-${today}`;
-      const db = getDatabase();
+  async ({ kind, text, summary, tags }: { kind: "append" | "note" | "intent"; text?: string; summary?: string; tags?: string[]; project_id?: number }) => {
+    if (kind === "append") {
+      if (!text) {
+        return { isError: true, content: [{ type: "text", text: JSON.stringify({ error: "kind='append' requires `text`" }, null, 2) }] };
+      }
+      try {
+        const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+        const journalFolder = "journal";
+        const title = `journal-${today}`;
+        const db = getDatabase();
 
-      // Try to find an existing journal file for today.
-      const knowledgeDir = join(dataDir, "knowledge");
-      const expectedPath = join(knowledgeDir, journalFolder, `${title}.md`);
-      const existingRow = db
-        .prepare("SELECT id, path FROM files WHERE path = ? AND project_id IS NULL")
-        .get(expectedPath) as { id: number; path: string } | undefined;
+        // Try to find an existing journal file for today.
+        const knowledgeDir = join(dataDir, "knowledge");
+        const expectedPath = join(knowledgeDir, journalFolder, `${title}.md`);
+        const existingRow = db
+          .prepare("SELECT id, path FROM files WHERE path = ? AND project_id IS NULL")
+          .get(expectedPath) as { id: number; path: string } | undefined;
 
-      if (existingRow) {
-        // Append to existing file.
-        const existing = readFile(existingRow.id);
-        const timestamp = new Date().toISOString().replace("T", " ").slice(0, 19);
-        const newContent = `${existing.content}\n---\n**${timestamp}** ${text}\n`;
-        await updateFile(existingRow.id, newContent, dataDir);
+        if (existingRow) {
+          // Append to existing file.
+          const existing = readFile(existingRow.id);
+          const timestamp = new Date().toISOString().replace("T", " ").slice(0, 19);
+          const newContent = `${existing.content}\n---\n**${timestamp}** ${text}\n`;
+          await updateFile(existingRow.id, newContent, dataDir);
+          return {
+            content: [{ type: "text", text: JSON.stringify({ file_id: existingRow.id }, null, 2) }],
+          };
+        } else {
+          // Create a new daily journal file.
+          const timestamp = new Date().toISOString().replace("T", " ").slice(0, 19);
+          const content = `# Journal — ${today}\n\n---\n**${timestamp}** ${text}\n`;
+          const result = await createFile({
+            title,
+            content,
+            destination: "knowledge",
+            folder: journalFolder,
+            dataDir,
+          });
+          return {
+            content: [{ type: "text", text: JSON.stringify({ file_id: result.id }, null, 2) }],
+          };
+        }
+      } catch (e: any) {
         return {
-          content: [{ type: "text", text: JSON.stringify({ file_id: existingRow.id }, null, 2) }],
-        };
-      } else {
-        // Create a new daily journal file.
-        const timestamp = new Date().toISOString().replace("T", " ").slice(0, 19);
-        const content = `# Journal — ${today}\n\n---\n**${timestamp}** ${text}\n`;
-        const result = await createFile({
-          title,
-          content,
-          destination: "knowledge",
-          folder: journalFolder,
-          dataDir,
-        });
-        return {
-          content: [{ type: "text", text: JSON.stringify({ file_id: result.id }, null, 2) }],
+          isError: true,
+          content: [{ type: "text", text: JSON.stringify({ error: e?.message ?? String(e) }, null, 2) }],
         };
       }
-    } catch (e: any) {
-      return {
-        isError: true,
-        content: [{ type: "text", text: JSON.stringify({ error: e?.message ?? String(e) }, null, 2) }],
-      };
     }
+
+    if (kind === "note") {
+      if (!text) {
+        return { isError: true, content: [{ type: "text", text: JSON.stringify({ error: "kind='note' requires `text`" }, null, 2) }] };
+      }
+      const ev: RawEvent = {
+        ts: new Date().toISOString(),
+        agent: getCurrentAgent(),
+        sid: getCurrentSid(),
+        event: "agent_note",
+        summary: text,
+        tags: tags ?? [],
+      };
+      appendVoluntaryEvent(ev);
+      return { content: [{ type: "text", text: JSON.stringify({ ok: true, recorded_at: ev.ts }) }] };
+    }
+
+    // kind === "intent"
+    if (!summary) {
+      return { isError: true, content: [{ type: "text", text: JSON.stringify({ error: "kind='intent' requires `summary`" }, null, 2) }] };
+    }
+    const ev: RawEvent = {
+      ts: new Date().toISOString(),
+      agent: getCurrentAgent(),
+      sid: getCurrentSid(),
+      event: "user_intent",
+      summary,
+    };
+    appendVoluntaryEvent(ev);
+    return { content: [{ type: "text", text: JSON.stringify({ ok: true, recorded_at: ev.ts }) }] };
   }
 );
 
 server.tool(
   "files.create",
-  "Create a new markdown, mermaid, or HTML file in the knowledge base or project. This operation writes a new file to disk and adds it to the local SQLite FTS5 index. Destination can be 'knowledge' (global KB), 'project' (reference file inside a project repo), or 'kontexta' (internal Kontexta schema file). If destination is 'project' or 'kontexta', project_id is strictly required. If destination is 'knowledge', 'kind' is strictly required — pick 'dictionary' (authoritative source-of-truth) or 'note' (informational snapshot); see the kind param for the rubric. No external auth required. Rate limits do not apply (local operation). Returns the created file metadata including its new ID, path, and estimated tokens. If the destination directory does not exist, it will be created automatically. Use this tool to instantiate new contextual documents or notes. To modify an existing file, use 'files.update' instead. Parameters: 'destination' dictates required fields; if 'project' or 'kontexta', 'project_id' must be a valid integer; if 'knowledge', 'kind' must be 'dictionary' or 'note'. 'tags' and 'folder' are optional. Pass format='mmd' to create a Mermaid diagram file (.mmd) or format='html' for HTML reports; defaults to 'md'.",
+  "Create one or more markdown, mermaid, or HTML files in the knowledge base or project (up to 200 per call). Pass a single-element `files` array for the one-file case. This operation writes each file to disk and adds it to the local SQLite FTS5 index. Destination can be 'knowledge' (global KB), 'project' (reference file inside a project repo), or 'kontexta' (internal Kontexta schema file). If destination is 'project' or 'kontexta', project_id is strictly required. If destination is 'knowledge', 'kind' is strictly required for md files — pick 'dictionary' (authoritative source-of-truth) or 'note' (informational snapshot); see the kind param for the rubric. No external auth required. Rate limits do not apply (local operation). Per-item failures are isolated to `errors[]` — the rest of the batch still commits; a single-item call still reports its failure the same way. Returns `{created_count, error_count, created, errors}`. If a destination directory does not exist, it will be created automatically. To modify an existing file, use 'files.update' instead. Pass format='mmd' on an item to create a Mermaid diagram file (.mmd) — for destination='knowledge' it's auto-routed to the KB's `mermaid/` bucket (`kind` ignored, not required); for destination='project' it's written wherever `folder` says, same as any project file. Pass format='html' for an HTML report — `destination` MUST be 'knowledge' (html reports are auto-routed to the KB's `html/` bucket; `kind` is ignored and not required for html). Format defaults to 'md'.",
   {
-    title: z.string().describe("Title of the file"),
-    content: z.string().describe("Content of the file"),
-    destination: z.enum(["knowledge", "project", "kontexta"]).describe("Destination type"),
-    project_id: z.number().optional().describe("Project ID (required for project/kontexta destinations)"),
-    folder: z.string().optional().describe("Optional folder path"),
-    tags: z.array(z.string()).optional().describe("Optional array of tags"),
-    format: z.enum(["md", "mmd", "html"]).optional().describe("File extension to write. Defaults to 'md'. Use 'html' for HTML reports."),
-    kind: z.enum(["dictionary", "note"]).optional()
-      .describe("REQUIRED for destination='knowledge'. 'dictionary' = source of truth (mappings, glossaries, runbooks, PR templates). 'note' = snapshot (meeting notes, sprint reviews, PR findings, post-mortems). Test: if this file disagreed with the code, who wins? File wins → dictionary; file loses → note. Ignored for destination='project' or 'kontexta'."),
+    files: z
+      .array(
+        z.object({
+          title: z.string().describe("Title of the file"),
+          content: z.string().describe("Content of the file"),
+          destination: z.enum(["knowledge", "project", "kontexta"]).describe("Destination type"),
+          project_id: z.number().optional().describe("Project ID (required for project/kontexta destinations)"),
+          folder: z.string().optional().describe("Optional folder path"),
+          tags: z.array(z.string()).optional().describe("Optional array of tags"),
+          format: z.enum(["md", "mmd", "html"]).optional().describe("File extension to write. Defaults to 'md'. Use 'html' for HTML reports."),
+          kind: z.enum(["dictionary", "note"]).optional()
+            .describe("REQUIRED for destination='knowledge'. 'dictionary' = source of truth (mappings, glossaries, runbooks, PR templates). 'note' = snapshot (meeting notes, sprint reviews, PR findings, post-mortems). Test: if this file disagreed with the code, who wins? File wins → dictionary; file loses → note. Ignored for destination='project' or 'kontexta'."),
+        })
+      )
+      .min(1)
+      .max(200)
+      .describe("Files to create. Single-element array = one-file case. Max 200 per call."),
   },
-  async ({ title, content, destination, project_id, folder, tags, format, kind }) => {
-    const resolved = resolveKindFolder({ destination, folder, kind });
-    if ("error" in resolved) {
-      return { isError: true, content: [{ type: "text", text: JSON.stringify({ error: resolved.error }, null, 2) }] };
+  async ({ files }) => {
+    const created: any[] = [];
+    const errors: { index: number; title: string; error: string }[] = [];
+    for (let i = 0; i < files.length; i++) {
+      const f = files[i];
+      try {
+        const resolved = resolveKindFolder({ destination: f.destination, folder: f.folder, kind: f.kind, format: f.format, title: f.title });
+        if ("error" in resolved) {
+          errors.push({ index: i, title: f.title, error: resolved.error });
+          continue;
+        }
+        const result = await createFile({
+          title: f.title,
+          content: f.content,
+          destination: f.destination,
+          projectId: f.project_id,
+          folder: resolved.folder,
+          tags: f.tags,
+          dataDir,
+          format: f.format,
+        });
+        const payload: any = annotateTokens(result);
+        if (resolved.warning) payload.warning = resolved.warning;
+        created.push(payload);
+      } catch (e: any) {
+        errors.push({ index: i, title: f.title, error: e?.message ?? String(e) });
+      }
     }
-    const result = await createFile({
-      title,
-      content,
-      destination,
-      projectId: project_id,
-      folder: resolved.folder,
-      tags,
-      dataDir,
-      format,
-    });
-    const payload: any = annotateTokens(result);
-    if (resolved.warning) payload.warning = resolved.warning;
     return {
-      content: [{ type: "text", text: JSON.stringify(payload, null, 2) }],
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify(
+            { created_count: created.length, error_count: errors.length, created, errors },
+            null,
+            2
+          ),
+        },
+      ],
     };
   }
 );
@@ -527,40 +662,104 @@ server.tool(
 
 server.tool(
   "files.read",
-  "Read one file's full body and metadata by ID. Read-only; no side effects, auth, or rate limits. Returns title, path, content, tags, est_tokens (so you can budget context before opening more files), and timestamps. Throws if the ID is unknown. Use for a single known file. Prefer `files.describe` to inspect without paying body tokens; `files.read_many` for batches; `files.read_lines`/`files.read_section` for partial reads; `files.read_by_path` when you only have the absolute path.",
+  "Read one or more files, in full or in part. Modes: single-by-id (`id`), single-by-path (`path`, absolute on-disk path — must be exactly as indexed), batch-by-id (`ids`, up to 200), partial-by-heading (`id`+`section`), partial-by-line-range (`id`+`lines`). Exactly one of `id`/`path`/`ids` is required. `section` and `lines` are mutually exclusive and only valid with `id` (not `ids` or `path`). Read-only; no side effects, auth, or rate limits. Response shape: a single file object (with `content`, tags, est_tokens) for `id`/`path`; a partial-content object for `section`/`lines`; `{files, total_est_tokens, error_count, errors}` for `ids` (per-ID failures isolated, batch never partial-throws). Prefer `files.describe` to inspect without paying body tokens.",
   {
-    id: z.number().describe("File ID"),
+    id: z.number().int().positive().optional().describe("Single file by ID."),
+    path: z.string().optional().describe("Single file by absolute on-disk path (must match exactly what Kontexta indexed)."),
+    ids: z.array(z.number()).min(1).max(200).optional().describe("Batch mode: multiple file IDs (max 200 per call); returns an array plus aggregate token cost."),
+    section: z.string().optional().describe("Partial read: return only this heading's body (case-insensitive exact-string after trim). Requires `id`; mutually exclusive with `lines`."),
+    lines: z.object({
+      from: z.number().int().positive().describe("First line (1-indexed, inclusive)"),
+      to: z.number().int().positive().describe("Last line (1-indexed, inclusive)"),
+    }).optional().describe("Partial read: 1-indexed inclusive line range. Requires `id`; mutually exclusive with `section`."),
   },
-  async ({ id }) => {
-    const result = readFile(id);
-    return {
-      content: [{ type: "text", text: JSON.stringify(annotateTokens(result), null, 2) }],
-    };
-  }
-);
-
-server.tool(
-  "files.read_many",
-  "Batch read up to 200 files by ID in one call. Returns per-file annotated records, an aggregate `total_est_tokens`, and an isolated `errors[]` (one bad ID does NOT abort the batch). Read-only; no side effects, auth, or rate limits. Use instead of looping `files.read` to halve round-trips and get the combined token cost upfront. For >200 IDs, page yourself.",
-  {
-    ids: z.array(z.number()).min(1).max(200).describe("File IDs to read (max 200 per call)"),
-  },
-  async ({ ids }) => {
-    const files: any[] = [];
-    const errors: { id: number; error: string }[] = [];
-    let total_est_tokens = 0;
-    for (const id of ids) {
-      try {
-        const r = annotateTokens(readFile(id));
-        files.push(r);
-        total_est_tokens += r.est_tokens ?? 0;
-      } catch (e: any) {
-        errors.push({ id, error: e?.message ?? String(e) });
-      }
+  async ({ id, path, ids, section, lines }) => {
+    const modeCount = [id !== undefined, path !== undefined, ids !== undefined].filter(Boolean).length;
+    if (modeCount !== 1) {
+      return { isError: true, content: [{ type: "text", text: JSON.stringify({ error: "Exactly one of `id`, `path`, or `ids` must be present" }, null, 2) }] };
     }
-    return {
-      content: [{ type: "text", text: JSON.stringify({ files, total_est_tokens, error_count: errors.length, errors }, null, 2) }],
-    };
+    if (section !== undefined && lines !== undefined) {
+      return { isError: true, content: [{ type: "text", text: JSON.stringify({ error: "`section` and `lines` are mutually exclusive" }, null, 2) }] };
+    }
+    if ((section !== undefined || lines !== undefined) && ids !== undefined) {
+      return { isError: true, content: [{ type: "text", text: JSON.stringify({ error: "`section`/`lines` require `id` (single-file mode), not `ids`" }, null, 2) }] };
+    }
+    if ((section !== undefined || lines !== undefined) && path !== undefined) {
+      return { isError: true, content: [{ type: "text", text: JSON.stringify({ error: "`section`/`lines` require `id`, not `path`" }, null, 2) }] };
+    }
+
+    try {
+      if (ids !== undefined) {
+        const files: any[] = [];
+        const errors: { id: number; error: string }[] = [];
+        let total_est_tokens = 0;
+        for (const rid of ids) {
+          try {
+            const r = annotateTokens(readFile(rid));
+            files.push(r);
+            total_est_tokens += r.est_tokens ?? 0;
+          } catch (e: any) {
+            errors.push({ id: rid, error: e?.message ?? String(e) });
+          }
+        }
+        return {
+          content: [{ type: "text", text: JSON.stringify({ files, total_est_tokens, error_count: errors.length, errors }, null, 2) }],
+        };
+      }
+
+      let resolvedId: number;
+      if (path !== undefined) {
+        if (path.length === 0) throw new Error("path is required");
+        const row = getDatabase().prepare("SELECT id FROM files WHERE path = ?").get(path) as { id: number } | undefined;
+        if (!row) {
+          return { isError: true, content: [{ type: "text", text: JSON.stringify({ error: `No file indexed at path: ${path}` }, null, 2) }] };
+        }
+        resolvedId = row.id;
+      } else {
+        resolvedId = id!;
+      }
+
+      if (section !== undefined) {
+        const file = readFile(resolvedId);
+        const node = findSection(file.content, section);
+        if (!node) {
+          return { isError: true, content: [{ type: "text", text: JSON.stringify({ error: `Section not found: ${section}` }, null, 2) }] };
+        }
+        const buf = Buffer.from(file.content, "utf8");
+        const body = buf.subarray(node.contentStart, node.contentEnd).toString("utf8");
+        return {
+          content: [{ type: "text", text: JSON.stringify({
+            file_id: resolvedId, path: file.path, heading: node.text, level: node.level, line: node.line,
+            content: body, size_bytes: Buffer.byteLength(body, "utf8"), est_tokens: estimateTokensFromBuffer(Buffer.from(body, "utf8")),
+          }, null, 2) }],
+        };
+      }
+
+      if (lines !== undefined) {
+        if (lines.to < lines.from) throw new Error("`lines.to` must be >= `lines.from`");
+        const file = readFile(resolvedId);
+        const allLines = file.content.split("\n");
+        const start = Math.max(0, lines.from - 1);
+        const end = Math.min(allLines.length, lines.to);
+        const slice = allLines.slice(start, end).join("\n");
+        return {
+          content: [{ type: "text", text: JSON.stringify({
+            file_id: resolvedId, path: file.path, from: start + 1, to: end, total_lines: allLines.length,
+            content: slice, size_bytes: Buffer.byteLength(slice, "utf8"), est_tokens: estimateTokensFromBuffer(Buffer.from(slice, "utf8")),
+          }, null, 2) }],
+        };
+      }
+
+      const result = readFile(resolvedId);
+      return {
+        content: [{ type: "text", text: JSON.stringify(annotateTokens(result), null, 2) }],
+      };
+    } catch (e: any) {
+      return {
+        isError: true,
+        content: [{ type: "text", text: JSON.stringify({ error: e?.message ?? String(e) }, null, 2) }],
+      };
+    }
   }
 );
 
@@ -698,119 +897,20 @@ server.tool(
 );
 
 server.tool(
-  "files.read_lines",
-  "Return a 1-indexed inclusive line slice of a file. Out-of-range bounds clamp silently to the file's actual length; `to < from` throws. Read-only; no side effects, auth, or rate limits. Returns the snippet plus its size_bytes and est_tokens. Use to inspect a stack-trace region or a chunk of a large file without pulling the whole body. Prefer `read_section` if you know the heading, `grep_in_file` if you know a pattern but not the line number.",
-  {
-    id: z.number().describe("File ID"),
-    from: z.number().int().positive().describe("First line (1-indexed, inclusive)"),
-    to: z.number().int().positive().describe("Last line (1-indexed, inclusive)"),
-  },
-  async ({ id, from, to }) => {
-    try {
-      if (to < from) throw new Error("`to` must be >= `from`");
-      const file = readFile(id);
-      const lines = file.content.split("\n");
-      const start = Math.max(0, from - 1);
-      const end = Math.min(lines.length, to);
-      const slice = lines.slice(start, end).join("\n");
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(
-              {
-                file_id: id,
-                path: file.path,
-                from: start + 1,
-                to: end,
-                total_lines: lines.length,
-                content: slice,
-                size_bytes: Buffer.byteLength(slice, "utf8"),
-                est_tokens: estimateTokensFromBuffer(Buffer.from(slice, "utf8")),
-              },
-              null,
-              2
-            ),
-          },
-        ],
-      };
-    } catch (e: any) {
-      return {
-        isError: true,
-        content: [{ type: "text", text: JSON.stringify({ error: e?.message ?? String(e) }, null, 2) }],
-      };
-    }
-  }
-);
-
-server.tool(
-  "files.grep",
-  "Match a JS regex against one file's lines and return matched lines with line numbers (capped: default 100, max 500). Catches what FTS misses: URLs, hyphenated terms, code identifiers. Read-only; no side effects, auth, or rate limits. Invalid regex throws `invalid regex`. Returns `{matches, match_count, truncated}`. Use after `files.read_outline` when you know the file but need a specific reference; for cross-file regex use `files.regex_search`; for keyword/concept search use `files.search`.",
-  {
-    id: z.number().describe("File ID"),
-    pattern: z.string().describe("Pattern to match. Treated as a JavaScript RegExp source."),
-    case_insensitive: z.boolean().optional().describe("Add the 'i' flag (default false)"),
-    max_matches: z.number().int().positive().max(500).optional().describe("Cap on returned hits (default 100)"),
-  },
-  async ({ id, pattern, case_insensitive, max_matches }) => {
-    try {
-      let re: RE2;
-      try {
-        re = new RE2Class(pattern, case_insensitive ? "i" : "");
-      } catch (e: any) {
-        throw new Error(`invalid regex: ${e?.message ?? e}`);
-      }
-      const file = readFile(id);
-      const lines = file.content.split("\n");
-      const cap = max_matches ?? 100;
-      const matches: { line: number; text: string }[] = [];
-      for (let i = 0; i < lines.length; i++) {
-        if (re.test(lines[i])) {
-          matches.push({ line: i + 1, text: lines[i] });
-          if (matches.length >= cap) break;
-        }
-      }
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(
-              {
-                file_id: id,
-                path: file.path,
-                pattern,
-                match_count: matches.length,
-                truncated: matches.length === cap,
-                matches,
-              },
-              null,
-              2
-            ),
-          },
-        ],
-      };
-    } catch (e: any) {
-      return {
-        isError: true,
-        content: [{ type: "text", text: JSON.stringify({ error: e?.message ?? String(e) }, null, 2) }],
-      };
-    }
-  }
-);
-
-server.tool(
   "files.regex_search",
-  "Match a JS regex against the body of every file in scope (project, KB, or all) and return per-file hits with line numbers. Slower than FTS `search` because it reads each file's content; use only when FTS misses substrings, URLs, or code identifiers. Read-only; no side effects, auth, or rate limits. Capped at 500 files / 10 hits per file by default; the response reports `files_truncated` and per-file truncation so the agent can re-scope. `project_id: null` = KB only; omit = everywhere; `kind` narrows to one content class. Invalid regex throws.",
+  "Match a JS regex against file bodies. Default mode scans every file in scope (project, KB, or all) and returns per-file hits with line numbers — slower than FTS `files.search` because it reads each file's content; use only when FTS misses substrings, URLs, or code identifiers. Pass `file_id` to instead scan just that one file (catches what FTS misses within a single known file); response shape changes to `{file_id, path, pattern, match_count, truncated, matches}`. Read-only; no side effects, auth, or rate limits. Multi-file mode capped at 500 files / 10 hits per file by default (`files_truncated` reports the cap); single-file mode capped at 100 hits by default, max 500. `project_id`/`kind` are ignored when `file_id` is set. Invalid regex throws.",
   {
     pattern: z.string().describe("JavaScript RegExp source"),
-    project_id: z.number().nullable().optional().describe("Scope to one project, null for KB-only, omit for everything"),
+    file_id: z.number().optional().describe("Scan only this file instead of every file in scope. When set, `project_id`/`kind`/`max_files`/`max_matches_per_file` are ignored in favor of `max_matches`."),
+    project_id: z.number().nullable().optional().describe("Scope to one project, null for KB-only, omit for everything. Ignored when `file_id` is set."),
     case_insensitive: z.boolean().optional().describe("If true, match pattern case-insensitively (RegExp 'i' flag). Default false."),
-    max_files: z.number().int().positive().max(2000).optional().describe("Cap on files scanned (default 500)"),
-    max_matches_per_file: z.number().int().positive().max(100).optional().describe("Per-file hit cap (default 10)"),
+    max_files: z.number().int().positive().max(2000).optional().describe("Cap on files scanned (default 500). Ignored when `file_id` is set."),
+    max_matches_per_file: z.number().int().positive().max(100).optional().describe("Per-file hit cap in multi-file mode (default 10). Ignored when `file_id` is set."),
+    max_matches: z.number().int().positive().max(500).optional().describe("Cap on returned hits in single-file mode (default 100). Only used when `file_id` is set."),
     kind: z.enum(["dictionary", "note", "journal", "project"]).optional()
-      .describe("Filter by content class before scanning."),
+      .describe("Filter by content class before scanning. Ignored when `file_id` is set."),
   },
-  async ({ pattern, project_id, case_insensitive, max_files, max_matches_per_file, kind }) => {
+  async ({ pattern, file_id, project_id, case_insensitive, max_files, max_matches_per_file, max_matches, kind }) => {
     try {
       let re: RE2;
       try {
@@ -818,6 +918,39 @@ server.tool(
       } catch (e: any) {
         throw new Error(`invalid regex: ${e?.message ?? e}`);
       }
+
+      if (file_id !== undefined) {
+        const file = readFile(file_id);
+        const lines = file.content.split("\n");
+        const cap = max_matches ?? 100;
+        const matches: { line: number; text: string }[] = [];
+        for (let i = 0; i < lines.length; i++) {
+          if (re.test(lines[i])) {
+            matches.push({ line: i + 1, text: lines[i] });
+            if (matches.length >= cap) break;
+          }
+        }
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(
+                {
+                  file_id,
+                  path: file.path,
+                  pattern,
+                  match_count: matches.length,
+                  truncated: matches.length === cap,
+                  matches,
+                },
+                null,
+                2
+              ),
+            },
+          ],
+        };
+      }
+
       const fileCap = max_files ?? 500;
       const perFileCap = max_matches_per_file ?? 10;
       const db = getDatabase();
@@ -888,36 +1021,67 @@ server.tool(
 
 server.tool(
   "files.update",
-  "Update the entire content of an existing file by its ID. This replaces the file's content on disk and triggers an FTS5 re-index. Returns the updated file metadata including new estimated token counts. Operates locally with no external auth or rate limits. If you only need to modify a single section without replacing the entire file, use 'files.update_section' instead to save context budget. Parameters: 'id' must be a valid integer file ID. 'content' is the complete markdown string that will replace the file.",
+  "Rewrite a file. Default = full-body replacement: `content` becomes the entire file, triggering disk write + FTS5 re-index. Pass `section` to instead rewrite ONLY that heading's body (case-insensitive exact-string after trim; the heading line itself is preserved, siblings untouched) — saves context budget vs resending the whole file. Throws if `section` is set but the heading doesn't exist (this mode will NOT create a new section — append the section text via a full-body update first). Operates locally with no external auth or rate limits. Returns the updated file metadata including new estimated token counts.",
   {
     id: z.number().describe("File ID"),
-    content: z.string().describe("New content"),
+    content: z.string().describe("New content. With `section` set, this replaces just that heading's body; otherwise it becomes the entire file body."),
+    section: z.string().optional().describe("Case-insensitive exact-string heading. When set, only this heading's body is rewritten instead of the whole file."),
   },
-  async ({ id, content }) => {
-    const result = await updateFile(id, content, dataDir);
-    return {
-      content: [{ type: "text", text: JSON.stringify(annotateTokens(result), null, 2) }],
-    };
+  async ({ id, content, section }) => {
+    try {
+      let newBody = content;
+      if (section !== undefined) {
+        const file = readFile(id);
+        newBody = replaceSection(file.content, section, content);
+      }
+      const result = await updateFile(id, newBody, dataDir);
+      return {
+        content: [{ type: "text", text: JSON.stringify(annotateTokens(result), null, 2) }],
+      };
+    } catch (e: any) {
+      return {
+        isError: true,
+        content: [{ type: "text", text: JSON.stringify({ error: e?.message ?? String(e) }, null, 2) }],
+      };
+    }
   }
 );
 
 server.tool(
   "files.delete",
-  "DESTRUCTIVE. Permanently delete one file by ID. KB files are unlinked from disk AND removed from the FTS5 index; project reference files only have their index entry removed (the file on disk is left alone so the watcher does not fight your editor). Not idempotent — deleting an unknown ID throws. No external auth or rate limits. Returns `{success: true}`. Use only when the file is truly obsolete; to deprioritise without losing data, untag (`tags.remove`) or unfavorite (`tags.set_favorite`) instead. Bulk variant: `files.delete_many`.",
+  "DESTRUCTIVE. Permanently delete one or more files by ID (up to 500 per call). Pass a single-element `ids` array for the one-file case. KB files are unlinked from disk AND removed from the FTS5 index; project reference files only have their index entry removed (the file on disk is left alone so the watcher does not fight your editor). Not idempotent — deleting an unknown ID surfaces as a per-item error. No external auth or rate limits. Per-ID failures are isolated to `errors[]` and the rest of the batch still commits — partial success is the norm, always inspect `error_count`. Returns `{deleted_count, error_count, deleted, errors}`. Use only when the file is truly obsolete; to deprioritise without losing data, untag (`tags.remove`) or unfavorite (`tags.set_favorite`) instead. To preview the set before deleting, run `files.list` with the same filter and confirm the IDs.",
   {
-    id: z.number().describe("File ID"),
+    ids: z.array(z.number()).min(1).max(500).describe("File IDs to delete. Single-element array = one-file case. Max 500 per call."),
   },
-  async ({ id }) => {
-    await deleteFile(id, dataDir);
+  async ({ ids }) => {
+    const deleted: number[] = [];
+    const errors: { id: number; error: string }[] = [];
+    for (const id of ids) {
+      try {
+        await deleteFile(id, dataDir);
+        deleted.push(id);
+      } catch (e: any) {
+        errors.push({ id, error: e?.message ?? String(e) });
+      }
+    }
     return {
-      content: [{ type: "text", text: JSON.stringify({ success: true }, null, 2) }],
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify(
+            { deleted_count: deleted.length, error_count: errors.length, deleted, errors },
+            null,
+            2
+          ),
+        },
+      ],
     };
   }
 );
 
 server.tool(
   "files.list",
-  "List file metadata with optional filters (project_id, tag, favorite, folder, untagged, kind) and pagination. Read-only; no side effects, auth, or rate limits. Each row is annotated with tags, est_tokens, size_bytes, and content_class; the response includes `total_est_tokens` so you can budget before reading bodies. `project_id: null` returns ONLY Knowledge Base files; omit the field to span everything; `kind` narrows to one content class. Use to browse known structure; for keyword/content lookup use `search`; for a denser whole-vault dump use `project_map`.",
+  "List file metadata with optional filters (project_id, tag, favorite, folder, untagged, kind) and pagination. Read-only; no side effects, auth, or rate limits. Each row is annotated with tags, est_tokens, size_bytes, and content_class; the response includes `total_est_tokens` so you can budget before reading bodies. `project_id: null` returns ONLY Knowledge Base files; omit the field to span everything; `kind` narrows to one content class. Use to browse known structure; for keyword/content lookup use `files.search`; for a denser whole-vault dump use `projects.map`.",
   {
     project_id: z.number().nullable().optional().describe("Filter by project ID. Pass null to list ONLY Knowledge Base files (project_id IS NULL)."),
     tag: z.string().optional().describe("Filter by tag name"),
@@ -951,7 +1115,7 @@ server.tool(
 
 server.tool(
   "files.search",
-  "Full-text (SQLite FTS5) keyword search across files. Returns ranked matches with inline match_excerpt and title_highlight (no follow-up `read_file` needed for snippets) plus tags, est_tokens, size_bytes, content_class, and aggregate `total_est_tokens`. Read-only; no side effects, auth, or rate limits. Ordering: dictionary hits sort above everything else for the same query (dictionary-wins on conflict), then BM25 rank. FTS is tokenised: it WILL miss URLs, hyphenated terms, and partial substrings — fall back to `files.regex_search` for those. `project_id: null` searches only the KB; omit the field to span everything; `tags[]` requires ALL listed tags to match; `kind` narrows to one content class. For prompt-ready bundled bodies use `files.bundle_search`.",
+  "Full-text (SQLite FTS5) keyword search across files. Default mode returns ranked matches with inline match_excerpt and title_highlight (no follow-up `files.read` needed for snippets) plus tags, est_tokens, size_bytes, content_class, and aggregate `total_est_tokens`. Pass `include_bodies: true` to instead get a single prompt-ready bundle: matched bodies concatenated into XML `<document>` blocks or markdown headers + fences (see `format`/`max_tokens`), capped at the token budget — files are added in rank order until the next would exceed it, the rest going to `meta.skipped[]`. Use `include_bodies` instead of `files.search` + N×`files.read` when you need several related files as one context blob. Read-only; no side effects, auth, or rate limits. Ordering: dictionary hits sort above everything else for the same query (dictionary-wins on conflict), then BM25 rank. FTS is tokenised: it WILL miss URLs, hyphenated terms, and partial substrings — fall back to `files.regex_search` for those. `project_id: null` searches only the KB; omit the field to span everything; `tags[]` requires ALL listed tags to match; `kind` narrows to one content class.",
   {
     query: z.string().describe("Search query"),
     project_id: z.number().nullable().optional().describe("Filter by project ID. Pass null to search ONLY Knowledge Base files."),
@@ -959,13 +1123,31 @@ server.tool(
     favorite: z.boolean().optional().describe("Filter by favorite status"),
     kind: z.enum(["dictionary", "note", "journal", "project"]).optional()
       .describe("Filter by content class. dictionary = authoritative KB (system IDs, mappings, glossaries), note = informational KB, journal = time-log, project = project file. Omit to see all classes with dictionary-first ordering."),
+    include_bodies: z.boolean().optional().describe("If true, return a single prompt-ready bundle of matched bodies instead of a match list. Response shape changes to `{bundle, meta: {included, skipped, ...}}`. Default false."),
+    format: z.enum(["xml", "markdown"]).optional().describe("Bundle format when `include_bodies` is true. xml = Anthropic-recommended <document> tags (default); markdown = ## headers + fenced blocks. Ignored otherwise."),
+    max_tokens: z.number().int().positive().optional().describe("Token budget when `include_bodies` is true (default 50000). Files added in rank order until the next would exceed; remainder go to `meta.skipped[]`. Ignored otherwise."),
   },
-  async ({ query, project_id, tags, favorite, kind }) => {
+  async ({ query, project_id, tags, favorite, kind, include_bodies, format, max_tokens }) => {
     const filters: any = { query };
     if (project_id !== undefined) filters.project_id = project_id;
     if (tags !== undefined) filters.tags = tags;
     if (favorite !== undefined) filters.favorite = favorite;
     if (kind !== undefined) filters.content_class = kind;
+
+    if (include_bodies) {
+      let bundleResult;
+      try {
+        bundleResult = await bundleSearch(filters, { format: format ?? "xml", max_tokens: max_tokens ?? 50000 });
+      } catch (e: any) {
+        if (e instanceof FtsQueryError) {
+          return { isError: true, content: [{ type: "text", text: e.message }] };
+        }
+        throw e;
+      }
+      return {
+        content: [{ type: "text", text: JSON.stringify(bundleResult, null, 2) }],
+      };
+    }
 
     let result;
     try {
@@ -985,45 +1167,8 @@ server.tool(
 );
 
 server.tool(
-  "files.bundle_search",
-  "Run an FTS search and concatenate matched bodies into a single prompt-ready bundle (XML `<document>` blocks or markdown headers + fences) capped at `max_tokens`. Files are added in rank order (dictionary-wins first, then BM25) until the next would exceed the budget; the rest go to `skipped[]`. Read-only; no side effects, auth, or rate limits. Use instead of `files.search` + N×`files.read` when you need several related files as one context blob. Defaults: format=xml, max_tokens=50000. `project_id: null` = KB only; `tags[]` requires ALL to match; `kind` narrows to one content class.",
-  {
-    query: z.string().describe("Full-text search query"),
-    project_id: z.number().nullable().optional().describe("Filter by project ID. Pass null to bundle ONLY Knowledge Base files."),
-    tags: z.array(z.string()).optional().describe("Filter by tags (all must match)"),
-    favorite: z.boolean().optional().describe("Filter by favorite status"),
-    format: z.enum(["xml", "markdown"]).default("xml")
-      .describe("Bundle format. xml = Anthropic-recommended <document> tags; markdown = ## headers + fenced blocks"),
-    max_tokens: z.number().int().positive().default(50000)
-      .describe("Token budget. Files added in rank order until the next would exceed; remainder go to skipped[]"),
-    kind: z.enum(["dictionary", "note", "journal", "project"]).optional()
-      .describe("Filter by content class. dictionary = authoritative KB, note = informational KB, journal = time-log, project = project file."),
-  },
-  async ({ query, project_id, tags, favorite, format, max_tokens, kind }) => {
-    const filters: any = { query };
-    if (project_id !== undefined) filters.project_id = project_id;
-    if (tags !== undefined) filters.tags = tags;
-    if (favorite !== undefined) filters.favorite = favorite;
-    if (kind !== undefined) filters.content_class = kind;
-
-    let result;
-    try {
-      result = await bundleSearch(filters, { format, max_tokens });
-    } catch (e: any) {
-      if (e instanceof FtsQueryError) {
-        return { isError: true, content: [{ type: "text", text: e.message }] };
-      }
-      throw e;
-    }
-    return {
-      content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-    };
-  }
-);
-
-server.tool(
   "tags.add",
-  "Append tags to ONE file. Additive — existing tags are preserved; re-adding an existing tag is a no-op (idempotent per tag). New tag names auto-create rows in the global `tags` table. Persists to local SQLite. No external auth or rate limits. Returns `{success: true}`; throws if file_id is unknown. Use to label a single file. To tag every file matching a query in one call use `tag_search_results`; to remove tags use `remove_tags`.",
+  "Append tags to ONE file. Additive — existing tags are preserved; re-adding an existing tag is a no-op (idempotent per tag). New tag names auto-create rows in the global `tags` table. Persists to local SQLite. No external auth or rate limits. Returns `{success: true}`; throws if file_id is unknown. Use to label a single file. To tag every file matching a query in one call use `tags.search`; to remove tags use `tags.remove`.",
   {
     file_id: z.number().describe("File ID"),
     tags: z.array(z.string()).describe("Array of tag names to add"),
@@ -1038,7 +1183,7 @@ server.tool(
 
 server.tool(
   "tags.remove",
-  "Detach one or more tag IDs from ONE file. Destructive on the link only — does NOT delete the file or the global tag definition (orphan tags survive in `list_tags`). Idempotent: removing an already-absent tag is a no-op. No external auth or rate limits. Returns `{success: true}`. Note: takes tag IDs (integers), not names — fetch them via `list_tags`. To remove ALL tags from many files via a query, see `tag_search_results` (additive only) — there is no bulk-untag-by-query tool.",
+  "Detach one or more tag IDs from ONE file. Destructive on the link only — does NOT delete the file or the global tag definition (orphan tags survive in `tags.list`). Idempotent: removing an already-absent tag is a no-op. No external auth or rate limits. Returns `{success: true}`. Note: takes tag IDs (integers), not names — fetch them via `tags.list`. To remove ALL tags from many files via a query, see `tags.search` (additive only) — there is no bulk-untag-by-query tool.",
   {
     file_id: z.number().describe("File ID"),
     tag_ids: z.array(z.number()).describe("Array of tag IDs to remove"),
@@ -1053,7 +1198,7 @@ server.tool(
 
 server.tool(
   "tags.set_favorite",
-  "Set or clear the favorite flag on one file (idempotent — re-setting the same value is a no-op; not a toggle, you pass the desired state). Persists to local SQLite. No external auth or rate limits. Returns `{success: true}`. Use to curate quick-access pins; `list_files`/`search`/`bundle_search` accept `favorite: true` to filter to the pinned set.",
+  "Set or clear the favorite flag on one file (idempotent — re-setting the same value is a no-op; not a toggle, you pass the desired state). Persists to local SQLite. No external auth or rate limits. Returns `{success: true}`. Use to curate quick-access pins; `files.list` / `files.search` accept `favorite: true` to filter to the pinned set.",
   {
     file_id: z.number().describe("File ID"),
     favorite: z.boolean().describe("Favorite status"),
@@ -1068,7 +1213,7 @@ server.tool(
 
 server.tool(
   "tags.list",
-  "List every tag in the global SQLite database with id, name, and applied count. Read-only; no side effects, auth, or rate limits. Returns the entire taxonomy (not paginated). Use to discover existing labels before tagging (so you reuse rather than fork) or to find tag IDs to feed into `remove_tags`. For tags on a specific file, use `describe_file`.",
+  "List every tag in the global SQLite database with id, name, and applied count. Read-only; no side effects, auth, or rate limits. Returns the entire taxonomy (not paginated). Use to discover existing labels before tagging (so you reuse rather than fork) or to find tag IDs to feed into `tags.remove`. For tags on a specific file, use `files.describe`.",
   {},
   async () => {
     const result = listTags();
@@ -1080,7 +1225,7 @@ server.tool(
 
 server.tool(
   "projects.list",
-  "List every registered project with id, name, absolute path, and a derived `has_hands` flag (true when the path exists on disk AND contains a `kontexta.json`). Read-only; no side effects, auth, or rate limits. Use to find the project_id to pass to scoped tools (`search`, `list_files`, `commit_backup`, `refresh_index`, etc.). To register a new project use `register_project`; to inspect its Hands tools use `list_hands`.",
+  "List every registered project with id, name, absolute path, and a derived `has_hands` flag (true when the path exists on disk AND contains a `kontexta.json`). Read-only; no side effects, auth, or rate limits. Use to find the project_id to pass to scoped tools (`files.search`, `files.list`, `admin.commit_backup`, `projects.refresh_index`, etc.). To register a new project use `projects.register`; to inspect its Hands tools use `hands.list`.",
   {},
   async () => {
     const result = listProjects();
@@ -1554,7 +1699,7 @@ function repoDirForFile(file: { storage_type: string; project_id: number | null 
 
 server.tool(
   "files.get_history",
-  "Return the git commit history for one file (newest first), each entry with hash, message, date, and author. Reads the file's owning repo: the project's git repo for project files, the KB backup repo for KB files. Read-only; no side effects, auth, or rate limits. Returns `{file_id, path, history}`; an empty array means the file has not been committed yet. Use to understand a file's evolution before editing or restoring. Pair with `get_diff` to see exact line changes; use `restore_file` to roll back.",
+  "Return the git commit history for one file (newest first), each entry with hash, message, date, and author. Reads the file's owning repo: the project's git repo for project files, the KB backup repo for KB files. Read-only; no side effects, auth, or rate limits. Returns `{file_id, path, history}`; an empty array means the file has not been committed yet. Use to understand a file's evolution before editing or restoring. Pair with `files.get_diff` to see exact line changes; use `files.restore` to roll back.",
   {
     file_id: z.number().describe("ID of the file"),
   },
@@ -1574,7 +1719,7 @@ server.tool(
 
 server.tool(
   "files.get_diff",
-  "Return the unified diff of one file between two commit hashes (typically obtained from `get_history` for the same file). Read-only; no side effects, auth, or rate limits. Order matters — `commit_a` is treated as the earlier side; reversing the args inverts the diff. Throws if either hash is unknown to the file's repo. Use after `get_history` to see WHAT changed, not just THAT it changed.",
+  "Return the unified diff of one file between two commit hashes (typically obtained from `files.get_history` for the same file). Read-only; no side effects, auth, or rate limits. Order matters — `commit_a` is treated as the earlier side; reversing the args inverts the diff. Throws if either hash is unknown to the file's repo. Use after `files.get_history` to see WHAT changed, not just THAT it changed.",
   {
     file_id: z.number().describe("ID of the file"),
     commit_a: z.string().describe("Earlier commit hash (from get_history)"),
@@ -1596,7 +1741,7 @@ server.tool(
 
 server.tool(
   "files.restore",
-  "DESTRUCTIVE. Overwrite a file's current on-disk content with the version recorded at a specific git commit, then re-index FTS. The hash MUST come from `get_history` for THIS file (foreign hashes throw). The current uncommitted content is lost unless it was already committed elsewhere. The file watcher may also pick up the change before this returns. No external auth or rate limits. Returns `{file_id, path, hash, success, message}`. Use only to undo accidental edits or recover a known-good version.",
+  "DESTRUCTIVE. Overwrite a file's current on-disk content with the version recorded at a specific git commit, then re-index FTS. The hash MUST come from `files.get_history` for THIS file (foreign hashes throw). The current uncommitted content is lost unless it was already committed elsewhere. The file watcher may also pick up the change before this returns. No external auth or rate limits. Returns `{file_id, path, hash, success, message}`. Use only to undo accidental edits or recover a known-good version.",
   {
     file_id: z.number().describe("ID of the file"),
     hash: z.string().describe("Commit hash to restore from (from get_history)"),
@@ -1635,7 +1780,7 @@ server.tool(
 
 server.tool(
   "files.read_outline",
-  "Return a flat list of markdown headings for one file (level, text, line, byteStart, byteEnd). Read-only; no side effects, auth, or rate limits. Use as a cheap probe before `read_section` or `update_file_section` so you don't spend tokens on the full body just to learn what sections exist. Empty outline means the file has no markdown headings (it may still have content — fall back to `read_file` or `read_file_lines`).",
+  "Return a flat list of markdown headings for one file (level, text, line, byteStart, byteEnd). Read-only; no side effects, auth, or rate limits. Use as a cheap probe before `files.read({ id, section })` or `files.update({ file_id, section, content })` so you don't spend tokens on the full body just to learn what sections exist. Empty outline means the file has no markdown headings (it may still have content — fall back to `files.read` in full or `files.read({ id, lines })`).",
   {
     file_id: z.number().describe("File ID"),
   },
@@ -1660,80 +1805,6 @@ server.tool(
             ),
           },
         ],
-      };
-    } catch (e: any) {
-      return {
-        isError: true,
-        content: [{ type: "text", text: JSON.stringify({ error: e?.message ?? String(e) }, null, 2) }],
-      };
-    }
-  }
-);
-
-server.tool(
-  "files.read_section",
-  "Return the body of ONE heading (the heading line itself is excluded) plus level, line, size_bytes, and est_tokens. Heading match is case-insensitive but exact-string after trim — fuzzy / partial matches do NOT resolve. Returns isError if the heading is absent. Read-only; no side effects, auth, or rate limits. Pair with `read_file_outline` when you are unsure which headings exist; for non-heading line ranges use `read_file_lines`.",
-  {
-    file_id: z.number().describe("File ID"),
-    heading: z.string().describe("Heading text to extract (case-insensitive)"),
-  },
-  async ({ file_id, heading }) => {
-    try {
-      const file = readFile(file_id);
-      const node = findSection(file.content, heading);
-      if (!node) {
-        return {
-          isError: true,
-          content: [{ type: "text", text: JSON.stringify({ error: `Section not found: ${heading}` }, null, 2) }],
-        };
-      }
-      const buf = Buffer.from(file.content, "utf8");
-      const body = buf.subarray(node.contentStart, node.contentEnd).toString("utf8");
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(
-              {
-                file_id,
-                path: file.path,
-                heading: node.text,
-                level: node.level,
-                line: node.line,
-                content: body,
-                size_bytes: Buffer.byteLength(body, "utf8"),
-                est_tokens: estimateTokensFromBuffer(Buffer.from(body, "utf8")),
-              },
-              null,
-              2
-            ),
-          },
-        ],
-      };
-    } catch (e: any) {
-      return {
-        isError: true,
-        content: [{ type: "text", text: JSON.stringify({ error: e?.message ?? String(e) }, null, 2) }],
-      };
-    }
-  }
-);
-
-server.tool(
-  "files.update_section",
-  "Surgical write — replace the body of ONE heading without touching siblings. The heading line itself is preserved verbatim; only its body is rewritten. Persists via the same path as `update_file` (writes to disk → FTS reindex → git commit). Throws if the heading does not exist (this tool will NOT create a new section — append the section text via `update_file` first). Heading match is case-insensitive exact-string. No external auth or rate limits. Returns the updated file metadata. Use to make targeted edits without re-sending the whole body; for full-file replacement use `update_file`.",
-  {
-    file_id: z.number().describe("File ID"),
-    heading: z.string().describe("Heading whose body to replace (case-insensitive)"),
-    content: z.string().describe("New body content (heading line is preserved automatically)"),
-  },
-  async ({ file_id, heading, content }) => {
-    try {
-      const file = readFile(file_id);
-      const updated = replaceSection(file.content, heading, content);
-      const result = await updateFile(file_id, updated, dataDir);
-      return {
-        content: [{ type: "text", text: JSON.stringify(annotateTokens(result), null, 2) }],
       };
     } catch (e: any) {
       return {
@@ -1772,7 +1843,7 @@ function validateFolderName(name: string): void {
 
 server.tool(
   "folders.list",
-  "List folder paths under a project root (or the Knowledge Base when `project_id` is null/omitted). Returns `{folders: string[], base_path}` where `folders` are RELATIVE to `base_path`. Read-only; no side effects, auth, or rate limits. Throws if `project_id` references an unknown project. Use to discover where to drop a new file via `create_file`'s `folder` argument or to navigate vault structure; to actually create one use `create_folder`.",
+  "List folder paths under a project root (or the Knowledge Base when `project_id` is null/omitted). Returns `{folders: string[], base_path}` where `folders` are RELATIVE to `base_path`. Read-only; no side effects, auth, or rate limits. Throws if `project_id` references an unknown project. Use to discover where to drop a new file via `files.create`'s `folder` argument or to navigate vault structure; to actually create one use `folders.create`.",
   {
     project_id: z.number().nullable().optional().describe("Project ID. Pass null or omit to list KB folders."),
   },
@@ -1819,7 +1890,7 @@ server.tool(
 
 server.tool(
   "folders.delete",
-  "DESTRUCTIVE — recursively delete a folder under the KB AND every file inside it (disk + FTS rows). REFUSES (returns isError) when `project_id` is supplied: deleting inside a registered project would race the file watcher and re-ingest the contents — remove project content via your editor instead. Same name validation as `create_folder`. Not recoverable from Kontexta after the call (only the git backup, if configured, retains it). No external auth or rate limits. Returns `{success: true}`.",
+  "DESTRUCTIVE — recursively delete a folder under the KB AND every file inside it (disk + FTS rows). REFUSES (returns isError) when `project_id` is supplied: deleting inside a registered project would race the file watcher and re-ingest the contents — remove project content via your editor instead. Same name validation as `folders.create`. Not recoverable from Kontexta after the call (only the git backup, if configured, retains it). No external auth or rate limits. Returns `{success: true}`.",
   {
     project_id: z.number().nullable().optional().describe("Project ID. Pass null or omit to delete from the KB. Project IDs are rejected."),
     name: z.string().describe("Folder name (relative)"),
@@ -1991,104 +2062,6 @@ server.tool(
   }
 );
 
-
-server.tool(
-  "files.create_many",
-  "Batch variant of `files.create` — create up to 200 markdown, mermaid, or HTML files in one call. Each item follows the same rules: `project_id` required if `destination` is `project`/`kontexta`; `kind` ('dictionary' or 'note') required if `destination` is `knowledge`. SIDE EFFECTS: writes new files to disk and inserts FTS5 rows; missing folders are mkdir'd. Per-item failures are isolated to `errors[]` and the rest of the batch still commits — partial success is the norm, always inspect `error_count`. No external auth or rate limits. Returns `{created_count, error_count, created, errors}`. Use for bulk ingestion; for >200 items, page yourself. Pass format='mmd' on an item to create a Mermaid diagram file (.mmd) or 'html' for HTML reports; defaults to 'md'.",
-  {
-    files: z
-      .array(
-        z.object({
-          title: z.string().describe("File title."),
-          content: z.string().describe("File body content (markdown, mermaid, or HTML depending on format)."),
-          destination: z.enum(["knowledge", "project", "kontexta"]).describe("Storage destination: 'knowledge' for KB, 'project' for a project, 'kontexta' for app-internal."),
-          project_id: z.number().optional().describe("Project ID — required when destination is 'project' or 'kontexta'."),
-          folder: z.string().optional().describe("Relative folder path within the destination (e.g. 'notes/daily')."),
-          tags: z.array(z.string()).optional().describe("Tags to apply to this file."),
-          format: z.enum(["md", "mmd", "html"]).optional().describe("File format: 'md' (default), 'mmd' (Mermaid diagram), or 'html' (report)."),
-          kind: z.enum(["dictionary", "note"]).optional()
-            .describe("REQUIRED per-item for destination='knowledge'. See files.create for the dictionary/note rubric."),
-        })
-      )
-      .min(1)
-      .max(200)
-      .describe("Files to create (max 200 per call)"),
-  },
-  async ({ files }) => {
-    const created: any[] = [];
-    const errors: { index: number; title: string; error: string }[] = [];
-    for (let i = 0; i < files.length; i++) {
-      const f = files[i];
-      try {
-        const resolved = resolveKindFolder({ destination: f.destination, folder: f.folder, kind: f.kind });
-        if ("error" in resolved) {
-          errors.push({ index: i, title: f.title, error: resolved.error });
-          continue;
-        }
-        const result = await createFile({
-          title: f.title,
-          content: f.content,
-          destination: f.destination,
-          projectId: f.project_id,
-          folder: resolved.folder,
-          tags: f.tags,
-          dataDir,
-          format: f.format,
-        });
-        const payload: any = annotateTokens(result);
-        if (resolved.warning) payload.warning = resolved.warning;
-        created.push(payload);
-      } catch (e: any) {
-        errors.push({ index: i, title: f.title, error: e?.message ?? String(e) });
-      }
-    }
-    return {
-      content: [
-        {
-          type: "text",
-          text: JSON.stringify(
-            { created_count: created.length, error_count: errors.length, created, errors },
-            null,
-            2
-          ),
-        },
-      ],
-    };
-  }
-);
-
-server.tool(
-  "files.delete_many",
-  "DESTRUCTIVE batch — delete up to 500 files by ID in one call. Same physical-deletion rules as `files.delete` (KB files unlinked from disk; project reference files only de-indexed). Per-ID failures isolated to `errors[]`; the batch keeps going — partial success is the norm. Not idempotent — unknown IDs surface as per-item errors. No external auth or rate limits. Returns `{deleted_count, error_count, deleted, errors}`. To preview the set before deleting, run `files.list` with the same filter and confirm the IDs.",
-  {
-    ids: z.array(z.number()).min(1).max(500).describe("File IDs to delete (max 500 per call)"),
-  },
-  async ({ ids }) => {
-    const deleted: number[] = [];
-    const errors: { id: number; error: string }[] = [];
-    for (const id of ids) {
-      try {
-        await deleteFile(id, dataDir);
-        deleted.push(id);
-      } catch (e: any) {
-        errors.push({ id, error: e?.message ?? String(e) });
-      }
-    }
-    return {
-      content: [
-        {
-          type: "text",
-          text: JSON.stringify(
-            { deleted_count: deleted.length, error_count: errors.length, deleted, errors },
-            null,
-            2
-          ),
-        },
-      ],
-    };
-  }
-);
-
 server.tool(
   "tags.search",
   "Bulk-tag — run an FTS `search` and append `add_tags` to every matching file in one call. Side effect: each match gets `addTags` applied (additive, idempotent per tag); the matched files themselves are NOT modified beyond their tag links. Per-file failures isolated to `errors[]`. No external auth or rate limits. There is NO dry-run flag, so ALWAYS run `files.search` with the same query first to verify the match set before tagging. The `tags[]` filter requires existing tags to ALL match (it scopes the search; it does not control which tags get added). Returns `{matched_count, tagged_count, tags_applied, tagged_ids, errors}`.",
@@ -2144,56 +2117,62 @@ server.tool(
   }
 );
 
+
 server.tool(
-  "files.read_by_path",
-  "Look up a file by its absolute on-disk path and return the same shape as `files.read`. The path must EXACTLY match what Kontexta indexed — no symlink resolution, no path normalisation beyond what the OS does, no trailing-slash tolerance. Returns isError if no row matches (the file may exist on disk but not be indexed — try `projects.refresh_index`). Read-only; no side effects, auth, or rate limits. Use when an agent has a path from its working directory but no file ID; if you have the ID, prefer `files.read`.",
+  "admin.overview",
+  "Vault-state snapshot. `mode: 'stats'` = aggregate counts for a scope: `file_count`, `untagged_count`, `favorite_count`, `top_tags`. With `project_id` omitted (everything), also returns `by_project` breakdown. `include_token_total: true` stat()s every matching file on disk to compute a body-size estimate — measurably slower on large vaults; default false. `mode: 'whats_new'` = list files created or modified since a checkpoint (`since`, REQUIRED for this mode — ISO-8601 like `2025-01-15T00:00:00Z` or relative durations like `1h`/`7d`/`2w`; invalid formats throw); CAVEAT: hard-deleted files are NOT surfaced, only mtime-driven changes. Both modes: `project_id: null` = KB only; omit = everything. Read-only; no side effects, auth, or rate limits. Use `stats` as a cheap dashboard or to spot untagged content for cleanup (for live disk-vs-index drift use `files.diff_against_disk`); use `whats_new` at session start to catch up.",
   {
-    path: z.string().describe("Absolute path on disk (must match the path stored in Kontexta)"),
+    mode: z.enum(["stats", "whats_new"]).describe("Which snapshot to return. 'whats_new' requires `since`."),
+    project_id: z.number().nullable().optional().describe("Filter to a single project. Pass null for KB-only. Omit for everything."),
+    top_tags: z.number().int().positive().max(100).optional().describe("mode='stats' only: how many top tags to return (default 10)"),
+    include_token_total: z.boolean().optional().describe("mode='stats' only: if true, stat every matching file on disk to compute total est_tokens. Default false (cheap)."),
+    since: z.string().optional().describe("REQUIRED for mode='whats_new'. ISO 8601 timestamp or relative duration (e.g. \"1h\", \"7d\", \"2w\")."),
+    include_tags: z.boolean().optional().describe("mode='whats_new' only: attach tags[] to each file. Default true."),
+    limit: z.number().optional().describe("mode='whats_new' only: max files returned. Default 200."),
   },
-  async ({ path }) => {
-    try {
-      if (typeof path !== "string" || path.length === 0) {
-        throw new Error("path is required");
+  async ({ mode, project_id, top_tags, include_token_total, since, include_tags, limit }) => {
+    if (mode === "whats_new") {
+      if (!since) {
+        return { isError: true, content: [{ type: "text", text: JSON.stringify({ error: "mode='whats_new' requires `since`" }, null, 2) }] };
       }
-      const row = getDatabase()
-        .prepare("SELECT id FROM files WHERE path = ?")
-        .get(path) as { id: number } | undefined;
-      if (!row) {
+      try {
+        const opts: any = { since };
+        if (project_id !== undefined) opts.project_id = project_id;
+        if (include_tags !== undefined) opts.include_tags = include_tags;
+        if (limit !== undefined) opts.limit = limit;
+        const result = whatsNew(opts);
+        const annotated = result.files.map(annotateTokens);
+        const total_est_tokens = annotated.reduce((s, f) => s + (f.est_tokens ?? 0), 0);
         return {
-          isError: true,
           content: [
             {
               type: "text",
-              text: JSON.stringify({ error: `No file indexed at path: ${path}` }, null, 2),
+              text: JSON.stringify(
+                {
+                  since: result.since,
+                  until: result.until,
+                  count: result.count,
+                  total_est_tokens,
+                  files: annotated,
+                },
+                null,
+                2
+              ),
             },
           ],
         };
+      } catch (e) {
+        return {
+          isError: true,
+          content: [{ type: "text", text: JSON.stringify({ error: (e as Error).message }, null, 2) }],
+        };
       }
-      const result = readFile(row.id);
-      return {
-        content: [{ type: "text", text: JSON.stringify(annotateTokens(result), null, 2) }],
-      };
-    } catch (e: any) {
-      return {
-        isError: true,
-        content: [{ type: "text", text: JSON.stringify({ error: e?.message ?? String(e) }, null, 2) }],
-      };
     }
-  }
-);
 
-server.tool(
-  "admin.stats",
-  "Aggregate counts for a scope: `file_count`, `untagged_count`, `favorite_count`, `top_tags`. With `project_id` omitted (everything), also returns `by_project` breakdown. `include_token_total: true` stat()s every matching file on disk to compute a body-size estimate — measurably slower on large vaults; default false. `project_id: null` = KB only; omit = all. Read-only; no side effects, auth, or rate limits. Use as a cheap dashboard or to spot untagged content for cleanup; for live disk-vs-index drift use `files.diff_against_disk`.",
-  {
-    project_id: z.number().nullable().optional().describe("Filter to a single project. Pass null for KB-only. Omit for everything."),
-    top_tags: z.number().int().positive().max(100).optional().describe("How many top tags to return (default 10)"),
-    include_token_total: z.boolean().optional().describe("If true, stat every matching file on disk to compute total est_tokens. Default false (cheap)."),
-  },
-  async ({ project_id, top_tags, include_token_total }) => {
+    // mode === "stats"
     try {
       const db = getDatabase();
-      const limit = top_tags ?? 10;
+      const limitTags = top_tags ?? 10;
 
       let scopeWhere = "";
       const scopeParams: any[] = [];
@@ -2231,7 +2210,7 @@ server.tool(
            ORDER BY count DESC, t.name ASC
            LIMIT ?`
         )
-        .all(...scopeParams, limit) as { name: string; count: number }[];
+        .all(...scopeParams, limitTags) as { name: string; count: number }[];
 
       const byProject =
         project_id === undefined
@@ -2552,52 +2531,6 @@ server.tool(
   }
 );
 
-
-server.tool(
-  "admin.whats_new",
-  "List files created or modified since a checkpoint. `since` accepts ISO-8601 (`2025-01-15T00:00:00Z`) or relative durations (`1h`, `7d`, `2w`); invalid formats throw. Read-only; no side effects, auth, or rate limits. Returns annotated rows plus aggregate `total_est_tokens` so you can decide what to read next. CAVEAT: hard-deleted files are NOT surfaced — only mtime-driven changes. Defaults: include_tags=true, limit=200. `project_id: null` = KB only; omit = everything. Use at session start to catch up.",
-  {
-    since: z.string().describe("ISO 8601 timestamp or relative duration (e.g. \"1h\", \"7d\", \"2w\")."),
-    project_id: z.number().nullable().optional().describe("Filter to a single project. Pass null for knowledge-base-only files. Omit for all."),
-    include_tags: z.boolean().optional().describe("Attach tags[] to each file. Default true."),
-    limit: z.number().optional().describe("Max files returned. Default 200."),
-  },
-  async ({ since, project_id, include_tags, limit }) => {
-    try {
-      const opts: any = { since };
-      if (project_id !== undefined) opts.project_id = project_id;
-      if (include_tags !== undefined) opts.include_tags = include_tags;
-      if (limit !== undefined) opts.limit = limit;
-      const result = whatsNew(opts);
-      const annotated = result.files.map(annotateTokens);
-      const total_est_tokens = annotated.reduce((s, f) => s + (f.est_tokens ?? 0), 0);
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(
-              {
-                since: result.since,
-                until: result.until,
-                count: result.count,
-                total_est_tokens,
-                files: annotated,
-              },
-              null,
-              2
-            ),
-          },
-        ],
-      };
-    } catch (e) {
-      return {
-        isError: true,
-        content: [{ type: "text", text: JSON.stringify({ error: (e as Error).message }, null, 2) }],
-      };
-    }
-  }
-);
-
 server.tool(
   "projects.map",
   "Return a compact indented outline of folders, file titles, tags, and IDs in a single dense block — substantially fewer tokens than the equivalent `files.list` JSON for the same scope. Read-only; no side effects, auth, or rate limits. Capped at `max_lines` (default 5000); the response reports `est_tokens` and emits a `warning` field if it exceeds `KONTEXTA_PROJECT_TOKEN_WARN`. `project_id: null` = KB only; omit = everything. Defaults: include_tags=true, show_titles=true. Use to orient yourself in an unfamiliar vault or project; for keyword lookup use `files.search`.",
@@ -2698,9 +2631,14 @@ server.resource(
 
 server.tool(
   "hands.list",
-  "List every Hands command tool currently registered, with project scope, tool name, danger level, confirmation flag, and description. Hands tools come from per-project `kontexta.json` files loaded at register time. Read-only; no side effects, auth, or rate limits. Use to discover what side-effectful project commands the agent is permitted to run; for the `kontexta.json` schema see `hands.describe_schema`; reload after editing one with `hands.reload`.",
-  {},
-  async () => {
+  "List every Hands command tool currently registered, with project scope, tool name, danger level, confirmation flag, and description. Hands tools come from per-project `kontexta.json` files loaded at register time. Pass `schema: true` to instead get the complete `kontexta.json` authoring reference (JSON schema, validation rules, security guarantees, limitations, annotated example) — a static document, unrelated to any specific registered hand. Read-only; no side effects, auth, or rate limits. Use the default list mode to discover what side-effectful project commands the agent is permitted to run; use `schema: true` when helping a user write or fix a `kontexta.json`; reload after editing one with `hands.reload`.",
+  {
+    schema: z.boolean().optional().describe("If true, return the kontexta.json authoring reference document instead of the registered-hands list. Default false."),
+  },
+  async ({ schema }) => {
+    if (schema) {
+      return { content: [{ type: "text", text: buildSchemaDoc() }] };
+    }
     const items = handsRegistry.list();
     return { content: [{ type: "text", text: JSON.stringify({ hands: items }, null, 2) }] };
   }
@@ -2708,7 +2646,7 @@ server.tool(
 
 server.tool(
   "hands.reload",
-  "Re-scan every registered project's `kontexta.json` and rebuild the live Hands tool registry — newly-declared tools become callable immediately, removed tools disappear from `tools/list`. SIDE EFFECT is on the running MCP session's tool inventory only (no disk writes). Idempotent. No external auth or rate limits. Takes no parameters. Returns per-project load results (counts of registered/disabled tools and any validation warnings). Use after editing a `kontexta.json` mid-session; for the schema see `hands.describe_schema`.",
+  "Re-scan every registered project's `kontexta.json` and rebuild the live Hands tool registry — newly-declared tools become callable immediately, removed tools disappear from `tools/list`. SIDE EFFECT is on the running MCP session's tool inventory only (no disk writes). Idempotent. No external auth or rate limits. Takes no parameters. Returns per-project load results (counts of registered/disabled tools and any validation warnings). Use after editing a `kontexta.json` mid-session; for the schema see `hands.list({ schema: true })`.",
   {},
   async () => {
     const projects = listProjects()
@@ -2735,13 +2673,6 @@ server.tool(
       return { content: [{ type: "text", text: `Execution failed after approval: ${e?.message ?? e}` }] };
     }
   }
-);
-
-server.tool(
-  "hands.describe_schema",
-  "Return the complete authoring reference for `kontexta.json`: JSON schema, validation rules, security guarantees, limitations, and an annotated example. Static document — does not read any project file or DB row. Read-only; no side effects, auth, or rate limits. Takes no parameters. Use when helping a user write or fix a `kontexta.json`; to see the loaded tools themselves use `hands.list`; to apply edits use `hands.reload`.",
-  {},
-  async () => ({ content: [{ type: "text", text: buildSchemaDoc() }] })
 );
 
 server.tool(

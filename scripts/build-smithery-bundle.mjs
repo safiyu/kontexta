@@ -28,44 +28,59 @@ if (!existsSync(mcpToolsPath)) {
 }
 const rawTools = JSON.parse(readFileSync(mcpToolsPath, "utf8")).tools;
 
+// Per-tool annotations. The previous string-heuristic classifier had two
+// unfixable failure modes: (a) it mislabeled destructive tools whose names
+// happen to contain a read-only substring (tags.search is bulk-tag mutation
+// but matched `.search`), and (b) it silently missed tools whose namespace
+// didn't align with any heuristic branch (admin.refresh_session_context,
+// projects.map, journal.status, files.bundle_search). Keep this table as
+// the source of truth; a tool that lands here without a classification
+// throws in enrichedTools below so the mismatch can't ship.
+const READ_ONLY_TOOLS = new Set([
+  "admin.get_profile", "admin.overview", "admin.refresh_session_context",
+  "calendar.entities.list", "calendar.events.conflicts", "calendar.events.list", "calendar.export_ics",
+  "files.describe", "files.diff_against_disk", "files.find_related",
+  "files.get_diff", "files.get_history", "files.list",
+  "files.read", "files.read_outline", "files.regex_search", "files.search",
+  "folders.list",
+  "hands.list",
+  "journal.status",
+  "projects.list", "projects.map",
+  "resources.export_report", "resources.list_reports",
+  "tags.list", "tags.suggest",
+]);
+
+const DESTRUCTIVE_TOOLS = new Set([
+  "calendar.entities.delete", "calendar.events.delete",
+  "files.delete", "files.restore",
+  "folders.delete",
+  "journal.housekeep",
+  "resources.delete_report",
+  "tags.remove",
+]);
+
+const NEUTRAL_TOOLS = new Set([
+  "admin.commit_backup", "admin.onboard_agent", "admin.transfer_agent_context",
+  "calendar.entities.add", "calendar.entities.link", "calendar.entities.update",
+  "calendar.events.add", "calendar.events.update",
+  "files.create", "files.move", "files.update",
+  "folders.create",
+  "hands.confirm", "hands.reload",
+  "journal.commit_upgrades", "journal.distill", "journal.write",
+  "projects.refresh_index", "projects.register",
+  "resources.add_report", "resources.clip_url",
+  "tags.add", "tags.search", "tags.set_favorite",
+]);
+
 function classifyAnnotations(name) {
-  const isReadOnly =
-    name.startsWith("read_") ||
-    name.startsWith("files.read") ||
-    name.startsWith("list_") ||
-    name.includes(".list") ||
-    name.startsWith("get_") ||
-    name.includes(".get_") ||
-    name.startsWith("search") ||
-    name.includes(".search") ||
-    name.startsWith("find_") ||
-    name.includes(".find_") ||
-    name.startsWith("diff_") ||
-    name.includes(".diff_") ||
-    name.startsWith("describe_") ||
-    name.includes(".describe") ||
-    name.startsWith("grep_") ||
-    name.includes(".grep") ||
-    name.startsWith("whats_new") ||
-    name.includes(".whats_new") ||
-    name.startsWith("bundle_search") ||
-    name.startsWith("regex_search") ||
-    name.includes(".regex_search") ||
-    name.startsWith("suggest_") ||
-    name.includes(".suggest") ||
-    name.startsWith("stats") ||
-    name.includes(".stats") ||
-    name.includes(".conflicts") ||
-    name.includes(".export_");
-
-  const isDestructive =
-    name.startsWith("delete_") ||
-    name.includes(".delete") ||
-    name.startsWith("remove_") ||
-    name.includes(".remove") ||
-    name.startsWith("housekeep_") ||
-    name.includes(".housekeep");
-
+  const isReadOnly = READ_ONLY_TOOLS.has(name);
+  const isDestructive = DESTRUCTIVE_TOOLS.has(name);
+  const isKnown = isReadOnly || isDestructive || NEUTRAL_TOOLS.has(name);
+  if (!isKnown) {
+    throw new Error(
+      `build-smithery-bundle: tool "${name}" is not classified. Add it to READ_ONLY_TOOLS, DESTRUCTIVE_TOOLS, or NEUTRAL_TOOLS in scripts/build-smithery-bundle.mjs.`
+    );
+  }
   return {
     readOnlyHint: isReadOnly,
     ...(isDestructive ? { destructiveHint: true } : {}),

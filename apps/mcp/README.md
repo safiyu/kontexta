@@ -6,7 +6,7 @@
 
 > Want the dashboard too? Install [`kontexta`](https://www.npmjs.com/package/kontexta) instead — it includes this MCP server plus the WebUI. Run `npx kontexta start` for the full experience or `npx kontexta mcp` for MCP-only.
 
-MCP server for [Kontexta](https://kontexta.dev) — **53 tools** that let AI coding agents search, read, edit (section-level), tag, version, clip web content, and run sandboxed commands through a local SQLite-backed knowledge base. Designed for context-window economy: every file-returning response is annotated with `est_tokens` and `size_bytes`.
+MCP server for [Kontexta](https://kontexta.dev) — **58 tools** that let AI coding agents search, read, edit (section-level), tag, version, clip web content, and run sandboxed commands through a local SQLite-backed knowledge base. Designed for context-window economy: every file-returning response is annotated with `est_tokens` and `size_bytes`.
 
 ## Install
 
@@ -70,16 +70,14 @@ Open `http://localhost:23002`.
 
 ## Tool categories
 
-The 53 tools are organized into these groups:
+The 58 tools are organized into these groups:
 
 ### Find
 
 | Tool | Purpose |
 |---|---|
-| `files.search` | Natural-language keyword search across the knowledge base (FTS5) |
-| `files.regex_search` | Substring/regex search across all indexed files |
-| `files.grep` | Substring/regex search within a single known file |
-| `files.bundle_search` | Search hits + file bodies in a single token-budgeted call |
+| `files.search` | Natural-language keyword search across the knowledge base (FTS5); pass `include_bodies: true` for a token-budgeted bundle of hits + bodies |
+| `files.regex_search` | Substring/regex search across all indexed files, or one known file via `file_id` |
 | `files.find_related` | Discover sibling files via tag overlap |
 | `tags.suggest` | Propose tags for an existing file |
 
@@ -87,11 +85,7 @@ The 53 tools are organized into these groups:
 
 | Tool | Purpose |
 |---|---|
-| `files.read` | Read one file's full body and metadata by ID |
-| `files.read_many` | Batch read up to 200 files by ID in one call |
-| `files.read_by_path` | Read a file by absolute path (no ID needed) |
-| `files.read_lines` | Read a specific line range from a file |
-| `files.read_section` | Read a section by heading within a file |
+| `files.read` | Read a file by `id` or `path`, a batch via `ids`, or a partial read via `section`/`lines` |
 | `files.read_outline` | Get a compact outline of a file's structure |
 | `files.describe` | Metadata-only inspection (tags, size, history, related) — no body tokens |
 
@@ -99,12 +93,9 @@ The 53 tools are organized into these groups:
 
 | Tool | Purpose |
 |---|---|
-| `files.create` | Create a new markdown or mermaid file in the KB or project |
-| `files.create_many` | Create multiple new files in one call |
-| `files.update` | Replace the entire body of a file |
-| `files.update_section` | Surgical edit at a known heading |
-| `files.delete` | Delete a single file |
-| `files.delete_many` | Delete multiple files in one call |
+| `files.create` | Create one new file, or a `files` array for bulk-creating several, in the KB or project |
+| `files.update` | Replace the entire body of a file, or a single heading's body via `section` |
+| `files.delete` | Delete one file, or an `ids` array for bulk delete |
 | `files.move` | Rename or relocate a file |
 
 ### Organize
@@ -138,15 +129,13 @@ The 53 tools are organized into these groups:
 | `projects.list` | Enumerate registered projects |
 | `projects.register` | Register a new project root with kontexta |
 | `projects.map` | Compact folder/file tree with titles and tags |
-| `admin.stats` | Counts and health metrics for a project |
-| `admin.whats_new` | Files added/changed since a cutoff timestamp |
+| `admin.overview` | `mode: "stats"` for counts/health, `mode: "whats_new"` for files changed since a cutoff |
 
 ### Journaling
 
 | Tool | Purpose |
 |---|---|
-| `journal.note` | Record a free-form decision/abandonment/observation note |
-| `journal.intent` | Record a topic/intent pivot |
+| `journal.write` | Record an event: `kind: "note"` (decision/observation), `kind: "intent"` (topic pivot), or `kind: "append"` (daily journal entry) |
 | `journal.status` | Report journal backlog and high-water mark |
 | `journal.distill` | Run the distillation pipeline (raw events → markdown summaries) |
 | `journal.commit_upgrades` | Mark mechanical entries as upgraded after subagent dispatch |
@@ -156,10 +145,9 @@ The 53 tools are organized into these groups:
 
 | Tool | Purpose |
 |---|---|
-| `hands.list` | List every Hands command tool currently registered |
+| `hands.list` | List every Hands command tool currently registered; pass `schema: true` for the complete `kontexta.json` authoring reference |
 | `hands.reload` | Re-scan projects and rebuild the Hands tool registry |
 | `hands.confirm` | Approve a pending Hands invocation by its approval token |
-| `hands.describe_schema` | Return the complete `kontexta.json` authoring reference |
 
 ### Onboarding
 

@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-ROOT_DIR=$(pwd)
 # Publish Kontexta MCP to Smithery as an MCPB stdio bundle (no public HTTPS needed).
 # Usage: ./scripts/publish-kontexta-smithery.sh [version] [namespace] [--dry-run]
 # Defaults: version from package.json or npm (kontexta-mcp latest), namespace safiyu.
 set -euo pipefail
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 VERSION=""
 NAMESPACE="safiyu"
@@ -19,8 +19,8 @@ QUALIFIED="${NAMESPACE}/kontexta"
 
 # Version: arg > package.json > npm latest
 if [ -z "$VERSION" ]; then
-  if [ -f "package.json" ]; then
-    VERSION="$(node -p "require('./package.json').version" 2>/dev/null || true)"
+  if [ -f "${ROOT_DIR}/package.json" ]; then
+    VERSION="$(node -p "require('${ROOT_DIR}/package.json').version" 2>/dev/null || true)"
   fi
 fi
 if [ -z "$VERSION" ]; then
