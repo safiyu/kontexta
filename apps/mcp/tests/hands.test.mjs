@@ -419,6 +419,6 @@ test("formatter: pending confirm shows resolved argv", () => {
   assert.match(md, /requires human approval/i);
   assert.match(md, /\[0\] gcloud/);
   assert.match(md, /\[3\] svc/);
-  assert.match(md, /confirm_hand/);
+  assert.match(md, /hands\.confirm/);
   assert.match(md, /abc123/);
 });

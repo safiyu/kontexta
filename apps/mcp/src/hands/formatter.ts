@@ -44,7 +44,7 @@ export function formatPendingConfirm(p: PendingFormatInput): string {
     ...p.resolvedArgv.map((a, i) => `    [${i}] ${a}`),
     `  Working dir: ${p.workingDir}`,
     ``,
-    `To approve, call: confirm_hand({ token: "${p.token}" })`,
+    `To approve, call: hands.confirm({ token: "${p.token}" })`,
     `This token expires in 60 seconds.`,
   ].join("\n");
 }

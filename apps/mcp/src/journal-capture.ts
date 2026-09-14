@@ -142,7 +142,7 @@ export function wrapHandler<TArgs extends Record<string, unknown>, TResult exten
                 backlog_events: status.backlog_events,
                 backlog_oldest_age_hours: status.backlog_oldest_age_hours,
                 high_water: status.high_water,
-                suggested_action: "distill_journal",
+                suggested_action: "journal.distill",
                 mode: "lenient",
               },
             };

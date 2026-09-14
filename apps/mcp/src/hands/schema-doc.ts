@@ -63,7 +63,7 @@ export function buildSchemaDoc(): string {
 - **\`workingDir\`** — optional, relative to project root. Must not contain \`..\`. Symlinks are resolved and verified to remain inside the project root.
 - **\`timeout\`** — optional, milliseconds. Default 60000, max 300000 (clamped).
 - **\`danger\`** — \`safe | moderate | high\`. Default \`safe\`. Informational; \`confirm: true\` is what actually pauses execution.
-- **\`confirm\`** — boolean, default false. When true, the first call returns a token; agent must call \`confirm_hand({ token })\` to actually execute.
+- **\`confirm\`** — boolean, default false. When true, the first call returns a token; agent must call \`hands.confirm({ token })\` to actually execute.
 - **\`disabled\`** — boolean, default false. Disabled tools are validated but never registered. Agent never sees them.
 - **\`argSeparator\`** — boolean, default false. When true, \`--\` is inserted in argv before the first substituted element.
 - **\`maxOutputBytes\`** — optional, per-stream output cap. Default 100000, max 1000000 (clamped).
