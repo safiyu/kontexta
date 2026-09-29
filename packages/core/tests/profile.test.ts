@@ -5,6 +5,7 @@ import {
   getMissingSections,
   repairProfile,
   assembleProfile,
+  parseProfileSections,
 } from "../src/profile/index";
 
 describe("profile module", () => {
@@ -111,6 +112,31 @@ describe("profile module", () => {
       }
       expect(content).toContain("John Doe");
       expect(content).toContain("Developer");
+    });
+  });
+
+  describe("parseProfileSections", () => {
+    it("parses all 8 sections from profile markdown", () => {
+      const sections = {
+        name: "Ada",
+        role: "Lead",
+        vision: "Ship fast",
+        roadmap: "Q1 launch",
+        preferences: "TypeScript",
+        sessionCodingStyle: "TDD",
+        teamMembersAndRoles: "Bob - PM",
+        notes: "Remember passwords",
+      };
+      const markdown = assembleProfile(sections);
+      const parsed = parseProfileSections(markdown);
+      expect(parsed).toEqual(sections);
+    });
+
+    it("handles missing sections by returning empty strings", () => {
+      const parsed = parseProfileSections("# Profile\n\n## Name\nAda\n");
+      expect(parsed.name).toBe("Ada");
+      expect(parsed.role).toBe("");
+      expect(parsed.notes).toBe("");
     });
   });
 });
