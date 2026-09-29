@@ -683,6 +683,7 @@ export default function HomePage() {
             projects={projects}
             onUploaded={refreshAllFiles}
             onRefresh={handleRefresh}
+            onOnboarded={() => { refreshProjects(); refreshFiles(); }}
             refreshing={isRefreshing}
             onNewFile={() => setNewFileOpen(true)}
           />

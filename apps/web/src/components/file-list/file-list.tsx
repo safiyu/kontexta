@@ -53,6 +53,8 @@ interface FileListProps {
   projects?: Project[];
   onUploaded?: () => void;
   onRefresh: () => void;
+  /** Called after an agent is onboarded; should reload the projects list (rules status) as well as files. */
+  onOnboarded?: () => void;
   refreshing?: boolean;
   onNewFile: () => void;
 }
@@ -74,6 +76,7 @@ export function FileList({
   projects,
   onUploaded,
   onRefresh,
+  onOnboarded,
   refreshing,
   onNewFile,
 }: FileListProps) {
@@ -471,7 +474,7 @@ export function FileList({
           onClose={() => setOnboardOpen(false)}
           projectId={selectedProject.id}
           projectName={selectedProject.name}
-          onOnboarded={() => { onRefresh(); }}
+          onOnboarded={() => { (onOnboarded ?? onRefresh)(); }}
         />
       )}
     </div>

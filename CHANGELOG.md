@@ -7,6 +7,7 @@
 - Journal entries keep notes, commits, conversation and shell commands instead of "No file activity" stubs; later distill runs stay in the same task, and branchless work is filed as `task-<HHMM>-<topic>` (UTC) instead of `task-orphan`.
 - `rulesVersion` 3.0.0 → 3.1.0: existing projects re-onboard via `admin.onboard_agent`.
 - The old dark theme is removed; Blueprint is now Dark.
+- Onboarding an agent from the dashboard now clears the "agent rules outdated" alert without a page refresh.
 
 ## 5.0.0 — MCP tool surface consolidation (breaking)
 
