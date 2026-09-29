@@ -1,5 +1,13 @@
 # Changelog
 
+## 5.1.0 — Agent hooks
+
+- Hooks capture your prompts, agent replies and shell commands into the journal for Claude Code, Gemini CLI, Codex CLI, Copilot CLI, Cursor, Windsurf, Cline and OpenCode (`docs/HOOKS.md`). All agents start disabled; enabling one installs its hooks.
+- `kontexta hooks …` CLI, a first-run wizard and Configure → AGENTS tab in the dashboard, and `admin.onboard_agent({hooks: true})`. Still 58 tools.
+- Journal entries keep notes, commits, conversation and shell commands instead of "No file activity" stubs, and later distill runs stay in the same task instead of piling into `task-orphan`.
+- `rulesVersion` 3.0.0 → 3.1.0: existing projects re-onboard via `admin.onboard_agent`.
+- The old dark theme is removed; Blueprint is now Dark.
+
 ## 5.0.0 — MCP tool surface consolidation (breaking)
 
 Glama flagged the 71-tool surface as too large for agents to navigate reliably. This release collapses 13 tools into their siblings via mode/kind/union parameters — no aliases, no backward compatibility. Existing agent context files re-onboard automatically on next `admin.onboard_agent` call (triggered by the `rulesVersion` bump to 3.0.0).
