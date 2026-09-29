@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
     console.error("[Auth/Setup] Failed to sign session:", err);
     return NextResponse.json({ error: "Failed to create session" }, { status: 500 });
   }
-  
+
   const response = NextResponse.json({ success: true });
   response.cookies.set("kontexta_session", token, {
     httpOnly: true,

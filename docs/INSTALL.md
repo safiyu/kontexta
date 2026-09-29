@@ -161,6 +161,16 @@ docker compose down -v                           # also removes volumes (does NO
 
 ---
 
+## Agent hooks (conversation capture)
+
+Hooks let the journal record your prompts, the agent's replies and the shell commands it runs — for any enabled agent. All agents start disabled; enable the ones you use in the dashboard (Settings → Agents) or with `kontexta hooks enable <agent>`.
+
+- **npx:** `kontexta start` installs hooks for enabled agents automatically.
+- **Docker:** the dashboard shows a per-agent one-liner that runs the installer with your home directory mounted (the container can't write to it otherwise).
+- **Source:** `kontexta hooks status|install|uninstall|enable|disable|reconcile`.
+
+Per-agent capabilities and limitations: [`docs/HOOKS.md`](HOOKS.md).
+
 ## Onboarding a project: agent context rules
 
 When you register a project with kontexta (via the MCP `projects.register` tool), the server inspects the project root for known agent context files and recommends a follow-up so your agent learns kontexta's conventions on day one. Without this, a fresh conversation starts ignorant of which writes belong in the KB, when to journal, how to search, and where specs live.

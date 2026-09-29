@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { AlertTriangle, Search } from "lucide-react";
 import { toast } from "sonner";
 import { unified } from "unified";
@@ -80,7 +80,7 @@ interface ContentPaneProps {
   onChanged?: () => void;
   // Lets the parent guard navigation handlers against discarding
   // in-progress edits (window.confirm before clearing selectedFileId).
-  onDirtyChange?: (dirty: boolean) => void;
+  onDirtyChange?: (key: string, dirty: boolean) => void;
   // Set from the parent so intra-pane navigation (backlinks click) can update selectedFileId.
   onNavigateToFile?: (id: number) => void;
 }
@@ -231,9 +231,11 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange, onNavi
 
   useEffect(() => {
     const dirty = (editing && file != null && editContent !== file.content) || (editHtmlOpen && htmlEditorDirty);
-    onDirtyChangeRef.current?.(dirty);
-  }, [editing, editContent, file?.content, editHtmlOpen, htmlEditorDirty]);
-  useEffect(() => () => { onDirtyChangeRef.current?.(false); }, []);
+    const key = `file:${fileId}`;
+    onDirtyChangeRef.current?.(key, dirty);
+    return () => onDirtyChangeRef.current?.(key, false);
+  }, [fileId, editing, editContent, file?.content, editHtmlOpen, htmlEditorDirty]);
+  const reportProfileDirty = useCallback((dirty: boolean) => onDirtyChangeRef.current?.("profile", dirty), []);
 
   useEffect(() => {
     if (fileId === null) {
@@ -591,7 +593,7 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange, onNavi
   if (isKbProfile) {
     return (
       <div key={fileId} className="h-full flex flex-col">
-        <ProfileEditor onDirtyChange={onDirtyChange} onChanged={onChanged} />
+        <ProfileEditor onDirtyChange={reportProfileDirty} onChanged={onChanged} />
       </div>
     );
   }

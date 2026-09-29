@@ -114,6 +114,7 @@ const nextConfig: NextConfig = {
       : {
           "**/*": [
             "../../packages/core/src/agent-rules/rules-block.md",
+            "../../packages/core/src/hooks/emit.mjs",
             "../../packages/core/src/db/migrations/*.sql",
             "../../CHANGELOG.md",
             pdfkitDataGlob,

@@ -38,6 +38,15 @@ export function repairProfile(content: string): { content: string; repaired: str
     }
   }
 
+  // Files doubled by the old bug carry extra `# Profile` lines; keep only the first.
+  let seenH1 = false;
+  working = working.split("\n").filter((line) => {
+    if (!/^#\s+Profile\s*$/.test(line)) return true;
+    if (seenH1) return false;
+    seenH1 = true;
+    return true;
+  }).join("\n");
+
   // Parse existing sections into a map: heading -> body (without trailing newline).
   const existing = parseSections(working);
 
@@ -138,7 +147,7 @@ function parseSections(content: string): Map<string, string> {
     // so the user can see the merge happened.
     const existing = map.get(current);
     if (existing != null && existing.trim().length > 0 && newBody.trim().length > 0) {
-      map.set(current, `${existing.replace(/\n+$/, "")}\n\n---\n\n${newBody}`);
+      if (existing.trim() !== newBody.trim()) map.set(current, `${existing.replace(/\n+$/, "")}\n\n---\n\n${newBody}`);
     } else if (existing != null && existing.trim().length > 0) {
       map.set(current, existing);
     } else {
@@ -165,10 +174,10 @@ function escapeRegExp(s: string): string {
 
 /** Extract text between `# Profile` (or start of file) and the first `##` heading. */
 function extractPreamble(content: string): string {
-  const h1Match = /^#\s+Profile\s*$/.exec(content);
+  const h1Match = /^#\s+Profile\s*$/m.exec(content);
   const start = h1Match ? h1Match.index + h1Match[0].length : 0;
   const rest = content.slice(start);
-  const firstH2 = /^##\s+/.exec(rest);
+  const firstH2 = /^##\s+/m.exec(rest);
   if (!firstH2) return rest.trim().length > 0 ? rest : "";
   return rest.slice(0, firstH2.index).trim();
 }

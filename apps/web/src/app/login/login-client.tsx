@@ -39,7 +39,7 @@ export function LoginClient({ isSetupRequired }: { isSetupRequired: boolean }) {
       }
 
       // Use router.push for clean navigation.
-      // After first-time setup, include ?setup=1 so the Configure modal opens.
+      // After first-time setup, include ?setup=1 so the first-run wizard opens.
       router.push(isSetupRequired ? "/?setup=1" : "/");
     } catch (err: any) {
       setError(err.message || "An unexpected error occurred. Check browser console.");

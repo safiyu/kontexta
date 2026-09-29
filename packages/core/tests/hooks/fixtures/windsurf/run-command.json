@@ -1,0 +1,1 @@
+{ "trajectory_id": "w1", "execution_id": "e3", "tool_info": { "command_line": "bq ls itg-btdpslt-gbl-ww-dv:stds_probe", "cwd": "/tmp/work" } }

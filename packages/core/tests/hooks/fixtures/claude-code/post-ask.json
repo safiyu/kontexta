@@ -1,0 +1,1 @@
+{ "session_id": "s1", "cwd": "/tmp/work", "hook_event_name": "PostToolUse", "tool_name": "AskUserQuestion", "tool_input": { "questions": [ { "header": "Capture depth", "question": "How much should the journal keep?", "options": [] } ] }, "tool_response": { "answers": { "How much should the journal keep?": "no need of the code. bash commands is good to have" } } }

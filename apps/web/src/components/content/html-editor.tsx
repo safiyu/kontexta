@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { Dialog } from "@/components/ui/dialog";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 export function HtmlEditor({
   fileId,
@@ -21,10 +22,11 @@ export function HtmlEditor({
 }) {
   const [value, setValue] = useState(initial);
   const [busy, setBusy] = useState(false);
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
   const dirty = value !== initial;
 
   function requestClose() {
-    if (dirty && !window.confirm("You have unsaved changes. Discard them?")) return;
+    if (dirty) { setConfirmDiscard(true); return; }
     onClose();
   }
 
@@ -77,6 +79,16 @@ export function HtmlEditor({
           </button>
         </div>
       </div>
+      <ConfirmDialog
+        open={confirmDiscard}
+        onClose={() => setConfirmDiscard(false)}
+        onConfirm={() => { setConfirmDiscard(false); onClose(); }}
+        title="Unsaved changes"
+        message="You have unsaved changes. Discard them?"
+        confirmLabel="Discard"
+        cancelLabel="Keep editing"
+        destructive
+      />
     </Dialog>
   );
 }

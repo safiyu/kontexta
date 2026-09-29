@@ -30,27 +30,10 @@
   /* --font-sans / --font-mono / --font-title come from next/font in layout.tsx */
 }
 
-.dark {
-  --bg-primary: #0A0F1A;
-  --bg-secondary: #121A2B;
-  --bg-tertiary: #0F274F;
-  --text-primary: #efd3a0;
-  --text-secondary: #BFA17A;
-  --muted: #8C755A;
-  --border: rgba(180, 120, 30, 0.15);
-
-  --accent: #B4781E;
-  --accent-soft: rgba(180, 120, 30, 0.18);
-  --success: #2F855A;
-  --warning: #C0841A;
-  --danger: #C05656;
-  --danger-soft: rgba(192, 86, 86, 0.15);
-  --text-tertiary: #A08662;
-}
-
-/* Blueprint theme — opt-in port of the kontexta.dev Blueprint × Ember system.
+/* Dark theme — the kontexta.dev Blueprint × Ember system (formerly the opt-in
+   "blueprint" theme; the earlier navy/gold dark theme was retired 2026-09-29).
    See docs/superpowers/2026-07-21-blueprint-app-theme-design.md */
-.blueprint {
+.dark {
   --bg-primary: #060A12;
   --bg-secondary: #0D1119;
   --bg-tertiary: #10141F;
@@ -70,31 +53,31 @@
   --font-title: var(--font-saira);
 }
 
-/* Square corners under Blueprint; bp-keep-round is the escape hatch. */
-.blueprint [class*="rounded"] { border-radius: 0 !important; }
-.blueprint .bp-keep-round { border-radius: 9999px !important; }
+/* Square corners under dark; bp-keep-round is the escape hatch. */
+.dark [class*="rounded"] { border-radius: 0 !important; }
+.dark .bp-keep-round { border-radius: 9999px !important; }
 
-/* Chrome utilities — no rules outside .blueprint, so the classes are inert
-   in light/dark and components may carry them unconditionally. */
-.blueprint .bp-annotation {
+/* Chrome utilities — no rules outside .dark, so the classes are inert
+   in light and components may carry them unconditionally. */
+.dark .bp-annotation {
   font-family: var(--font-mono);
   font-size: 10px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--text-secondary);
 }
-.blueprint .bp-dashed { border-style: dashed; }
+.dark .bp-dashed { border-style: dashed; }
 /* Toolbar buttons (Calendar/Sync/Reindex/Configure/About/Publish) match
-   the title-block annotation's muted tone under Blueprint instead of the
-   amber accent they use in light/dark. */
-.blueprint .bp-toolbar-btn { color: var(--text-secondary); }
-.blueprint .bp-grid {
+   the title-block annotation's muted tone under dark instead of the
+   amber accent they use in light. */
+.dark .bp-toolbar-btn { color: var(--text-secondary); }
+.dark .bp-grid {
   background-image:
     linear-gradient(rgba(224, 144, 48, 0.05) 1px, transparent 1px),
     linear-gradient(90deg, rgba(224, 144, 48, 0.05) 1px, transparent 1px);
   background-size: 22px 22px;
 }
-/* Title-block annotation: visible in every theme. Blueprint layers its
+/* Title-block annotation: visible in every theme. Dark layers its
    own font/letter-spacing/uppercase via .bp-annotation above. */
 .bp-title-block {
   display: inline;
@@ -104,7 +87,7 @@
   color: var(--text-secondary);
   opacity: 0.7;
 }
-.blueprint .bp-title-block { opacity: 1; }
+.dark .bp-title-block { opacity: 1; }
 
 /* Light theme specific adjustments for icons/emojis.
    Tuned for the warm-cream (#F4F3EF) → muted amber (#B4781E) pairing
@@ -158,10 +141,6 @@ h1, h2, h3, h4, h5, h6 {
   border-radius: 3px;
 }
 
-.dark ::-webkit-scrollbar-thumb {
-  background: #24324A;
-}
-
 ::-webkit-scrollbar-thumb:hover {
   background: var(--accent);
 }
@@ -169,10 +148,6 @@ h1, h2, h3, h4, h5, h6 {
 * {
   scrollbar-width: thin;
   scrollbar-color: #4A5874 var(--bg-secondary);
-}
-
-.dark * {
-  scrollbar-color: #24324A var(--bg-secondary);
 }
 
 /* Referenced by components; scrollbars are already thin globally, this
@@ -236,25 +211,6 @@ html {
   to { opacity: 1; transform: translateY(0); }
 }
 
-.dark .prose {
-  --tw-prose-body: var(--text-primary);
-  --tw-prose-headings: var(--text-primary);
-  --tw-prose-lead: var(--text-secondary);
-  --tw-prose-links: var(--accent);
-  --tw-prose-bold: var(--text-primary);
-  --tw-prose-counters: var(--accent);
-  --tw-prose-bullets: var(--accent);
-  --tw-prose-hr: var(--border);
-  --tw-prose-quotes: var(--text-primary);
-  --tw-prose-quote-borders: var(--accent);
-  --tw-prose-captions: var(--text-secondary);
-  --tw-prose-code: var(--text-primary);
-  --tw-prose-pre-code: var(--text-primary);
-  --tw-prose-pre-bg: var(--bg-secondary);
-  --tw-prose-th-borders: var(--border);
-  --tw-prose-td-borders: var(--border);
-}
-
 .animate-fade-in {
   animation: fade-in 0.4s cubic-bezier(0.16, 1, 0.3, 1);
 }
@@ -284,11 +240,6 @@ html {
   border: 1px solid var(--border);
   box-shadow: 0 20px 50px -12px rgba(0, 0, 0, 0.5);
   transition: box-shadow 0.3s ease, border-color 0.3s ease;
-}
-
-.dark .floating-surface {
-  box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.7);
-  background-color: #0d1421; /* Slightly lighter than pure black for depth */
 }
 
 .focus-glow {
@@ -323,8 +274,8 @@ html {
  *
  * Active = hover OR press OR focus. All three trigger the same color shift
  * so touch devices (no hover) get identical feedback on tap.
- * Light theme is the unqualified default; .dark overrides for dark mode,
- * mirroring how globals.css already keys theming.
+ * Light theme is the unqualified default; .dark overrides where the
+ * Blueprint × Ember palette needs a different resting tone.
  */
 
 /* Themed <select> — strip browser chrome, replace with accent chevron, theme options. */
@@ -345,8 +296,8 @@ option {
   color: var(--text-primary);
 }
 
-/* Blueprint uses the ember-orange accent for the chevron. */
-.blueprint select {
+/* Dark uses the ember-orange accent for the chevron. */
+.dark select {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='%23E09030'%3E%3Cpath d='M2 4 L6 8 L10 4 Z'/%3E%3C/svg%3E");
 }
 
@@ -367,23 +318,12 @@ option {
 }
 
 .dark .btn {
-  color: #E5C079;
-}
-
-.blueprint .btn {
   color: var(--text-secondary);
 }
 
 .btn:hover,
 .btn:active,
 .btn:focus {
-  color: #FFFFFF;
-  background: var(--accent);
-}
-
-.dark .btn:hover,
-.dark .btn:active,
-.dark .btn:focus {
   color: #FFFFFF;
   background: var(--accent);
 }
@@ -419,10 +359,6 @@ option {
   border-color: var(--accent);
   color: #FFFFFF;
 }
-.dark .btn-primary,
-.blueprint .btn-primary {
-  color: #FFFFFF;
-}
 .btn-primary:hover,
 .btn-primary:active,
 .btn-primary:focus {
@@ -450,13 +386,6 @@ option {
 .btn-destructive:hover,
 .btn-destructive:active,
 .btn-destructive:focus {
-  color: #ffffff;
-  background: color-mix(in srgb, var(--danger) 85%, transparent);
-}
-
-.dark .btn-destructive:hover,
-.dark .btn-destructive:active,
-.dark .btn-destructive:focus {
   color: #ffffff;
   background: color-mix(in srgb, var(--danger) 85%, transparent);
 }

@@ -1,0 +1,1 @@
+{ "session_id": "s1", "cwd": "/tmp/work", "hook_event_name": "Stop", "stop_hook_active": false, "last_assistant_message": "Root cause: the claim is never released on NotFound. Fix: release in finally." }

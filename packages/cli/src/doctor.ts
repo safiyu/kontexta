@@ -1,5 +1,5 @@
 import { createRequire } from 'node:module';
-import { existsSync, readdirSync, statSync, mkdirSync } from 'node:fs';
+import { existsSync, readdirSync, statSync, mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir, tmpdir } from 'node:os';
 import { resolveDataDir } from './util/data-dir.js';
@@ -30,6 +30,15 @@ function checkNode(): CheckResult {
 function checkDataDir(): CheckResult {
   const r = resolveDataDir();
   return { name: 'Data dir', ok: true, detail: `${r.path} (source: ${r.source})` };
+}
+
+function checkHooks(): CheckResult {
+  const { path } = resolveDataDir();
+  const emitter = join(path, 'hooks', 'emit.mjs');
+  if (!existsSync(emitter)) return { name: 'hooks', ok: true, informational: true, detail: 'not staged — enable an agent in the dashboard or run `kontexta hooks enable <agent>`' };
+  const first = readFileSync(emitter, 'utf8').split('\n')[0];
+  const m = first.match(/^\/\/ kontexta-hooks v(\S+)$/);
+  return { name: 'hooks', ok: !!m, informational: true, detail: m ? `emitter v${m[1]} staged at ${emitter}` : `unrecognised emitter header at ${emitter}` };
 }
 
 function checkNative(mod: string): CheckResult {
@@ -113,6 +122,7 @@ export async function runDoctor(): Promise<number> {
   const results: CheckResult[] = [
     checkNode(),
     checkDataDir(),
+    checkHooks(),
     checkNative('better-sqlite3'),
     checkNative('re2'),
     await checkPuppeteerChromium(),

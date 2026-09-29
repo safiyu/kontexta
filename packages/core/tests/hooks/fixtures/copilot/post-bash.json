@@ -1,0 +1,1 @@
+{ "sessionId": "p1", "cwd": "/tmp/work", "toolName": "bash", "toolArgs": "{\"command\":\"gh run list --limit 5\"}", "toolResult": { "resultType": "success", "textResultForLlm": "..." } }

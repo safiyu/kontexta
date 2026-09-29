@@ -118,7 +118,8 @@ Use absolute paths — most clients launch the process from their own working di
 
 **Configuration paths:**
 
-- **Antigravity & Gemini**: `~/.gemini/antigravity/mcp_servers.json`
+- **Antigravity**: `~/.gemini/config/mcp_config.json` (or `.agents/mcp_config.json`)
+- **Gemini CLI**: `~/.gemini/settings.json`
 - **Claude Desktop**: `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows)
 - **Codex**: `.codex/mcp_servers.json`
 - **Continue.dev**: `~/.continue/config.json` — add to the `mcpServers` array.
@@ -239,7 +240,7 @@ The MCP server exposes 58 tools designed for agents that care about context-wind
 | :--- | :--- | :--- |
 | `folders.list`, `folders.create`, `folders.delete` | Folder CRUD. `folders.delete` refuses project folders (the watcher would re-ingest); KB only. | "Create a `journal` folder under the KB." |
 | `projects.register`, `projects.list` | Add an external repo as a project; Kontexta indexes its `.md` files. Warns when total tokens exceed `KONTEXTA_PROJECT_TOKEN_WARN`. The response also carries a `recommendation` field — update or create — telling the agent whether it should follow up with `admin.onboard_agent`. | "Register `~/code/foo` as a project." |
-| `admin.onboard_agent` | Writes or updates a fenced, version-stamped kontexta workflow rules block into a project's agent context file(s) — `CLAUDE.md` / `AGENTS.md` / `GEMINI.md` / `.cursor/rules/*.mdc` / `.continue/rules/*.md` / `.aider/kontexta.md` / `.clinerules` / `.github/copilot-instructions.md`. Idempotent (skips on same version, splices on bump). Update mode targets detected files; create mode scaffolds the canonical filename for the chosen `target_agent`. Run after `projects.register` when its recommendation suggests it, or any time to refresh the block. | "Onboard this project for Claude Code." |
+| `admin.onboard_agent` | Writes or updates a fenced, version-stamped kontexta workflow rules block into a project's agent context file(s) — `CLAUDE.md` / `AGENTS.md` / `GEMINI.md` / `.cursor/rules/*.mdc` / `.continue/rules/*.md` / `.aider/kontexta.md` / `.clinerules` / `.github/copilot-instructions.md`. Idempotent (skips on same version, splices on bump). Update mode targets detected files; create mode scaffolds the canonical filename for the chosen `target_agent`. Run after `projects.register` when its recommendation suggests it, or any time to refresh the block. Pass `hooks: true` with `target_agent` to also enable that agent and install its conversation-capture hooks (Docker installs get the host command instead). | "Onboard this project for Claude Code." |
 | `projects.map` | Single-call indented outline of folders + file titles + tags + ids — typically 5× denser than `files.list`. | "Give me a map of the `acme` project." |
 | `admin.overview` | `mode: "stats"` for counts (files, untagged, favorites, top tags, by-project breakdown, optional total token cost); `mode: "whats_new"` for files created or modified since a checkpoint (`"30m"`, `"7d"`, ISO timestamp). | "How many untagged files are in the KB?" / "What changed in Kontexta in the last 24h?" |
 
@@ -279,7 +280,7 @@ Every file-returning tool annotates its response with `size_bytes` and `est_toke
 | `admin.overview` (`mode: "whats_new"`) | `{ since, until, count, total_est_tokens, files: [{ ...file, change: "created"\|"modified", tags, size_bytes, est_tokens }] }` |
 | `admin.overview` (`mode: "stats"`) | `{ scope, file_count, untagged_count, favorite_count, top_tags: [{name, count}], by_project?, total_est_tokens? }` |
 | `projects.map` | `{ stats: { files, folders, roots, truncated }, est_tokens, outline }` (outline is an indented text string with `[id] Title  #tag1 #tag2` per leaf) |
-| `projects.register` | `{ project, discovered_files_count, total_est_tokens, discovered_files: [...annotated], hands: { found, tools_registered, tools_disabled, warnings }, recommendation: { kind: "onboard_agent", mode: "update"\|"create", reason, target_files, next_tool, next_args }, warnings? }` |
+| `projects.register` | `{ project, discovered_files_count, total_est_tokens, discovered_files: [...annotated], hands: { found, tools_registered, tools_disabled, warnings }, recommendation: { kind: "onboard_agent", mode: "update"\|"create", reason, target_files, next_tool, next_args }, warnings?, hooks?: { install_mode, alerts, prompt } }` — `hooks` appears only when an enabled agent needs attention |
 | `admin.onboard_agent` | `{ written: [{ path, action: "created"\|"updated"\|"skipped", version }], skipped: [{ path, reason }] }` |
 | `projects.list` | `[{ ...project, has_hands }]` |
 | `files.read_outline` | `{ file_id, path, title, outline: [{ level, text, line, byteStart, byteEnd }] }` |

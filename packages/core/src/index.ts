@@ -1,5 +1,5 @@
 export { getDataDir, getDbPath, ensureDataDir, resetDataDirCache, defaultDataDir, defaultDataDirDisplay, homeSensitivePrefixes } from "./util/paths.js";
-export { createDatabase, getDatabase, closeDatabase, gracefulShutdown } from "./db/index.js";
+export { createDatabase, getDatabase, isDatabaseOpen, closeDatabase, gracefulShutdown } from "./db/index.js";
 import { createFile, readFile, updateFile, deleteFile, listFiles, moveFile, createFolder, deleteFolder, listProjectFolders, listProjectFoldersWithFiles, slugify } from "./files/index.js";
 export { createFile, readFile, updateFile, deleteFile, listFiles, moveFile, createFolder, deleteFolder, listProjectFolders, listProjectFoldersWithFiles, slugify };
 export { parseOutline, findSection, replaceSection, type OutlineNode } from "./files/sections.js";
@@ -47,6 +47,7 @@ export {
   type ProjectMapOptions, type ProjectMapResult, type ProjectMapStats,
 } from "./project-map/index.js";
 export * from "./journal/index.js";
+export * from "./hooks/index.js";
 export * from "./profile/index.js";
 export * from "./calendar/index.js";
 export { writeResource, readResource, listResources, deleteResource, resourceUrlFor, resourceSrcFor, mimeFor } from "./reports/resources.js";

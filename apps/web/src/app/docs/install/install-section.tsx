@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Folder } from "lucide-react";
 import { InstallSnippetView } from "@/components/docs/install-snippet-view";
+import { useAgents } from "@/hooks/use-agents";
 
 const CLIENTS = [
   { id: "claude-code", label: "Claude Code" },
@@ -31,6 +32,19 @@ export function InstallSection() {
   const [detected, setDetected] = useState<string | null>(null);
   const [dataDirInfo, setDataDirInfo] = useState<{ dataDir: string; isDefaultDir: boolean; defaultDirDisplay: string } | null>(null);
 
+  const { state: agentsState } = useAgents();
+  const enabledIds = useMemo(() => new Set((agentsState?.agents ?? []).filter((a) => a.enabled).map((a) => a.id)), [agentsState]);
+  // Fail open: with no agents state we cannot tell what is enabled, so show everything.
+  const visibleClients = useMemo(
+    () => (agentsState ? CLIENTS.filter((c) => c.id === "generic" || enabledIds.has(c.id)) : CLIENTS),
+    [agentsState, enabledIds],
+  );
+  const nothingEnabled = !!agentsState && enabledIds.size === 0;
+
+  useEffect(() => {
+    if (!visibleClients.some((c) => c.id === client)) setClient(visibleClients[0].id);
+  }, [visibleClients, client]);
+
   useEffect(() => {
     fetch(`/api/install-snippets?client=${client}&install=${install}&t=${Date.now()}`)
       .then((r) => r.json())
@@ -48,7 +62,7 @@ export function InstallSection() {
         <label className="flex flex-col text-xs">
           <span className="mb-1 text-[var(--text-secondary)]">AI client</span>
           <select aria-label="AI client" value={client} onChange={(e) => setClient(e.target.value)} className="px-2 py-1 bg-[var(--bg-secondary)] border border-[var(--border)] rounded">
-            {CLIENTS.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
+            {visibleClients.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
           </select>
         </label>
         <label className="flex flex-col text-xs">
@@ -58,6 +72,12 @@ export function InstallSection() {
           </select>
         </label>
       </div>
+      {nothingEnabled && (
+        <p className="mb-3 text-xs text-[var(--text-secondary)]">No agents enabled yet — enable the agents you use in the AGENTS tab to see their config here. Enabling an agent installs kontexta hooks into that agent&apos;s config file (you can uninstall them there too).</p>
+      )}
+      {agentsState && !nothingEnabled && (
+        <p className="mb-3 text-xs text-[var(--text-secondary)]">Missing an agent? Enable it in the AGENTS tab.</p>
+      )}
       {dataDirInfo && (
         <div className="mb-3 text-xs text-[var(--text-secondary)] flex items-center gap-1.5">
           <Folder className="w-3.5 h-3.5 opacity-60" aria-hidden />

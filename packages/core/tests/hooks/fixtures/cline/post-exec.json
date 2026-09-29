@@ -1,0 +1,1 @@
+{ "hookName": "PostToolUse", "taskId": "l1", "postToolUse": { "toolName": "execute_command", "parameters": { "command": "black modules/sltdecode" }, "result": "reformatted 1 file" } }

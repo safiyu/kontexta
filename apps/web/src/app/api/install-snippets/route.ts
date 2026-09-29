@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { renderTemplate, CLIENTS, INSTALLS, type Client, type Install, type Snippet } from "@/lib/install-templates";
 import { DATA_DIR } from "@/lib/db-init";
 // kxta-core is server-external so os.homedir()/APPDATA reads never get bundled into a Windows-breaking nft glob.
-import { defaultDataDir, defaultDataDirDisplay } from "kxta-core";
+import { defaultDataDir, defaultDataDirDisplay, detectInstallMode } from "kxta-core";
 
 // Written by ./bootstrap / bootstrap.ps1 at repo root — the source of truth for a manual install's entrypoint.
 const MANUAL_INSTALL_FLAG = ".kontexta-manual-mcp";
@@ -57,17 +57,6 @@ function loadVersion(): string {
   return cachedVersion;
 }
 
-function detectInstall(): Install {
-  if (process.env.KONTEXTA_INSTALL_HINT === "docker") return "docker";
-  if (process.env.KONTEXTA_INSTALL_HINT === "npm") return "npm";
-  if (process.env.KONTEXTA_INSTALL_HINT === "source") return "source";
-  try {
-    if (existsSync("/.dockerenv")) return "docker";
-  } catch {}
-  if (process.env.npm_execpath?.includes("npx")) return "npm";
-  return "source";
-}
-
 /** True when the resolved dataDir looks like a temp/test path — never show these in snippets. */
 function isTempPath(p: string): boolean {
   const lower = p.toLowerCase();
@@ -114,7 +103,7 @@ export async function GET(req: NextRequest) {
         });
   return NextResponse.json({
     ...snippet,
-    detectedInstall: detectInstall(),
+    detectedInstall: detectInstallMode(),
     dataDir,
     isDefaultDir,
     defaultDirDisplay,

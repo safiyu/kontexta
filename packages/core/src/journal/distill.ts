@@ -2,13 +2,14 @@
 import { readFileSync, readdirSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { RawEvent, DistillResult, JournalFrontmatter } from "./types.js";
-import { groupEventsIntoTasks } from "./topic-detector.js";
-import { renderMechanicalEntry } from "./renderer.js";
+import { groupEvents, lastBranchOf } from "./topic-detector.js";
+import { renderMechanicalEntry, touchedFilesOf } from "./renderer.js";
 import { readHighWater, writeHighWater } from "./high-water.js";
-import { upsertJournalMeta, openTasksForProject } from "./repository.js";
+import { upsertJournalMeta, openTasksForProject, gitRefsForFiles } from "./repository.js";
 import { getDatabase } from "../db/index.js";
 import type { ExtraPatternDef } from "./patterns/extra-loader.js";
 import { acquireCooldown, releaseCooldown } from "./cooldown.js";
+import { markVerified } from "../hooks/registry.js";
 
 export interface DistillJournalOpts {
   projectSlug: string;
@@ -21,6 +22,8 @@ export interface DistillJournalOpts {
   now: Date;
   extraPatterns?: ExtraPatternDef[];
   cooldownSeconds?: number;
+  /** Reprocess this fixed window of raw events instead of continuing from the high-water mark; the mark is neither read nor written. */
+  range?: { since: string; until: string };
 }
 
 const REL_BASE = ["knowledge", "journal"]; // joined under dataDir
@@ -49,10 +52,10 @@ export async function distillJournal(opts: DistillJournalOpts): Promise<DistillR
     };
   }
   try {
-    const hw = readHighWater(join(opts.dataDir, ...REL_BASE), opts.projectSlug);
-    const since = hw?.last_event_ts ?? "0000-01-01T00:00:00Z";
+    const hw = opts.range ? null : readHighWater(join(opts.dataDir, ...REL_BASE), opts.projectSlug);
+    const since = opts.range?.since ?? hw?.last_event_ts ?? "0000-01-01T00:00:00Z";
     const seenKeys = new Set<string>(hw?.last_event_keys ?? []);
-    const cutoff = new Date(opts.now.getTime() - opts.inFlightWindowSeconds * 1000).toISOString();
+    const cutoff = opts.range?.until ?? new Date(opts.now.getTime() - opts.inFlightWindowSeconds * 1000).toISOString();
 
     // 1. READ
     const events = readRawEvents(opts, since, cutoff, opts.maxEvents, seenKeys);
@@ -60,9 +63,25 @@ export async function distillJournal(opts: DistillJournalOpts): Promise<DistillR
       return { events_processed: 0, tasks_touched: [], tasks_created: [], high_water_advanced_to: since, warnings: [] };
     }
 
+    // One transaction with the first/last hook timestamp per agent, not one auto-committed UPDATE per event.
+    const hookSeen = new Map<string, { first: string; last: string }>();
+    for (const ev of events) {
+      if (ev.source !== "hook" || !ev.agent) continue;
+      const seen = hookSeen.get(ev.agent);
+      if (!seen) hookSeen.set(ev.agent, { first: ev.ts, last: ev.ts });
+      else { if (ev.ts < seen.first) seen.first = ev.ts; if (ev.ts > seen.last) seen.last = ev.ts; }
+    }
+    if (hookSeen.size > 0) {
+      try {
+        getDatabase().transaction(() => {
+          for (const [agent, { first, last }] of hookSeen) { markVerified(agent, first); if (last !== first) markVerified(agent, last); }
+        })();
+      } catch { /* registry is best-effort during distill */ }
+    }
+
     // 2. GROUP
     const openTasks = loadOpenTasks(opts);
-    const buckets = groupEventsIntoTasks(events, openTasks, opts.ticketRegex);
+    const { buckets, sessions } = groupEvents(events, openTasks, opts.ticketRegex, { initialBranch: hw?.last_branch ?? null, initialSessions: hw?.session_tasks });
 
     // 3. RENDER + 4. INDEX
     const tasksTouched: string[] = [];
@@ -75,7 +94,7 @@ export async function distillJournal(opts: DistillJournalOpts): Promise<DistillR
       const filename = `task-${bucket.task_slug}.md`;
       const filePath = join(dir, filename);
 
-      const fm: JournalFrontmatter = buildFrontmatter(bucket, opts.projectSlug);
+      let fm: JournalFrontmatter = buildFrontmatter(bucket, opts.projectSlug);
       const entry = renderMechanicalEntry({
         task_slug: bucket.task_slug,
         events: bucket.events,
@@ -84,13 +103,10 @@ export async function distillJournal(opts: DistillJournalOpts): Promise<DistillR
       });
 
       if (existsSync(filePath)) {
-        // Re-emit frontmatter so last_active_at / touched_files / git_refs
-        // reflect this run, then prepend the new entry above prior bodies.
-        // Previously only the entry was prepended and the old frontmatter
-        // was kept verbatim, diverging from what the DB row recorded.
+        // Accumulate with what earlier runs recorded so the DB row and next run's task matching keep the whole history, not just this batch.
         const existing = readFileSync(filePath, "utf8");
-        const mergedFm = mergeFrontmatter(parseExistingFrontmatter(existing), fm);
-        writeFileSync(filePath, replaceOrAppendEntry(existing, mergedFm, entry));
+        fm = mergeFrontmatter(parseFrontmatter(existing), fm);
+        writeFileSync(filePath, replaceOrAppendEntry(existing, fm, entry));
       } else {
         writeFileSync(filePath, serializeFrontmatter(fm) + "\n\n" + entry);
         tasksCreated.push(bucket.task_slug);
@@ -121,18 +137,22 @@ export async function distillJournal(opts: DistillJournalOpts): Promise<DistillR
     const boundaryKeys = events
       .filter((e) => e.ts === newHw)
       .map((e) => eventKey(e));
-    writeHighWater(join(opts.dataDir, ...REL_BASE), opts.projectSlug, {
-      last_event_ts: newHw,
-      last_event_keys: boundaryKeys,
-      last_distilled_at: opts.now.toISOString(),
-      events_processed: (hw?.events_processed ?? 0) + events.length,
-    });
+    if (!opts.range) {
+      writeHighWater(join(opts.dataDir, ...REL_BASE), opts.projectSlug, {
+        last_event_ts: newHw,
+        last_event_keys: boundaryKeys,
+        last_distilled_at: opts.now.toISOString(),
+        events_processed: (hw?.events_processed ?? 0) + events.length,
+        last_branch: lastBranchOf(events, hw?.last_branch ?? null),
+        session_tasks: mergeSessionTasks(hw?.session_tasks, sessions),
+      });
+    }
 
     return {
       events_processed: events.length,
       tasks_touched: tasksTouched,
       tasks_created: tasksCreated,
-      high_water_advanced_to: newHw,
+      high_water_advanced_to: opts.range ? "" : newHw,
       warnings: [],
     };
   } finally {
@@ -208,29 +228,45 @@ function readRawEvents(
   return all.slice(0, max);
 }
 
+// Most recently used sessions win the cap, so a long-running install doesn't grow this map forever.
+const MAX_REMEMBERED_SESSIONS = 200;
+function mergeSessionTasks(prior: Record<string, string> | undefined, fresh: Record<string, string>): Record<string, string> {
+  const kept = Object.entries(prior ?? {}).filter(([sid]) => !(sid in fresh));
+  return Object.fromEntries([...kept, ...Object.entries(fresh)].slice(-MAX_REMEMBERED_SESSIONS));
+}
+
 function loadOpenTasks(opts: DistillJournalOpts): JournalFrontmatter[] {
   const rows = openTasksForProject(opts.projectId, opts.openTaskWindowDays);
-  // Phase 1: load minimal frontmatter from DB; full FM read could be added later.
-  return rows.map((r) => ({
-    task: r.task_slug,
-    project: opts.projectSlug,
-    tags: [],
-    touched_files: r.touched_files,
-    git: { branches: [], commits: [], ticket_ids: [] }, // Phase 2: rebuild from journal_git_refs
-    status_latest: r.status_latest,
-    started_at: r.started_at,
-    last_active_at: r.last_active_at,
-    distilled_from: r.raw_sources,
-  }));
+  const refs = gitRefsForFiles(rows.map((r) => r.file_id));
+  return rows.map((r) => {
+    const rr = refs.get(r.file_id) ?? [];
+    const values = (type: string) => rr.filter((x) => x.ref_type === type).map((x) => x.ref_value);
+    return {
+      task: r.task_slug,
+      project: opts.projectSlug,
+      tags: [],
+      touched_files: r.touched_files,
+      git: {
+        branches: values("branch"),
+        commits: values("commit").map((sha) => ({ sha, msg: "", ts: "" })),
+        ticket_ids: values("ticket"),
+      },
+      status_latest: r.status_latest,
+      started_at: r.started_at,
+      last_active_at: r.last_active_at,
+      distilled_from: r.raw_sources,
+    };
+  });
 }
 
 function buildFrontmatter(
-  bucket: { task_slug: string; events: RawEvent[]; is_new: boolean },
+  bucket: { task_slug: string; events: RawEvent[]; is_new: boolean; branches?: string[] },
   projectSlug: string,
 ): JournalFrontmatter {
   const events = bucket.events;
-  const touched = [...new Set(events.flatMap((e) => e.touched ?? []))];
-  const branches = [...new Set(events.filter((e) => e.event === "git_context").map((e) => e.branch!).filter(Boolean))];
+  const touched = touchedFilesOf(events);
+  // git_context events are consumed by the grouper rather than bucketed, so the bucket carries the branches that were current.
+  const branches = [...new Set([...(bucket.branches ?? []), ...events.filter((e) => e.event === "git_context").map((e) => e.branch!).filter(Boolean)])];
   const commits = events.filter((e) => e.event === "git_commit").map((e) => ({ sha: e.sha!, msg: e.msg ?? "", ts: e.ts }));
   const ticketRe = /[A-Z]+-\d+/;
   const tickets = [...new Set([
@@ -299,30 +335,52 @@ function replaceOrAppendEntry(existing: string, fm: JournalFrontmatter, newEntry
   return serializeFrontmatter(fm) + "\n\n" + newEntry + body;
 }
 
-function parseExistingFrontmatter(existing: string): JournalFrontmatter | null {
-  // Minimal extractor: we only consume what mergeFrontmatter needs from the
-  // prior file; everything else gets overwritten by the new fm anyway. Treats
-  // anything malformed as "no prior" — the caller then keeps fm as-is.
+// Parses the frontmatter this file's own serializer wrote; anything malformed means "no prior" and the caller keeps the new value.
+function parseFrontmatter(existing: string): JournalFrontmatter | null {
   if (!existing.startsWith("---\n")) return null;
   const end = existing.indexOf("\n---", 4);
   if (end < 0) return null;
   const block = existing.slice(4, end);
-  const get = (k: string) => {
+  const lines = block.split("\n");
+  const scalar = (k: string): string => {
     const m = block.match(new RegExp(`^${k}:\\s*(.*)$`, "m"));
     return m ? m[1].trim() : "";
   };
-  const startedAt = get("started_at");
+  const inline = (k: string): string[] => {
+    const m = block.match(new RegExp(`^\\s*${k}:\\s*\\[(.*)\\]\\s*$`, "m"));
+    return m && m[1].trim() ? m[1].split(",").map((x) => x.trim()).filter(Boolean) : [];
+  };
+  const list = (k: string): string[] => {
+    const i = lines.findIndex((l) => l === `${k}:`);
+    if (i < 0) return [];
+    const out: string[] = [];
+    for (let j = i + 1; j < lines.length; j++) {
+      const m = /^  - (.*)$/.exec(lines[j]);
+      if (!m) break;
+      out.push(m[1]);
+    }
+    return out;
+  };
+  const commits: Array<{ sha: string; msg: string; ts: string }> = [];
+  for (const l of lines) {
+    const m = /^\s{4}- \{ sha: (\S+), msg: (".*"), ts: (\S+) \}$/.exec(l);
+    if (!m) continue;
+    let msg = "";
+    try { msg = JSON.parse(m[2]); } catch { /* keep empty message */ }
+    commits.push({ sha: m[1], msg, ts: m[3] });
+  }
+  const startedAt = scalar("started_at");
   if (!startedAt) return null;
   return {
-    task: get("task"),
-    project: get("project"),
-    tags: [],
-    touched_files: [],
-    git: { branches: [], commits: [], ticket_ids: [] },
+    task: scalar("task"),
+    project: scalar("project"),
+    tags: inline("tags"),
+    touched_files: list("touched_files"),
+    git: { branches: inline("branches"), commits, ticket_ids: inline("ticket_ids") },
     status_latest: null,
     started_at: startedAt,
-    last_active_at: get("last_active_at"),
-    distilled_from: [],
+    last_active_at: scalar("last_active_at"),
+    distilled_from: list("distilled_from"),
   };
 }
 
@@ -331,10 +389,20 @@ function mergeFrontmatter(
   next: JournalFrontmatter,
 ): JournalFrontmatter {
   if (!prior) return next;
-  // Preserve the original started_at (the file's earliest event). Everything
-  // else is taken from the new batch — last_active_at, touched_files etc.
-  // are intentionally overwritten so the DB and file agree.
-  return { ...next, started_at: prior.started_at };
+  const union = <T>(a: T[], b: T[]): T[] => [...new Set([...a, ...b])];
+  const commits = [...prior.git.commits];
+  for (const c of next.git.commits) if (!commits.some((x) => x.sha === c.sha)) commits.push(c);
+  return {
+    ...next,
+    started_at: prior.started_at,
+    touched_files: union(prior.touched_files, next.touched_files),
+    git: {
+      branches: union(prior.git.branches, next.git.branches),
+      commits,
+      ticket_ids: union(prior.git.ticket_ids, next.git.ticket_ids),
+    },
+    distilled_from: union(prior.distilled_from, next.distilled_from),
+  };
 }
 
 function ensureFileRecord(filePath: string, title: string, projectId: number): number {

@@ -1,6 +1,20 @@
 // jsdom is ~650ms to load; built lazily on first call so importing kxta-core (MCP stdio startup, web db-init) doesn't pay for it when HTML is never touched.
 let purify: ReturnType<typeof import("dompurify").default> | undefined;
 
+// CSS is kept (reports need layout) but every resource-loading construct is removed so a stylesheet can't beacon or exfil through url()/@import/image-set().
+export function scrubCss(css: string): string {
+  return css
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    // Decode CSS escapes first so `u\72 l(` / `\75rl(` resolve to `url(` and get caught below.
+    .replace(/\\([0-9a-fA-F]{1,6})\s?/g, (_, h) => { const cp = parseInt(h, 16); return cp > 0 && cp <= 0x10ffff ? String.fromCodePoint(cp) : ""; })
+    .replace(/\\(.)/g, "$1")
+    .replace(/@import\b[^;{]*(;|(?=\}))/gi, "")
+    .replace(/@(document|-moz-document)\b[^{]*\{/gi, "@media not all {")
+    .replace(/\b(url|image-set|image|src|element|expression)\s*\((?:[^()]|\([^()]*\))*\)/gi, "none")
+    .replace(/-moz-binding\s*:[^;}]*;?/gi, "")
+    .replace(/\bbehavior\s*:[^;}]*;?/gi, "");
+}
+
 async function getPurify() {
   if (purify) return purify;
   const [{ JSDOM }, { default: createDOMPurify }] = await Promise.all([import("jsdom"), import("dompurify")]);
@@ -12,7 +26,11 @@ async function getPurify() {
     "poster", "background", "cite", "longdesc", "usemap", "manifest", "codebase",
     "data", "ping", "profile", "archive", "icon",
   ]);
+  purify.addHook("uponSanitizeElement", (node, data) => {
+    if (data.tagName === "style") node.textContent = scrubCss(node.textContent ?? "");
+  });
   purify.addHook("uponSanitizeAttribute", (_node, data) => {
+    if (data.attrName === "style") { data.attrValue = scrubCss(String(data.attrValue)); return; }
     if (!URL_ATTRS.has(data.attrName)) return;
     const v = String(data.attrValue).trim();
     if (data.attrName === "src" && /^data:image\//i.test(v)) return;
@@ -28,10 +46,9 @@ export async function sanitizeHtml(dirty: string): Promise<string> {
   return p.sanitize(dirty, {
     WHOLE_DOCUMENT: false,
     FORCE_BODY: true,
-    // <style> dropped — CSS is a covert-exfil channel via url()/@import that no DOMPurify hook can safely tighten.
     ADD_ATTR: ["target"],
     ALLOW_DATA_ATTR: true,
-    FORBID_TAGS: ["script", "iframe", "object", "embed", "style", "link", "meta", "base"],
-    FORBID_ATTR: ["onerror", "onload", "onclick", "onmouseover", "onfocus", "onblur", "style"],
+    FORBID_TAGS: ["script", "iframe", "object", "embed", "link", "meta", "base"],
+    FORBID_ATTR: ["onerror", "onload", "onclick", "onmouseover", "onfocus", "onblur"],
   });
 }

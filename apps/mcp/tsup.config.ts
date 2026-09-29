@@ -3,7 +3,7 @@ import { mkdirSync, copyFileSync, readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 export default defineConfig({
-  entry: ["src/index.ts"],
+  entry: ["src/index.ts", "src/hooks-cli.ts"],
   outDir: "dist",
   format: ["esm"],
   target: "node22",
@@ -52,5 +52,11 @@ export default defineConfig({
     mkdirSync(rulesDstDir, { recursive: true });
     copyFileSync(rulesSrc, join(rulesDstDir, "rules-block.md"));
     console.log(`[tsup] copied rules-block.md → ${rulesDstDir}/rules-block.md`);
+
+    const emitSrc = resolve(__dirname, "../../packages/core/src/hooks/emit.mjs");
+    const emitDstDir = resolve(__dirname, "dist/hooks");
+    mkdirSync(emitDstDir, { recursive: true });
+    copyFileSync(emitSrc, join(emitDstDir, "emit.mjs"));
+    console.log(`[tsup] copied emit.mjs → ${emitDstDir}/emit.mjs`);
   },
 });

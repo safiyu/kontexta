@@ -114,3 +114,49 @@ describe("profile module", () => {
     });
   });
 });
+
+describe("repairProfile is idempotent and never duplicates", () => {
+  const count = (s: string, re: RegExp) => (s.match(re) || []).length;
+  const h1 = /^#\s+Profile\s*$/gm;
+  const h2 = /^##\s/gm;
+  const clean = assembleProfile({ name: "Ada", role: "Lead", vision: "v", roadmap: "r", preferences: "p", sessionCodingStyle: "s", teamMembersAndRoles: "t", notes: "n" });
+
+  it("leaves an already-complete profile unchanged and does not add sections", () => {
+    const { content, repaired } = repairProfile(clean);
+    expect(repaired).toEqual([]);
+    expect(count(content, h1)).toBe(1);
+    expect(count(content, h2)).toBe(8);
+    expect(content.trim()).toBe(clean.trim());
+  });
+
+  it("is a fixed point: repairing its own output changes nothing", () => {
+    const once = repairProfile("# Profile\n\n## Name\nAda\n").content;
+    expect(repairProfile(once).content).toBe(once);
+  });
+
+  it("keeps a preamble and custom sections exactly once", () => {
+    const src = "# Profile\n\nSome intro line.\n\n## Name\nAda\n\n## Extras\nkeep me\n";
+    const { content } = repairProfile(src);
+    expect(count(content, /Some intro line\./g)).toBe(1);
+    expect(count(content, /^## Extras$/gm)).toBe(1);
+    expect(count(content, /keep me/g)).toBe(1);
+    expect(count(content, h1)).toBe(1);
+    expect(repairProfile(content).content).toBe(content);
+  });
+
+  it("repairs a file that was already doubled by the old bug: one H1, one of each section, no repeated bodies", () => {
+    const doubled = clean + "\n" + clean + "\n" + clean;
+    const { content } = repairProfile(doubled);
+    expect(count(content, h1)).toBe(1);
+    expect(count(content, h2)).toBe(8);
+    expect(count(content, /^Ada$/gm)).toBe(1);
+    expect(repairProfile(content).content).toBe(content);
+  });
+
+  it("still merges genuinely different duplicate sections instead of dropping one", () => {
+    const { content } = repairProfile("# Profile\n\n## Notes\nfirst\n\n## Notes\nsecond\n");
+    expect(content).toContain("first");
+    expect(content).toContain("second");
+    expect(count(content, /^## Notes$/gm)).toBe(1);
+  });
+});

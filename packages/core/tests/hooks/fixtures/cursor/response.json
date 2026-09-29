@@ -1,0 +1,1 @@
+{ "conversation_id": "u1", "generation_id": "gen1", "hook_event_name": "afterAgentResponse", "workspace_roots": ["/tmp/work"], "text": "Done — extracted withRetry()." }
