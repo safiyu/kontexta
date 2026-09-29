@@ -118,7 +118,8 @@ Use absolute paths — most clients launch the process from their own working di
 
 **Configuration paths:**
 
-- **Antigravity & Gemini**: `~/.gemini/antigravity/mcp_servers.json`
+- **Antigravity**: `~/.gemini/config/mcp_config.json` (or `.agents/mcp_config.json`)
+- **Gemini CLI**: `~/.gemini/settings.json`
 - **Claude Desktop**: `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows)
 - **Codex**: `.codex/mcp_servers.json`
 - **Continue.dev**: `~/.continue/config.json` — add to the `mcpServers` array.

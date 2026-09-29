@@ -34,9 +34,9 @@ export async function POST(req: NextRequest) {
 
   const { password, bypassIps, trustProxyHeaders } = body;
 
-  if (typeof password !== "string" || password.length < 4) {
+  if (typeof password !== "string" || password.length < 8) {
     console.warn("[Auth/Setup] Password validation failed");
-    return NextResponse.json({ error: "Password must be at least 4 characters" }, { status: 400 });
+    return NextResponse.json({ error: "Password must be at least 8 characters" }, { status: 400 });
   }
 
   try {

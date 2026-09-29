@@ -56,7 +56,8 @@ Both invoke the same `dist/index.js` — use whichever your client's config form
 | Continue | `~/.continue/config.json` |
 | Codex | `.codex/mcp_servers.json` |
 | GitHub Copilot (VS Code Insider) | VS Code Settings → `mcp.servers` (built-in Copilot chat supports MCP) |
-| Gemini / Antigravity | `~/.gemini/antigravity/mcp_servers.json` |
+| Antigravity | `~/.gemini/config/mcp_config.json` |
+| Gemini CLI | `~/.gemini/settings.json` |
 
 ## Web UI (optional)
 
