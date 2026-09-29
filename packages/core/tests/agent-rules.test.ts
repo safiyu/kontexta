@@ -21,6 +21,7 @@ describe("agent-rules constants", () => {
       "All KB writes go through kontexta",
       "Batch reads",
       "Address `journal.suggested_action`",
+      'Relay `hooks` prompts once per session',
       'Use `journal.write({kind: "note"',
       'Use `journal.write({kind: "intent"',
       "Confirm Hands tokens within 60 seconds",

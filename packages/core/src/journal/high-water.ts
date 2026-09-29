@@ -13,6 +13,10 @@ export interface HighWater {
   last_event_keys?: string[];
   last_distilled_at: string;
   events_processed: number;
+  /** Branch that was current at the end of the last run, so the next run does not start with none. */
+  last_branch?: string | null;
+  /** Session id → the readable task name that session was given, so its later batches join the same task. */
+  session_tasks?: Record<string, string>;
 }
 
 function pathFor(baseDir: string, projectSlug: string): string {

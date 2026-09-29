@@ -6,13 +6,20 @@ export type EventKind =
   | "agent_note"
   | "error"
   | "git_context"
-  | "git_commit";
+  | "git_commit"
+  | "user_prompt"
+  | "agent_reply"
+  | "agent_question"
+  | "shell";
+
+export type EventSource = "mcp" | "hook" | "git";
 
 export interface RawEvent {
   ts: string;            // ISO 8601 UTC
   agent: string;         // 'claude-code' | 'cursor' | 'antigravity' | 'codex' | 'unknown'
   sid: string;           // session correlator
   event: EventKind;
+  source?: EventSource;  // absent = legacy, treated as "mcp"
   // tool_call / error
   tool?: string;
   args?: Record<string, unknown>;
@@ -23,6 +30,17 @@ export interface RawEvent {
   // user_intent / agent_note
   summary?: string;
   tags?: string[];
+  // user_prompt / agent_reply
+  text?: string;
+  truncated?: boolean;
+  bytes?: number;
+  subagent?: boolean;
+  // agent_question
+  questions?: Array<{ question: string; answer?: string }>;
+  // shell
+  command?: string;
+  // hook events
+  cwd?: string;
   // git_context
   branch?: string;
   head?: string;
@@ -52,7 +70,8 @@ export interface TaskBucket {
   task_slug: string;
   events: RawEvent[];
   is_new: boolean;            // true if no existing task file matched
-  matched_via: "ticket" | "branch" | "files" | "minted";
+  matched_via: "ticket" | "branch" | "files" | "session" | "minted";
+  branches?: string[];        // every branch that was current for an event placed in this task
 }
 
 export interface DistillResult {

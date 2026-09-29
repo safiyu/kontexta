@@ -1,0 +1,1 @@
+{ "session_id": "g1", "cwd": "/tmp/work", "hook_event_name": "AfterAgent", "prompt": "Summarise the SLT run mail", "prompt_response": "All green except MARD lag 4m." }

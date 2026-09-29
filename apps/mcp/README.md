@@ -217,6 +217,7 @@ The MCP server drains in-flight work on `SIGINT`/`SIGTERM`:
 | `KONTEXTA_DB_PATH` | `$KONTEXTA_DATA_DIR/kontexta.db` | Override the database file path |
 | `KONTEXTA_DEFAULT_PROJECT_SLUG` | `"default"` | Default project for journal capture |
 | `KONTEXTA_AGENT` | `"unknown"` | Agent identifier for journal events |
+| `KONTEXTA_HOOKS_HOME` | OS home | Home directory whose agent configs `admin.onboard_agent({hooks: true})` writes hook entries into (for MCP servers running in a container or over SSH) |
 | `KONTEXTA_PROJECT_PATH` | `process.cwd()` | Project path for git polling |
 | `KONTEXTA_PROJECT_TOKEN_WARN` | `100000` | Token budget soft cap warning threshold |
 | `KONTEXTA_PROJECTS` | — | Colon-separated list of project directories to auto-register |

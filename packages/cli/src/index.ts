@@ -7,6 +7,8 @@ Usage:
   kontexta mcp                       Run stdio MCP server (for AI client config)
   kontexta doctor                    Print environment diagnostics
   kontexta doctor install-chromium   Download the Chromium build used for PDF export
+  kontexta hooks <status|install|uninstall|enable|disable|reconcile|stage>
+                                     Manage coding-agent hooks that feed the journal
   kontexta --version                 Print version
   kontexta --help                    Print this help
 `;
@@ -35,6 +37,10 @@ Usage:
     }
     const { runDoctor } = await import('./doctor.js');
     process.exit(await runDoctor());
+  }
+  if (arg === 'hooks') {
+    const { runHooks } = await import('./hooks.js');
+    process.exit(await runHooks(process.argv.slice(3)));
   }
   if (arg === 'start') {
     const { runStart } = await import('./start.js');

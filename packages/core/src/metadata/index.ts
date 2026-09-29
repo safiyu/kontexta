@@ -12,6 +12,7 @@ import type { TagRecord, ProjectRecord, FileRecord, SearchFilters } from "../typ
 import { computeHash } from "../files/index.js";
 import { isIndexedFile, stripIndexedExt } from "../util/extensions.js";
 import { getDataDir } from "../util/paths.js";
+import { syncProjectsSidecarIfStaged } from "../hooks/stage.js";
 
 export interface FileRecordWithRank extends FileRecord {
   rank: number;
@@ -268,6 +269,8 @@ export function registerProject(
   // Auto-discover and index files in the project directory.
   const newlyIndexed = reconcileIndex({ projectId, dataDir: getDataDir() }).newRecords.length;
 
+  try { syncProjectsSidecarIfStaged(getDataDir()); } catch { /* sidecar is best-effort; hooks fall back to slug "default" */ }
+
   return {
     ...(db.prepare("SELECT * FROM projects WHERE id = ?").get(projectId) as ProjectRecord),
     newlyIndexed,
@@ -300,6 +303,8 @@ export function unregisterProject(projectId: number, dataDir?: string): void {
 
     db.prepare("DELETE FROM projects WHERE id = ?").run(projectId);
   })();
+
+  try { syncProjectsSidecarIfStaged(getDataDir()); } catch { /* sidecar is best-effort; hooks fall back to slug "default" */ }
 
   // Outside the txn: remove the backup subtree so re-register doesn't resurrect ghosts.
   // next syncBackup doesn't resurrect ghost files. Best-effort; log on fail.

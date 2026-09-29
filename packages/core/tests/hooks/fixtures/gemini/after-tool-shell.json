@@ -1,0 +1,1 @@
+{ "session_id": "g1", "cwd": "/tmp/work", "hook_event_name": "AfterTool", "tool_name": "run_shell_command", "tool_input": { "command": "gcloud auth list" }, "tool_response": { "llmContent": "ok", "returnDisplay": "ok" } }

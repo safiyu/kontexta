@@ -1,0 +1,1 @@
+{"hook_event_name": "postToolUse", "cwd": "/tmp/work", "tool_name": "shell", "tool_input": {"command": "ls -la"}, "tool_response": {}}

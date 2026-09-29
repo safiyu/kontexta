@@ -1,0 +1,1 @@
+{ "agent_action_name": "pre_user_prompt", "trajectory_id": "w1", "execution_id": "e1", "tool_info": { "user_prompt": "Check the bootstrap gate" } }

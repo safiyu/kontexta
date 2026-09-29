@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-function resolveMcpEntry(): string {
+export function resolveMcpEntry(): string {
   const here = dirname(fileURLToPath(import.meta.url));
   // Installed layout: <global>/node_modules/kontexta/{dist,bundle}/…
   const bundled = resolve(

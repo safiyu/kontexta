@@ -52,6 +52,7 @@ import {
   writeResource,
   listResources,
   deleteResource,
+  syncAgentRows,
   type AgentId,
   type RawEvent,
 } from "kxta-core";
@@ -68,6 +69,7 @@ import { formatExecResult } from "./hands/formatter.js";
 import { killAllActiveChildren } from "./hands/executor.js";
 import { initCapture, shutdownCapture, wrapHandler, startGitPoller, appendVoluntaryEvent, getCurrentAgent, getCurrentSid } from "./journal-capture.js";
 import { registerJournalTools } from "./journal-tools.js";
+import { currentHooksBlock, enableAndInstallHooks, type HooksInstallResult } from "./hooks-block.js";
 import { registerCommitUpgradesTool } from "./journal-commit-upgrades-tool.js";
 import { registerHousekeepTool } from "./journal-housekeep-tool.js";
 import { registerCalendarTools } from "./calendar-tools.js";
@@ -360,8 +362,10 @@ function loadProfileInstructions(): string | undefined {
   // means it comes back every session until admin.onboard_agent is run.
   const rulesWarning = getAgentRulesWarning();
   const rulesBlock = rulesWarning ? `\n⚠️  ${rulesWarning}` : "";
+  const hooksNudge = currentHooksBlock(pkgVersion)?.prompt;
+  const hooksLine = hooksNudge ? `\n🪝 ${hooksNudge}` : "";
 
-  return [header, "", profileBlock, "", calendarBlock, freshness, rulesBlock].filter(Boolean).join("\n");
+  return [header, "", profileBlock, "", calendarBlock, freshness, rulesBlock, hooksLine].filter(Boolean).join("\n");
 }
 
 const server = new McpServer(
@@ -386,6 +390,7 @@ const projectSlug = process.env.KONTEXTA_DEFAULT_PROJECT_SLUG ?? "default";
 const agent = process.env.KONTEXTA_AGENT ?? "unknown";
 const sid = `${process.pid}-${Date.now().toString(36)}`;
 initCapture({ projectSlug, baseDir: baseJournalDir, agent, sid });
+try { syncAgentRows(); } catch { /* agents table is re-seeded on the next start */ }
 
 const distillEngineEnabled = process.env.KONTEXTA_DISTILL_ENGINE !== "off";
 const distillEngine = distillEngineEnabled
@@ -1360,6 +1365,7 @@ ERROR CONDITIONS: Returns isError=true if path is missing or unresolvable. Scan 
                 "Scaffold an AI agent instructions file now? Tell me which agent you use (claude-code, codex, gemini, antigravity, cursor, continue, aider, cline, or copilot) and I'll create the right file (e.g. CLAUDE.md) with the kontexta workflow rules pre-installed, so your agent picks them up on its next session.",
             };
 
+      const hooksBlock = currentHooksBlock(pkgVersion);
       const content: any[] = [
         {
           type: "text",
@@ -1372,6 +1378,7 @@ ERROR CONDITIONS: Returns isError=true if path is missing or unresolvable. Scan 
               hands: handsSummary,
               recommendation,
               rules_status: ruleStatuses,
+              ...(hooksBlock ? { hooks: hooksBlock } : {}),
               ...(warnings.length ? { warnings } : {}),
             },
             null,
@@ -1386,6 +1393,7 @@ ERROR CONDITIONS: Returns isError=true if path is missing or unresolvable. Scan 
           text: `\nPROMPT: ${recommendation.prompt}`,
         });
       }
+      if (hooksBlock?.prompt) content.push({ type: "text", text: `\nPROMPT: ${hooksBlock.prompt}` });
 
       return { content };
     } catch (e: any) {
@@ -1409,15 +1417,18 @@ PARAMETERS:
 - files: string[], optional. Paths relative to project root. For update mode, defaults to recommendation.target_files. Ignored when files is empty AND target_agent is provided (create mode).
 - target_agent: enum claude-code | codex | gemini | cursor | continue | aider | cline | copilot | generic. Required when files is empty AND no context file currently exists. Picks the canonical filename and the starter scaffold.
 
-RETURNS: { written: [{ path, action: created|updated|skipped, version }], skipped: [{ path, reason }] }`,
+- hooks: boolean, optional. With target_agent set, also enables that agent and installs its conversation-capture hooks (npx/source installs) or returns the host docker command (Docker). Ask the user before setting it.
+
+RETURNS: { written: [{ path, action: created|updated|skipped, version }], skipped: [{ path, reason }], hooks_install?: { agent, mode, enabled, outcome?, docker_command?, note?, error? }, hooks?: { install_mode, alerts, prompt } }`,
   {
     project_id: z.number().describe("Project ID returned from register_project"),
     confirm: z.boolean().describe("MANDATORY: Set to true only after obtaining explicit user consent to modify context files."),
     files: z.array(z.string()).optional().describe("Project-relative paths to update; defaults to detected context files"),
     target_agent: z.enum(["claude-code", "codex", "gemini", "antigravity", "cursor", "continue", "aider", "cline", "copilot", "generic"]).optional()
       .describe("Required when files is empty AND no context file exists. Picks the canonical filename + scaffold."),
+    hooks: z.boolean().optional().describe("With target_agent, also enable that agent and install its conversation-capture hooks (npx/source) or return the host docker command. Ask the user first."),
   },
-  async ({ project_id, confirm, files, target_agent }) => {
+  async ({ project_id, confirm, files, target_agent, hooks }) => {
     try {
       if (confirm !== true) {
         return {
@@ -1452,14 +1463,27 @@ RETURNS: { written: [{ path, action: created|updated|skipped, version }], skippe
         };
       }
 
+      if (hooks === true && !target_agent) {
+        return {
+          isError: true,
+          content: [{ type: "text", text: JSON.stringify({ error: "target_agent is required when hooks is true" }, null, 2) }],
+        };
+      }
+
       const result = syncAgentRules({
         projectPath: project.path,
         project: { name: project.name, description: project.description },
         files: targetFiles,
         targetAgent: target_agent as AgentId | undefined,
       });
+      let hooksInstall: HooksInstallResult | undefined;
+      if (hooks === true) hooksInstall = enableAndInstallHooks(target_agent!, pkgVersion);
+      const hooksBlock = currentHooksBlock(pkgVersion);
       return {
-        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        content: [{
+          type: "text",
+          text: JSON.stringify({ ...result, ...(hooksInstall ? { hooks_install: hooksInstall } : {}), ...(hooksBlock ? { hooks: hooksBlock } : {}) }, null, 2),
+        }],
       };
     } catch (e: any) {
       return {

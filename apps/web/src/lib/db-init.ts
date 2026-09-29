@@ -1,4 +1,4 @@
-import { getDataDir, ensureDataDir, getDatabase, resetDataDirCache } from "kxta-core";
+import { getDataDir, ensureDataDir, getDatabase, resetDataDirCache, syncAgentRows, stageEmitter, syncProjectsSidecar, pruneHookState } from "kxta-core";
 
 export let DATA_DIR = getDataDir();
 
@@ -32,5 +32,23 @@ export function ensureDbInitialized() {
 
   if (!globalThis.__kontextaDb) {
     getDatabase(); // Auto-initializes using core's unified path resolution
+  }
+
+  ensureHooksStaged();
+}
+
+let hooksStagedFor: string | null = null;
+
+// Runs once per data dir per process; failures are logged, never fatal — the dashboard must come up even if hooks staging can't write.
+export function ensureHooksStaged(): void {
+  if (hooksStagedFor === DATA_DIR) return;
+  hooksStagedFor = DATA_DIR;
+  try {
+    syncAgentRows();
+    stageEmitter(DATA_DIR);
+    syncProjectsSidecar(DATA_DIR);
+    pruneHookState(DATA_DIR);
+  } catch (e) {
+    console.warn("[hooks] staging failed:", e);
   }
 }

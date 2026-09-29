@@ -117,6 +117,10 @@ export function getDatabase(): Database.Database {
   return db;
 }
 
+export function isDatabaseOpen(): boolean {
+  return db !== null;
+}
+
 /**
  * Close the database connection
  */

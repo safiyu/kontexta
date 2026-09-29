@@ -121,3 +121,17 @@ export function markUpgradeApplied(file_id: number, status_latest: string | null
     .prepare(`UPDATE journal_meta SET status_latest = ? WHERE file_id = ?`)
     .run(status_latest, file_id);
 }
+
+export function gitRefsForFiles(fileIds: number[]): Map<number, Array<{ ref_type: string; ref_value: string }>> {
+  const out = new Map<number, Array<{ ref_type: string; ref_value: string }>>();
+  if (fileIds.length === 0) return out;
+  const rows = getDatabase()
+    .prepare(`SELECT file_id, ref_type, ref_value FROM journal_git_refs WHERE file_id IN (${fileIds.map(() => "?").join(",")})`)
+    .all(...fileIds) as Array<{ file_id: number; ref_type: string; ref_value: string }>;
+  for (const r of rows) {
+    const list = out.get(r.file_id) ?? [];
+    list.push({ ref_type: r.ref_type, ref_value: r.ref_value });
+    out.set(r.file_id, list);
+  }
+  return out;
+}

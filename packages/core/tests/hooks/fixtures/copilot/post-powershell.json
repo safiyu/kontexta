@@ -1,0 +1,1 @@
+{"sessionId": "p1", "cwd": "C:\\work", "toolName": "powershell", "toolArgs": {"command": "Get-ChildItem C:\\work"}, "toolResult": {"resultType": "success", "textResultForLlm": "..."}}

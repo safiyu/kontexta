@@ -1,0 +1,1 @@
+{ "conversation_id": "u1", "generation_id": "gen1", "hook_event_name": "beforeSubmitPrompt", "workspace_roots": ["/tmp/work"], "prompt": "Refactor the retry loop", "attachments": [] }

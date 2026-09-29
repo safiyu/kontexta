@@ -83,9 +83,11 @@ COPY --from=builder /app/apps/web/.next/static ./apps/web/.next/static
 # file-tracing resolves __dirname at runtime.
 COPY --from=builder /app/packages/core/src/db/migrations ./packages/core/src/db/migrations
 COPY --from=builder /app/packages/core/src/agent-rules/rules-block.md ./packages/core/src/agent-rules/rules-block.md
+COPY --from=builder /app/packages/core/src/hooks/emit.mjs ./packages/core/src/hooks/emit.mjs
 
 # Copy deployed MCP server
 COPY --from=builder /app/mcp-deploy ./apps/mcp
+COPY --chmod=755 docker-entrypoint.sh /app/docker-entrypoint.sh
 
 # Web UI on 23002. The file-watcher WebSocket shares this same port
 # (upgrade path /_kontexta_ws), so no separate port is exposed.
@@ -95,4 +97,5 @@ EXPOSE 23002
 USER node
 
 # We use the built standalone server
-CMD ["node", "apps/web/server.js"]
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
+CMD []

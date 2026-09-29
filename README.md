@@ -128,6 +128,8 @@ npx kontexta start
 
 Boots the dashboard on `http://localhost:23002` (opens in your browser) and starts the MCP server. First run walks you through master password, data location, and project registration in the browser.
 
+Enable the coding agents you use in the dashboard and kontexta installs lightweight hooks so the journal also captures your conversation and shell commands — see [`docs/HOOKS.md`](docs/HOOKS.md).
+
 ### Add to your AI client (MCP-only)
 
 If you only want the MCP server (no dashboard), point your AI client at:

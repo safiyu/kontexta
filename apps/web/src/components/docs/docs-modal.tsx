@@ -1,15 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Dialog } from "@/components/ui/dialog";
 import { ToolsSection } from "@/app/docs/tools/tools-section";
 import { InstallSection } from "@/app/docs/install/install-section";
+import { AgentsPanel } from "@/components/agents/agents-panel";
 import { BuilderSection } from "@/app/docs/builder/builder-section";
 import { JournalPanel } from "@/app/docs/journal/journal-panel";
 
-type Tab = "tools" | "install" | "builder" | "journal";
+export type Tab = "tools" | "install" | "agents" | "builder" | "journal";
 const TABS: { id: Tab; label: string }[] = [
   { id: "install", label: "MCP SERVER CONFIG" },
+  { id: "agents", label: "AGENTS" },
   { id: "journal", label: "JOURNAL CONFIG" },
   { id: "builder", label: "HANDS TOOLS" },
   { id: "tools", label: "MCP DOCUMENTATION" },
@@ -18,10 +20,12 @@ const TABS: { id: Tab; label: string }[] = [
 interface DocsModalProps {
   open: boolean;
   onClose: () => void;
+  initialTab?: Tab;
 }
 
-export function DocsModal({ open, onClose }: DocsModalProps) {
+export function DocsModal({ open, onClose, initialTab }: DocsModalProps) {
   const [tab, setTab] = useState<Tab>("install");
+  useEffect(() => { if (open && initialTab) setTab(initialTab); }, [open, initialTab]);
 
   return (
     <Dialog open={open} onClose={onClose} title="Kontexta configuration" widthClass="max-w-6xl" hideHeader>
@@ -48,6 +52,7 @@ export function DocsModal({ open, onClose }: DocsModalProps) {
         <div key={tab} className="flex-1 overflow-auto p-6 bg-[var(--bg-primary)] animate-fade-in">
           {tab === "tools" && <ToolsSection />}
           {tab === "install" && <InstallSection />}
+          {tab === "agents" && <AgentsPanel />}
           {tab === "builder" && <BuilderSection />}
           {tab === "journal" && <JournalPanel />}
         </div>

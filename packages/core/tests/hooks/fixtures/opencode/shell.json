@@ -1,0 +1,1 @@
+{ "kontexta_event": "shell", "session_id": "o1", "cwd": "/tmp/work", "command": "pytest -q" }

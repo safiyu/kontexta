@@ -29,6 +29,8 @@ This project is registered with kontexta. Honor these rules to keep the index, h
 
 **Address `journal.suggested_action` before the next tool call.** Many tool responses include a `journal` envelope. If `journal.suggested_action` is set (e.g., `"journal.distill"`), call that tool before issuing your next tool. To dismiss for the rest of the session, pass `journal_acknowledge: true` on your next tool call.
 
+**Relay `hooks` prompts once per session.** If a tool response carries a `hooks.prompt` (or the session welcome mentions hooks), tell the user once that kontexta can capture their conversation and shell commands for the agents they enabled. Only call `admin.onboard_agent` with `hooks: true` after they agree.
+
 **Use `journal.write({kind: "note", text, tags})` for decisions and abandonments.** When you make a non-obvious call, try something that doesn't work, or capture a workaround, log it. Hands runs are auto-captured now.
 
 **Use `journal.write({kind: "intent", summary})` when the user pivots.** One short sentence so the distillation step knows the topic shifted.

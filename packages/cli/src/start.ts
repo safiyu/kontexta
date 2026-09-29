@@ -40,6 +40,15 @@ export async function runStart(): Promise<never> {
   const data = resolveDataDir();
   process.stdout.write(`Using data at ${data.path}\n`);
 
+  if (!process.env.KONTEXTA_NO_HOOKS) {
+    try {
+      const { runHooks } = await import('./hooks.js');
+      await runHooks(['reconcile'], { ...process.env, KONTEXTA_DATA_DIR: data.path });
+    } catch (e: any) {
+      process.stderr.write(`hooks reconcile skipped: ${e?.message ?? e}\n`);
+    }
+  }
+
   const rawPort = process.env.PORT;
   const preferred = rawPort && /^\d+$/.test(rawPort) ? Number(rawPort) : 23002;
   if (rawPort && !/^\d+$/.test(rawPort)) {

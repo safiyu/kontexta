@@ -29,7 +29,7 @@ export async function checkGit(
   if (branch !== state.branch) {
     events.push({
       ts: now, agent: meta.agent ?? "unknown", sid: meta.sid ?? "unknown",
-      event: "git_context", branch, head, project: meta.project,
+      event: "git_context", source: "git", branch, head, project: meta.project,
     });
   }
 
@@ -43,7 +43,7 @@ export async function checkGit(
       const files_changed = filesOut ? filesOut.split("\n").filter(Boolean) : [];
       events.push({
         ts: now, agent: meta.agent ?? "unknown", sid: meta.sid ?? "unknown",
-        event: "git_commit", sha, msg, files_changed, project: meta.project,
+        event: "git_commit", source: "git", sha, msg, files_changed, project: meta.project,
       });
     }
   }

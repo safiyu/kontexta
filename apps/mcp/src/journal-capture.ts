@@ -1,4 +1,4 @@
-import { getDataDir, getDatabase, JournalWriter, defaultRedactConfig, redactArgs, checkGit, readHighWater, shouldBlock, backlogErrorPayload, type GitWatcherState, resetDataDirCache } from "kxta-core";
+import { getDataDir, getDatabase, isDatabaseOpen, JournalWriter, defaultRedactConfig, redactArgs, checkGit, readHighWater, shouldBlock, backlogErrorPayload, type GitWatcherState, resetDataDirCache } from "kxta-core";
 import type { RawEvent } from "kxta-core";
 import { readdirSync, readFileSync as fsReadFileSync, existsSync as fsExistsSync } from "node:fs";
 
@@ -87,6 +87,8 @@ export function wrapHandler<TArgs extends Record<string, unknown>, TResult exten
     delete cleanArgs.journal_bypass;
 
     const start = Date.now();
+    // Resolve ids before the handler runs — files.delete removes the rows we'd otherwise look up.
+    const touchedBefore = extractTouched(cleanArgs);
     let result: TResult;
     try {
       result = await inner(cleanArgs as TArgs);
@@ -97,9 +99,10 @@ export function wrapHandler<TArgs extends Record<string, unknown>, TResult exten
         agent: ctx?.agent ?? "unknown",
         sid: ctx?.sid ?? "unknown",
         event: "error",
+        source: "mcp",
         tool: toolName,
         args: ctx ? redactArgs(cleanArgs, defaultRedactConfig) : cleanArgs,
-        touched: extractTouched(cleanArgs),
+        touched: touchedBefore,
         status: "error",
         ms: Date.now() - start,
         msg: err instanceof Error ? err.message : String(err),
@@ -112,9 +115,10 @@ export function wrapHandler<TArgs extends Record<string, unknown>, TResult exten
       agent: ctx?.agent ?? "unknown",
       sid: ctx?.sid ?? "unknown",
       event: "tool_call",
+      source: "mcp",
       tool: toolName,
       args: ctx ? redactArgs(cleanArgs, defaultRedactConfig) : cleanArgs,
-      touched: extractTouched(cleanArgs),
+      touched: [...new Set([...touchedBefore, ...touchedFromResult(result)])],
       status: result.isError ? "error" : "ok",
       ms: Date.now() - start,
     });
@@ -193,11 +197,45 @@ function tryWriteEvent(ev: RawEvent): void {
   }
 }
 
-function extractTouched(args: Record<string, unknown>): string[] {
-  const out: string[] = [];
-  if (typeof args.path === "string") out.push(args.path);
-  if (Array.isArray(args.paths)) for (const p of args.paths) if (typeof p === "string") out.push(p);
+function fileIdsIn(args: Record<string, unknown>): number[] {
+  const out: number[] = [];
+  for (const k of ["id", "file_id"]) if (typeof args[k] === "number") out.push(args[k] as number);
+  if (Array.isArray(args.ids)) for (const v of args.ids) if (typeof v === "number") out.push(v);
   return out;
+}
+
+// Capture must never be what opens the DB — getDatabase() would auto-create one at the default data dir.
+function pathsForFileIds(ids: number[]): string[] {
+  if (ids.length === 0 || !isDatabaseOpen()) return [];
+  try {
+    const rows = getDatabase()
+      .prepare(`SELECT path FROM files WHERE id IN (${ids.map(() => "?").join(",")})`)
+      .all(...ids) as { path: string }[];
+    return rows.map((r) => r.path);
+  } catch {
+    return [];
+  }
+}
+
+function extractTouched(args: Record<string, unknown>): string[] {
+  const out = new Set<string>();
+  if (typeof args.path === "string") out.add(args.path);
+  if (Array.isArray(args.paths)) for (const p of args.paths) if (typeof p === "string") out.add(p);
+  for (const p of pathsForFileIds(fileIdsIn(args))) out.add(p);
+  return [...out];
+}
+
+// files.create is the one tool whose paths only exist after it runs; they come back as created[].path.
+function touchedFromResult(result: { content?: any }): string[] {
+  const text = result?.content?.[0]?.text;
+  if (typeof text !== "string" || !text.startsWith("{")) return [];
+  try {
+    const created = JSON.parse(text)?.created;
+    if (!Array.isArray(created)) return [];
+    return created.map((c: any) => c?.path).filter((p: unknown): p is string => typeof p === "string");
+  } catch {
+    return [];
+  }
 }
 
 let gitState: GitWatcherState = { branch: null, head: null };
@@ -205,7 +243,7 @@ let gitTimer: NodeJS.Timeout | null = null;
 let activitySinceLastCheck = false;
 
 export function appendVoluntaryEvent(ev: RawEvent): void {
-  tryWriteEvent(ev);
+  tryWriteEvent({ source: "mcp", ...ev });
 }
 
 let _resolvedSlugCache: { slug: string; ts: number } | null = null;

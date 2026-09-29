@@ -1,0 +1,1 @@
+{ "hook_event_name": "postToolUse", "cwd": "/tmp/work", "session_id": "k1", "tool_name": "execute_bash", "tool_input": { "command": "ls -la" }, "tool_response": {} }

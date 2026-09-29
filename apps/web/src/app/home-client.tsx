@@ -14,7 +14,9 @@ import { NewFileDialog } from "@/components/content/new-file-dialog";
 import { NewFolderDialog } from "@/components/folder-tree/new-folder-dialog";
 import { DeleteFolderDialog } from "@/components/folder-tree/delete-folder-dialog";
 import { UnregisterModal } from "@/components/file-list/unregister-modal";
-import { DocsModal } from "@/components/docs/docs-modal";
+import { DocsModal, type Tab as DocsTab } from "@/components/docs/docs-modal";
+import { HooksBanner } from "@/components/agents/hooks-banner";
+import { FirstRunWizard } from "@/components/file-list/first-run-wizard";
 import { PublishDialog } from "@/components/publish/publish-dialog";
 import { useProjects } from "@/hooks/use-projects";
 import { useFiles } from "@/hooks/use-files";
@@ -32,6 +34,8 @@ export default function HomePage() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
   const [docsOpen, setDocsOpen] = useState(false);
+  const [docsTab, setDocsTab] = useState<DocsTab | undefined>(undefined);
+  const [wizardOpen, setWizardOpen] = useState(false);
   const [newFileOpen, setNewFileOpen] = useState(false);
   const [newFolderOpen, setNewFolderOpen] = useState(false);
   const [folderBucketPrefix, setFolderBucketPrefix] = useState<string | null>(null);
@@ -51,12 +55,12 @@ export default function HomePage() {
   const [sortBy, setSortBy] = useState<SortBy>("updated_at");
   const [folderRefreshKey, setFolderRefreshKey] = useState(0);
 
-  // On first-time setup (?setup=1), auto-open the Configure/Docs modal
+  // On first-time setup (?setup=1), auto-open the first-run wizard (agents → hooks → profile → onboard)
   // and immediately clean up the URL so refreshes don't re-trigger it.
   const searchParams = useSearchParams();
   useEffect(() => {
     if (searchParams.get("setup") === "1") {
-      setDocsOpen(true);
+      setWizardOpen(true);
       const url = new URL(window.location.href);
       url.searchParams.delete("setup");
       window.history.replaceState({}, "", url.toString());
@@ -629,6 +633,7 @@ export default function HomePage() {
         onSyncProject={selectedSection === "projects" && selectedProjectId ? handleSync : undefined}
       />
       <Breadcrumb segments={breadcrumbSegments} />
+      <HooksBanner onOpen={() => { setDocsTab("agents"); setDocsOpen(true); }} />
 
       <ThreePane
         leftRail={<IconRail items={railItems} footer={railFooter} />}
@@ -705,8 +710,17 @@ export default function HomePage() {
 
       <DocsModal
         open={docsOpen}
-        onClose={() => setDocsOpen(false)}
+        onClose={() => { setDocsOpen(false); setDocsTab(undefined); }}
+        initialTab={docsTab}
       />
+      {wizardOpen && (
+        <FirstRunWizard
+          open
+          onClose={() => setWizardOpen(false)}
+          projects={projects}
+          onSaved={refreshProjects}
+        />
+      )}
 
       <NewFileDialog
         open={newFileOpen}
