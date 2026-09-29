@@ -11,7 +11,7 @@ export class MalformedConfigError extends Error {
   }
 }
 
-const q = (s: string) => `"${s.replace(/(["\\$`])/g, "\\$1")}"`;
+const q = (s: string) => `"${s.replace(/(["$`])/g, "\\$1")}"`;
 
 export const hostDirOf = (ctx: InstallCtx): string => ctx.hostDataDir ?? ctx.dataDir;
 
@@ -27,7 +27,7 @@ export function emitCommand(ctx: InstallCtx, agent: string, event?: string): str
 }
 
 export function isOwned(command: unknown): boolean {
-  return typeof command === "string" && command.includes(OWNED_MARK);
+  return typeof command === "string" && (/hooks[\\/]emit\.mjs/).test(command);
 }
 
 export function readJsonConfig(path: string): Record<string, unknown> {

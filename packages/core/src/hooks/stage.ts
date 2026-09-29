@@ -1,11 +1,11 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, statSync, unlinkSync, renameSync } from "node:fs";
-import { join, dirname } from "node:path";
+import { join, dirname, posix } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
 import { getDatabase } from "../db/index.js";
 
 export function emitterVersionOf(source: string): string {
-  return createHash("sha256").update(source).digest("hex").slice(0, 12);
+  return createHash("sha256").update(source.replace(/\r\n/g, "\n")).digest("hex").slice(0, 12);
 }
 
 const DEV_HEADER = "// kontexta-hooks v0.0.0-dev";
@@ -42,11 +42,14 @@ export const EMITTER_VERSION: string = (() => {
 })();
 
 export function stagedEmitterPath(dataDir: string): string {
+  if (dataDir.startsWith("/") || (!dataDir.includes("\\") && dataDir.includes("/"))) {
+    return posix.join(dataDir, "hooks", "emit.mjs");
+  }
   return join(dataDir, "hooks", "emit.mjs");
 }
 
 export function stageEmitter(dataDir: string): { path: string; changed: boolean; version: string } {
-  const src = readFileSync(emitterSourcePath(), "utf8");
+  const src = readFileSync(emitterSourcePath(), "utf8").replace(/\r\n/g, "\n");
   const stamped = src.startsWith(DEV_HEADER) ? `// kontexta-hooks v${EMITTER_VERSION}${src.slice(DEV_HEADER.length)}` : src;
   const dst = stagedEmitterPath(dataDir);
   const current = existsSync(dst) ? readFileSync(dst, "utf8") : null;
@@ -60,7 +63,7 @@ export function stageEmitter(dataDir: string): { path: string; changed: boolean;
 
 export function emitterVersionOnDisk(dataDir: string): string | null {
   try {
-    const first = readFileSync(stagedEmitterPath(dataDir), "utf8").split("\n")[0];
+    const first = readFileSync(stagedEmitterPath(dataDir), "utf8").split(/\r?\n/)[0].trimEnd();
     const m = first.match(/^\/\/ kontexta-hooks v(\S+)$/);
     return m ? m[1] : null;
   } catch { return null; }

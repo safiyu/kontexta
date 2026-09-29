@@ -24,9 +24,9 @@ describe("hooks staging", () => {
     expect(first.changed).toBe(true);
     expect(first.path).toBe(stagedEmitterPath(dataDir));
     const text = readFileSync(first.path, "utf8");
-    expect(text.split("\n")[0]).toBe(`// kontexta-hooks v${EMITTER_VERSION}`);
+    expect(text.split(/\r?\n/)[0]).toBe(`// kontexta-hooks v${EMITTER_VERSION}`);
     expect(text).toContain("export const ADAPTERS");
-    expect(readFileSync(emitterSourcePath(), "utf8").split("\n")[0]).toBe("// kontexta-hooks v0.0.0-dev");
+    expect(readFileSync(emitterSourcePath(), "utf8").split(/\r?\n/)[0]).toBe("// kontexta-hooks v0.0.0-dev");
     expect(emitterVersionOnDisk(dataDir)).toBe(EMITTER_VERSION);
     expect(stageEmitter(dataDir).changed).toBe(false);
   });

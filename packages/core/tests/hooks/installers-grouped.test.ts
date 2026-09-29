@@ -122,7 +122,7 @@ describe.each([
 
   it("bakes the absolute node path by default, but plain `node` for host installs", () => {
     INSTALLERS[id].install(ctx());
-    expect(JSON.stringify(read(cfgPath()))).toContain(`\\"${process.execPath}\\" \\"`);
+    expect(JSON.stringify(read(cfgPath()))).toContain(`\\"${process.execPath.replace(/\\/g, "\\\\")}\\" \\"`);
     rmSync(cfgPath(), { force: true });
     INSTALLERS[id].install({ ...ctx(), hostDataDir: "/host/kx" });
     const cmd: string = JSON.stringify(read(cfgPath()));

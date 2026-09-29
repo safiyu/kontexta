@@ -34,9 +34,9 @@ export async function POST(req: NextRequest) {
 
   const { password, bypassIps, trustProxyHeaders } = body;
 
-  if (typeof password !== "string" || password.length < 8) {
+  if (typeof password !== "string" || password.length < 4) {
     console.warn("[Auth/Setup] Password validation failed");
-    return NextResponse.json({ error: "Password must be at least 8 characters" }, { status: 400 });
+    return NextResponse.json({ error: "Password must be at least 4 characters" }, { status: 400 });
   }
 
   try {
@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
     console.error("[Auth/Setup] Failed to sign session:", err);
     return NextResponse.json({ error: "Failed to create session" }, { status: 500 });
   }
-  
+
   const response = NextResponse.json({ success: true });
   response.cookies.set("kontexta_session", token, {
     httpOnly: true,

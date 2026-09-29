@@ -29,6 +29,7 @@ describe("host-side install (docker path)", () => {
     createDatabase(join(dataDir, "k.db")); syncAgentRows();
     installHooks(["gemini"], { home, dataDir });
     expect(listAgents().find((r) => r.id === "gemini")!.hooks_installed).toBe(true);
-    expect(readFileSync(join(home, ".gemini", "settings.json"), "utf8")).toContain(join(dataDir, "hooks", "emit.mjs"));
+    const cfg = JSON.parse(readFileSync(join(home, ".gemini", "settings.json"), "utf8"));
+    expect(cfg.hooks.BeforeAgent[0].hooks[0].command).toContain(join(dataDir, "hooks", "emit.mjs"));
   });
 });

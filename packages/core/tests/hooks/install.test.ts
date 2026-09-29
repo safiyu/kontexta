@@ -111,6 +111,6 @@ describe("reconcile", () => {
     writeFileSync(stagedEmitterPath(dataDir), "// kontexta-hooks v0.0.1\n");
     const out = reconcile(opts());
     expect(out.map((o) => o.agent)).toEqual(["gemini"]);
-    expect(readFileSync(stagedEmitterPath(dataDir), "utf8").split("\n")[0]).toBe(`// kontexta-hooks v${EMITTER_VERSION}`);
+    expect(readFileSync(stagedEmitterPath(dataDir), "utf8").split(/\r?\n/)[0]).toBe(`// kontexta-hooks v${EMITTER_VERSION}`);
   });
 });

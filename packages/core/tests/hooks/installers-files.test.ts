@@ -101,7 +101,7 @@ describe("cline (executable shims)", () => {
     const r = INSTALLERS.cline.install(ctx());
     expect(r.changed).toBe(true);
     const shim = readFileSync(join(dir, "UserPromptSubmit"), "utf8");
-    expect(shim.split("\n")[0]).toBe("#!/bin/sh");
+    expect(shim.split(/\r?\n/)[0]).toBe("#!/bin/sh");
     expect(shim).toContain("# kontexta-hooks");
     expect(shim).toContain("--agent cline");
     if (process.platform !== "win32") expect(statSync(join(dir, "UserPromptSubmit")).mode & 0o111).toBeTruthy();
@@ -119,8 +119,8 @@ describe("opencode (TypeScript plugin)", () => {
     const r = INSTALLERS.opencode.install(ctx());
     expect(r.path).toBe(join(home, ".config", "opencode", "plugins", "kontexta.ts"));
     const src = readFileSync(r.path, "utf8");
-    expect(src.split("\n")[0]).toBe("// kontexta-hooks");
-    expect(src).toContain(join(dataDir, "hooks", "emit.mjs"));
+    expect(src.split(/\r?\n/)[0]).toBe("// kontexta-hooks");
+    expect(src).toContain(join(dataDir, "hooks", "emit.mjs").replace(/\\/g, "\\\\"));
     expect(src).toContain('"chat.message"');
     expect(src).toContain('"tool.execute.after"');
     expect(src).toContain("directory ?? process.cwd()");
