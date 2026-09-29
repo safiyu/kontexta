@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { profileRelPath, getMissingSections, repairProfile, assembleProfile, getDataDir } from "kxta-core";
+import { profileRelPath, getMissingSections, repairProfile, assembleProfile, parseProfileSections, getDataDir, type ProfileSections } from "kxta-core";
 import { checkAuth } from "@/lib/auth";
 
 export async function GET(request: NextRequest) {
@@ -13,16 +13,18 @@ export async function GET(request: NextRequest) {
     const profilePath = join(dataDir, profileRelPath());
 
     if (!existsSync(profilePath)) {
-      return NextResponse.json({ exists: false, content: null, missing_sections: [] });
+      return NextResponse.json({ exists: false, content: null, missing_sections: [], sections: null });
     }
 
     const content = readFileSync(profilePath, "utf8");
     const missing = getMissingSections(content);
+    const sections = parseProfileSections(content);
 
     return NextResponse.json({
       exists: true,
       content,
       missing_sections: missing,
+      sections,
     });
   } catch (error: any) {
     return NextResponse.json(
@@ -49,26 +51,36 @@ export async function PUT(request: NextRequest) {
     const body = await request.json();
     let content: string;
 
-    if (body.sections) {
-      // Sections form is all-or-nothing — reject partial payloads so a targeted update never silently wipes the fields it didn't send.
-      const REQUIRED_SECTIONS = ["name", "role", "vision", "roadmap", "preferences", "sessionCodingStyle", "teamMembersAndRoles", "notes"] as const;
-      const s = body.sections as Partial<Record<typeof REQUIRED_SECTIONS[number], string>>;
-      const missing = REQUIRED_SECTIONS.filter((k) => typeof s[k] !== "string");
-      if (missing.length > 0) {
-        return NextResponse.json(
-          { error: `sections is missing required fields: ${missing.join(", ")}. Send all eight, or use 'content' for a raw update.` },
-          { status: 400 }
-        );
+    if (body.sections && typeof body.sections === "object") {
+      const s = body.sections as Partial<ProfileSections>;
+      let base: ProfileSections = {
+        name: "",
+        role: "",
+        vision: "",
+        roadmap: "",
+        preferences: "",
+        sessionCodingStyle: "",
+        teamMembersAndRoles: "",
+        notes: "",
+      };
+      if (existsSync(profilePath)) {
+        try {
+          const existingContent = readFileSync(profilePath, "utf8");
+          base = parseProfileSections(existingContent);
+        } catch {
+          // ignore corrupted or unreadable profile, base defaults to empty
+        }
       }
+
       content = assembleProfile({
-        name: s.name!,
-        role: s.role!,
-        vision: s.vision!,
-        roadmap: s.roadmap!,
-        preferences: s.preferences!,
-        sessionCodingStyle: s.sessionCodingStyle!,
-        teamMembersAndRoles: s.teamMembersAndRoles!,
-        notes: s.notes!,
+        name: typeof s.name === "string" ? s.name : base.name,
+        role: typeof s.role === "string" ? s.role : base.role,
+        vision: typeof s.vision === "string" ? s.vision : base.vision,
+        roadmap: typeof s.roadmap === "string" ? s.roadmap : base.roadmap,
+        preferences: typeof s.preferences === "string" ? s.preferences : base.preferences,
+        sessionCodingStyle: typeof s.sessionCodingStyle === "string" ? s.sessionCodingStyle : base.sessionCodingStyle,
+        teamMembersAndRoles: typeof s.teamMembersAndRoles === "string" ? s.teamMembersAndRoles : base.teamMembersAndRoles,
+        notes: typeof s.notes === "string" ? s.notes : base.notes,
       });
     } else if (body.content) {
       // Raw content
@@ -91,6 +103,7 @@ export async function PUT(request: NextRequest) {
       success: true,
       repaired,
       content,
+      sections: parseProfileSections(content),
     });
   } catch (error: any) {
     return NextResponse.json(

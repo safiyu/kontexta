@@ -1,5 +1,13 @@
 # Changelog
 
+## 5.1.1 — Profile save fix (2026-09-29)
+
+### Fixed
+
+- **"Failed to save profile" in the first-run wizard.** The wizard's profile step (step 3) only collected six fields but the `PUT /api/profile` endpoint introduced in 4.6.0 required all eight — silently rejecting the request with a `400` that surfaced as the generic error string. The two missing fields (`sessionCodingStyle`, `teamMembersAndRoles`) are now present in the wizard form, and the error banner now shows the actual server error message rather than always displaying the fallback string.
+- **`PUT /api/profile` accepts partial `sections` payloads.** When a client sends only a subset of profile fields, the endpoint now merges the provided values with the existing saved profile instead of rejecting the request. This preserves data that the caller did not intend to touch and makes partial updates safe to issue from any surface. A `sections` object is also now included in both the `GET` and `PUT` responses so clients can read back parsed field values without needing to re-parse the raw markdown.
+- **`parseProfileSections` added to `kxta-core`.** New exported utility (`parseProfileSections(content: string): ProfileSections`) parses a profile markdown document back into a typed `ProfileSections` record. Used internally by the API and available to any future surface that needs structured field access.
+
 ## 5.1.0 — Agent hooks
 
 - Hooks capture your prompts, agent replies and shell commands into the journal for Claude Code, Gemini CLI, Codex CLI, Copilot CLI, Cursor, Windsurf, Cline and OpenCode (`docs/HOOKS.md`). All agents start disabled (new `agents` table, migration 010); enabling one installs its hooks.

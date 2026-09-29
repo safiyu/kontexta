@@ -102,4 +102,44 @@ describe("profile API route", () => {
     expect(fileContent).toContain("# Name");
     expect(fileContent).toContain("John Doe");
   });
+
+  it("PUT with partial sections updates provided fields while preserving others", async () => {
+    // First create a complete profile
+    await PUT(new NextRequest("http://localhost/api/profile", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sections: {
+          name: "Original Name",
+          role: "Original Role",
+          vision: "Original Vision",
+          roadmap: "Original Roadmap",
+          preferences: "Original Preferences",
+          sessionCodingStyle: "Original Style",
+          teamMembersAndRoles: "Original Team",
+          notes: "Original Notes",
+        }
+      })
+    }));
+
+    // Now update only name and role
+    const req = new NextRequest("http://localhost/api/profile", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sections: {
+          name: "Updated Name",
+          role: "Updated Role",
+        }
+      })
+    });
+    const res = await PUT(req);
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.success).toBe(true);
+    expect(data.sections.name).toBe("Updated Name");
+    expect(data.sections.role).toBe("Updated Role");
+    expect(data.sections.vision).toBe("Original Vision");
+    expect(data.sections.notes).toBe("Original Notes");
+  });
 });

@@ -134,6 +134,28 @@ function hasHeading(content: string, heading: string): boolean {
   return re.test(content);
 }
 
+export function parseProfileSections(content: string): ProfileSections {
+  const bodies = parseSections(content);
+  const findBody = (heading: string) => {
+    if (bodies.has(heading)) return bodies.get(heading)!.trim();
+    const lower = heading.toLowerCase();
+    for (const [k, v] of bodies.entries()) {
+      if (k.toLowerCase() === lower) return v.trim();
+    }
+    return "";
+  };
+  return {
+    name: findBody("Name"),
+    role: findBody("Role"),
+    vision: findBody("Vision"),
+    roadmap: findBody("Roadmap"),
+    preferences: findBody("Preferences"),
+    sessionCodingStyle: findBody("Session coding style"),
+    teamMembersAndRoles: findBody("Team members and roles"),
+    notes: findBody("Notes"),
+  };
+}
+
 function parseSections(content: string): Map<string, string> {
   const map = new Map<string, string>();
   const lines = content.split("\n");

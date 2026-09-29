@@ -372,6 +372,27 @@ option {
   color: #FFFFFF;
 }
 
+/* Dark-mode override: dark background + orange text at rest, solid on hover.
+   Mirrors the btn-outline pattern but uses the accent colour instead of gold. */
+.dark .btn-primary {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.dark .btn-primary:hover,
+.dark .btn-primary:active,
+.dark .btn-primary:focus {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #FFFFFF;
+}
+.dark .btn-primary:disabled:hover,
+.dark .btn-primary:disabled:active,
+.dark .btn-primary:disabled:focus {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  color: var(--accent);
+}
+
 /* Outline role — persistent subtle border/background at rest, so an
    icon-only action (e.g. the calendar close button) reads as a button
    instead of blending into the toolbar until hovered. */

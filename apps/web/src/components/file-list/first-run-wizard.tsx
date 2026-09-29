@@ -13,7 +13,7 @@ interface FirstRunWizardProps {
   onSaved: () => void;
 }
 
-interface ProfileSections { name: string; role: string; vision: string; roadmap: string; preferences: string; notes: string }
+interface ProfileSections { name: string; role: string; vision: string; roadmap: string; preferences: string; sessionCodingStyle: string; teamMembersAndRoles: string; notes: string }
 
 const TITLES: Record<number, string> = {
   1: "Which coding agents do you use?",
@@ -34,7 +34,7 @@ const SECONDARY = "btn btn-md btn-outline";
 export function FirstRunWizard({ open, onClose, initialStep = 1, projects, onSaved }: FirstRunWizardProps) {
   const { state, setEnabled, hooksAction } = useAgents();
   const [step, setStep] = useState(initialStep);
-  const [sections, setSections] = useState<ProfileSections>({ name: "", role: "", vision: "", roadmap: "", preferences: "", notes: "" });
+  const [sections, setSections] = useState<ProfileSections>({ name: "", role: "", vision: "", roadmap: "", preferences: "", sessionCodingStyle: "", teamMembersAndRoles: "", notes: "" });
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [seeded, setSeeded] = useState(false);
   const [results, setResults] = useState<Record<string, ToggleResult>>({});
@@ -93,7 +93,8 @@ export function FirstRunWizard({ open, onClose, initialStep = 1, projects, onSav
     setSaving(true); setError(null);
     try {
       const res = await fetch("/api/profile", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sections }) });
-      if (!res.ok) throw new Error("Failed to save profile");
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || "Failed to save profile");
       setStep(4);
     } catch (e: any) {
       setError(e?.message || "Failed to save profile");
@@ -191,13 +192,22 @@ export function FirstRunWizard({ open, onClose, initialStep = 1, projects, onSav
 
         {step === 3 && (
           <div className="space-y-4">
-            {(["name", "role", "vision", "roadmap", "preferences", "notes"] as const).map((field) => (
-              <div key={field}>
-                <label htmlFor={`wizard-${field}`} className="mb-1 block text-sm font-medium capitalize text-[var(--text-secondary)]">{field}</label>
-                {field === "notes" ? (
-                  <textarea id={`wizard-${field}`} value={sections[field]} onChange={(e) => setSections({ ...sections, [field]: e.target.value })} className={FIELD} rows={3} placeholder={`Enter your ${field}...`} />
+            {([
+              { key: "name", label: "Name", multiline: false, placeholder: "e.g. Safiyu" },
+              { key: "role", label: "Role", multiline: false, placeholder: "e.g. Data engineer" },
+              { key: "vision", label: "Vision", multiline: false, placeholder: "e.g. reduce operational load on the SAP replication path" },
+              { key: "roadmap", label: "Roadmap", multiline: false, placeholder: "e.g. sprint 7 CDC observability" },
+              { key: "preferences", label: "Preferences", multiline: false, placeholder: "e.g. TypeScript, terse responses" },
+              { key: "sessionCodingStyle", label: "Session coding style", multiline: true, placeholder: "e.g. one-line comments only; no auto push to git" },
+              { key: "teamMembersAndRoles", label: "Team members & roles", multiline: true, placeholder: "e.g. Alice — PM\nBob — SRE" },
+              { key: "notes", label: "Notes", multiline: true, placeholder: "Free-form scratch space." },
+            ] as const).map(({ key, label, multiline, placeholder }) => (
+              <div key={key}>
+                <label htmlFor={`wizard-${key}`} className="mb-1 block text-sm font-medium text-[var(--text-secondary)]">{label}</label>
+                {multiline ? (
+                  <textarea id={`wizard-${key}`} value={sections[key]} onChange={(e) => setSections({ ...sections, [key]: e.target.value })} className={FIELD} rows={3} placeholder={placeholder} />
                 ) : (
-                  <input id={`wizard-${field}`} type="text" value={sections[field]} onChange={(e) => setSections({ ...sections, [field]: e.target.value })} className={FIELD} placeholder={`Enter your ${field}...`} />
+                  <input id={`wizard-${key}`} type="text" value={sections[key]} onChange={(e) => setSections({ ...sections, [key]: e.target.value })} className={FIELD} placeholder={placeholder} />
                 )}
               </div>
             ))}
