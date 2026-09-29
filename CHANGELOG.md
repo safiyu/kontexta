@@ -1,5 +1,16 @@
 # Changelog
 
+## 5.1.2 — First-run wizard streamline & onboarding fixes (2026-09-30)
+
+### Changed
+
+- **Streamline first-run wizard:** The first-run wizard now completes at Step 3 ("Set Up Your Profile") with a "Finish & Launch" button. Step 4 ("Onboard an Agent") was removed from the initial setup flow since projects have not yet been registered during fresh install; onboarding is performed per-project later (e.g. via `admin.onboard_agent` or in project settings).
+
+### Fixed
+
+- **Knowledge Base onboarding in `/api/projects/onboard`:** When `project_id` is omitted or null (Knowledge Base mode), the endpoint now scaffolds agent context rules (e.g. `ANTIGRAVITY.md`, `GEMINI.md`) into the Knowledge Base root directory (`join(DATA_DIR, "knowledge")`) instead of rejecting the request.
+- **Wizard error display:** Added explicit JSON error extraction on onboard requests to surface actual server errors.
+
 ## 5.1.1 — Profile save fix (2026-09-29)
 
 ### Fixed

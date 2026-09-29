@@ -19,19 +19,17 @@ const TITLES: Record<number, string> = {
   1: "Which coding agents do you use?",
   2: "Install hooks",
   3: "Set Up Your Profile",
-  4: "Onboard an Agent",
 };
 const DESCRIPTIONS: Record<number, string> = {
   1: "Pick the agents you use. Kontexta installs hooks for them so your conversations and shell commands reach the journal — agents you leave off are ignored everywhere.",
   2: "Result of installing hooks for each agent you selected.",
   3: "Help AI agents understand you better by filling in your profile.",
-  4: "Select an AI coding agent to onboard with your kontexta setup.",
 };
 const FIELD = "w-full rounded-md border border-[var(--border)] bg-[var(--bg-primary)] px-3 py-2 text-sm text-[var(--text-primary)]";
 const PRIMARY = "btn btn-md btn-primary";
 const SECONDARY = "btn btn-md btn-outline";
 
-export function FirstRunWizard({ open, onClose, initialStep = 1, projects, onSaved }: FirstRunWizardProps) {
+export function FirstRunWizard({ open, onClose, initialStep = 1, onSaved }: FirstRunWizardProps) {
   const { state, setEnabled, hooksAction } = useAgents();
   const [step, setStep] = useState(initialStep);
   const [sections, setSections] = useState<ProfileSections>({ name: "", role: "", vision: "", roadmap: "", preferences: "", sessionCodingStyle: "", teamMembersAndRoles: "", notes: "" });
@@ -40,28 +38,21 @@ export function FirstRunWizard({ open, onClose, initialStep = 1, projects, onSav
   const [results, setResults] = useState<Record<string, ToggleResult>>({});
   const [retryErrors, setRetryErrors] = useState<Record<string, string | null>>({});
   const [copied, setCopied] = useState<string | null>(null);
-  const [selectedAgent, setSelectedAgent] = useState<string>("");
-  const [selectedProject, setSelectedProject] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Reset state when the wizard opens or its inputs change while open, so async-arriving projects aren't ignored.
+  // Reset state when the wizard opens
   useEffect(() => {
     if (!open) return;
     setStep(initialStep);
     setError(null);
-    if (projects.length > 0 && !selectedProject) setSelectedProject(projects[0].id);
-  }, [open, initialStep, projects, selectedProject]);
+  }, [open, initialStep]);
 
   useEffect(() => {
     if (state && !seeded) { setSelected(new Set(state.agents.filter((a) => a.enabled).map((a) => a.id))); setSeeded(true); }
   }, [state, seeded]);
 
   const agents = state?.agents ?? [];
-  const onboardChoices = (() => {
-    const enabled = agents.filter((a) => a.enabled && a.onboardable);
-    return enabled.length > 0 ? enabled : agents.filter((a) => a.onboardable);
-  })();
 
   const toggle = (id: string) => setSelected((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
 
@@ -95,22 +86,10 @@ export function FirstRunWizard({ open, onClose, initialStep = 1, projects, onSav
       const res = await fetch("/api/profile", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sections }) });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || "Failed to save profile");
-      setStep(4);
+      onSaved();
+      onClose();
     } catch (e: any) {
       setError(e?.message || "Failed to save profile");
-    } finally { setSaving(false); }
-  };
-
-  const handleOnboardAgent = async () => {
-    if (!selectedAgent) { setError("Please select an agent"); return; }
-    setSaving(true); setError(null);
-    try {
-      const projectId = projects.length > 0 ? selectedProject : null;
-      const res = await fetch("/api/projects/onboard", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ agent: selectedAgent, project_id: projectId }) });
-      if (!res.ok) throw new Error("Failed to onboard agent");
-      onSaved(); onClose();
-    } catch (e: any) {
-      setError(e?.message || "Failed to onboard agent");
     } finally { setSaving(false); }
   };
 
@@ -213,37 +192,7 @@ export function FirstRunWizard({ open, onClose, initialStep = 1, projects, onSav
             ))}
             <div className="flex justify-end gap-2 pt-4">
               <button className={SECONDARY} onClick={onClose}>Skip</button>
-              <button className={PRIMARY} onClick={() => void handleSaveProfile()} disabled={saving}>{saving ? "Saving..." : "Continue"}</button>
-            </div>
-          </div>
-        )}
-
-        {step === 4 && (
-          <div className="space-y-4">
-            {projects.length > 1 && (
-              <div>
-                <label htmlFor="wizard-project" className="mb-1 block text-sm font-medium text-[var(--text-secondary)]">Target project</label>
-                <select id="wizard-project" value={selectedProject ?? ""} onChange={(e) => setSelectedProject(Number(e.target.value))} className={FIELD}>
-                  {projects.map((p) => <option key={p.id} value={p.id}>{p.name || `Project ${p.id}`}</option>)}
-                  <option value="">Knowledge Base (no project)</option>
-                </select>
-              </div>
-            )}
-            <div className="grid grid-cols-2 gap-2">
-              {onboardChoices.map((a) => (
-                <button
-                  key={a.id}
-                  aria-pressed={selectedAgent === a.id}
-                  onClick={() => setSelectedAgent(a.id)}
-                  className={`rounded-lg border p-3 text-left text-sm transition-colors ${selectedAgent === a.id ? "border-[var(--accent)] bg-[var(--accent-soft)]" : "border-[var(--border)] hover:bg-[var(--bg-tertiary)]"}`}
-                >
-                  <div className="font-medium">{a.name}</div>
-                </button>
-              ))}
-            </div>
-            <div className="flex justify-end gap-2 pt-4">
-              <button className={SECONDARY} onClick={() => setStep(3)}>Back</button>
-              <button className={PRIMARY} onClick={() => void handleOnboardAgent()} disabled={saving || !selectedAgent}>{saving ? "Onboarding..." : "Onboard Agent"}</button>
+              <button className={PRIMARY} onClick={() => void handleSaveProfile()} disabled={saving}>{saving ? "Saving..." : "Finish & Launch"}</button>
             </div>
           </div>
         )}

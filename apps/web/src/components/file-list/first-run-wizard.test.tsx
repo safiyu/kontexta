@@ -84,16 +84,29 @@ describe("FirstRunWizard", () => {
     expect(screen.getByRole("button", { name: "Copy install command for Claude Code" })).toBeTruthy();
   });
 
-  it("the onboard step offers only enabled agents that have a rules scaffold", async () => {
-    renderWizard();
+  it("the profile step is the final step and finishes the wizard on save", async () => {
+    let closed = false;
+    let saved = false;
+    render(
+      <FirstRunWizard
+        open
+        onClose={() => { closed = true; }}
+        projects={[]}
+        onSaved={() => { saved = true; }}
+      />
+    );
     fireEvent.click(await screen.findByLabelText("Claude Code"));
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     await screen.findByText("Install hooks");
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     await screen.findByText("Set Up Your Profile");
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-    expect(await screen.findByText("Onboard an Agent")).toBeTruthy();
-    expect(screen.getByRole("button", { name: /Claude Code/ })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: /Gemini CLI/ })).toBeNull();
+    expect(screen.getByRole("button", { name: "Finish & Launch" })).toBeTruthy();
+    expect(screen.queryByText("Onboard an Agent")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Finish & Launch" }));
+    await vi.waitFor(() => {
+      expect(saved).toBe(true);
+      expect(closed).toBe(true);
+    });
   });
 });
