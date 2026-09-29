@@ -1,7 +1,8 @@
 import { checkAuth } from "@/lib/auth";
 import { NextRequest, NextResponse } from "next/server";
 import { syncAgentRules, getDatabase, type AgentId } from "kxta-core";
-import { ensureDbInitialized } from "@/lib/db-init";
+import { DATA_DIR, ensureDbInitialized } from "@/lib/db-init";
+import { join } from "node:path";
 
 export async function POST(req: NextRequest) {
   if (!checkAuth(req)) return new NextResponse("Unauthorized", { status: 401 });
@@ -23,21 +24,20 @@ export async function POST(req: NextRequest) {
   // Resolve project path
   let projectPath: string | null = null;
   let projectName = "";
-  if (project_id != null) {
+  if (project_id != null && project_id !== "" && Number(project_id) > 0) {
     const db = getDatabase();
     const project = db
       .prepare("SELECT id, name, path FROM projects WHERE id = ?")
-      .get(project_id) as { id: number; name: string; path: string | null } | undefined;
+      .get(Number(project_id)) as { id: number; name: string; path: string | null } | undefined;
     if (!project || !project.path) {
       return NextResponse.json({ error: `Project ${project_id} not found or has no path` }, { status: 404 });
     }
     projectPath = project.path;
     projectName = project.name;
-  }
-
-  // For KB-only mode (no project), we can't onboard — need a project path
-  if (!projectPath) {
-    return NextResponse.json({ error: "project_id is required for onboarding" }, { status: 400 });
+  } else {
+    // For KB-only mode or fresh installs without projects yet, onboard into the Knowledge Base root
+    projectPath = join(DATA_DIR, "knowledge");
+    projectName = "Knowledge Base";
   }
 
   try {

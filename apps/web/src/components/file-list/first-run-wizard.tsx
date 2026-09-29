@@ -107,7 +107,8 @@ export function FirstRunWizard({ open, onClose, initialStep = 1, projects, onSav
     try {
       const projectId = projects.length > 0 ? selectedProject : null;
       const res = await fetch("/api/projects/onboard", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ agent: selectedAgent, project_id: projectId }) });
-      if (!res.ok) throw new Error("Failed to onboard agent");
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || "Failed to onboard agent");
       onSaved(); onClose();
     } catch (e: any) {
       setError(e?.message || "Failed to onboard agent");
@@ -243,6 +244,7 @@ export function FirstRunWizard({ open, onClose, initialStep = 1, projects, onSav
             </div>
             <div className="flex justify-end gap-2 pt-4">
               <button className={SECONDARY} onClick={() => setStep(3)}>Back</button>
+              <button className={SECONDARY} onClick={onClose}>Skip</button>
               <button className={PRIMARY} onClick={() => void handleOnboardAgent()} disabled={saving || !selectedAgent}>{saving ? "Onboarding..." : "Onboard Agent"}</button>
             </div>
           </div>
