@@ -19,7 +19,7 @@ const manrope = Manrope({
   variable: "--font-title",
   display: "swap",
 });
-// Title face for the Blueprint theme (.blueprint overrides --font-title in globals.css).
+// Title face for the dark theme (.dark overrides --font-title in globals.css).
 const saira = Saira({
   subsets: ["latin"],
   variable: "--font-saira",
@@ -37,6 +37,14 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        {/* Runs before next-themes reads localStorage: the retired "blueprint" id becomes "dark". */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `try{if(localStorage.getItem("theme")==="blueprint")localStorage.setItem("theme","dark")}catch(e){}`,
+          }}
+        />
+      </head>
       <body
         className={`${inter.variable} ${jetbrainsMono.variable} ${manrope.variable} ${saira.variable} font-sans antialiased`}
       >

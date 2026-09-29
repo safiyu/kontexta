@@ -7,8 +7,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   return (
     <NextThemesProvider
       attribute="class"
-      defaultTheme="blueprint"
-      themes={["light", "dark", "blueprint"]}
+      defaultTheme="dark"
+      themes={["light", "dark"]}
     >
       {children}
     </NextThemesProvider>
