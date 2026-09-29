@@ -106,6 +106,9 @@ export function ProfileEditor({ onDirtyChange, onChanged }: ProfileEditorProps) 
   useEffect(() => {
     onDirtyChange?.(dirty);
   }, [dirty, onDirtyChange]);
+  const onDirtyChangeRef = useRef(onDirtyChange);
+  useEffect(() => { onDirtyChangeRef.current = onDirtyChange; }, [onDirtyChange]);
+  useEffect(() => () => onDirtyChangeRef.current?.(false), []);
 
   const initialLoadRef = useRef(false);
   useEffect(() => {
@@ -117,9 +120,10 @@ export function ProfileEditor({ onDirtyChange, onChanged }: ProfileEditorProps) 
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
         const content = data.exists ? (data.content as string) : "";
+        const canon = assemble(parseProfile(content));
         setParsed(parseProfile(content));
-        setRawContent(content);
-        setSavedContent(content);
+        setRawContent(canon);
+        setSavedContent(canon);
       } catch (e: any) {
         setError(e?.message ?? "Failed to load profile");
       } finally {
@@ -164,9 +168,11 @@ export function ProfileEditor({ onDirtyChange, onChanged }: ProfileEditorProps) 
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error ?? `HTTP ${res.status}`);
       const finalContent = (data.content as string) ?? currentContent;
-      setSavedContent(finalContent);
+      // Baseline is the editor's own canonical form so a server-normalised file never reads as dirty.
+      const canon = assemble(parseProfile(finalContent));
+      setSavedContent(canon);
       setParsed(parseProfile(finalContent));
-      setRawContent(finalContent);
+      setRawContent(canon);
       toast.success("Profile saved");
       onChanged?.();
     } catch (e: any) {

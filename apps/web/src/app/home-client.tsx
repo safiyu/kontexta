@@ -18,6 +18,7 @@ import { DocsModal, type Tab as DocsTab } from "@/components/docs/docs-modal";
 import { HooksBanner } from "@/components/agents/hooks-banner";
 import { FirstRunWizard } from "@/components/file-list/first-run-wizard";
 import { PublishDialog } from "@/components/publish/publish-dialog";
+import { useDiscardGuard } from "@/hooks/use-discard-guard";
 import { useProjects } from "@/hooks/use-projects";
 import { useFiles } from "@/hooks/use-files";
 import { useFolders } from "@/hooks/use-folders";
@@ -153,7 +154,7 @@ export default function HomePage() {
 
   // Tag is its own axis — clear the other filters so the file list only reflects the tag. Dirty check runs before any state change so a Cancel leaves the UI untouched.
   const handleSelectTag = (tag: string | null) => {
-    if (tag && !confirmDiscardIfDirty()) return;
+    if (tag && !guardDiscard(() => handleSelectTag(tag))) return;
     setSelectedTag(tag);
     if (tag) {
       setSelectedSection("tags");
@@ -195,29 +196,11 @@ export default function HomePage() {
   const [hydrated, setHydrated] = useState(false);
   useEffect(() => setHydrated(true), []);
 
-  // ContentPane reports unsaved-edit state up via onDirtyChange. Selection
-  // handlers below check this before discarding the active file so an
-  // unintended click can't silently throw away in-progress edits.
-  const isDirtyRef = useRef(false);
-  const confirmDiscardIfDirty = (): boolean => {
-    if (!isDirtyRef.current) return true;
-    return window.confirm("You have unsaved changes in the open file. Discard them?");
-  };
-
-  // Catches tab close / hard-refresh while editing.
-  useEffect(() => {
-    const handler = (e: BeforeUnloadEvent) => {
-      if (isDirtyRef.current) {
-        e.preventDefault();
-        e.returnValue = "";
-      }
-    };
-    window.addEventListener("beforeunload", handler);
-    return () => window.removeEventListener("beforeunload", handler);
-  }, []);
+  // ContentPane reports unsaved-edit state up via onDirtyChange; selection handlers gate on it through an in-app dialog.
+  const { confirmDiscardIfDirty: guardDiscard, setDirty, dialog: discardDialog } = useDiscardGuard();
 
   const handleSelectProject = (projectId: number) => {
-    if (!confirmDiscardIfDirty()) return;
+    if (!guardDiscard(() => handleSelectProject(projectId))) return;
     setSelectedProjectId(projectId);
     setSelectedSection("projects");
     setSelectedFileId(null);
@@ -228,7 +211,7 @@ export default function HomePage() {
   };
 
   const handleSelectKnowledge = () => {
-    if (!confirmDiscardIfDirty()) return;
+    if (!guardDiscard(() => handleSelectKnowledge())) return;
     setSelectedSection("knowledge");
     setSelectedProjectId(null);
     setSelectedFileId(null);
@@ -239,7 +222,7 @@ export default function HomePage() {
   };
 
   const handleSelectFavorites = () => {
-    if (!confirmDiscardIfDirty()) return;
+    if (!guardDiscard(() => handleSelectFavorites())) return;
     setSelectedSection("favorites");
     setSelectedProjectId(null);
     setSelectedFileId(null);
@@ -252,7 +235,7 @@ export default function HomePage() {
   // Atomically switches to KB section AND selects a specific folder
   // (avoids the race where handleSelectKnowledge clears selectedFolder)
   const handleSelectKnowledgeFolder = (folderPath: string | null) => {
-    if (!confirmDiscardIfDirty()) return;
+    if (!guardDiscard(() => handleSelectKnowledgeFolder(folderPath))) return;
     setSelectedSection("knowledge");
     setSelectedProjectId(null);
     setSelectedFileId(null);
@@ -263,7 +246,7 @@ export default function HomePage() {
   };
 
   const handleSelectFile = (fileId: number, fromTree?: boolean) => {
-    if (fileId !== selectedFileId && !confirmDiscardIfDirty()) return;
+    if (fileId !== selectedFileId && !guardDiscard(() => handleSelectFile(fileId, fromTree))) return;
     
     const file = allFiles.find((f) => f.id === fileId);
     if (file) {
@@ -306,7 +289,7 @@ export default function HomePage() {
   };
 
   const handleSelectFolder = (folderPath: string | null) => {
-    if (!confirmDiscardIfDirty()) return;
+    if (!guardDiscard(() => handleSelectFolder(folderPath))) return;
     setSelectedFolder(folderPath);
     setSelectedFileId(null);
   };
@@ -377,7 +360,7 @@ export default function HomePage() {
   };
 
   const handleSearchSelect = (result: { id: number; path: string; project_id: number | null }) => {
-    if (result.id !== selectedFileId && !confirmDiscardIfDirty()) return;
+    if (result.id !== selectedFileId && !guardDiscard(() => handleSearchSelect(result))) return;
     // Switch the surrounding navigation context to the file's owning
     // section/project so the breadcrumb, file list, and folder tree all
     // line up with the content the user is about to view.
@@ -633,6 +616,7 @@ export default function HomePage() {
         onSyncProject={selectedSection === "projects" && selectedProjectId ? handleSync : undefined}
       />
       <Breadcrumb segments={breadcrumbSegments} />
+      {discardDialog}
       <HooksBanner onOpen={() => { setDocsTab("agents"); setDocsOpen(true); }} />
 
       <ThreePane
@@ -688,7 +672,7 @@ export default function HomePage() {
             onNewFile={() => setNewFileOpen(true)}
           />
         }
-        right={<ContentPane fileId={selectedFileId} onDelete={handleDeleteFile} onChanged={refreshAllFiles} onDirtyChange={(d) => { isDirtyRef.current = d; }} onNavigateToFile={(id) => handleSelectFile(id)} />}
+        right={<ContentPane fileId={selectedFileId} onDelete={handleDeleteFile} onChanged={refreshAllFiles} onDirtyChange={setDirty} onNavigateToFile={(id) => handleSelectFile(id)} />}
       />
       <StatusBar
         globalRemoteUrl={globalRemoteUrl}
