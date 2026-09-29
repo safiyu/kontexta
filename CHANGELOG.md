@@ -2,9 +2,9 @@
 
 ## 5.1.0 — Agent hooks
 
-- Hooks capture your prompts, agent replies and shell commands into the journal for Claude Code, Gemini CLI, Codex CLI, Copilot CLI, Cursor, Windsurf, Cline and OpenCode (`docs/HOOKS.md`). All agents start disabled; enabling one installs its hooks.
+- Hooks capture your prompts, agent replies and shell commands into the journal for Claude Code, Gemini CLI, Codex CLI, Copilot CLI, Cursor, Windsurf, Cline and OpenCode (`docs/HOOKS.md`). All agents start disabled (new `agents` table, migration 010); enabling one installs its hooks.
 - `kontexta hooks …` CLI, a first-run wizard and Configure → AGENTS tab in the dashboard, and `admin.onboard_agent({hooks: true})`. Still 58 tools.
-- Journal entries keep notes, commits, conversation and shell commands instead of "No file activity" stubs, and later distill runs stay in the same task instead of piling into `task-orphan`.
+- Journal entries keep notes, commits, conversation and shell commands instead of "No file activity" stubs; later distill runs stay in the same task, and branchless work is filed as `task-<HHMM>-<topic>` (UTC) instead of `task-orphan`.
 - `rulesVersion` 3.0.0 → 3.1.0: existing projects re-onboard via `admin.onboard_agent`.
 - The old dark theme is removed; Blueprint is now Dark.
 

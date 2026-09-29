@@ -12,9 +12,9 @@ const USAGE = `kontexta hooks — install coding-agent hooks that feed the journ
 
 Usage:
   kontexta hooks status [--json]
-  kontexta hooks install (--agent a,b | --all-enabled) [--dry-run]
-  kontexta hooks uninstall --agent a,b [--dry-run]
-  kontexta hooks enable <agent> [--no-install]
+  kontexta hooks install (--agent a,b | --all-enabled) [--dry-run] [--json]
+  kontexta hooks uninstall --agent a,b [--dry-run] [--json]
+  kontexta hooks enable <agent> [--no-install] [--json]
   kontexta hooks disable <agent>
   kontexta hooks reconcile [--json]
   kontexta hooks stage

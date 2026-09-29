@@ -168,4 +168,9 @@ describe("groupEventsIntoTasks", () => {
     expect(buckets).toHaveLength(1);
     expect(buckets[0].task_slug).toBe("other-thing");
   });
+
+  it("never builds a task name from text that looks like a credential", () => {
+    const events = [ev({ ts: "2026-09-28T07:37:00.000Z", sid: "s9", agent: "codex", event: "agent_note", tool: undefined, touched: undefined, summary: "db password is hunter2 for staging" })];
+    expect(groupEventsIntoTasks(events, [], TICKET_RE)[0].task_slug).toBe("0737-codex");
+  });
 });

@@ -103,8 +103,7 @@ export async function distillJournal(opts: DistillJournalOpts): Promise<DistillR
       });
 
       if (existsSync(filePath)) {
-        // Accumulate with what earlier runs recorded (files, branches, commits) so the DB row and the
-        // open-task matching of the next run keep the task's whole history, not just this batch.
+        // Accumulate with what earlier runs recorded so the DB row and next run's task matching keep the whole history, not just this batch.
         const existing = readFileSync(filePath, "utf8");
         fm = mergeFrontmatter(parseFrontmatter(existing), fm);
         writeFileSync(filePath, replaceOrAppendEntry(existing, fm, entry));

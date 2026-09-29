@@ -1,5 +1,5 @@
-import { readFileSync, writeFileSync, mkdirSync, existsSync, renameSync, realpathSync, statSync, chmodSync } from "node:fs";
-import { dirname } from "node:path";
+import { readFileSync, writeFileSync, mkdirSync, existsSync, renameSync, realpathSync, statSync, chmodSync, lstatSync, readlinkSync } from "node:fs";
+import { dirname, resolve, isAbsolute } from "node:path";
 import { stagedEmitterPath } from "../stage.js";
 import type { InstallCtx } from "./types.js";
 
@@ -43,6 +43,15 @@ export function readJsonConfig(path: string): Record<string, unknown> {
   }
 }
 
+// A symlink whose target does not exist yet (dotfile managers): write the target so the link survives.
+function danglingLinkTarget(path: string): string | null {
+  try {
+    if (!lstatSync(path).isSymbolicLink()) return null;
+    const t = readlinkSync(path);
+    return isAbsolute(t) ? t : resolve(dirname(path), t);
+  } catch { return null; }
+}
+
 export function writeJsonConfig(path: string, value: unknown, dryRun = false): boolean {
   const next = JSON.stringify(value, null, 2) + "\n";
   const exists = existsSync(path);
@@ -52,7 +61,7 @@ export function writeJsonConfig(path: string, value: unknown, dryRun = false): b
   if (same) return false;
   if (dryRun) return true;
   // Write through symlinks (dotfile managers) and keep the target's mode: replacing the path itself would break the link and can widen a 0600 file.
-  const real = exists ? realpathSync(path) : path;
+  const real = exists ? realpathSync(path) : danglingLinkTarget(path) ?? path;
   const mode = exists ? statSync(real).mode & 0o777 : 0o644;
   mkdirSync(dirname(real), { recursive: true });
   const tmp = `${real}.${process.pid}.tmp`;

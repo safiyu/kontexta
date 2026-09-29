@@ -50,6 +50,8 @@ function labelFor(events: RawEvent[]): string {
   const first = events.find((e) =>
     (e.event === "user_prompt" && e.text) || ((e.event === "agent_note" || e.event === "user_intent") && e.summary));
   const raw = first ? (first.text ?? first.summary ?? "") : "";
+  // Task names land in the KB index and git backup, so text that looks like a credential never becomes one.
+  if (/(password|passwd|pwd|secret|token|api[_-]?key|bearer|credential)/i.test(raw)) return slugify(events.find((e) => e.agent && e.agent !== "unknown")?.agent ?? "session") || "session";
   const words = raw.toLowerCase().replace(/[^a-z0-9\s-]/g, " ").split(/\s+/).filter((w) => w.length > 1).slice(0, 6);
   const fromText = slugify(words.join(" ")).slice(0, 40).replace(/-+$/, "");
   if (fromText) return fromText;

@@ -7,7 +7,7 @@ Kontexta's journal records what happens through its own MCP tools. Hooks add the
 1. You enable an agent (dashboard → Settings → Agents, the first-run wizard, or `kontexta hooks enable <agent>`). Every agent starts **disabled**; nothing is installed for an agent you haven't enabled.
 2. Kontexta writes hook entries into that agent's user-level config and stages a dependency-free script at `<data dir>/hooks/emit.mjs`.
 3. On each prompt, reply and shell command the agent runs `node emit.mjs --agent <id>`; the script appends one JSON line to `<data dir>/knowledge/journal/<project>/raw/<date>.jsonl`. It prints nothing and always exits 0, so it can never block a turn.
-4. `journal.distill` renders a **Conversation** and a **Shell** section per task; `files.search` finds them.
+4. `journal.distill` renders a **Conversation** and a **Shell** section per task; `files.search` finds them. Work with no branch is filed as `task-<HHMM>-<topic>.md`; the time is UTC, like every other timestamp in the journal.
 
 The project is resolved from the agent's working directory via `<data dir>/hooks/projects.json`; the git branch is read from `.git/HEAD` so entries bucket by branch even without the MCP server running.
 

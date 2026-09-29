@@ -50,6 +50,7 @@ describe("InstallSection — enabled-agent filter", () => {
     render(<InstallSection />);
     await waitFor(() => expect(clientLabels()).toEqual(["Generic JSON"]));
     expect(screen.getByText(/enable the agents you use in the AGENTS tab/i)).toBeTruthy();
+    expect(screen.getByText(/enabling an agent installs kontexta hooks into that agent's config file/i)).toBeTruthy();
   });
 
   it("re-selects a visible client when the default one is hidden", async () => {

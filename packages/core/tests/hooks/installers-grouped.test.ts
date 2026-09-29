@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, rmSync, readFileSync, writeFileSync, mkdirSync, existsSync, symlinkSync, lstatSync, statSync, chmodSync } from "node:fs";
+import { mkdtempSync, rmSync, readFileSync, writeFileSync, mkdirSync, existsSync, symlinkSync, lstatSync, statSync, chmodSync, realpathSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { INSTALLERS } from "../../src/hooks/installers/index.js";
@@ -96,6 +96,20 @@ describe.each([
       const cfg = JSON.parse(readFileSync(target, "utf8"));
       expect(cfg.env).toEqual({ KEY: "secret" });
       expect(Object.keys(cfg.hooks).length).toBeGreaterThan(0);
+    } finally { rmSync(dotfiles, { recursive: true, force: true }); }
+  });
+
+  it("keeps a dangling symlink and creates its target instead of replacing the link", () => {
+    if (process.platform === "win32") return;
+    const dotfiles = mkdtempSync(join(tmpdir(), "kontexta-dotfiles-"));
+    try {
+      mkdirSync(join(home, rel[0]), { recursive: true });
+      const target = join(dotfiles, "not-yet-created.json");
+      symlinkSync(target, cfgPath());
+      INSTALLERS[id].install(ctx());
+      expect(lstatSync(cfgPath()).isSymbolicLink()).toBe(true);
+      expect(realpathSync(cfgPath())).toBe(realpathSync(target));
+      expect(Object.keys(JSON.parse(readFileSync(target, "utf8")).hooks).length).toBeGreaterThan(0);
     } finally { rmSync(dotfiles, { recursive: true, force: true }); }
   });
 
