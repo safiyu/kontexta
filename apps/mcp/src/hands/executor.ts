@@ -7,7 +7,7 @@ import type { ExecResult, HandToolDef, ParamDef } from "./types.js";
 const PLACEHOLDER_RE = /\{\{([a-zA-Z_][a-zA-Z0-9_]*)\}\}/g;
 const SAFE_ENV_KEYS = [
   "PATH", "HOME", "USER", "LANG", "TZ",
-  // Windows essentials — absent on POSIX (skipped), required on win32:
+  // Windows essentials: absent on POSIX (skipped), required on win32:
   // child processes misbehave or fail to start without SYSTEMROOT, and
   // executable resolution needs PATHEXT. All are machine config, not
   // user secrets, so the sandbox posture is unchanged.

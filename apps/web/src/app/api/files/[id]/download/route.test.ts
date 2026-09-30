@@ -33,7 +33,7 @@ describe("GET /api/files/[id]/download", () => {
   });
 
   // NTFS forbids control characters in filenames, so the malicious fixture
-  // can only exist on POSIX — the sanitizer itself is platform-independent.
+  // can only exist on POSIX: the sanitizer itself is platform-independent.
   test.skipIf(process.platform === "win32")("sanitizes filenames with CR/LF to prevent response splitting", async () => {
     ensureDbInitialized();
     const dataDir = process.env.KONTEXTA_DATA_DIR || "";
@@ -46,7 +46,7 @@ describe("GET /api/files/[id]/download", () => {
     });
 
     // Linux allows CR and LF in filenames (only NUL and '/' are forbidden).
-    // Create a real file with CRLF in the name and point the DB row at it —
+    // Create a real file with CRLF in the name and point the DB row at it,
     // this exercises the actual route.ts sanitization, not an inline copy of it.
     const dangerPath = join(tmpdir(), "evil\r\nname.md");
     writeFileSync(dangerPath, "safe content", "utf8");
@@ -58,7 +58,7 @@ describe("GET /api/files/[id]/download", () => {
     expect(res.status).toBe(200);
 
     const disp = res.headers.get("content-disposition") || "";
-    // The header must contain no raw CR or LF — either would split the HTTP response.
+    // The header must contain no raw CR or LF: either would split the HTTP response.
     expect(disp).not.toContain("\r");
     expect(disp).not.toContain("\n");
     // The sanitizer must replace the control chars, not silently drop the filename.

@@ -25,7 +25,7 @@ describe("install-templates", () => {
             expect(snip.body).toContain("/app/data");
             expect(snip.body).toContain("/home/user/kontexta-data");
           } else {
-            // non-default dataDir — should appear in the snippet
+            // non-default dataDir: should appear in the snippet
             expect(snip.body).toContain("/app/data");
           }
         }

@@ -14,7 +14,7 @@ export default async function LoginPage() {
   try {
     passwordHash = getSetting("auth_password_hash");
   } catch {
-    // Settings table not ready — show setup page.
+    // Settings table not ready: show setup page.
   }
 
   // If password is set and user is already authenticated (and not explicitly locked), skip login.

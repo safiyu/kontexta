@@ -3,7 +3,7 @@ import { mkdirSync, copyFileSync, readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 export default defineConfig({
-  entry: ["src/index.ts", "src/hooks-cli.ts"],
+  entry: ["src/index.ts", "src/hooks-cli.ts", "src/connect-cli.ts"],
   outDir: "dist",
   format: ["esm"],
   target: "node22",
@@ -27,6 +27,7 @@ export default defineConfig({
     "zod",
     "simple-git",
     "undici",
+    "yaml",
   ],
   // Migration .sql files live under packages/core/src/db/migrations/ in
   // the source tree but `runMigrations()` in the bundled output reads

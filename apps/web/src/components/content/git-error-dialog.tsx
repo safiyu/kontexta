@@ -6,7 +6,7 @@ interface GitErrorDialogProps {
   open: boolean;
   onClose: () => void;
   title: string;
-  /** Explanatory sentence — states what actually happened to the user's data. */
+  /** Explanatory sentence: states what actually happened to the user's data. */
   body: string;
   /** Optional technical detail (raw error/warning text) shown in a monospace box. */
   detail?: string;
@@ -16,7 +16,7 @@ interface GitErrorDialogProps {
  * Generic save-outcome dialog used for git warnings, save conflicts, and
  * save failures alike. `title`/`body` are required (not defaulted) so every
  * call site must say something accurate about whether the save actually
- * happened — a git-commit warning ("saved, but...") and a failed save
+ * happened: a git-commit warning ("saved, but...") and a failed save
  * ("not saved") must never share the same body text.
  */
 export function GitErrorDialog({ open, onClose, title, body, detail }: GitErrorDialogProps) {

@@ -59,7 +59,7 @@ export function LiveStatus({ projectId }: { projectId: number }) {
           <ul className="ml-4 list-disc mt-2">
             {status.open_tasks.map((t) => (
               <li key={t.task_slug}>
-                <span className="font-mono">{t.task_slug}</span> — {t.status_latest ?? "(no status)"} —{" "}
+                <span className="font-mono">{t.task_slug}</span>: {t.status_latest ?? "(no status)"},{" "}
                 <span className="text-[var(--text-secondary)]">{t.last_active_at}</span>
               </li>
             ))}

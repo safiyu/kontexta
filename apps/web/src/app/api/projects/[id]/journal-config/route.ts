@@ -59,7 +59,7 @@ export async function GET(
   try {
     parsed = JSON.parse(raw);
   } catch {
-    // malformed — treat as empty
+    // malformed: treat as empty
   }
   return NextResponse.json({
     exists: true,
@@ -110,7 +110,7 @@ export async function PUT(
 
   current.journal = body.journal;
 
-  // Sweep stray *.tmp.* siblings from prior SIGKILLed writes — skip our own pid
+  // Sweep stray *.tmp.* siblings from prior SIGKILLed writes: skip our own pid
   // and any tmp written within the last 60s (likely a concurrent in-flight PUT).
   const dir = dirname(file);
   const baseName = basename(file);

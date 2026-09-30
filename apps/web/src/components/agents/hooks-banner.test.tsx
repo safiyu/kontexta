@@ -51,4 +51,19 @@ describe("HooksBanner", () => {
     render(<HooksBanner onOpen={() => {}} />);
     expect(await screen.findByText(/Gemini CLI, Codex CLI/)).toBeTruthy();
   });
+
+  it("also warns about agents whose MCP server is not connected", async () => {
+    serve({ ...stateWith([]), mcp_alerts: [{ agent: "cursor", name: "Cursor" }] });
+    const onOpen = vi.fn();
+    render(<HooksBanner onOpen={onOpen} />);
+    expect(await screen.findByText(/MCP not connected for Cursor/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Set up agents" }));
+    expect(onOpen).toHaveBeenCalledOnce();
+  });
+
+  it("combines hook and MCP warnings in one banner", async () => {
+    serve({ ...stateWith([{ agent: "gemini", name: "Gemini CLI", installed: false }]), mcp_alerts: [{ agent: "cursor", name: "Cursor" }] });
+    render(<HooksBanner onOpen={() => {}} />);
+    expect(await screen.findByText(/Hooks not installed for Gemini CLI\. MCP not connected for Cursor/)).toBeTruthy();
+  });
 });

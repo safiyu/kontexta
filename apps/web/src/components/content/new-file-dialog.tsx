@@ -34,7 +34,7 @@ export function NewFileDialog({ open, onClose, onCreate, currentProjectId, avail
   const [kind, setKind] = useState<NewFileKind | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Reset only on false→true transition — defaultFolder can change mid-open without wiping user input.
+  // Reset only on false→true transition: defaultFolder can change mid-open without wiping user input.
   const prevOpenRef = useRef(false);
   useEffect(() => {
     if (open && !prevOpenRef.current) {
@@ -125,8 +125,8 @@ export function NewFileDialog({ open, onClose, onCreate, currentProjectId, avail
                   className="w-full bg-[var(--bg-secondary)] border border-[var(--border)] rounded px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-amber-accent/50 cursor-pointer"
                   required={isKb}
                 >
-                  {!isKb && <option value="">— Root level —</option>}
-                  {isKb && <option value="" disabled>— Pick a folder —</option>}
+                  {!isKb && <option value="">Root level</option>}
+                  {isKb && <option value="" disabled>Pick a folder</option>}
                   {suggestedFolders.map((f) => (
                     <option key={f} value={f}>{f}</option>
                   ))}
@@ -136,7 +136,7 @@ export function NewFileDialog({ open, onClose, onCreate, currentProjectId, avail
                   type="text"
                   value={folder}
                   onChange={(e) => setFolder(e.target.value)}
-                  placeholder={isKb ? "e.g. knowledge/topic" : "No folders yet — type to create"}
+                  placeholder={isKb ? "e.g. knowledge/topic" : "No folders yet, type to create"}
                   className="w-full bg-[var(--bg-secondary)] border border-[var(--border)] rounded px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-amber-accent/50"
                 />
               )}
@@ -175,7 +175,7 @@ export function NewFileDialog({ open, onClose, onCreate, currentProjectId, avail
                   type="button"
                   onClick={() => setKind("dictionary")}
                   className={`btn btn-sm flex-1 ${kind === "dictionary" ? "border-[var(--accent)]" : ""}`}
-                  title="Authoritative — system IDs, mappings, glossaries. Trusted over notes."
+                  title="Authoritative: system IDs, mappings, glossaries. Trusted over notes."
                 >
                   DICTIONARY
                 </button>
@@ -183,13 +183,13 @@ export function NewFileDialog({ open, onClose, onCreate, currentProjectId, avail
                   type="button"
                   onClick={() => setKind("note")}
                   className={`btn btn-sm flex-1 ${kind === "note" ? "border-[var(--accent)]" : ""}`}
-                  title="Informational — meeting notes, working thoughts, current-state write-ups."
+                  title="Informational: meeting notes, working thoughts, current-state write-ups."
                 >
                   NOTE
                 </button>
               </div>
               {!kind && (
-                <p className="text-[10px] text-red-500 mt-1">Required — pick dictionary (authoritative) or note (informational).</p>
+                <p className="text-[10px] text-red-500 mt-1">Required: pick dictionary (authoritative) or note (informational).</p>
               )}
             </div>
           )}
@@ -197,7 +197,7 @@ export function NewFileDialog({ open, onClose, onCreate, currentProjectId, avail
           {isKb && (
             <div>
               <label className="block text-[10px] font-bold text-[var(--text-secondary)] tracking-widest mb-1.5">
-                FORMAT{formatLocked && <span className="ml-2 text-[var(--text-secondary)] font-normal normal-case tracking-normal italic">— fixed by {kbBucket}/</span>}
+                FORMAT{formatLocked && <span className="ml-2 text-[var(--text-secondary)] font-normal normal-case tracking-normal italic">(fixed by {kbBucket}/)</span>}
               </label>
               <div className="flex gap-3">
                 {(["md", "mmd", "html"] as const).map((f) => {

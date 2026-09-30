@@ -1,7 +1,7 @@
 export { AGENTS, agentMeta, isAgentId } from "./agents.js";
 export type { AgentId, AgentMeta } from "./agents.js";
-export { syncAgentRows, listAgents, setEnabled, markInstalled, markUninstalled, markVerified, alerts } from "./registry.js";
-export type { AgentRow } from "./registry.js";
+export { syncAgentRows, listAgents, setEnabled, markInstalled, markUninstalled, markVerified, alerts, markMcpInstalled, markMcpUninstalled, setMcpApproval, mcpAlerts, MCP_APPROVALS } from "./registry.js";
+export type { AgentRow, McpApproval } from "./registry.js";
 export {
   EMITTER_VERSION, emitterVersionOf, emitterSourcePath, stagedEmitterPath, stageEmitter, emitterVersionOnDisk, syncProjectsSidecar, pruneHookState,
 } from "./stage.js";

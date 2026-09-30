@@ -29,7 +29,7 @@ describe("InstallSection", () => {
   });
 });
 
-describe("InstallSection — enabled-agent filter", () => {
+describe("InstallSection: enabled-agent filter", () => {
   const agentRow = (id: string, enabled: boolean) => ({ id, name: id, enabled, hooks_supported: true, onboardable: true, hooks_installed: false, hooks_version: null, hooks_verified_at: null, last_hook_event_at: null, config_present: false, emitter_stale: false, notes: [] });
   const serve = (agents: { ok: boolean; json: () => Promise<unknown> }) => {
     global.fetch = vi.fn(async (url: string) => {

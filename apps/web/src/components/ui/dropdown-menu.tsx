@@ -25,7 +25,7 @@ export function DropdownMenu({ trigger, items, align = "end" }: DropdownMenuProp
           Radix computes this element's own inline `transform` for popper
           positioning. A CSS animation on the same element overrides that
           `transform` for the animation's duration, so the menu would open
-          unpositioned before snapping to its real spot — the animation
+          unpositioned before snapping to its real spot: the animation
           lives on the inner div instead, which has no positioning role.
         */}
         <Menu.Content align={align} sideOffset={6} className="z-[var(--z-dropdown)]">

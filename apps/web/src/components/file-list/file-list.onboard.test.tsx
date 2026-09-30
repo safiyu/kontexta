@@ -20,7 +20,7 @@ beforeEach(() => {
 });
 afterEach(() => cleanup());
 
-describe("FileList — outdated agent rules alert", () => {
+describe("FileList: outdated agent rules alert", () => {
   it("reloads the projects list after onboarding so the alert clears without a page refresh", async () => {
     const onOnboarded = vi.fn();
     const props = renderList({ onOnboarded });

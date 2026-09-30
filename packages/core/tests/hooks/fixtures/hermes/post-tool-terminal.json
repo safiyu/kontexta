@@ -1,0 +1,15 @@
+{
+  "hook_event_name": "post_tool_call",
+  "tool_name": "terminal",
+  "tool_input": {
+    "command": "gcloud auth list"
+  },
+  "session_id": "sess_abc123",
+  "cwd": "/home/user/project",
+  "profile": "default",
+  "extra": {
+    "result": "{}",
+    "duration_ms": 12,
+    "status": "ok"
+  }
+}

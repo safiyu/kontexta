@@ -161,7 +161,7 @@ export function WeekView({ anchor, events, entitiesById, conflictEventIds, highl
                         left: `${(lane / lanes) * 100}%`,
                         width: `calc(${100 / lanes}% - 2px)`,
                       }}
-                      title={`${entityName} — ${event.title}`}
+                      title={`${entityName}: ${event.title}`}
                     >
                       <div className="font-semibold truncate">
                         <span className="font-bold">{entityName}</span> · {event.title}

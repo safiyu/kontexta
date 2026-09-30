@@ -197,8 +197,8 @@ export function JournalPanel() {
               className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded px-2 py-1 text-xs"
             >
               <option value="lenient">Lenient (recommended)</option>
-              <option value="strict">Strict — block reads when backlog exists</option>
-              <option value="mechanical-only">Mechanical-only — no LLM upgrade</option>
+              <option value="strict">Strict: block reads when backlog exists</option>
+              <option value="mechanical-only">Mechanical-only: no LLM upgrade</option>
             </select>
             <div className="mt-2 p-3 bg-amber-500/5 border border-amber-500/20 rounded text-xs text-[var(--text-secondary)] leading-normal">
               {config.mode === "lenient" && (

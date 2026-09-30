@@ -50,7 +50,7 @@ describe("FirstRunWizard", () => {
     fireEvent.click(screen.getByLabelText("Gemini CLI"));
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 
-    expect(await screen.findByText("Install hooks")).toBeTruthy();
+    expect(await screen.findByText("Connect your agents")).toBeTruthy();
     expect(patches).toEqual([{ id: "claude-code", enabled: true }, { id: "gemini", enabled: true }]);
     expect(await screen.findByText(/Install failed: settings\.json is not valid JSON/)).toBeTruthy();
     expect(screen.getByRole("button", { name: "Retry Gemini CLI" })).toBeTruthy();
@@ -97,7 +97,7 @@ describe("FirstRunWizard", () => {
     );
     fireEvent.click(await screen.findByLabelText("Claude Code"));
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-    await screen.findByText("Install hooks");
+    await screen.findByText("Connect your agents");
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     await screen.findByText("Set Up Your Profile");
     expect(screen.getByRole("button", { name: "Finish & Launch" })).toBeTruthy();
@@ -108,5 +108,15 @@ describe("FirstRunWizard", () => {
       expect(saved).toBe(true);
       expect(closed).toBe(true);
     });
+  });
+
+  it("step 2 also offers to connect MCP for agents that support it", async () => {
+    state.destructive_tools = ["files.delete"]; state.mcp_docker_commands = {};
+    state.agents = state.agents.map((a: any) => a.id === "gemini" ? { ...a, mcp_supported: true, mcp_installed: false, mcp_approval: "prompt", mcp_approval_supported: true } : a);
+    renderWizard();
+    fireEvent.click(await screen.findByLabelText("Gemini CLI"));
+    fireEvent.click(screen.getByRole("button", { name: /continue|next|apply/i }));
+    expect(await screen.findByRole("button", { name: "Connect MCP for Gemini CLI" })).toBeTruthy();
+    expect(screen.getByText("Connect your agents")).toBeTruthy();
   });
 });

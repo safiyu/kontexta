@@ -16,7 +16,7 @@ interface BacklinksPanelProps {
   onSelectFile: (id: number) => void;
 }
 
-// FTS snippet markers — swap for a highlighted span so matches stand out inline.
+// FTS snippet markers: swap for a highlighted span so matches stand out inline.
 function renderSnippet(snippet: string): React.ReactNode {
   const parts = snippet.split(/<<<|>>>/);
   return parts.map((chunk, i) =>
@@ -69,7 +69,7 @@ export function BacklinksPanel({ fileId, onSelectFile }: BacklinksPanelProps) {
     );
   }
 
-  // Nothing to link means we hide the panel entirely — no visual weight for empty state.
+  // Nothing to link means we hide the panel entirely: no visual weight for empty state.
   if (error || links.length === 0) return null;
 
   return (

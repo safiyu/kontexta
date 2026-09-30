@@ -61,14 +61,26 @@ describe("copilot (own file under ~/.copilot/hooks)", () => {
     for (const [ev, list] of Object.entries<any[]>(cfg.hooks)) {
       expect(list).toHaveLength(1);
       expect(list[0].type).toBe("command");
-      expect(list[0].command).toContain(`--event ${ev}`);
-      expect(list[0].bash).toBeUndefined();
+      // Only the documented per-OS keys: an extra generic `command` could make Copilot run the emitter twice.
+      expect(list[0].command).toBeUndefined();
+      expect(list[0].bash).toContain(`--event ${ev}`);
+      expect(list[0].powershell).toMatch(/^.*emit\.mjs' --agent copilot --data-dir '.*' --event /);
+      expect(list[0].powershell).not.toContain('"');
       expect(list[0].timeoutSec).toBe(5);
     }
     expect(INSTALLERS.copilot.install(ctx()).changed).toBe(false);
     expect(INSTALLERS.copilot.status(ctx()).installed).toBe(true);
     expect(INSTALLERS.copilot.uninstall(ctx()).changed).toBe(true);
     expect(existsSync(r.path)).toBe(false);
+  });
+});
+
+describe("copilot — PowerShell quoting", () => {
+  it("single-quotes paths (doubling embedded quotes) so $ and spaces stay literal", () => {
+    const r = INSTALLERS.copilot.install({ ...ctx(), nodeCmd: "C:\\Program Files\\nodejs\\node.exe", dataDir: "D:\\it's $here" });
+    const ps = read(r.path).hooks.postToolUse[0].powershell as string;
+    expect(ps.startsWith("& 'C:\\Program Files\\nodejs\\node.exe' ")).toBe(true);
+    expect(ps).toContain("'D:\\it''s $here'");
   });
 });
 
@@ -133,5 +145,5 @@ describe("opencode (TypeScript plugin)", () => {
 });
 
 it("INSTALLERS covers exactly the hook-capable agents that have a verified installer", () => {
-  expect(Object.keys(INSTALLERS).sort()).toEqual(["claude-code", "cline", "codex", "copilot", "cursor", "gemini", "opencode", "windsurf"]);
+  expect(Object.keys(INSTALLERS).sort()).toEqual(["antigravity", "claude-code", "cline", "codex", "copilot", "cursor", "gemini", "hermes", "opencode", "windsurf"]);
 });

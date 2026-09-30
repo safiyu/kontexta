@@ -87,7 +87,7 @@ export function wrapHandler<TArgs extends Record<string, unknown>, TResult exten
     delete cleanArgs.journal_bypass;
 
     const start = Date.now();
-    // Resolve ids before the handler runs — files.delete removes the rows we'd otherwise look up.
+    // Resolve ids before the handler runs: files.delete removes the rows we'd otherwise look up.
     const touchedBefore = extractTouched(cleanArgs);
     let result: TResult;
     try {
@@ -135,10 +135,10 @@ export function wrapHandler<TArgs extends Record<string, unknown>, TResult exten
           let isPlainObject = false;
           try {
             parsed = JSON.parse(orig);
-            // Only inject into plain objects — NOT arrays (spread would corrupt to {"0":…})
+            // Only inject into plain objects: NOT arrays (spread would corrupt to {"0":…})
             // and NOT raw text that failed to parse (e.g. Hands confirm token strings).
             isPlainObject = parsed !== null && typeof parsed === "object" && !Array.isArray(parsed);
-          } catch { /* not JSON — leave response untouched */ }
+          } catch { /* not JSON: leave response untouched */ }
           if (isPlainObject) {
             const envelope = {
               ...parsed,
@@ -189,7 +189,7 @@ export function wrapHandler<TArgs extends Record<string, unknown>, TResult exten
 }
 
 function tryWriteEvent(ev: RawEvent): void {
-  if (!ctx) return; // capture not initialised — swallow
+  if (!ctx) return; // capture not initialised: swallow
   try {
     ctx.writer.append(ev);
   } catch (err) {
@@ -204,7 +204,7 @@ function fileIdsIn(args: Record<string, unknown>): number[] {
   return out;
 }
 
-// Capture must never be what opens the DB — getDatabase() would auto-create one at the default data dir.
+// Capture must never be what opens the DB: getDatabase() would auto-create one at the default data dir.
 function pathsForFileIds(ids: number[]): string[] {
   if (ids.length === 0 || !isDatabaseOpen()) return [];
   try {
@@ -279,7 +279,7 @@ function resolveProjectSlug(): string {
         if (matches[0]) resolved = matches[0].slug;
       }
     }
-  } catch { /* DB unavailable — fall through */ }
+  } catch { /* DB unavailable: fall through */ }
 
   const out = resolved ?? envSlug ?? "default";
   _resolvedSlugCache = { slug: out, ts: now };

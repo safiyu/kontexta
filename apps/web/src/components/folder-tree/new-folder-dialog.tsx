@@ -9,7 +9,7 @@ interface NewFolderDialogProps {
   onCreate: (name: string) => Promise<boolean>;
   /**
    * When set (KB context), the dialog treats the new folder as a subfolder
-   * inside this bucket — the prefix is displayed but not typed, and the
+   * inside this bucket: the prefix is displayed but not typed, and the
    * submitted name becomes `<bucketPrefix>/<user input>`.
    */
   bucketPrefix?: string | null;
@@ -31,13 +31,13 @@ export function NewFolderDialog({ open, onClose, onCreate, bucketPrefix }: NewFo
 
     setLoading(true);
     try {
-      // Wire format is POSIX — flip any pasted `\` to `/` so tree keys match.
+      // Wire format is POSIX: flip any pasted `\` to `/` so tree keys match.
       const cleanedName = name.trim()
         .replace(/\\+/g, "/")
         .replace(/^\/+|\/+$/g, "");
       const fullName = bucketPrefix ? `${bucketPrefix}/${cleanedName}` : cleanedName;
       const created = await onCreate(fullName);
-      // Only clear the form and close on success — onCreate already shows a
+      // Only clear the form and close on success: onCreate already shows a
       // toast on failure, and the typed name must survive so the user can
       // fix and retry rather than losing it silently.
       if (created) {

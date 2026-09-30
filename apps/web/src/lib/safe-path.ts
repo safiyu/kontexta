@@ -1,7 +1,7 @@
 import { realpathSync, existsSync } from "node:fs";
 import { resolve, isAbsolute, sep } from "node:path";
 // homeSensitivePrefixes comes from kxta-core (server-external) so that no
-// os.homedir() call exists in webpack-bundled chunks — @vercel/nft re-folds
+// os.homedir() call exists in webpack-bundled chunks: @vercel/nft re-folds
 // bundled+minified homedir expressions into recursive user-profile globs at
 // build time, failing `next build` on Windows (protected junctions → EPERM).
 import { homeSensitivePrefixes } from "kxta-core";

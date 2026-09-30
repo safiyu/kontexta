@@ -19,7 +19,7 @@ describe("handleGetProfile", () => {
     const result = handleGetProfile(tmpDir);
     expect(result.exists).toBe(false);
     expect(result.content).toBeNull();
-    expect(result.hint).toBe("Profile not yet set up — ask the user to fill it in via the web UI or by editing knowledge/profile.md");
+    expect(result.hint).toBe("Profile not yet set up: ask the user to fill it in via the web UI or by editing knowledge/profile.md");
   });
 
   it("returns missing_sections when profile is partial", () => {

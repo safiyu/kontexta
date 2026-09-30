@@ -15,7 +15,7 @@ export default async function Page() {
   try {
     passwordHash = getSetting("auth_password_hash");
   } catch {
-    // Settings table not ready — redirect to login which will handle setup.
+    // Settings table not ready: redirect to login which will handle setup.
     redirect("/login");
   }
 
@@ -23,7 +23,7 @@ export default async function Page() {
     redirect("/login");
   }
 
-  // Password is configured — now enforce authentication.
+  // Password is configured: now enforce authentication.
   const reqHeaders = await headers();
   const reqCookies = await cookies();
   

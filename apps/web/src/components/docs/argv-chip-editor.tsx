@@ -37,7 +37,7 @@ export function ArgvChipEditor({ value, onChange, declaredParams }: Props) {
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
         onKeyDown={(e) => {
-          // Commit on Enter, Tab, Space, or comma — match common chip-editor habits.
+          // Commit on Enter, Tab, Space, or comma: match common chip-editor habits.
           const commit =
             (e.key === "Enter" || e.key === "Tab" || e.key === "," ||
               (e.key === " " && draft.trim().length > 0)) &&

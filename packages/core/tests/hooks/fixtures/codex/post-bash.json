@@ -1,0 +1,1 @@
+{ "session_id": "c1", "turn_id": "t1", "cwd": "/tmp/work", "hook_event_name": "PostToolUse", "tool_name": "Bash", "tool_use_id": "tu1", "tool_input": { "command": "gh pr create --fill" }, "tool_response": { "output": "" }, "permission_mode": "default", "model": "gpt-x" }

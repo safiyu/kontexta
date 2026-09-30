@@ -84,7 +84,7 @@ export async function POST(req: NextRequest) {
         } catch {}
       }
     } catch (e: any) {
-      // Surface as a soft warning — registration succeeded even if scan failed.
+      // Surface as a soft warning: registration succeeded even if scan failed.
       console.warn(`registerProject succeeded but discoverFiles failed:`, e);
       return NextResponse.json(
         { project, discovered_files: 0, warning: `Initial scan failed: ${e?.message ?? e}` },

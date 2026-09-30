@@ -61,7 +61,7 @@ describe("BuilderSection", () => {
     await waitFor(() => expect(screen.getAllByTitle("Delete tool").length).toBeGreaterThan(0));
     fireEvent.click(screen.getAllByTitle("Delete tool")[0]);
     
-    // Confirm via the modal dialog — modal's confirm button is the last one named /delete tool/
+    // Confirm via the modal dialog: modal's confirm button is the last one named /delete tool/
     await waitFor(() => expect(screen.getByRole("dialog", { name: /delete tool/i })).toBeTruthy());
     const deleteToolBtns = screen.getAllByRole("button", { name: /delete tool/i });
     fireEvent.click(deleteToolBtns[deleteToolBtns.length - 1]);
@@ -100,7 +100,7 @@ describe("BuilderSection", () => {
     // The inline SaveBar should now show "1 change" (BuilderSection uses inline prop)
     await waitFor(() => expect(screen.getByText("1 change")).toBeTruthy());
 
-    // Click Save Changes — the inline SaveBar's save button
+    // Click Save Changes: the inline SaveBar's save button
     fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
     
     // After PUT resolves the count drops to 0, so "1 change" text disappears

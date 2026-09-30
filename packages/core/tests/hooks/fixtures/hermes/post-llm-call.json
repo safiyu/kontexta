@@ -1,0 +1,14 @@
+{
+  "hook_event_name": "post_llm_call",
+  "tool_name": null,
+  "tool_input": null,
+  "session_id": "sess_abc123",
+  "cwd": "/home/user/project",
+  "profile": "default",
+  "extra": {
+    "user_message": "Check the SLT replication lag",
+    "assistant_response": "Lag is 4m on MARD.",
+    "model": "m",
+    "platform": "cli"
+  }
+}

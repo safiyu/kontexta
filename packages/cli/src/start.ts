@@ -47,6 +47,12 @@ export async function runStart(): Promise<never> {
     } catch (e: any) {
       process.stderr.write(`hooks reconcile skipped: ${e?.message ?? e}\n`);
     }
+    try {
+      const { runConnect } = await import('./connect.js');
+      await runConnect(['reconcile'], { ...process.env, KONTEXTA_DATA_DIR: data.path });
+    } catch (e: any) {
+      process.stderr.write(`MCP reconcile skipped: ${e?.message ?? e}\n`);
+    }
   }
 
   const rawPort = process.env.PORT;

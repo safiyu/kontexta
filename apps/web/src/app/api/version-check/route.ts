@@ -4,7 +4,7 @@ import { currentVersion } from "@/lib/app-version";
 const CACHE_MS = 60 * 60 * 1000; // re-check the registry at most once an hour
 let cache: { latest: string; fetchedAt: number } | null = null;
 
-// Simple x.y.z comparison — this repo only ever publishes bare semver.
+// Simple x.y.z comparison: this repo only ever publishes bare semver.
 function isNewer(latest: string, current: string): boolean {
   const a = latest.split(".").map(Number);
   const b = current.split(".").map(Number);
@@ -24,7 +24,7 @@ async function fetchLatestVersion(): Promise<string | null> {
     cache = { latest, fetchedAt: Date.now() };
     return latest;
   } catch {
-    return cache?.latest ?? null; // offline / registry unreachable — never block the page on this
+    return cache?.latest ?? null; // offline / registry unreachable: never block the page on this
   }
 }
 

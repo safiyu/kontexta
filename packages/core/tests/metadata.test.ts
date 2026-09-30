@@ -24,6 +24,7 @@ import { chmodSync } from "node:fs";
 
 import { tmpdir } from "node:os";
 import { mkdtempSync } from "node:fs";
+import { upsertJournalMeta } from "../src/journal/repository.js";
 const TEST_DATA_DIR = mkdtempSync(join(tmpdir(), "kontexta-test-"));
 const testDir = TEST_DATA_DIR;
 const dbPath = join(testDir, "test.db");
@@ -248,6 +249,18 @@ describe("Metadata Module", () => {
   it("registerProject: still throws PROJECT_CONFLICT for a real (non-null path) conflict", () => {
     registerProject("Existing Real Project", "/tmp/existing-real");
     expect(() => registerProject("Existing Real Project", "/tmp/different-path")).toThrow(/Cannot register/);
+  });
+
+  it("unregisterProject: a project with a distilled journal can still be removed (journal files live in the KB)", () => {
+    const project = registerProject("Journal Project", "/tmp/journal-project");
+    const db = getDatabase();
+    const f = db.prepare("INSERT INTO files (path, title, project_id, storage_type) VALUES (?, ?, NULL, 'local')").run("/kb/knowledge/journal/jp/2026/09/30/task.md", "task");
+    upsertJournalMeta({ file_id: Number(f.lastInsertRowid), project_id: project.id, task_slug: "task", status_latest: null, started_at: "2026-09-30T10:00:00Z", last_active_at: "2026-09-30T10:05:00Z", touched_files: [], raw_sources: [], git_refs: [] });
+    expect(() => unregisterProject(project.id)).not.toThrow();
+    expect(db.prepare("SELECT * FROM projects WHERE id = ?").get(project.id)).toBeUndefined();
+    expect(db.prepare("SELECT * FROM journal_meta WHERE project_id = ?").all(project.id)).toHaveLength(0);
+    // The journal file itself is a KB document and stays.
+    expect(db.prepare("SELECT id FROM files WHERE id = ?").get(Number(f.lastInsertRowid))).toBeDefined();
   });
 
   it("unregisterProject: removes project and associated files", async () => {

@@ -25,7 +25,7 @@ export function EventChip({ event, entityName, allDay, conflicted, highlighted, 
       className={`w-full text-left truncate rounded px-1.5 py-0.5 text-[11px] border ${color.chip} ${
         conflicted ? "ring-1 ring-red-400/70" : ""
       } ${highlighted ? "ring-2 ring-red-400" : ""}`}
-      title={`${entityName} — ${event.title}`}
+      title={`${entityName}: ${event.title}`}
     >
       {!allDay && (
         <>

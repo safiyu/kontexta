@@ -123,7 +123,7 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange, onNavi
   const handleExportText = async () => {
     if (!file) return;
     // strip-markdown's defaults delete code blocks and tables entirely
-    // (not just their syntax) — `keep` preserves the underlying content;
+    // (not just their syntax): `keep` preserves the underlying content;
     // `tableCell` needs its own entry since it has a separate default
     // handler independent of `table`. remark-gfm is required for both
     // parsing and re-stringifying GFM tables correctly.
@@ -153,7 +153,7 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange, onNavi
           const parsed = JSON.parse(text);
           if (parsed?.error) message = parsed.error;
         } catch {
-          // Response wasn't JSON (e.g. a framework error page) — log the
+          // Response wasn't JSON (e.g. a framework error page): log the
           // raw body so it's still visible for debugging.
           console.error(`[export-${kindLabel}] non-JSON error response:`, text);
         }
@@ -175,7 +175,7 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange, onNavi
       toast.success(`Exported ${kindLabel}`, { id: toastId });
     } catch (err) {
       console.error(`[export-${kindLabel}] request failed:`, err);
-      toast.error(`Failed to export ${kindLabel} — check the browser console for details.`, { id: toastId });
+      toast.error(`Failed to export ${kindLabel}. Check the browser console for details.`, { id: toastId });
     } finally {
       setBusy(false);
     }
@@ -214,7 +214,7 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange, onNavi
   // Mirrors the fileId PROP (not the loaded file?.id) so async handlers
   // detect navigation as soon as it happens, not after the new file's
   // GET resolves. Using file?.id leaves a window between click-on-B and
-  // B's fetch landing where the ref still points at A — during which a
+  // B's fetch landing where the ref still points at A: during which a
   // stale handler for A can sneak its result through the equality check.
   const fileIdRef = useRef<number | null>(fileId);
   useEffect(() => { fileIdRef.current = fileId; }, [fileId]);
@@ -264,7 +264,7 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange, onNavi
           setFile(data);
           setEditContent(data.content);
         } else {
-          // Surface the error instead of silently no-op'ing — otherwise a
+          // Surface the error instead of silently no-op'ing: otherwise a
           // click on a file whose row points at a missing disk path just
           // does nothing, and the user can't tell whether the click
           // registered or the file is broken.
@@ -315,7 +315,7 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange, onNavi
         return;
       }
       const updated = await res.json();
-      // Local optimistic update — path and content_class change, id stays the same.
+      // Local optimistic update: path and content_class change, id stays the same.
       setFile((prev) => (prev ? { ...prev, path: updated.path, content_class: updated.content_class ?? null } : prev));
       onChanged?.();
       toast.success(`Moved to ${kind === "dictionary" ? "dictionary" : "notes"}`);
@@ -409,7 +409,7 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange, onNavi
 
   const handleSave = async () => {
     if (!file) return;
-    // Capture the id at handler entry — if the user navigates to a
+    // Capture the id at handler entry: if the user navigates to a
     // different file mid-save, the response from the OLD file's PUT must
     // not clobber the NEW file's content state.
     const savingFileId = file.id;
@@ -465,7 +465,7 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange, onNavi
           }
           setGitErrorTitle("File changed on disk");
           setGitErrorBody(
-            "This file was NOT saved — it was modified elsewhere since you opened it. Disk content has been reloaded below; your edits are still in the editor. Click Save again to overwrite with your edits."
+            "This file was NOT saved. It was modified elsewhere since you opened it. Disk content has been reloaded below; your edits are still in the editor. Click Save again to overwrite with your edits."
           );
           setGitErrorDetail(undefined);
           setGitErrorOpen(true);
@@ -484,7 +484,7 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange, onNavi
       console.error("Failed to save file:", error);
       if (fileIdRef.current === savingFileId) {
         setGitErrorTitle("Save failed");
-        setGitErrorBody("Your changes were NOT saved — a network error occurred.");
+        setGitErrorBody("Your changes were NOT saved. A network error occurred.");
         setGitErrorDetail(error?.message ?? "Network error while saving");
         setGitErrorOpen(true);
       }
@@ -532,7 +532,7 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange, onNavi
     // Specific UX for each failure mode so the user knows whether to:
     //  - Remove the orphan row (disk file vanished out from under the index)
     //  - Refresh / retry (transient HTTP / network)
-    //  - Live with it (row truly missing — likely a stale selection)
+    //  - Live with it (row truly missing: likely a stale selection)
     if (loadError?.kind === "disk_missing") {
       return (
         <div className="h-full flex flex-col items-center justify-center text-[var(--text-secondary)] gap-4 animate-fade-in p-8">
@@ -586,9 +586,9 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange, onNavi
     );
   }
 
-  // profile.md gets a dedicated structured editor — matches the 6-section shape enforced server-side.
+  // profile.md gets a dedicated structured editor: matches the 6-section shape enforced server-side.
   const posixPath = file.path.replace(/\\/g, "/");
-  // Only the KB's canonical profile.md — a project file with the same suffix must not hijack the ProfileEditor.
+  // Only the KB's canonical profile.md: a project file with the same suffix must not hijack the ProfileEditor.
   const isKbProfile = file.project_id === null && /(^|\/)knowledge\/profile\.md$/.test(posixPath);
   if (isKbProfile) {
     return (
@@ -598,7 +598,7 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange, onNavi
     );
   }
 
-  // Only the KB's auto-generated publish buckets are read-only — a project's own `publish/` folder stays editable.
+  // Only the KB's auto-generated publish buckets are read-only: a project's own `publish/` folder stays editable.
   const inPublishFolder = file.project_id === null && /\/knowledge\/(html|knowledge)\/publish\//.test(posixPath);
   return (
     <div key={fileId} className="h-full flex flex-col animate-fade-in">
@@ -653,7 +653,7 @@ export function ContentPane({ fileId, onDelete, onChanged, onDirtyChange, onNavi
                   ? "bg-amber-accent text-[var(--bg-primary)] cursor-default"
                   : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer"
               }`}
-              title="Authoritative — trusted over notes on conflict"
+              title="Authoritative: trusted over notes on conflict"
             >
               Dictionary
             </button>

@@ -74,7 +74,7 @@ export function ToolForm({ initial, projectName, onSave, onCancel, inline }: Too
               className="w-full mt-1 px-3 py-2 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg font-mono focus:border-[var(--accent)] outline-none transition"
             />
             <span className="block text-[10px] text-[var(--text-secondary)] mt-1.5 leading-relaxed">
-              Lowercase letters, digits, hyphens. Kontexta namespaces it automatically — the agent sees{" "}
+              Lowercase letters, digits, hyphens. Kontexta namespaces it automatically, so the agent sees{" "}
               <code className="text-[var(--accent)]">
                 {(projectName ?? "<project>")}__{name || "<name>"}
               </code>
@@ -158,9 +158,9 @@ export function ToolForm({ initial, projectName, onSave, onCancel, inline }: Too
             </label>
           </div>
           <ul className="text-[10px] text-[var(--text-secondary)] space-y-1 opacity-80">
-            <li>• <b>confirm</b> — Pause for human approval before execution.</li>
-            <li>• <b>disabled</b> — Validated but hidden from the agent.</li>
-            <li>• <b>argSeparator</b> — Insert <code>--</code> before the first substituted element.</li>
+            <li>• <b>confirm</b>: Pause for human approval before execution.</li>
+            <li>• <b>disabled</b>: Validated but hidden from the agent.</li>
+            <li>• <b>argSeparator</b>: Insert <code>--</code> before the first substituted element.</li>
           </ul>
         </section>
 

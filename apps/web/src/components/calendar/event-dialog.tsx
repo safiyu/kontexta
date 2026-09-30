@@ -134,7 +134,7 @@ export function EventDialog({ state, entities, knownTypes, onClose, onSaved }: E
               list="calendar-event-types"
               value={type}
               onChange={(e) => setType(e.target.value)}
-              placeholder="Freeform — any label you like"
+              placeholder="Freeform: any label you like"
               className={inputClass}
             />
             <datalist id="calendar-event-types">

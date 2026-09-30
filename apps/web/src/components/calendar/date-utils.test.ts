@@ -97,7 +97,7 @@ describe("datetime-local round trip", () => {
 });
 
 describe("eventTouchesDay", () => {
-  it("uses half-open semantics — an event ending exactly at midnight excludes the next day", () => {
+  it("uses half-open semantics: an event ending exactly at midnight excludes the next day", () => {
     // Construct day boundaries and event instants both in local time (as
     // startOfDay does internally) to keep the test independent of the
     // runner's timezone.

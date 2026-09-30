@@ -48,6 +48,7 @@ export {
 } from "./project-map/index.js";
 export * from "./journal/index.js";
 export * from "./hooks/index.js";
+export * from "./mcp-install/index.js";
 export * from "./profile/index.js";
 export * from "./calendar/index.js";
 export { writeResource, readResource, listResources, deleteResource, resourceUrlFor, resourceSrcFor, mimeFor } from "./reports/resources.js";

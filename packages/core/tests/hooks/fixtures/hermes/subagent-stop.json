@@ -1,0 +1,14 @@
+{
+  "hook_event_name": "subagent_stop",
+  "tool_name": null,
+  "tool_input": null,
+  "session_id": "sess_abc123",
+  "cwd": "/home/user/project",
+  "profile": "default",
+  "extra": {
+    "child_role": "leaf",
+    "child_summary": "Found 3 failing jobs.",
+    "child_status": "completed",
+    "duration_ms": 900
+  }
+}

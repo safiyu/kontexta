@@ -105,8 +105,8 @@ export function ConflictsPanel({ conflicts, bufferMinutes, loading, entitiesById
                   {c.gap_minutes !== null && <span className="text-[10px] font-mono">{c.gap_minutes}m gap</span>}
                 </div>
                 <div className="text-xs text-[var(--text-primary)] space-y-0.5 mb-1.5">
-                  <div>{c.event_a.title} — {fmtTime(c.event_a.starts_at)} ({entityA?.name ?? c.entity_a.name})</div>
-                  <div>{c.event_b.title} — {fmtTime(c.event_b.starts_at)} ({entityB?.name ?? c.entity_b.name})</div>
+                  <div>{c.event_a.title}, {fmtTime(c.event_a.starts_at)} ({entityA?.name ?? c.entity_a.name})</div>
+                  <div>{c.event_b.title}, {fmtTime(c.event_b.starts_at)} ({entityB?.name ?? c.entity_b.name})</div>
                 </div>
                 <div className="text-[11px] text-[var(--text-secondary)]">{c.reason}</div>
               </div>

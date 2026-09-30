@@ -1,7 +1,7 @@
 /**
  * Client-side helpers mirroring the 4.6.0 KB layout rules.
  *
- * All paths are treated as strings that may use either `/` or `\` — some
+ * All paths are treated as strings that may use either `/` or `\`: some
  * incoming values are POSIX (normalized by the folders API), others come
  * straight from OS-native paths on Windows. Split on both.
  */

@@ -38,7 +38,7 @@ describe("SaveBar", () => {
   it("Discard click opens confirm modal; modal Discard calls onDiscard", () => {
     const onDiscard = vi.fn();
     render(<SaveBar count={2} errorCount={0} onDiscard={onDiscard} onSave={() => {}} />);
-    // Initial click opens the modal — onDiscard NOT yet called.
+    // Initial click opens the modal: onDiscard NOT yet called.
     fireEvent.click(screen.getByRole("button", { name: /^discard$/i }));
     expect(onDiscard).not.toHaveBeenCalled();
     expect(screen.getByRole("dialog", { name: /discard unsaved changes\?/i })).toBeTruthy();

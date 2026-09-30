@@ -289,6 +289,8 @@ export function unregisterProject(projectId: number, dataDir?: string): void {
     | undefined;
 
   db.transaction(() => {
+    // Journal task files are KB files (no project_id), so they no longer cascade this away; journal_meta still points at the project.
+    db.prepare("DELETE FROM journal_meta WHERE project_id = ?").run(projectId);
     const files = db.prepare("SELECT id FROM files WHERE project_id = ?").all(projectId) as { id: number }[];
     const fileIds = files.map(f => f.id);
 

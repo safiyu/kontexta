@@ -199,7 +199,7 @@ export function TopBar({
           onClick={async () => {
             await fetch("/api/auth/logout", { method: "POST" });
             // Use router.push so React unmounts the WS hook cleanly before
-            // navigating — prevents a spurious 1008 WS reconnect error.
+            // navigating: prevents a spurious 1008 WS reconnect error.
             router.push("/login");
           }}
           className="p-2 rounded-md text-[var(--text-secondary)] hover:text-[var(--danger)] hover:bg-[var(--bg-tertiary)] transition-colors shrink-0"

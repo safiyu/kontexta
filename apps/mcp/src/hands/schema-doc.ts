@@ -1,5 +1,5 @@
 export function buildSchemaDoc(): string {
-  return `# Kontexta Hands — \`kontexta.json\` Authoring Reference
+  return `# Kontexta Hands: \`kontexta.json\` Authoring Reference
 
 ## 1. Overview
 
@@ -56,23 +56,23 @@ export function buildSchemaDoc(): string {
 
 ## 3. Field reference
 
-- **\`version\`** — must be the string \`"1"\`. Future versions may change the schema.
-- **\`tools.<tool-name>\`** — tool name must match \`^[a-z][a-z0-9-]*$\`. Exposed to the agent as \`<project>__<tool-name>\`.
-- **\`description\`** — required, non-empty string. Shown to the agent.
-- **\`command\`** — required, non-empty array of strings. Element 0 is the executable; remaining elements are argv. Use \`{{name}}\` for parameter substitution (element 0 may not contain substitutions).
-- **\`workingDir\`** — optional, relative to project root. Must not contain \`..\`. Symlinks are resolved and verified to remain inside the project root.
-- **\`timeout\`** — optional, milliseconds. Default 60000, max 300000 (clamped).
-- **\`danger\`** — \`safe | moderate | high\`. Default \`safe\`. Informational; \`confirm: true\` is what actually pauses execution.
-- **\`confirm\`** — boolean, default false. When true, the first call returns a token; agent must call \`hands.confirm({ token })\` to actually execute.
-- **\`disabled\`** — boolean, default false. Disabled tools are validated but never registered. Agent never sees them.
-- **\`argSeparator\`** — boolean, default false. When true, \`--\` is inserted in argv before the first substituted element.
-- **\`maxOutputBytes\`** — optional, per-stream output cap. Default 100000, max 1000000 (clamped).
-- **\`env\`** — optional, key/value strings. Cannot include \`PATH\`, \`LD_PRELOAD\`, \`LD_LIBRARY_PATH\`, \`DYLD_*\`.
-- **\`params.<name>.type\`** — \`string | number | boolean\`.
-- **\`params.<name>.required\`** — boolean, default false.
-- **\`params.<name>.default\`** — used when the agent omits the param.
-- **\`params.<name>.pattern\`** — string params only. Validated via the \`re2\` engine (linear-time, ReDoS-proof). Empty-string values always pass pattern validation. Strings with no explicit pattern get a default of \`^[^-].*\`.
-- **\`params.<name>.min\` / \`max\`** — number params only.
+- **\`version\`**: must be the string \`"1"\`. Future versions may change the schema.
+- **\`tools.<tool-name>\`**: tool name must match \`^[a-z][a-z0-9-]*$\`. Exposed to the agent as \`<project>__<tool-name>\`.
+- **\`description\`**: required, non-empty string. Shown to the agent.
+- **\`command\`**: required, non-empty array of strings. Element 0 is the executable; remaining elements are argv. Use \`{{name}}\` for parameter substitution (element 0 may not contain substitutions).
+- **\`workingDir\`**: optional, relative to project root. Must not contain \`..\`. Symlinks are resolved and verified to remain inside the project root.
+- **\`timeout\`**: optional, milliseconds. Default 60000, max 300000 (clamped).
+- **\`danger\`**: \`safe | moderate | high\`. Default \`safe\`. Informational; \`confirm: true\` is what actually pauses execution.
+- **\`confirm\`**: boolean, default false. When true, the first call returns a token; agent must call \`hands.confirm({ token })\` to actually execute.
+- **\`disabled\`**: boolean, default false. Disabled tools are validated but never registered. Agent never sees them.
+- **\`argSeparator\`**: boolean, default false. When true, \`--\` is inserted in argv before the first substituted element.
+- **\`maxOutputBytes\`**: optional, per-stream output cap. Default 100000, max 1000000 (clamped).
+- **\`env\`**: optional, key/value strings. Cannot include \`PATH\`, \`LD_PRELOAD\`, \`LD_LIBRARY_PATH\`, \`DYLD_*\`.
+- **\`params.<name>.type\`**: \`string | number | boolean\`.
+- **\`params.<name>.required\`**: boolean, default false.
+- **\`params.<name>.default\`**: used when the agent omits the param.
+- **\`params.<name>.pattern\`**: string params only. Validated via the \`re2\` engine (linear-time, ReDoS-proof). Empty-string values always pass pattern validation. Strings with no explicit pattern get a default of \`^[^-].*\`.
+- **\`params.<name>.min\` / \`max\`**: number params only.
 
 ## 4. Validation rules and errors
 
@@ -97,13 +97,13 @@ export function buildSchemaDoc(): string {
 - No shell ever interprets the command. \`spawn\` runs with \`shell: false\`; commands are arrays.
 - The executable (\`command[0]\`) is fixed by the author; agents cannot change which binary runs.
 - Default string pattern \`^[^-].*\` mitigates argv injection. \`argSeparator: true\` provides belt-and-braces.
-- All regex matching uses \`re2\` — no catastrophic backtracking.
+- All regex matching uses \`re2\`: no catastrophic backtracking.
 - NUL bytes are rejected in all param values, regardless of pattern.
 - Numeric params are bounded and finite; booleans are strict.
 - Working directory is locked to the project root (verified via \`realpath\`).
 - Environment is a clean base of \`PATH\`/\`HOME\`/\`USER\`/\`LANG\`/\`TZ\` plus the tool's \`env\`. Agents cannot add env keys.
 - Output is captured through a streaming ring buffer; large outputs are truncated in the middle, never hold more than the cap in memory.
-- Timeouts kill the entire process group (\`SIGTERM\`, then \`SIGKILL\` after 3 s) — no orphan workers.
+- Timeouts kill the entire process group (\`SIGTERM\`, then \`SIGKILL\` after 3 s): no orphan workers.
 - Confirm tokens are 32-byte CSPRNG, single-use, expire in 60 s, and bound to a hash of the resolved invocation.
 - The agent cannot modify \`kontexta.json\` through any MCP tool.
 
@@ -111,7 +111,7 @@ export function buildSchemaDoc(): string {
 
 - A poorly written \`kontexta.json\` (e.g. \`["sh", "-c", "{{anything}}"]\`) defeats every guarantee. Authoring is the human's responsibility.
 - Tool output may contain prompt-injection payloads. Treat the agent as potentially influenced after reading any command output.
-- No CPU/memory/disk quotas — a command can exhaust resources up to the timeout.
+- No CPU/memory/disk quotas: a command can exhaust resources up to the timeout.
 - A Hand defined as a shell command could in principle write \`kontexta.json\` from inside execution. Keep \`kontexta.json\` on a path no other tool will edit, and review diffs before \`reload_hands\`.
 - No rate limiting on \`reload_hands\`.
 
@@ -179,11 +179,11 @@ export function buildSchemaDoc(): string {
 
 What each tool demonstrates:
 
-- \`list-files\` — minimal tool with no params.
-- \`run-tests\` — optional param with a regex pattern; empty default safely drops the argv element.
-- \`deploy-staging\` — \`confirm: true\` makes the agent pause for human approval.
-- \`deploy-production\` — \`disabled: true\` keeps a high-risk tool in the file but invisible to the agent.
-- \`remove-temp\` — \`argSeparator: true\` plus a strict pattern to prevent argv injection on a path-accepting command.
+- \`list-files\`: minimal tool with no params.
+- \`run-tests\`: optional param with a regex pattern; empty default safely drops the argv element.
+- \`deploy-staging\`: \`confirm: true\` makes the agent pause for human approval.
+- \`deploy-production\`: \`disabled: true\` keeps a high-risk tool in the file but invisible to the agent.
+- \`remove-temp\`: \`argSeparator: true\` plus a strict pattern to prevent argv injection on a path-accepting command.
 
 ## 10. Out of scope (v7.0.0)
 

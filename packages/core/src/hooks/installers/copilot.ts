@@ -1,7 +1,7 @@
 import { join } from "node:path";
 import { existsSync, unlinkSync } from "node:fs";
 import type { Installer, InstallCtx } from "./types.js";
-import { emitCommand, isOwned, readJsonConfig, writeJsonConfig } from "./json-config.js";
+import { emitCommand, psEmitCommand, isOwned, readJsonConfig, writeJsonConfig } from "./json-config.js";
 
 const EVENTS = ["userPromptSubmitted", "subagentStop", "postToolUse"];
 // Copilot reads $COPILOT_HOME/hooks when set; a container host install can't see the host's environment, so it always uses <home>/.copilot.
@@ -14,7 +14,8 @@ export const copilotInstaller: Installer = {
   install(ctx) {
     const path = configPath(ctx);
     const hooks: Record<string, unknown> = {};
-    for (const ev of EVENTS) hooks[ev] = [{ type: "command", command: emitCommand(ctx, "copilot", ev), timeoutSec: 5 }];
+    // Only the documented per-OS keys: Copilot runs the one for the current OS, and a generic `command` alongside could make it run twice.
+    for (const ev of EVENTS) hooks[ev] = [{ type: "command", bash: emitCommand(ctx, "copilot", ev), powershell: psEmitCommand(ctx, "copilot", ev), timeoutSec: 5 }];
     const changed = writeJsonConfig(path, { version: 1, hooks }, ctx.dryRun);
     return { agent: "copilot", path, changed, notes: ["Copilot main-agent replies are not exposed to hooks yet (agentStop carries only a transcript path); subagent replies, prompts and shell commands are captured."] };
   },
@@ -28,8 +29,8 @@ export const copilotInstaller: Installer = {
     const path = configPath(ctx);
     let installed = false; const notes: string[] = [];
     try {
-      const hooks = readJsonConfig(path).hooks as Record<string, Array<{ command?: unknown; bash?: unknown }>> | undefined;
-      installed = EVENTS.every((ev) => (hooks?.[ev] ?? []).some((h) => isOwned(h?.command) || isOwned(h?.bash)));
+      const hooks = readJsonConfig(path).hooks as Record<string, Array<{ command?: unknown; bash?: unknown; powershell?: unknown }>> | undefined;
+      installed = EVENTS.every((ev) => (hooks?.[ev] ?? []).some((h) => isOwned(h?.command) || isOwned(h?.bash) || isOwned(h?.powershell)));
     } catch (e) { notes.push((e as Error).message); }
     return { agent: "copilot", path, installed, notes };
   },

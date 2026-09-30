@@ -7,7 +7,7 @@ export const codexInstaller = groupedInstaller({
     { name: "UserPromptSubmit" },
     { name: "Stop" },
     { name: "SubagentStop" },
-    { name: "PostToolUse", matcher: "shell|local_shell|exec_command" },
+    { name: "PostToolUse", matcher: "Bash|shell|local_shell|exec_command" },
   ],
   notes: [
     "Codex only runs hooks you have trusted: open Codex and run /hooks to review and trust the kontexta hooks (trust is tied to the hook's content, so re-trust after reinstalling or moving node).",

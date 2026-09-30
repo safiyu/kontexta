@@ -19,7 +19,7 @@ export function InstallSnippetView({ body, configPath, notes }: { body: string; 
         document.body.removeChild(textarea);
       }
     } catch {
-      // Silently fail — user can still manually select and copy
+      // Silently fail: user can still manually select and copy
     }
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);

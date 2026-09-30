@@ -21,7 +21,7 @@ export async function GET(
   if (n === null) return NextResponse.json({ error: `Invalid id: ${id}` }, { status: 400 });
 
   // Pre-check so we can give the UI a specific error code instead of a
-  // generic 404 when the DB row exists but the file on disk has vanished —
+  // generic 404 when the DB row exists but the file on disk has vanished,
   // a real situation when chokidar misses an unlink event or the user
   // deletes a file while the app isn't running.
   const db = getDatabase();
@@ -37,7 +37,7 @@ export async function GET(
         id: n,
         path: row.path,
       },
-      { status: 410 } // Gone — semantically right; client can offer "remove from index"
+      { status: 410 } // Gone, semantically right; client can offer "remove from index"
     );
   }
 

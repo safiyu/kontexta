@@ -72,7 +72,7 @@ export function EntityManager({ open, onClose, entities, links, onChanged }: Ent
       if (!res.ok) {
         // The ConfirmDialog stays open (rendered above this component's own
         // Dialog), so an inline `error` state here would be invisible behind
-        // it — use a toast, which floats above every open modal.
+        // it: use a toast, which floats above every open modal.
         const body = await res.json().catch(() => ({}));
         toast.error(body.error ?? "Failed to delete entity.");
         return;

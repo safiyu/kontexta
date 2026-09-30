@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 :root {
-  /* Light mode — warm off-white surfaces, navy text, amber accent.
+  /* Light mode: warm off-white surfaces, navy text, amber accent.
      Pairs the muted infrastructure gold with a calm cream that reads
      premium rather than washed-out. */
   --bg-primary: #F4F3EF;
@@ -22,7 +22,7 @@
   --danger-soft: rgba(192, 86, 86, 0.15);
   --text-tertiary: #6B7A99;
 
-  /* Layering scale — use z-[var(--z-*)] in components. */
+  /* Layering scale: use z-[var(--z-*)] in components. */
   --z-dropdown: 60;
   --z-modal: 100;
   --z-toast: 150;
@@ -30,7 +30,7 @@
   /* --font-sans / --font-mono / --font-title come from next/font in layout.tsx */
 }
 
-/* Dark theme — the kontexta.dev Blueprint × Ember system (formerly the opt-in
+/* Dark theme: the kontexta.dev Blueprint × Ember system (formerly the opt-in
    "blueprint" theme; the earlier navy/gold dark theme was retired 2026-09-29).
    See docs/superpowers/2026-07-21-blueprint-app-theme-design.md */
 .dark {
@@ -57,7 +57,7 @@
 .dark [class*="rounded"] { border-radius: 0 !important; }
 .dark .bp-keep-round { border-radius: 9999px !important; }
 
-/* Chrome utilities — no rules outside .dark, so the classes are inert
+/* Chrome utilities: no rules outside .dark, so the classes are inert
    in light and components may carry them unconditionally. */
 .dark .bp-annotation {
   font-family: var(--font-mono);
@@ -126,7 +126,7 @@ h1, h2, h3, h4, h5, h6 {
   body { font-size: 14px; }
 }
 
-/* Thin scrollbar styling — themed via CSS vars */
+/* Thin scrollbar styling: themed via CSS vars */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -217,7 +217,7 @@ html {
 
 /* Applied only to elements with no positioning responsibility of their own
    (Dialog/DropdownMenu wrap this in an inner div, separate from the element
-   that carries the actual position) — a `transform`-based animation on a
+   that carries the actual position): a `transform`-based animation on a
    positioned element would override that position for the animation's
    duration and snap into place once it ends. */
 @keyframes scale-in {
@@ -278,7 +278,7 @@ html {
  * Blueprint × Ember palette needs a different resting tone.
  */
 
-/* Themed <select> — strip browser chrome, replace with accent chevron, theme options. */
+/* Themed <select>: strip browser chrome, replace with accent chevron, theme options. */
 select {
   appearance: none;
   -webkit-appearance: none;
@@ -352,7 +352,7 @@ option {
 .btn-icon-sm { width: 28px; height: 28px; padding: 0; font-size: 14px; border-radius: 4px; }
 .btn-icon-md { width: 32px; height: 32px; padding: 0; font-size: 16px; border-radius: 6px; }
 
-/* Primary role — solid accent. Replaces ad-hoc `!text-amber-accent` and
+/* Primary role: solid accent. Replaces ad-hoc `!text-amber-accent` and
    docs-area solid-accent buttons. */
 .btn-primary {
   background: var(--accent);
@@ -393,7 +393,7 @@ option {
   color: var(--accent);
 }
 
-/* Outline role — persistent subtle border/background at rest, so an
+/* Outline role: persistent subtle border/background at rest, so an
    icon-only action (e.g. the calendar close button) reads as a button
    instead of blending into the toolbar until hovered. */
 .btn-outline {

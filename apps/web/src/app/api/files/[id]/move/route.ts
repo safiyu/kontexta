@@ -10,7 +10,7 @@ function parseId(raw: string): number | null {
 }
 
 /**
- * PATCH /api/files/[id]/move — rename or relocate a file.
+ * PATCH /api/files/[id]/move: rename or relocate a file.
  *
  * `new_path` must be absolute and resolve under either the file's owning
  * project (for reference files) or `<DATA_DIR>/knowledge` (for KB files).

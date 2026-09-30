@@ -6,6 +6,8 @@ import { cursorInstaller, windsurfInstaller } from "./flat.js";
 import { copilotInstaller } from "./copilot.js";
 import { clineInstaller } from "./cline.js";
 import { opencodeInstaller } from "./opencode.js";
+import { antigravityInstaller } from "./antigravity.js";
+import { hermesInstaller } from "./hermes.js";
 
 export const INSTALLERS: Record<string, Installer> = {
   "claude-code": claudeCodeInstaller,
@@ -16,6 +18,8 @@ export const INSTALLERS: Record<string, Installer> = {
   windsurf: windsurfInstaller,
   cline: clineInstaller,
   opencode: opencodeInstaller,
+  antigravity: antigravityInstaller,
+  hermes: hermesInstaller,
 };
 export type { Installer, InstallCtx, InstallResult, StatusResult } from "./types.js";
 export { MalformedConfigError, emitCommand, isOwned } from "./json-config.js";

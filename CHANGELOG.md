@@ -1,5 +1,23 @@
 # Changelog
 
+## 5.2.0 — MCP installer, Antigravity & Hermes hooks, journals in the KB (2026-09-30)
+
+### Added
+
+- **MCP installer:** `kontexta connect` and a Connect MCP control (Agents tab, first-run wizard) register the `kxta` server in Claude Code, Claude Desktop, Cursor, Gemini, Cline, Continue, Hermes, Codex and Copilot CLI, with an optional tool-approval level (`safe` / `all`) where the agent supports a config allowlist.
+- **Hooks for Antigravity and Hermes.**
+- **Repo-write guard:** kxta tools no longer create, edit or move files in a project repo.
+
+### Changed
+
+- Journal task files are indexed in the knowledge base instead of under a project.
+
+### Fixed
+
+- Codex shell commands were never captured (matcher and adapter); Copilot hooks now write the documented `bash`/`powershell` keys.
+- Profile no longer duplicates `# Profile` on save; saving no longer leaves the editor "unsaved"; the discard prompt is an in-app dialog.
+- Git sync popup is no longer hidden behind the breadcrumb bar.
+
 ## 5.1.3 — Hands & Journal config 404 fix, responsive top bar, generic profiles (2026-09-30)
 
 ### Fixed

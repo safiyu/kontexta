@@ -370,3 +370,51 @@ describe("distillJournal — task continuity across runs", () => {
     expect(hw.session_tasks).toEqual({ "codex:one": "0800-drafting-the-runbook-outline" });
   });
 });
+
+describe("distillJournal — journal files live in the KB, not under a project", () => {
+  let testDir: string;
+  const opts = () => ({
+    projectSlug: "demo", projectId: 1, dataDir: testDir, maxEvents: 200, ticketRegex: /[A-Z]+-\d+/,
+    openTaskWindowDays: 90, inFlightWindowSeconds: 0, now: new Date("2026-05-12T11:00:00Z"),
+  });
+
+  beforeEach(() => {
+    testDir = mkdtempSync(join(tmpdir(), "kontexta-distill-kb-"));
+    createDatabase(join(testDir, "test.db"));
+    getDatabase().prepare(`INSERT INTO projects (id, name, slug, path) VALUES (1, 'Demo', 'demo', '/tmp/demo')`).run();
+    const dir = join(testDir, "knowledge", "journal", "demo", "raw");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "2026-05-12.jsonl"), JSON.stringify({ ts: "2026-05-12T10:00:00Z", agent: "claude-code", sid: "s", event: "agent_note", summary: "did a thing" }) + "\n");
+  });
+  afterEach(() => { closeDatabase(); rmSync(testDir, { recursive: true, force: true }); });
+
+  const rows = () => getDatabase().prepare(
+    `SELECT f.project_id AS fpid, jm.project_id AS jpid FROM files f JOIN journal_meta jm ON jm.file_id = f.id`,
+  ).all() as Array<{ fpid: number | null; jpid: number }>;
+
+  it("indexes distilled files with no project while journal_meta keeps the owning project", async () => {
+    await distillJournal(opts());
+    const r = rows();
+    expect(r.length).toBeGreaterThan(0);
+    for (const row of r) { expect(row.fpid).toBeNull(); expect(row.jpid).toBe(1); }
+  });
+
+  it("detaches a file an earlier version had attached to a project", async () => {
+    await distillJournal(opts());
+    getDatabase().prepare(`UPDATE files SET project_id = 1 WHERE id IN (SELECT file_id FROM journal_meta)`).run();
+    appendFileSync(join(testDir, "knowledge", "journal", "demo", "raw", "2026-05-12.jsonl"),
+      JSON.stringify({ ts: "2026-05-12T10:30:00Z", agent: "claude-code", sid: "s", event: "agent_note", summary: "more" }) + "\n");
+    await distillJournal(opts());
+    for (const row of rows()) expect(row.fpid).toBeNull();
+  });
+
+  it("migration 011 detaches every existing journal file and leaves other files alone", async () => {
+    await distillJournal(opts());
+    const db = getDatabase();
+    db.prepare(`UPDATE files SET project_id = 1 WHERE id IN (SELECT file_id FROM journal_meta)`).run();
+    db.prepare(`INSERT INTO files (path, title, project_id, storage_type) VALUES ('/tmp/demo/a.md', 'a', 1, 'local')`).run();
+    db.exec(readFileSync(join(__dirname, "../../src/db/migrations/011-journal-files-in-kb.sql"), "utf8"));
+    for (const row of rows()) expect(row.fpid).toBeNull();
+    expect((db.prepare(`SELECT project_id FROM files WHERE path = '/tmp/demo/a.md'`).get() as any).project_id).toBe(1);
+  });
+});

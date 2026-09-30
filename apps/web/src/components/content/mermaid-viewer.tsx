@@ -19,7 +19,7 @@ function nextId(): string {
  * mermaid.render() appends temporary DOM nodes to `document.body` to compute
  * SVG dimensions. On parse/render errors mermaid renders its built-in
  * "Syntax error in text" diagram (the bomb / cherry-style icon + version
- * banner) into that temp node AND skips its own cleanup path — so the error
+ * banner) into that temp node AND skips its own cleanup path: so the error
  * SVG ends up orphaned at the bottom of the page, often visible AFTER the
  * footer. Remove everything keyed off the render id we passed in.
  */
@@ -38,7 +38,7 @@ function cleanupMermaidLeftovers(id: string): void {
     );
     prefixed.forEach((el) => el.remove());
   } catch {
-    // Selector failure (invalid id chars escaping into CSS) — fall back
+    // Selector failure (invalid id chars escaping into CSS): fall back
     // silently; the exact-id pass above is best-effort.
   }
 }
@@ -82,7 +82,7 @@ export function MermaidViewer({ source, className, filename }: MermaidViewerProp
         cleanupMermaidLeftovers(renderId);
       } catch (e) {
         // Remove mermaid's leaked "syntax error" diagram from document.body
-        // before surfacing our own error UI — otherwise the user sees BOTH
+        // before surfacing our own error UI: otherwise the user sees BOTH
         // our pre block AND mermaid's orphaned error block (with version
         // banner) tacked onto the end of the page.
         cleanupMermaidLeftovers(renderId);
@@ -105,7 +105,7 @@ export function MermaidViewer({ source, className, filename }: MermaidViewerProp
 
   const stem = sanitizeFilename(filename);
 
-  // Parse the SVG string held in state into a detached document — avoids depending on the container's live innerHTML, which can be racy under React re-renders and previously produced spurious "rendered SVG not found" errors on click.
+  // Parse the SVG string held in state into a detached document: avoids depending on the container's live innerHTML, which can be racy under React re-renders and previously produced spurious "rendered SVG not found" errors on click.
   const parseSvg = (raw: string): SVGSVGElement | null => {
     const doc = new DOMParser().parseFromString(raw, "image/svg+xml");
     if (doc.getElementsByTagName("parsererror").length > 0) {
@@ -124,7 +124,7 @@ export function MermaidViewer({ source, className, filename }: MermaidViewerProp
       setError("SVG export failed: could not parse rendered SVG");
       return;
     }
-    // Serialise via XMLSerializer so HTML inside <foreignObject> (e.g. <br>) is emitted as valid XML (<br/>) — mermaid's raw render() output isn't guaranteed well-formed XML.
+    // Serialise via XMLSerializer so HTML inside <foreignObject> (e.g. <br>) is emitted as valid XML (<br/>): mermaid's raw render() output isn't guaranteed well-formed XML.
     svgEl.setAttribute("xmlns", "http://www.w3.org/2000/svg");
     svgEl.setAttribute("xmlns:xlink", "http://www.w3.org/1999/xlink");
     const serialised = new XMLSerializer().serializeToString(svgEl);
@@ -167,7 +167,7 @@ export function MermaidViewer({ source, className, filename }: MermaidViewerProp
           height = bbox.height;
         }
       } catch {
-        // getBBox can throw on detached nodes — fall back to defaults.
+        // getBBox can throw on detached nodes: fall back to defaults.
       }
     }
 

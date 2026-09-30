@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
   const response = NextResponse.json({ success: true });
   response.cookies.set("kontexta_session", token, {
     httpOnly: true,
-    secure: false, // See login/route.ts — HTTP Docker deployments require non-secure cookies.
+    secure: false, // See login/route.ts, HTTP Docker deployments require non-secure cookies.
     sameSite: "lax",
     path: "/",
     maxAge: 60 * 60 * 24 * 30, // 30 days

@@ -130,7 +130,7 @@ export async function PUT(
     }
   }
 
-  // Sweep stray *.tmp.* siblings from prior SIGKILLed writes — skip our own pid
+  // Sweep stray *.tmp.* siblings from prior SIGKILLed writes: skip our own pid
   // and any tmp written within the last 60s (likely a concurrent in-flight PUT).
   const dir = dirname(file);
   const baseName = basename(file);
@@ -177,7 +177,7 @@ export async function DELETE(
     return NextResponse.json({ deleted: false });
   const file = join(root, "kontexta.json");
   if (!existsSync(file)) {
-    // Already absent — idempotent success.
+    // Already absent: idempotent success.
     return NextResponse.json({ deleted: false });
   }
   unlinkSync(file);
