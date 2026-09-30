@@ -1,6 +1,6 @@
 {
   "name": "kontexta",
-  "version": "5.2.0",
+  "version": "5.2.1",
   "description": "One-click local dashboard + MCP server for AI coding agents",
   "type": "module",
   "license": "Apache-2.0",
@@ -91,5 +91,5 @@
     "typescript": "^5.7.0",
     "vitest": "^2.1.0"
   },
-  "rulesVersion": "3.1.0"
+  "rulesVersion": "3.2.0"
 }

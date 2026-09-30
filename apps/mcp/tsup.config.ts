@@ -54,6 +54,10 @@ export default defineConfig({
     copyFileSync(rulesSrc, join(rulesDstDir, "rules-block.md"));
     console.log(`[tsup] copied rules-block.md → ${rulesDstDir}/rules-block.md`);
 
+    const rulesRefSrc = resolve(__dirname, "../../packages/core/src/agent-rules/rules-reference.md");
+    copyFileSync(rulesRefSrc, join(rulesDstDir, "rules-reference.md"));
+    console.log(`[tsup] copied rules-reference.md → ${rulesDstDir}/rules-reference.md`);
+
     const emitSrc = resolve(__dirname, "../../packages/core/src/hooks/emit.mjs");
     const emitDstDir = resolve(__dirname, "dist/hooks");
     mkdirSync(emitDstDir, { recursive: true });

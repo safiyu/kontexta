@@ -1,7 +1,7 @@
 {
   "name": "kontexta",
-  "version": "5.2.0",
-  "rulesVersion": "3.1.0",
+  "version": "5.2.1",
+  "rulesVersion": "3.2.0",
   "type": "module",
   "author": "Safiyu",
   "private": true,
