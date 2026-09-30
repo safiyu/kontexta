@@ -42,7 +42,7 @@ const DEFAULTS: JournalConfig = {
 interface Project {
   id: number;
   name: string;
-  path: string;
+  path?: string | null;
   slug: string;
 }
 
@@ -86,9 +86,10 @@ export function JournalPanel() {
       })
       .then((d: Project[]) => {
         if (cancelled) return;
-        setProjects(d);
-        if (d.length > 0 && projectId === null) {
-          setProjectId(d[0].id);
+        const valid = d.filter((p) => typeof p.path === "string" && p.path.trim().length > 0);
+        setProjects(valid);
+        if (valid.length > 0 && projectId === null) {
+          setProjectId(valid[0].id);
         }
       })
       .catch((e) => { 
@@ -103,6 +104,7 @@ export function JournalPanel() {
 
   useEffect(() => {
     if (projectId === null) return;
+    setLoadError(null);
     let cancelled = false;
     const ac = new AbortController();
     fetch(`/api/projects/${projectId}/journal-config`, { signal: ac.signal })
@@ -112,10 +114,14 @@ export function JournalPanel() {
       })
       .then((d) => {
         if (cancelled) return;
+        setLoadError(null);
         if (d.journal) {
           const loaded = { ...DEFAULTS, ...d.journal };
           loadedRef.current = loaded;
           setConfig(loaded);
+        } else {
+          loadedRef.current = DEFAULTS;
+          setConfig(DEFAULTS);
         }
       })
       .catch((e) => { 
@@ -166,7 +172,10 @@ export function JournalPanel() {
         <h2 className="text-lg font-medium mb-2">Project</h2>
         <select
           value={projectId ?? ""}
-          onChange={(e) => setProjectId(Number(e.target.value))}
+          onChange={(e) => {
+            setLoadError(null);
+            setProjectId(Number(e.target.value));
+          }}
           className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded px-2 py-1 min-w-[200px] text-xs"
         >
           <option value="">Select project…</option>

@@ -132,14 +132,23 @@ export function SyncPopover({
           </div>
         ) : (
           <div className="p-3 space-y-2">
-            <label className="block text-[12px] text-[var(--text-secondary)]">Global git remote URL</label>
+            <label className="block text-[12px] font-medium text-[var(--text-secondary)]">Global git remote URL</label>
             <input
               type="text"
               value={urlInput}
               onChange={(e) => setUrlInput(e.target.value)}
-              placeholder="https://github.com/user/repo.git or git@host:user/repo.git"
-              className="w-full px-2 py-1 bg-[var(--bg-primary)] border border-[var(--border)] rounded text-[12px]"
+              placeholder="https://github.com/user/repo.git or git@github.com:user/repo.git"
+              className="w-full px-2 py-1.5 bg-[var(--bg-primary)] border border-[var(--border)] rounded text-[12px] font-mono"
             />
+            <div className="text-[11px] text-[var(--text-secondary)] leading-relaxed space-y-1 bg-[var(--bg-primary)] p-2 rounded border border-[var(--border)]">
+              <p className="font-semibold text-[var(--text-primary)]">Supported URL formats:</p>
+              <ul className="list-disc list-inside space-y-0.5">
+                <li><span className="font-mono text-[10px]">git@github.com:owner/repo.git</span> (SSH agent)</li>
+                <li><span className="font-mono text-[10px]">https://&lt;token&gt;@github.com/owner/repo.git</span> (PAT)</li>
+                <li><span className="font-mono text-[10px]">https://user:&lt;token&gt;@github.com/owner/repo.git</span></li>
+              </ul>
+              <p className="text-[10px] text-[var(--text-muted)] pt-0.5">Tokens in URLs are automatically masked and redacted in logs.</p>
+            </div>
             <button
               disabled={busy}
               onClick={handleSaveRemote}

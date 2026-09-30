@@ -172,13 +172,13 @@ export function FirstRunWizard({ open, onClose, initialStep = 1, onSaved }: Firs
         {step === 3 && (
           <div className="space-y-4">
             {([
-              { key: "name", label: "Name", multiline: false, placeholder: "e.g. Safiyu" },
-              { key: "role", label: "Role", multiline: false, placeholder: "e.g. Data engineer" },
-              { key: "vision", label: "Vision", multiline: false, placeholder: "e.g. reduce operational load on the SAP replication path" },
-              { key: "roadmap", label: "Roadmap", multiline: false, placeholder: "e.g. sprint 7 CDC observability" },
-              { key: "preferences", label: "Preferences", multiline: false, placeholder: "e.g. TypeScript, terse responses" },
-              { key: "sessionCodingStyle", label: "Session coding style", multiline: true, placeholder: "e.g. one-line comments only; no auto push to git" },
-              { key: "teamMembersAndRoles", label: "Team members & roles", multiline: true, placeholder: "e.g. Alice — PM\nBob — SRE" },
+              { key: "name", label: "Name", multiline: false, placeholder: "e.g. Alex" },
+              { key: "role", label: "Role", multiline: false, placeholder: "e.g. Full-stack engineer" },
+              { key: "vision", label: "Vision", multiline: false, placeholder: "e.g. Improve API performance and developer workflows" },
+              { key: "roadmap", label: "Roadmap", multiline: false, placeholder: "e.g. Q3 auth refactor; performance benchmarking" },
+              { key: "preferences", label: "Preferences", multiline: false, placeholder: "e.g. TypeScript, concise explanations, TDD" },
+              { key: "sessionCodingStyle", label: "Session coding style", multiline: true, placeholder: "e.g. one-line comments only; no auto push to git; ask before migrations" },
+              { key: "teamMembersAndRoles", label: "Team members & roles", multiline: true, placeholder: "e.g. Alice — Product Manager\nBob — DevOps / SRE" },
               { key: "notes", label: "Notes", multiline: true, placeholder: "Free-form scratch space." },
             ] as const).map(({ key, label, multiline, placeholder }) => (
               <div key={key}>

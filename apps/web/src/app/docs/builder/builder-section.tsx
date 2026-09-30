@@ -8,7 +8,7 @@ import { SaveBar } from "@/components/docs/save-bar";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useSearchParams } from "next/navigation";
 
-interface Project { id: number; name: string; path: string; }
+interface Project { id: number; name: string; path: string | null; slug?: string; }
 interface LoadResp { exists: boolean; raw: string | null; parsed: any; mtimeMs: number | null; parseError?: string; }
 interface ValidationResp { tools: Record<string, ToolDef>; disabled: string[]; warnings: string[]; errors: string[]; }
 
@@ -45,10 +45,15 @@ export function BuilderSection() {
         return r.json();
       })
       .then((list: Project[]) => {
-        setProjects(list);
+        const valid = list.filter((p) => typeof p.path === "string" && p.path.trim().length > 0);
+        setProjects(valid);
         const fromUrl = sp.get("project");
         const fromUrlId = fromUrl ? Number(fromUrl) : NaN;
-        const initial = (!isNaN(fromUrlId) && list.find((p) => p.id === fromUrlId)) ? fromUrlId : list[0]?.id ?? null;
+        const initial = (!isNaN(fromUrlId) && valid.find((p) => p.id === fromUrlId))
+          ? fromUrlId
+          : (fromUrl ? valid.find((p) => p.slug === fromUrl || p.name === fromUrl)?.id : null)
+            ?? valid[0]?.id
+            ?? null;
         setProjectId(initial);
       })
       .catch((err) => {
@@ -59,12 +64,14 @@ export function BuilderSection() {
 
   useEffect(() => {
     if (projectId === null) return;
+    setSaveError(null);
     fetch(`/api/projects/${projectId}/hands-config`)
       .then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json();
       })
       .then((j: LoadResp) => {
+        setSaveError(null);
         setMtimeMs(j.mtimeMs);
         setParseError(j.parseError ?? null);
         const t = j.parsed?.tools ?? {};
@@ -214,7 +221,10 @@ export function BuilderSection() {
             Project
             <select
               value={projectId ?? ""}
-              onChange={(e) => setProjectId(Number(e.target.value))}
+              onChange={(e) => {
+                setSaveError(null);
+                setProjectId(Number(e.target.value));
+              }}
               aria-label="project"
               className="px-3 py-1.5 bg-[var(--bg-primary)] border border-[var(--border)] rounded-lg font-mono text-[var(--accent)] outline-none focus:border-[var(--accent)] transition-all cursor-pointer min-w-[220px]"
             >

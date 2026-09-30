@@ -64,6 +64,18 @@ describe("GET /api/projects/[id]/hands-config", () => {
     expect(body.parseError).toBeTruthy();
     expect(body.parsed).toBeNull();
   });
+  it("returns exists=false for project with null path (e.g. orphan distillation project)", async () => {
+    const db = (await import("kxta-core")).getDatabase();
+    const info = db.prepare("INSERT INTO projects (name, slug, path) VALUES (?, ?, NULL)").run("Default (unregistered)", "default-test-1");
+    const nullId = Number(info.lastInsertRowid);
+    const res = await GET(
+      new Request(`http://localhost/api/projects/${nullId}/hands-config`) as any,
+      { params: Promise.resolve({ id: String(nullId) }) },
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.exists).toBe(false);
+  });
 });
 
 describe("PUT /api/projects/[id]/hands-config", () => {
@@ -121,6 +133,21 @@ describe("PUT /api/projects/[id]/hands-config", () => {
     const body = await res.json();
     expect(typeof body.currentMtimeMs).toBe("number");
   });
+  it("400s when saving config for project with null path", async () => {
+    const db = (await import("kxta-core")).getDatabase();
+    const info = db.prepare("INSERT INTO projects (name, slug, path) VALUES (?, ?, NULL)").run("Default (unregistered)", "default-test-2");
+    const nullId = Number(info.lastInsertRowid);
+    const res = await PUT(
+      new Request(`http://localhost/api/projects/${nullId}/hands-config`, {
+        method: "PUT",
+        body: JSON.stringify({ config: { version: "1", tools: {} } }),
+      }) as any,
+      { params: Promise.resolve({ id: String(nullId) }) },
+    );
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toMatch(/no directory on disk/);
+  });
 });
 
 describe("DELETE /api/projects/[id]/hands-config", () => {
@@ -143,6 +170,18 @@ describe("DELETE /api/projects/[id]/hands-config", () => {
     const res = await DELETE(
       new Request(`http://localhost/api/projects/${projectId}/hands-config`, { method: "DELETE" }) as any,
       { params: Promise.resolve({ id: String(projectId) }) },
+    );
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ deleted: false });
+  });
+
+  it("returns deleted=false for project with null path", async () => {
+    const db = (await import("kxta-core")).getDatabase();
+    const info = db.prepare("INSERT INTO projects (name, slug, path) VALUES (?, ?, NULL)").run("Default (unregistered)", "default-test-3");
+    const nullId = Number(info.lastInsertRowid);
+    const res = await DELETE(
+      new Request(`http://localhost/api/projects/${nullId}/hands-config`, { method: "DELETE" }) as any,
+      { params: Promise.resolve({ id: String(nullId) }) },
     );
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ deleted: false });
