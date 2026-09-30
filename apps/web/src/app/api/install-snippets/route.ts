@@ -4,7 +4,7 @@ import os from "node:os";
 import { readFileSync } from "node:fs";
 import { renderTemplate, CLIENTS, INSTALLS, type Client, type Install, type Snippet } from "@/lib/install-templates";
 import { DATA_DIR } from "@/lib/db-init";
-import { resolveManualEntrypoint } from "@/lib/manual-entrypoint";
+import { resolveMarkerEntrypoint } from "@/lib/manual-entrypoint";
 // kxta-core is server-external so os.homedir()/APPDATA reads never get bundled into a Windows-breaking nft glob.
 import { defaultDataDir, defaultDataDirDisplay, detectInstallMode } from "kxta-core";
 
@@ -59,7 +59,7 @@ export async function GET(req: NextRequest) {
   const dataDir = isTempPath(rawDataDir) ? defaultDir : rawDataDir;
   const isDefaultDir = path.resolve(dataDir) === path.resolve(defaultDir);
 
-  const manualEntrypoint = install === "source" ? resolveManualEntrypoint() : null;
+  const manualEntrypoint = install === "source" ? resolveMarkerEntrypoint() : null;
   const snippet =
     install === "source" && !manualEntrypoint
       ? manualNotFoundSnippet()

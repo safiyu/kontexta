@@ -62,6 +62,14 @@ describe("McpControls", () => {
     expect(screen.getByRole("button", { name: "Update MCP for Gemini CLI" })).toBeTruthy();
   });
 
+  it("a server configured by hand reads as connected, not 'not connected', and can be taken over", () => {
+    render(<McpControls agent={agent({ mcp_installed: false, mcp_present: true, mcp_current: false })} state={state()} mcpAction={vi.fn()} />);
+    expect(screen.getByText(/MCP connected \(configured by hand\)/)).toBeTruthy();
+    expect(screen.queryByText(/not connected/i)).toBeNull();
+    expect(screen.getByRole("button", { name: "Update MCP for Gemini CLI" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Disconnect MCP/ })).toBeNull();
+  });
+
   it("flags an out-of-date registration", () => {
     render(<McpControls agent={agent({ mcp_installed: true, mcp_current: false })} state={state()} mcpAction={vi.fn()} />);
     expect(screen.getByText(/out of date/i)).toBeTruthy();

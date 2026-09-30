@@ -8,7 +8,7 @@ export interface AgentInfo {
   id: string; name: string; enabled: boolean; hooks_supported: boolean; onboardable: boolean;
   hooks_installed: boolean; hooks_version: string | null; hooks_verified_at: string | null; last_hook_event_at: string | null;
   config_present: boolean; emitter_stale: boolean; notes: string[];
-  mcp_supported: boolean; mcp_installed: boolean; mcp_approval: McpApproval; mcp_current: boolean; mcp_stale: boolean;
+  mcp_supported: boolean; mcp_installed: boolean; mcp_present?: boolean; mcp_approval: McpApproval; mcp_current: boolean; mcp_stale: boolean;
   mcp_config_path: string | null; mcp_approval_supported: boolean; mcp_notes: string[];
 }
 export type McpApproval = "prompt" | "safe" | "all";

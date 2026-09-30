@@ -72,7 +72,7 @@ describe("claude-code MCP installer", () => {
     writeFileSync(settings(), JSON.stringify({ permissions: { allow: ["Bash(ls)"] } }));
     inst().install(ctx({ approval: "all" }));
     expect(readJson(settings()).permissions.allow).toEqual(["Bash(ls)", "mcp__kxta"]);
-    expect(inst().uninstall(ctx()).changed).toBe(true);
+    expect(inst().uninstall(ctx({ previousApproval: "all" })).changed).toBe(true);
     expect(readJson(dotClaude()).mcpServers.kxta).toBeUndefined();
     expect(readJson(settings()).permissions.allow).toEqual(["Bash(ls)"]);
   });
@@ -84,6 +84,20 @@ describe("claude-code MCP installer", () => {
     expect(readJson(settings()).permissions.allow).toEqual(["mcp__kxta__files_read", "mcp__kxta__tags_list"]);
     inst().install(ctx({ approval: "prompt", previousApproval: "safe" }));
     expect(readJson(settings()).permissions).toBeUndefined();
+  });
+
+  it("uninstall keeps a hand-written kxta permission when no approval level was applied", () => {
+    mkdirSync(join(home, ".claude"));
+    writeFileSync(settings(), JSON.stringify({ permissions: { allow: ["mcp__kxta__files_read"] } }));
+    inst().install(ctx());
+    inst().uninstall(ctx({ previousApproval: "prompt" }));
+    expect(readJson(settings()).permissions.allow).toEqual(["mcp__kxta__files_read"]);
+  });
+
+  it("sees a server registered only for one project, without calling it current", () => {
+    writeFileSync(dotClaude(), JSON.stringify({ projects: { "/some/project": { mcpServers: { kxta: { type: "stdio", command: "npx", args: ["-y", "kontexta-mcp"] } } } } }));
+    expect(inst().status(ctx())).toMatchObject({ installed: true, current: false });
+    expect(inst().status(ctx()).notes.join(" ")).toMatch(/project/i);
   });
 
   it("prompt never creates a settings file", () => {

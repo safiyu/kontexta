@@ -26,7 +26,7 @@ test("connect-cli: status → install (with approval) → status → approval ba
     assert.equal(r.code, 0, r.err);
     assert.match(r.out, /gemini: connected \(approval: all\)/);
     const cfg = JSON.parse(readFileSync(join(home, ".gemini", "settings.json"), "utf8"));
-    assert.deepEqual(cfg.mcpServers.kxta, { command: "npx", args: ["-y", "kontexta-mcp"], env: { KONTEXTA_DATA_DIR: data } });
+    assert.deepEqual(cfg.mcpServers.kxta, { command: "npx", args: ["-y", "kontexta", "mcp"], env: { KONTEXTA_DATA_DIR: data } });
     assert.deepEqual(cfg.permissions.allow, ["mcp(kxta/*)"]);
 
     r = run(["status", "--home", home], env);
@@ -79,4 +79,12 @@ test("connect-cli: hermes always gets an explicit data dir because Hermes strips
 test("core's generated tool list matches the live tool manifest (regenerate with apps/mcp/scripts/generate-manifest.js)", () => {
   const manifest = JSON.parse(readFileSync(resolve(import.meta.dirname, "../../web/src/lib/mcp-tools.json"), "utf8"));
   assert.deepEqual(KXTA_TOOLS.map((t) => t.name).sort(), manifest.tools.map((t) => t.name).sort());
+});
+
+test("connect-cli is inert when imported (only running it as a script executes it)", () => {
+  const url = new URL(CLI, "file://").href.startsWith("file:") ? `file://${CLI}` : CLI;
+  const r = spawnSync(process.execPath, ["--input-type=module", "-e", `await import(${JSON.stringify(url)}); console.log("imported")`], { encoding: "utf8", env: { PATH: process.env.PATH } });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /imported/);
+  assert.doesNotMatch(r.stderr, /kontexta connect/);
 });

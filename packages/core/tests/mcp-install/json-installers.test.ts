@@ -91,6 +91,22 @@ describe.each([
     expect(existsSync(`${cfg()}.kontexta-bak`)).toBe(false);
   });
 
+  it("only manages KONTEXTA_DATA_DIR inside env: env keys the user added survive", () => {
+    mkAppDir();
+    writeFileSync(cfg(), JSON.stringify({ mcpServers: { kxta: { command: "npx", args: [], env: { FOO: "1", KONTEXTA_DATA_DIR: "/old" } } } }));
+    inst().install(ctx());
+    expect(read(cfg()).mcpServers.kxta.env).toEqual({ FOO: "1" });
+    inst().install(ctx({ entry: { ...ENTRY, env: { KONTEXTA_DATA_DIR: "/d" } } }));
+    expect(read(cfg()).mcpServers.kxta.env).toEqual({ FOO: "1", KONTEXTA_DATA_DIR: "/d" });
+  });
+
+  it("reads a config that starts with a UTF-8 BOM", () => {
+    mkAppDir();
+    writeFileSync(cfg(), "\uFEFF" + JSON.stringify({ theme: "x" }));
+    inst().install(ctx());
+    expect(read(cfg()).theme).toBe("x");
+  });
+
   it("refuses malformed JSON or a non-object mcpServers, and dry-run writes nothing", () => {
     mkAppDir();
     writeFileSync(cfg(), "{ nope");
@@ -185,8 +201,15 @@ describe("gemini allowlist (permissions.allow)", () => {
   it("uninstall removes the kxta server and its rules but nothing else", () => {
     writeFileSync(path(), JSON.stringify({ hooks: { Stop: [] }, permissions: { allow: ["command(ls)"] } }));
     MCP_INSTALLERS.gemini.install(ctx("all"));
-    MCP_INSTALLERS.gemini.uninstall(ctx("prompt"));
+    MCP_INSTALLERS.gemini.uninstall(ctx("prompt", "all"));
     expect(read(path())).toEqual({ hooks: { Stop: [] }, permissions: { allow: ["command(ls)"] } });
+  });
+
+  it("uninstall keeps a hand-written kxta rule when we never applied an approval level", () => {
+    writeFileSync(path(), JSON.stringify({ permissions: { allow: ["mcp(kxta/files.read)"] } }));
+    MCP_INSTALLERS.gemini.install(ctx("prompt"));
+    MCP_INSTALLERS.gemini.uninstall(ctx("prompt", "prompt"));
+    expect(allow()).toEqual(["mcp(kxta/files.read)"]);
   });
 });
 

@@ -39,7 +39,9 @@ export function McpControls({ agent: a, state, mcpAction }: { agent: AgentInfo; 
   const dockerBase = state.mcp_docker_commands?.[a.id];
   const dockerCmd = dockerBase ? (level === "prompt" ? dockerBase : `${dockerBase} --approval ${level}`) : null;
 
-  const status = a.mcp_installed ? `MCP connected${a.mcp_current ? "" : " (out of date)"}${a.mcp_approval !== "prompt" ? ` · ${LEVELS.find((l) => l.value === a.mcp_approval)?.label.toLowerCase()}` : ""}` : "MCP not connected";
+  const managed = a.mcp_installed;
+  const hasEntry = a.mcp_installed || !!a.mcp_present;
+  const status = !managed && a.mcp_present ? "MCP connected (configured by hand)" : a.mcp_installed ? `MCP connected${a.mcp_current ? "" : " (out of date)"}${a.mcp_approval !== "prompt" ? ` · ${LEVELS.find((l) => l.value === a.mcp_approval)?.label.toLowerCase()}` : ""}` : "MCP not connected";
 
   return (
     <div className="space-y-2">
@@ -59,8 +61,8 @@ export function McpControls({ agent: a, state, mcpAction }: { agent: AgentInfo; 
         )}
         {!dockerCmd && (
           <span className="flex gap-2">
-            <button className="btn btn-sm" disabled={busy} aria-label={`${a.mcp_installed ? "Update" : "Connect"} MCP for ${a.name}`} onClick={onConnect}>
-              {a.mcp_installed ? "Update MCP" : "Connect MCP"}
+            <button className="btn btn-sm" disabled={busy} aria-label={`${hasEntry ? "Update" : "Connect"} MCP for ${a.name}`} onClick={onConnect}>
+              {hasEntry ? "Update MCP" : "Connect MCP"}
             </button>
             {a.mcp_installed && (
               <button className="btn btn-sm btn-destructive" disabled={busy} aria-label={`Disconnect MCP for ${a.name}`} onClick={() => void run("uninstall", "prompt")}>Disconnect</button>

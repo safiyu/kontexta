@@ -116,6 +116,31 @@ describe("MCP orchestrator", () => {
     expect(JSON.parse(readFileSync(cursorCfg(), "utf8")).mcpServers.kxta.command).toBe("my-own");
   });
 
+  it("reconcile leaves an entry alone once the user has edited it after our install", () => {
+    setEnabled("cursor", true);
+    installMcp(["cursor"], { ...base() });
+    const c = JSON.parse(readFileSync(cursorCfg(), "utf8"));
+    c.mcpServers.kxta.command = "my-wrapper";
+    writeFileSync(cursorCfg(), JSON.stringify(c));
+    expect(reconcileMcp({ ...base(), installMode: "source", sourceEntrypoint: "/x/index.js" })).toEqual([]);
+    expect(JSON.parse(readFileSync(cursorCfg(), "utf8")).mcpServers.kxta.command).toBe("my-wrapper");
+  });
+
+  it("reconcile does not re-add an entry the user removed, and corrects the registry", () => {
+    setEnabled("cursor", true);
+    installMcp(["cursor"], { ...base() });
+    writeFileSync(cursorCfg(), JSON.stringify({ mcpServers: {} }));
+    expect(reconcileMcp({ ...base(), installMode: "source", sourceEntrypoint: "/x/index.js" })).toEqual([]);
+    expect(JSON.parse(readFileSync(cursorCfg(), "utf8")).mcpServers.kxta).toBeUndefined();
+    expect(row("cursor").mcp_installed).toBe(false);
+  });
+
+  it("status reports a hand-written entry as present without marking it managed", () => {
+    writeFileSync(cursorCfg(), JSON.stringify({ mcpServers: { kxta: { command: "my-own", args: [] } } }));
+    const s = mcpStatus({ ...base() }).find((r) => r.id === "cursor")!;
+    expect(s).toMatchObject({ installed: true, mcp_installed: false, current: false });
+  });
+
   it("reconcile keeps each agent's stored approval level", () => {
     setEnabled("gemini", true);
     installMcp(["gemini"], { ...base(), approval: "all" });

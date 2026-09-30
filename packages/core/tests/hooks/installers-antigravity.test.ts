@@ -51,6 +51,12 @@ describe("antigravity installer (named-entry hooks.json)", () => {
     expect(INSTALLERS.antigravity.status(ctx()).installed).toBe(false);
   });
 
+  it("uninstall on a machine that never installed creates nothing", () => {
+    const r = INSTALLERS.antigravity.uninstall(ctx());
+    expect(r.changed).toBe(false);
+    expect(existsSync(cfgPath())).toBe(false);
+  });
+
   it("keeps a user's enabled:false across reinstall", () => {
     INSTALLERS.antigravity.install(ctx());
     const cfg = read(cfgPath());

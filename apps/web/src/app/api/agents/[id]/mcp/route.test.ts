@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { NextRequest } from "next/server";
-import { mkdtempSync, rmSync, existsSync, readFileSync, mkdirSync } from "node:fs";
+import { mkdtempSync, rmSync, existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { setSetting } from "kxta-core";
@@ -55,6 +55,24 @@ describe("POST /api/agents/:id/mcp", () => {
     expect(j.outcome).toMatchObject({ ok: true, changed: true, approval: "prompt" });
     expect(JSON.parse(readFileSync(join(home, ".cursor", "mcp.json"), "utf8")).mcpServers.kxta.args).toEqual(["-y", "kontexta", "mcp"]);
     expect(await row("cursor")).toMatchObject({ mcp_installed: true, mcp_current: true });
+  });
+
+  it("connects from a source checkout that was never bootstrapped (finds apps/mcp/dist/index.js itself)", async () => {
+    process.env.KONTEXTA_INSTALL_HINT = "source";
+    mkdirSync(join(home, ".cursor"));
+    const j = await (await post("cursor", { action: "install" })).json();
+    expect(j.outcome, JSON.stringify(j)).toMatchObject({ ok: true, changed: true });
+    const args = JSON.parse(readFileSync(join(home, ".cursor", "mcp.json"), "utf8")).mcpServers.kxta.args;
+    expect(args[0]).toMatch(/apps[\\/]mcp[\\/]dist[\\/]index\.js$/);
+  });
+
+  it("a server the user configured by hand shows as present, raises no alert, and is not marked managed", async () => {
+    mkdirSync(join(home, ".cursor"));
+    writeFileSync(join(home, ".cursor", "mcp.json"), JSON.stringify({ mcpServers: { kxta: { command: "my-own", args: [] } } }));
+    await PATCH(new NextRequest("http://localhost/api/agents/cursor", { method: "PATCH", body: JSON.stringify({ enabled: true }) }), { params: Promise.resolve({ id: "cursor" }) });
+    const state = await (await get()).json();
+    expect(state.agents.find((a: any) => a.id === "cursor")).toMatchObject({ mcp_present: true, mcp_installed: false, mcp_current: false });
+    expect(state.mcp_alerts).toEqual([]);
   });
 
   it("applies an approval level where supported", async () => {

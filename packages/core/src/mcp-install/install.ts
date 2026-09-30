@@ -4,7 +4,7 @@ import { agentMeta, isAgentId } from "../hooks/agents.js";
 import type { InstallMode } from "../hooks/install-mode.js";
 import { listAgents, markMcpInstalled, markMcpUninstalled, type AgentRow, type McpApproval } from "../hooks/registry.js";
 import { defaultDataDir } from "../util/paths.js";
-import { buildServerEntry, entrySignature, type ServerEntry } from "./entry.js";
+import { buildServerEntry, entryHashOf, entryHashOfSignature, entrySignature, type ServerEntry } from "./entry.js";
 import { MCP_INSTALLERS } from "./installers/index.js";
 import { KXTA_TOOLS } from "./tools.generated.js";
 import type { McpCtx, McpTool, Runner } from "./types.js";
@@ -113,15 +113,21 @@ export function mcpStatus(o: McpOpts): McpStatusRow[] {
   });
 }
 
-// Refreshes registrations we made (entry or tool list changed). It never creates one: first-time registration is an explicit user action, so a hand-written entry is never replaced behind anyone's back. Containers cannot edit host files, so docker mode never reconciles.
+// Refreshes registrations we made (entry or tool list changed). It never creates one, never rewrites an entry the user edited after our install, and never re-adds one the user removed (the registry is corrected instead). Containers cannot edit host files, so docker mode never reconciles.
 export function reconcileMcp(o: McpOpts): McpOutcome[] {
   if (o.installMode === "docker") return [];
   const due: Record<string, McpApproval> = {};
   for (const r of listAgents()) {
     if (!r.enabled || !r.mcp_supported || !r.mcp_installed || !MCP_INSTALLERS[r.id]) continue;
-    let sig: string | null = null;
-    try { sig = entrySignature(entryFor(r.id, o), r.mcp_approval, toolsOf(o).map((t) => t.name)); } catch { /* cannot build an entry here: leave it */ }
-    if (sig !== null && r.mcp_version !== sig) due[r.id] = r.mcp_approval;
+    let desired: string;
+    let onDisk: { installed: boolean; entry?: ServerEntry };
+    try {
+      desired = entrySignature(entryFor(r.id, o), r.mcp_approval, toolsOf(o).map((t) => t.name));
+      onDisk = MCP_INSTALLERS[r.id].status(ctxFor(r.id, o, r.mcp_approval, r.mcp_approval));
+    } catch { continue; }
+    if (!onDisk.installed) { if (!o.dryRun && o.registry !== false) markMcpUninstalled(r.id); continue; }
+    if (onDisk.entry && entryHashOf(onDisk.entry) !== entryHashOfSignature(r.mcp_version ?? "")) continue;
+    if (r.mcp_version !== desired) due[r.id] = r.mcp_approval;
   }
   const ids = Object.keys(due);
   return ids.length === 0 ? [] : installMcp(ids, { ...o, approval: due });

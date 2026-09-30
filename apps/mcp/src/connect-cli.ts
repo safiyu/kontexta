@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // `kontexta connect …`: registers the kxta MCP server in each agent's own config. Ships in the MCP bundle next to hooks-cli.
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
@@ -73,7 +73,7 @@ export async function runConnectCli(argv: string[], env: NodeJS.ProcessEnv = pro
   const modeFlag = values["install-mode"];
   if (modeFlag !== undefined && !["docker", "npm", "source"].includes(modeFlag)) { process.stderr.write("--install-mode must be docker, npm or source\n"); return 2; }
 
-  if (values["data-dir"]) { env.KONTEXTA_DATA_DIR = values["data-dir"]; process.env.KONTEXTA_DATA_DIR = values["data-dir"]; resetDataDirCache(); }
+  if (values["data-dir"]) { process.env.KONTEXTA_DATA_DIR = values["data-dir"]; resetDataDirCache(); }
   ensureDataDir();
   const dataDir = getDataDir();
   if (!noDb) { getDatabase(); syncAgentRows(); }
@@ -82,7 +82,8 @@ export async function runConnectCli(argv: string[], env: NodeJS.ProcessEnv = pro
   const opts = {
     home: values.home, dataDir, hostDataDir: values["host-data-dir"] ?? env.KONTEXTA_HOST_DATA_DIR, installMode, version: mcpPackageVersion(),
     sourceEntrypoint: values["source-entrypoint"] ?? join(dirname(fileURLToPath(import.meta.url)), "index.js"),
-    hasLocalCliMcp: installMode === "npm" && env.KONTEXTA_VIA_CLI === "1", nodeCmd: values.node, dryRun: values["dry-run"], registry: !noDb,
+    // Same rule as the dashboard (an npm-launched dashboard has the CLI), so both write the same entry.
+    hasLocalCliMcp: installMode === "npm" && (env.KONTEXTA_VIA_CLI === "1" || env.KONTEXTA_INSTALL_HINT === "npm"), nodeCmd: values.node, dryRun: values["dry-run"], registry: !noDb,
   };
 
   try {
@@ -119,4 +120,8 @@ export async function runConnectCli(argv: string[], env: NodeJS.ProcessEnv = pro
   }
 }
 
-runConnectCli(process.argv.slice(2)).then((code) => { process.exitCode = code; }, (e) => { process.stderr.write(`${e?.stack ?? e}\n`); process.exitCode = 1; });
+// Only run when executed as a script, not when something imports this module.
+function isMain(): boolean {
+  try { return !!process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url)); } catch { return false; }
+}
+if (isMain()) runConnectCli(process.argv.slice(2)).then((code) => { process.exitCode = code; }, (e) => { process.stderr.write(`${e?.stack ?? e}\n`); process.exitCode = 1; });

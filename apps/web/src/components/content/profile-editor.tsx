@@ -99,7 +99,8 @@ export function ProfileEditor({ onDirtyChange, onChanged }: ProfileEditorProps) 
   const [saving, setSaving] = useState(false);
 
   const currentContent = useMemo(() => (rawMode ? rawContent : assemble(parsed)), [rawMode, rawContent, parsed]);
-  const dirty = currentContent.trim() !== savedContent.trim();
+  // Not dirty until the profile has loaded: before that the defaults differ from the empty saved baseline.
+  const dirty = !loading && currentContent.trim() !== savedContent.trim();
 
   const emptyCount = REQUIRED.filter((r) => !parsed.required[r.key].trim()).length;
 

@@ -40,6 +40,13 @@ describe("continue (owns ~/.continue/mcpServers/kontexta.yaml)", () => {
     expect(parse(readFileSync(file(), "utf8")).mcpServers[0]).toEqual({ name: "kxta", command: "node", args: ["x"] });
   });
 
+  it("an empty kontexta.yaml is safe to overwrite", () => {
+    mkDir(); mkdirSync(dirname(file()), { recursive: true });
+    writeFileSync(file(), "");
+    expect(inst().install(ctx()).changed).toBe(true);
+    expect(parse(readFileSync(file(), "utf8")).name).toBe("kontexta");
+  });
+
   it("will not overwrite a file that is not ours, and uninstall leaves it", () => {
     mkDir(); mkdirSync(dirname(file()), { recursive: true });
     writeFileSync(file(), "name: mine\nschema: v1\n");
@@ -83,6 +90,12 @@ describe("hermes (mcp_servers in ~/.hermes/config.yaml)", () => {
     expect(load().mcp_servers.github.command).toBe("npx");
     expect(inst().install(ctx()).changed).toBe(false);
     expect(inst().status(ctx())).toMatchObject({ installed: true, current: true });
+  });
+
+  it("keeps extra keys the user put on the kxta entry", () => {
+    seed("mcp_servers:\n  kxta:\n    command: old\n    args: []\n    timeout: 90\n    env:\n      FOO: bar\n");
+    inst().install(ctx());
+    expect(load().mcp_servers.kxta).toEqual({ command: "npx", args: ["-y", "kontexta-mcp"], timeout: 90, env: { FOO: "bar", KONTEXTA_DATA_DIR: "/d" } });
   });
 
   it("keeps a one-time backup of the original config.yaml", () => {

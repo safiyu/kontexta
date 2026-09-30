@@ -61,9 +61,9 @@ describe("copilot (own file under ~/.copilot/hooks)", () => {
     for (const [ev, list] of Object.entries<any[]>(cfg.hooks)) {
       expect(list).toHaveLength(1);
       expect(list[0].type).toBe("command");
-      expect(list[0].command).toContain(`--event ${ev}`);
-      // The documented per-OS keys carry the same call, so whichever key Copilot prefers runs the emitter.
-      expect(list[0].bash).toBe(list[0].command);
+      // Only the documented per-OS keys: an extra generic `command` could make Copilot run the emitter twice.
+      expect(list[0].command).toBeUndefined();
+      expect(list[0].bash).toContain(`--event ${ev}`);
       expect(list[0].powershell).toMatch(/^.*emit\.mjs' --agent copilot --data-dir '.*' --event /);
       expect(list[0].powershell).not.toContain('"');
       expect(list[0].timeoutSec).toBe(5);

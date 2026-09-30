@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 import type { Installer, InstallCtx } from "./types.js";
 import { emitCommand, isOwned, readJsonConfig, writeJsonConfig } from "./json-config.js";
@@ -50,6 +51,7 @@ export const antigravityInstaller: Installer = {
   },
   uninstall(ctx) {
     const path = configPath(ctx);
+    if (!existsSync(path)) return { agent: "antigravity", path, changed: false, notes: [] };
     const cfg = readJsonConfig(path);
     const changed = writeJsonConfig(path, stripOwned(cfg), ctx.dryRun);
     return { agent: "antigravity", path, changed, notes: [] };

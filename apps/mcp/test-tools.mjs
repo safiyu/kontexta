@@ -575,6 +575,8 @@ function assert(cond, msg) {
       assert(readFileSync(join(repo, "existing.md"), "utf8").includes("body"), "repo file was modified");
       const m = await rpc("tools/call", { name: "files.move", arguments: { file_id: existing.id, new_path: join(repo, "moved.md") } });
       assert(m.isError && /project repo/.test(m.content[0].text), "files.move on repo file not refused");
+      const rs = await rpc("tools/call", { name: "files.restore", arguments: { file_id: existing.id, hash: "0000000000000000000000000000000000000000" } });
+      assert(rs.isError && /project repo/.test(rs.content[0].text), `files.restore on repo file not refused: ${JSON.stringify(rs).slice(0, 200)}`);
 
       const kb = await call("files.create", { files: [{ title: "kb-ok", content: "x", destination: "knowledge", folder: "knowledge/notes", kind: "note" }] });
       assert(kb.created_count === 1, "KB create should still work");

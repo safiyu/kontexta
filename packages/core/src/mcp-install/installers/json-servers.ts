@@ -5,7 +5,7 @@ import { MalformedConfigError, readJsonConfig } from "../../hooks/installers/jso
 import { writeJsonWithBackup } from "../write.js";
 import { approvedTools, rewriteRules } from "../rules.js";
 import type { McpCtx, McpInstaller, McpResult, McpStatus } from "../types.js";
-import { sameEntry } from "../entry.js";
+import { sameEntry, toServerEntry } from "../entry.js";
 
 export const SERVER_KEY = "kxta";
 
@@ -64,7 +64,11 @@ export function jsonServersInstaller(spec: JsonServersSpec): McpInstaller {
       const servers = { ...serversOf(cfg, path) };
       const prior = isObj(servers[SERVER_KEY]) ? (servers[SERVER_KEY] as Json) : {};
       const next: Json = { ...prior, command: ctx.entry.command, args: ctx.entry.args };
-      if (ctx.entry.env) next.env = ctx.entry.env; else delete next.env;
+      // Only KONTEXTA_DATA_DIR is ours inside env; anything else the user put there stays.
+      const env: Record<string, unknown> = isObj(prior.env) ? { ...prior.env } : {};
+      delete env.KONTEXTA_DATA_DIR;
+      Object.assign(env, ctx.entry.env ?? {});
+      if (Object.keys(env).length > 0) next.env = env; else delete next.env;
       for (const [k, v] of Object.entries(spec.entryExtras ?? {})) if (!(k in next)) next[k] = v;
       if (spec.entryApproval) {
         const tools = approvedTools(ctx.approval, ctx.tools);
@@ -85,7 +89,7 @@ export function jsonServersInstaller(spec: JsonServersSpec): McpInstaller {
       delete servers[SERVER_KEY];
       cfg = { ...cfg };
       if (Object.keys(servers).length > 0) cfg.mcpServers = servers; else delete cfg.mcpServers;
-      if (spec.configApproval) cfg = applyConfigApproval(cfg, spec.configApproval, { ...ctx, approval: "prompt", previousApproval: "all" }, path);
+      if (spec.configApproval) cfg = applyConfigApproval(cfg, spec.configApproval, { ...ctx, approval: "prompt" }, path);
       return { agent: spec.id, path, changed: writeJsonWithBackup(path, cfg, ctx.dryRun), notes: [] };
     },
     status(ctx): McpStatus {
@@ -94,7 +98,7 @@ export function jsonServersInstaller(spec: JsonServersSpec): McpInstaller {
       try {
         path = spec.path(ctx);
         const existing = serversOf(readJsonConfig(path), path)[SERVER_KEY];
-        return { agent: spec.id, path, installed: existing !== undefined, current: sameEntry(existing, ctx.entry), notes };
+        return { agent: spec.id, path, installed: existing !== undefined, current: sameEntry(existing, ctx.entry), entry: toServerEntry(existing), notes };
       } catch (e) {
         notes.push((e as Error).message);
         return { agent: spec.id, path, installed: false, current: false, notes };

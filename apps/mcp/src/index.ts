@@ -1781,6 +1781,8 @@ server.tool(
   async ({ file_id, hash }) => {
     try {
       const file = readFile(file_id);
+      const refusal = refuseRepoFile(file);
+      if (refusal) throw new Error(refusal);
       const content = await restoreVersion(repoDirForFile(file), file.path, hash);
       return {
         content: [

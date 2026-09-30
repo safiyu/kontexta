@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, rmSync, writeFileSync, chmodSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { buildServerEntry, entrySignature } from "../../src/mcp-install/entry.js";
+import { buildServerEntry, entrySignature, entryHashOf, entryHashOfSignature } from "../../src/mcp-install/entry.js";
 import { KXTA_TOOLS } from "../../src/mcp-install/tools.generated.js";
 
 const base = { version: "5.1.0", dataDir: "/data/kontexta", isDefaultDir: true };
@@ -65,6 +65,18 @@ describe("entrySignature", () => {
   });
 });
 
+describe("signature parts", () => {
+  const entry = { command: "npx", args: ["-y", "kontexta-mcp"] };
+  it("carries an entry hash that ignores approval and tools", () => {
+    const a = entrySignature(entry, "prompt", ["a"]);
+    const b = entrySignature(entry, "all", ["a", "b"]);
+    expect(entryHashOfSignature(a)).toBe(entryHashOfSignature(b));
+    expect(entryHashOfSignature(a)).toBe(entryHashOf(entry));
+    expect(entryHashOf({ ...entry, args: ["x"] })).not.toBe(entryHashOf(entry));
+    expect(a).not.toBe(b);
+  });
+});
+
 describe("generated tool list", () => {
   it("has the kxta tools with destructive ones flagged", () => {
     const names = KXTA_TOOLS.map((t) => t.name);
@@ -72,5 +84,7 @@ describe("generated tool list", () => {
     expect(new Set(names).size).toBe(names.length);
     for (const n of ["files.delete", "folders.delete", "files.restore", "admin.commit_backup"]) expect(KXTA_TOOLS.find((t) => t.name === n)?.destructive).toBe(true);
     expect(KXTA_TOOLS.find((t) => t.name === "files.read")?.destructive).toBe(false);
+    // Guard against a naming change silently turning destructive tools into "safe" ones.
+    for (const t of KXTA_TOOLS) if (/delete|restore|backup/i.test(t.name)) expect(t.destructive, t.name).toBe(true);
   });
 });

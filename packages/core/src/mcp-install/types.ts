@@ -23,7 +23,12 @@ export interface McpCtx {
 }
 
 export interface McpResult { agent: AgentId; path: string; changed: boolean; notes: string[] }
-export interface McpStatus { agent: AgentId; path: string; installed: boolean; current: boolean; notes: string[] }
+export interface McpStatus {
+  agent: AgentId; path: string; installed: boolean; current: boolean;
+  /** The entry on disk, normalised; undefined when absent. */
+  entry?: ServerEntry;
+  notes: string[];
+}
 
 export interface McpInstaller {
   id: AgentId;

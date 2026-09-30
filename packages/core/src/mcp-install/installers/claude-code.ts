@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { readJsonConfig } from "../../hooks/installers/json-config.js";
 import { writeJsonWithBackup } from "../write.js";
-import { sameEntry, type ServerEntry } from "../entry.js";
+import { sameEntry, toServerEntry, type ServerEntry } from "../entry.js";
 import type { McpCtx, McpInstaller, McpResult, McpStatus, Runner } from "../types.js";
 import { applyConfigApproval, SERVER_KEY, type ConfigApprovalSpec } from "./json-servers.js";
 
@@ -33,6 +33,17 @@ function currentEntry(ctx: McpCtx): unknown {
     const servers = JSON.parse(readFileSync(p, "utf8"))?.mcpServers;
     return servers && typeof servers === "object" ? servers[SERVER_KEY] : undefined;
   } catch { return undefined; }
+}
+
+// `claude mcp add` without -s user registers for one project only (kept under projects.<path>); report those so the dashboard does not claim "not connected".
+function projectScopes(ctx: McpCtx): string[] {
+  const p = dotClaude(ctx);
+  if (!existsSync(p)) return [];
+  try {
+    const projects = JSON.parse(readFileSync(p, "utf8"))?.projects;
+    if (!projects || typeof projects !== "object") return [];
+    return Object.entries(projects as Record<string, { mcpServers?: Record<string, unknown> }>).filter(([, v]) => v?.mcpServers && v.mcpServers[SERVER_KEY] !== undefined).map(([k]) => k);
+  } catch { return []; }
 }
 
 function applyRules(ctx: McpCtx, approval: McpCtx["approval"], previous: McpCtx["approval"]): boolean {
@@ -80,11 +91,13 @@ export const claudeCodeMcpInstaller: McpInstaller = {
         if (r.error || r.status !== 0) throw new Error(`claude mcp remove failed: ${(r.stderr || r.error?.message || "unknown error").trim()}`);
       }
     }
-    if (applyRules(ctx, "prompt", "all")) changed = true;
+    if (applyRules(ctx, "prompt", ctx.previousApproval)) changed = true;
     return { agent: "claude-code", path: dotClaude(ctx), changed, notes: [] };
   },
   status(ctx): McpStatus {
     const existing = currentEntry(ctx);
-    return { agent: "claude-code", path: dotClaude(ctx), installed: existing !== undefined, current: sameEntry(existing, ctx.entry), notes: [] };
+    const scopes = projectScopes(ctx);
+    const notes = existing === undefined && scopes.length > 0 ? [`kxta is registered only for ${scopes.length} project${scopes.length > 1 ? "s" : ""} (${scopes.slice(0, 2).join(", ")}${scopes.length > 2 ? ", ..." : ""}); Connect adds it for every project.`] : [];
+    return { agent: "claude-code", path: dotClaude(ctx), installed: existing !== undefined || scopes.length > 0, current: sameEntry(existing, ctx.entry), entry: toServerEntry(existing), notes };
   },
 };

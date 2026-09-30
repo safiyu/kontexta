@@ -2,7 +2,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parse } from "smol-toml";
-import { sameEntry, type ServerEntry } from "../entry.js";
+import { sameEntry, toServerEntry, type ServerEntry } from "../entry.js";
 import type { McpCtx, McpInstaller, McpResult, McpStatus, Runner } from "../types.js";
 import { SERVER_KEY } from "./json-servers.js";
 
@@ -65,6 +65,6 @@ export const codexMcpInstaller: McpInstaller = {
   },
   status(ctx): McpStatus {
     const existing = currentEntry(ctx);
-    return { agent: "codex", path: configToml(ctx), installed: existing !== undefined, current: sameEntry(existing, ctx.entry), notes: [] };
+    return { agent: "codex", path: configToml(ctx), installed: existing !== undefined, current: sameEntry(existing, ctx.entry), entry: toServerEntry(existing), notes: [] };
   },
 };

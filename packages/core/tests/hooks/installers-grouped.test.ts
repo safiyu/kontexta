@@ -10,7 +10,7 @@ const read = (p: string) => JSON.parse(readFileSync(p, "utf8"));
 describe.each([
   { id: "claude-code", rel: [".claude", "settings.json"], events: ["UserPromptSubmit", "Stop", "SubagentStop", "PostToolUse"], matcher: "Bash|AskUserQuestion" },
   { id: "gemini", rel: [".gemini", "settings.json"], events: ["BeforeAgent", "AfterAgent", "AfterTool"], matcher: "run_shell_command" },
-  { id: "codex", rel: [".codex", "hooks.json"], events: ["UserPromptSubmit", "Stop", "SubagentStop", "PostToolUse"], matcher: "Bash" },
+  { id: "codex", rel: [".codex", "hooks.json"], events: ["UserPromptSubmit", "Stop", "SubagentStop", "PostToolUse"], matcher: "Bash|shell|local_shell|exec_command" },
 ])("grouped installer: $id", ({ id, rel, events, matcher }) => {
   let home: string; let dataDir: string;
   const ctx = () => ({ home, dataDir });

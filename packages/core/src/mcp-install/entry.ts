@@ -47,15 +47,32 @@ export function buildServerEntry(o: ServerEntryOpts): ServerEntry {
   return entry;
 }
 
-// Changes whenever the desired registration changes, so reconcile can tell an up-to-date install from a stale one.
-export function entrySignature(entry: ServerEntry, approval: McpApproval, tools: readonly string[]): string {
-  return createHash("sha1").update(JSON.stringify({ entry, approval, tools: approval === "prompt" ? [] : [...tools].sort() })).digest("hex").slice(0, 12);
+// We manage the command, args and KONTEXTA_DATA_DIR only; other env keys and fields belong to the user.
+const dataDirOf = (env: unknown): string => (env && typeof env === "object" && typeof (env as Record<string, unknown>).KONTEXTA_DATA_DIR === "string" ? ((env as Record<string, string>).KONTEXTA_DATA_DIR) : "");
+
+export function entryHashOf(entry: ServerEntry): string {
+  return createHash("sha1").update(JSON.stringify({ c: entry.command, a: entry.args, d: dataDirOf(entry.env) })).digest("hex").slice(0, 8);
 }
 
-// Whether an existing config entry already equals the desired one (an empty env counts as none; extra keys are ignored).
-export function sameEntry(existing: unknown, entry: ServerEntry): boolean {
-  if (!existing || typeof existing !== "object" || Array.isArray(existing)) return false;
+// "<entry hash>.<approval+tools hash>": reconcile can tell a user-edited entry (entry part differs from disk) from a stale one (policy or desired entry changed).
+export function entrySignature(entry: ServerEntry, approval: McpApproval, tools: readonly string[]): string {
+  const policy = createHash("sha1").update(JSON.stringify({ approval, tools: approval === "prompt" ? [] : [...tools].sort() })).digest("hex").slice(0, 8);
+  return `${entryHashOf(entry)}.${policy}`;
+}
+
+export const entryHashOfSignature = (signature: string): string => signature.split(".")[0];
+
+// Normalises whatever a config file holds into a ServerEntry (extra keys dropped), or undefined when it is not an entry.
+export function toServerEntry(existing: unknown): ServerEntry | undefined {
+  if (!existing || typeof existing !== "object" || Array.isArray(existing)) return undefined;
   const e = existing as Record<string, unknown>;
-  const env = (v: unknown) => (v && typeof v === "object" && Object.keys(v as object).length > 0 ? JSON.stringify(v) : "");
-  return e.command === entry.command && JSON.stringify(e.args ?? []) === JSON.stringify(entry.args) && env(e.env) === env(entry.env);
+  if (typeof e.command !== "string") return undefined;
+  const dir = dataDirOf(e.env);
+  return { command: e.command, args: Array.isArray(e.args) ? e.args.map(String) : [], ...(dir ? { env: { KONTEXTA_DATA_DIR: dir } } : {}) };
+}
+
+// Whether an existing config entry already equals the desired one (user-added env keys and extra fields are ignored).
+export function sameEntry(existing: unknown, entry: ServerEntry): boolean {
+  const e = toServerEntry(existing);
+  return !!e && entryHashOf(e) === entryHashOf(entry);
 }

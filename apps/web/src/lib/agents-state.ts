@@ -19,6 +19,8 @@ export const mcpDockerCommandFor = (agent: string, approval?: McpApproval): stri
 
 export interface AgentState extends HookStatusRow {
   /** On-disk checks for the MCP registration (the registry flags mcp_installed / mcp_approval come from HookStatusRow). */
+  /** The kxta server is in the agent's config, whoever put it there. */
+  mcp_present: boolean;
   mcp_current: boolean;
   mcp_stale: boolean;
   mcp_config_path: string | null;
@@ -42,14 +44,14 @@ export function agentsState(): AgentsState {
   const mcp = new Map(mcpStatus(mcpOpts()).map((r) => [r.id, r]));
   const agents: AgentState[] = hooksStatus(installOpts()).map((a) => {
     const m = mcp.get(a.id);
-    return { ...a, mcp_current: m?.current ?? false, mcp_stale: m?.stale ?? false, mcp_config_path: m?.config_path ?? null, mcp_approval_supported: m?.approval_supported ?? false, mcp_notes: m?.notes ?? [] };
+    return { ...a, mcp_present: m?.installed ?? false, mcp_current: m?.current ?? false, mcp_stale: m?.stale ?? false, mcp_config_path: m?.config_path ?? null, mcp_approval_supported: m?.approval_supported ?? false, mcp_notes: m?.notes ?? [] };
   });
   const block = buildHooksBlock({ installMode: mode, version: imageVersion(), hostDataDir: hostDataDir() });
   const docker_commands: Record<string, string> = {};
   if (mode === "docker") for (const a of agents) if (a.hooks_supported) docker_commands[a.id] = dockerCommandFor(a.id);
   const mcp_docker_commands: Record<string, string> = {};
   if (mode === "docker") for (const a of agents) if (a.mcp_supported) mcp_docker_commands[a.id] = mcpDockerCommandFor(a.id);
-  const mcp_alerts = agents.filter((a) => a.enabled && a.mcp_supported && !a.mcp_installed).map((a) => ({ agent: a.id, name: a.name }));
+  const mcp_alerts = agents.filter((a) => a.enabled && a.mcp_supported && !a.mcp_installed && !a.mcp_present).map((a) => ({ agent: a.id, name: a.name }));
   const destructive_tools = KXTA_TOOLS.filter((t) => t.destructive).map((t) => t.name);
   return { install_mode: mode, agents, alerts: block.alerts, prompt: block.prompt, docker_commands, mcp_docker_commands, mcp_alerts, destructive_tools };
 }

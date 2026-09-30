@@ -41,7 +41,7 @@ export function isOwned(command: unknown): boolean {
 
 export function readJsonConfig(path: string): Record<string, unknown> {
   if (!existsSync(path)) return {};
-  const text = readFileSync(path, "utf8");
+  const text = readFileSync(path, "utf8").replace(/^\uFEFF/, "");
   if (text.trim() === "") return {};
   try {
     const v = JSON.parse(text);

@@ -34,4 +34,17 @@ describe("ProfileEditor dirty state", () => {
     unmount();
     expect(onDirtyChange).toHaveBeenLastCalledWith(false);
   });
+
+  it("never reports dirty before the profile has loaded", async () => {
+    let release: (v: unknown) => void = () => {};
+    const gate = new Promise((r) => { release = r; });
+    global.fetch = vi.fn(async () => { await gate; return { ok: true, status: 200, json: async () => ({ exists: true, content: messy }) }; }) as any;
+    const onDirtyChange = vi.fn();
+    render(<ProfileEditor onDirtyChange={onDirtyChange} onChanged={vi.fn()} />);
+    await new Promise((r) => setTimeout(r, 30));
+    expect(onDirtyChange).not.toHaveBeenCalledWith(true);
+    release(null);
+    await screen.findByDisplayValue("safi");
+    expect(onDirtyChange).not.toHaveBeenCalledWith(true);
+  });
 });

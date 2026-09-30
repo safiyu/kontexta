@@ -14,11 +14,8 @@ export const copilotInstaller: Installer = {
   install(ctx) {
     const path = configPath(ctx);
     const hooks: Record<string, unknown> = {};
-    // `bash` and `powershell` are the documented per-OS keys; `command` carries the same call for builds that read it.
-    for (const ev of EVENTS) {
-      const sh = emitCommand(ctx, "copilot", ev);
-      hooks[ev] = [{ type: "command", command: sh, bash: sh, powershell: psEmitCommand(ctx, "copilot", ev), timeoutSec: 5 }];
-    }
+    // Only the documented per-OS keys: Copilot runs the one for the current OS, and a generic `command` alongside could make it run twice.
+    for (const ev of EVENTS) hooks[ev] = [{ type: "command", bash: emitCommand(ctx, "copilot", ev), powershell: psEmitCommand(ctx, "copilot", ev), timeoutSec: 5 }];
     const changed = writeJsonConfig(path, { version: 1, hooks }, ctx.dryRun);
     return { agent: "copilot", path, changed, notes: ["Copilot main-agent replies are not exposed to hooks yet (agentStop carries only a transcript path); subagent replies, prompts and shell commands are captured."] };
   },

@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { parse, stringify } from "yaml";
 import { writeTextWithBackup } from "../write.js";
-import { sameEntry, type ServerEntry } from "../entry.js";
+import { sameEntry, toServerEntry, type ServerEntry } from "../entry.js";
 import type { McpCtx, McpInstaller, McpResult, McpStatus } from "../types.js";
 import { SERVER_KEY } from "./json-servers.js";
 
@@ -14,7 +14,9 @@ const file = (ctx: McpCtx) => join(dir(ctx), "mcpServers", "kontexta.yaml");
 function read(path: string): { doc: Record<string, unknown> | null; ours: boolean } {
   if (!existsSync(path)) return { doc: null, ours: false };
   try {
-    const doc = parse(readFileSync(path, "utf8"));
+    const text = readFileSync(path, "utf8");
+    if (text.trim() === "") return { doc: null, ours: true };
+    const doc = parse(text);
     return { doc, ours: !!doc && typeof doc === "object" && (doc as Record<string, unknown>).name === OWNER };
   } catch { return { doc: null, ours: false }; }
 }
@@ -51,6 +53,6 @@ export const continueMcpInstaller: McpInstaller = {
     const path = file(ctx);
     const { doc, ours } = read(path);
     const server = ours ? serverOf(doc) : undefined;
-    return { agent: "continue", path, installed: server !== undefined, current: sameEntry(server, ctx.entry), notes: [] };
+    return { agent: "continue", path, installed: server !== undefined, current: sameEntry(server, ctx.entry), entry: toServerEntry(server), notes: [] };
   },
 };
