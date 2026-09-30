@@ -1,0 +1,1 @@
+{ "session_id": "c1", "turn_id": "t1", "cwd": "/tmp/work", "hook_event_name": "PostToolUse", "tool_name": "apply_patch", "tool_use_id": "tu2", "tool_input": { "command": "*** Begin Patch\n*** End Patch" }, "tool_response": "ok" }

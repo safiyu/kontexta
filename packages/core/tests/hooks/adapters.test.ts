@@ -10,6 +10,18 @@ const load = (agent: string, name: string) => JSON.parse(readFileSync(join(FIX, 
 
 type Case = { agent: string; fixture: string; hint?: string; expect: Record<string, unknown> | null };
 const CASES: Case[] = [
+  { agent: "codex", fixture: "post-bash", expect: { event: "shell", command: "gh pr create --fill", sid: "c1" } },
+  { agent: "codex", fixture: "post-apply-patch", expect: null },
+  { agent: "hermes", fixture: "pre-llm-call", expect: { event: "user_prompt", text: "Check the SLT replication lag", sid: "sess_abc123" } },
+  { agent: "hermes", fixture: "pre-llm-call-multimodal", expect: { event: "user_prompt", text: "What is in\nthis chart?" } },
+  { agent: "hermes", fixture: "post-llm-call", expect: { event: "agent_reply", text: "Lag is 4m on MARD.", sid: "sess_abc123" } },
+  { agent: "hermes", fixture: "post-tool-terminal", expect: { event: "shell", command: "gcloud auth list" } },
+  { agent: "hermes", fixture: "post-tool-other", expect: null },
+  { agent: "hermes", fixture: "subagent-stop", expect: { event: "agent_reply", text: "Found 3 failing jobs.", subagent: true } },
+  { agent: "antigravity", fixture: "post-run-command", expect: { event: "shell", command: "npm test", sid: "ec33ebf9-0cba-4100-8142-c61503f6c587" } },
+  { agent: "antigravity", fixture: "post-ask-question", expect: { event: "agent_question", questions: [{ question: "Which environment?" }] } },
+  { agent: "antigravity", fixture: "post-view-file", expect: null },
+  { agent: "antigravity", fixture: "stop", expect: null },
   { agent: "gemini", fixture: "before-agent", expect: { event: "user_prompt", text: "Summarise the SLT run mail", sid: "g1" } },
   { agent: "gemini", fixture: "after-agent", expect: { event: "agent_reply", text: "All green except MARD lag 4m.", sid: "g1" } },
   { agent: "gemini", fixture: "after-tool-shell", expect: { event: "shell", command: "gcloud auth list", sid: "g1" } },
@@ -51,7 +63,7 @@ describe("adapters", () => {
 
   it("every supported agent has an adapter and nothing else does", async () => {
     const { ADAPTERS } = await import(EMIT);
-    expect(Object.keys(ADAPTERS).sort()).toEqual(["claude-code", "cline", "codex", "copilot", "cursor", "gemini", "kiro", "opencode", "windsurf"]);
+    expect(Object.keys(ADAPTERS).sort()).toEqual(["antigravity", "claude-code", "cline", "codex", "copilot", "cursor", "gemini", "hermes", "kiro", "opencode", "windsurf"]);
   });
 
   it("--event hint is plumbed through the CLI (windsurf)", () => {

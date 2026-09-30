@@ -8,14 +8,21 @@ export interface AgentInfo {
   id: string; name: string; enabled: boolean; hooks_supported: boolean; onboardable: boolean;
   hooks_installed: boolean; hooks_version: string | null; hooks_verified_at: string | null; last_hook_event_at: string | null;
   config_present: boolean; emitter_stale: boolean; notes: string[];
+  mcp_supported: boolean; mcp_installed: boolean; mcp_approval: McpApproval; mcp_current: boolean; mcp_stale: boolean;
+  mcp_config_path: string | null; mcp_approval_supported: boolean; mcp_notes: string[];
 }
+export type McpApproval = "prompt" | "safe" | "all";
 export interface AgentsState {
   install_mode: "docker" | "npm" | "source";
   agents: AgentInfo[];
   alerts: Array<{ agent: string; name: string; installed: boolean; verified_at: string | null }>;
   prompt: string | null;
   docker_commands: Record<string, string>;
+  mcp_docker_commands: Record<string, string>;
+  mcp_alerts: Array<{ agent: string; name: string }>;
+  destructive_tools: string[];
 }
+export interface McpOutcome { ok: boolean; changed: boolean; approval: McpApproval; error?: string; notes: string[] }
 export interface InstallOutcome { ok: boolean; changed: boolean; error?: string; notes: string[] }
 export interface ToggleResult { agent: string; enabled: boolean; install: InstallOutcome | null; docker_command: string | null; note: string | null }
 
@@ -67,5 +74,14 @@ export function useAgents() {
     } catch { return { ok: false, status: 0, error: "Request failed" }; }
   }, []);
 
-  return { state, loading, refresh, setEnabled, hooksAction };
+  const mcpAction = useCallback(async (id: string, action: "install" | "uninstall", approval: McpApproval = "prompt") => {
+    try {
+      const res = await fetch(`/api/agents/${id}/mcp`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, approval }) });
+      const json = await res.json().catch(() => ({}));
+      notifyChanged();
+      return { ok: res.ok, status: res.status, ...json } as { ok: boolean; status: number; outcome?: McpOutcome; docker_command?: string; error?: string };
+    } catch { return { ok: false, status: 0, error: "Request failed" } as { ok: boolean; status: number; outcome?: McpOutcome; docker_command?: string; error?: string }; }
+  }, []);
+
+  return { state, loading, refresh, setEnabled, hooksAction, mcpAction };
 }

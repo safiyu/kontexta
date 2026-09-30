@@ -1,0 +1,27 @@
+{
+  "hook_event_name": "pre_llm_call",
+  "tool_name": null,
+  "tool_input": null,
+  "session_id": "sess_abc123",
+  "cwd": "/home/user/project",
+  "profile": "default",
+  "extra": {
+    "user_message": [
+      {
+        "type": "text",
+        "text": "What is in"
+      },
+      {
+        "type": "image_url",
+        "image_url": {
+          "url": "x"
+        }
+      },
+      {
+        "type": "text",
+        "text": "this chart?"
+      }
+    ],
+    "platform": "cli"
+  }
+}

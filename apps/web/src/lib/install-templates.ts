@@ -93,6 +93,27 @@ function claudeCodeShell(vars: TemplateVars, install: Install): Snippet {
   };
 }
 
+// Codex keeps MCP servers in ~/.codex/config.toml ([mcp_servers.<name>]); `codex mcp add` writes it, so the snippet is a command.
+function codexShell(vars: TemplateVars, install: Install): Snippet {
+  const hostDir = vars.hostDataDir || vars.dataDir;
+  const tail =
+    install === "docker"
+      ? `docker run --rm -i -v ${hostDir}:/app/data safiyu/kontexta:${vars.version} mcp`
+      : install === "npm"
+        ? `npx ${npmArgs(vars).join(" ")}`
+        : `node ${vars.sourceEntrypoint}`;
+  const envFlag = install !== "docker" && !vars.isDefaultDir ? ` --env KONTEXTA_DATA_DIR=${vars.dataDir}` : "";
+  return {
+    kind: "shell",
+    body: `codex mcp add kxta${envFlag} -- ${tail}`,
+    notes: [
+      dataDirNote(vars, install),
+      ...npmNotes(vars, install),
+      "Codex stores MCP servers in ~/.codex/config.toml under [mcp_servers.kxta]; the command above writes that entry. Restart Codex afterwards.",
+    ],
+  };
+}
+
 function aiderSnippet(vars: TemplateVars, install: Install): Snippet {
   return {
     kind: "shell",
@@ -176,23 +197,21 @@ function copilotSnippet(vars: TemplateVars, install: Install): Snippet {
       : install === "npm"
         ? npmArgs(vars)
         : [vars.sourceEntrypoint];
-  const env = install === "docker" || !vars.isDefaultDir ? { KONTEXTA_DATA_DIR: vars.dataDir } : undefined;
-  const serverConfig: Record<string, unknown> = { type: "stdio", command, args };
+  const env = install === "docker" || vars.isDefaultDir ? undefined : { KONTEXTA_DATA_DIR: vars.dataDir };
+  const serverConfig: Record<string, unknown> = { type: "local", command, args };
   if (env) serverConfig.env = env;
-  const body = JSON.stringify({ servers: { local: serverConfig }, inputs: [] }, null, 2);
+  serverConfig.tools = ["*"];
+  const body = JSON.stringify({ mcpServers: { kxta: serverConfig } }, null, 2);
   return {
     kind: "json",
     body,
     notes: [
       dataDirNote(vars, install),
       ...npmNotes(vars, install),
-      "VS Code Insider's built-in GitHub Copilot chat supports MCP servers via mcp.json.",
-      "Open your mcp.json file (e.g. ~/.config/Code\\-\\Insiders/User/mcp.json) and paste this JSON.",
-      "mcp.json location — VS Code Insider: Linux: ~/.config/Code - Insiders/User/mcp.json",
-      "macOS: ~/Library/Application Support/Code - Insiders/User/mcp.json",
-      "Windows: %APPDATA%\\Code - Insiders\\User\\mcp.json",
+      "GitHub Copilot CLI reads ~/.copilot/mcp-config.json ($COPILOT_HOME/mcp-config.json when set). Or run: copilot mcp add kxta -- <command> <args>.",
+      "Copilot CLI passes only PATH into MCP servers: if your data folder is somewhere non-standard (e.g. via XDG_DATA_HOME), add an env block with KONTEXTA_DATA_DIR. The Connect MCP button does this for you.",
+      "Per-repository servers go in .mcp.json or .github/mcp.json and load only in trusted folders.",
     ],
-    configPath: "VS Code mcp.json (servers.local)"
   };
 }
 
@@ -230,7 +249,7 @@ const TEMPLATES: Record<Client, (vars: TemplateVars, install: Install) => Snippe
   "claude-code": claudeCodeShell,
   "claude-desktop": genericJson,
   cursor: genericJson,
-  codex: genericJson,
+  codex: codexShell,
   gemini: genericJson,
   antigravity: genericJson,
   "continue": continueSnippet,
@@ -245,13 +264,13 @@ const CLIENT_CONFIG_PATHS: Record<Client, string> = {
   "claude-code": "Run this command in your terminal to configure Claude Code.",
   "claude-desktop": "macOS: ~/Library/Application Support/Claude/claude_desktop_config.json\nWindows: %APPDATA%\\Claude\\claude_desktop_config.json",
   "cursor": "Settings → Features → MCP (or paste into your configuration file)",
-  "codex": ".codex/mcp_servers.json",
+  "codex": "~/.codex/config.toml ([mcp_servers.kxta]) — written by `codex mcp add`",
   "gemini": "~/.gemini/settings.json",
   "antigravity": "~/.gemini/config/mcp_config.json",
   "continue": "~/.continue/mcpServers/kontexta.yaml",
   "aider": ".aider.conf.yml (global or project-local)",
   "cline": "~/.cline/mcp_settings.json (Cline extension for VS Code / Cursor)",
-  "copilot": "VS Code Settings → mcp.servers (VS Code Insider built-in Copilot chat)",
+  "copilot": "~/.copilot/mcp-config.json (or $COPILOT_HOME/mcp-config.json) — GitHub Copilot CLI",
   "hermes": "~/.hermes/config.yaml (or $HERMES_HOME/config.yaml) — under the `mcp_servers` key. Restart Hermes after editing.",
   "generic": "Paste into your AI client's MCP configuration settings or file."
 };

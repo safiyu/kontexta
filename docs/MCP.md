@@ -39,6 +39,42 @@ Every KB file carries a `content_class` — an authority axis, separate from tag
 
 ---
 
+## Connect your agents automatically
+
+Instead of pasting config by hand, let Kontexta register the `kxta` MCP server in each agent you use: **Configure → AGENTS** in the dashboard (Connect MCP), the first-run wizard, or the CLI:
+
+```bash
+kontexta connect status                          # which agents are connected
+kontexta connect install --agent cursor,gemini   # register kxta in those agents
+kontexta connect install --all-enabled           # every agent switched on in the dashboard
+kontexta connect approval gemini safe            # change how much the agent may do without asking
+kontexta connect uninstall --agent cursor
+```
+
+Only user-level config is touched (never a project repo), only the `kxta` entry is edited, comments and every other key stay, and the first change to a file keeps a copy next to it as `<file>.kontexta-bak`. If an agent's config folder does not exist (you have not opened it once) the installer stops with a message instead of inventing a config nothing reads. Restart the agent afterwards. `kontexta start` only refreshes registrations it made itself; a hand-written `kxta` entry is replaced only when you run `install`.
+
+| Agent | What is written | Tool approval from config |
+|---|---|---|
+| Claude Code | `claude mcp add kxta -s user …` (needs `claude` on PATH) | `permissions.allow` in `~/.claude/settings.json` |
+| Claude Desktop | `mcpServers.kxta` in `claude_desktop_config.json` (macOS, Windows) | app UI only |
+| Gemini CLI | `mcpServers.kxta` in `~/.gemini/settings.json` | `permissions.allow` (`mcp(kxta/*)`) |
+| Cursor | `mcpServers.kxta` in `~/.cursor/mcp.json` (documented `type: stdio`) | app UI only |
+| Codex | `codex mcp add kxta …` (writes `[mcp_servers.kxta]` in `~/.codex/config.toml`; needs `codex` on PATH) | app UI only |
+| GitHub Copilot CLI | `mcpServers.kxta` in `~/.copilot/mcp-config.json` (`$COPILOT_HOME` honoured) | app UI only |
+| Cline | `mcpServers.kxta` in `~/.cline/mcp_settings.json` | `alwaysAllow` |
+| Continue | its own file, `~/.continue/mcpServers/kontexta.yaml` | app UI only |
+| Hermes | `mcp_servers.kxta` in `~/.hermes/config.yaml` (default profile) | not needed: Hermes approves commands and file writes, not MCP tools |
+
+Not yet automated: Antigravity (use the INSTALL tab snippet). Paths and formats come from each agent's documentation or a working config, and have not been exercised against the running agents; the `codex mcp add` argument syntax is from memory of the Codex CLI, so check `codex mcp list` after the first install.
+
+**Tool approval.** By default the agent asks before each kxta tool call. `--approval safe` allows every tool except the destructive ones (the delete tools, `files.restore`, `admin.commit_backup`); `--approval all` allows every tool, including those, and per-project hands tools that run scripts. The dashboard asks you to confirm `all` and lists exactly what it covers. Agents with "app UI only" keep asking: approve there. The kxta tools themselves never write into a project repo.
+
+**Docker.** The container cannot edit files on your machine, so the dashboard shows a one-liner to run on the host (`docker run … connect install --home /host --host-data-dir … --no-db --agent <id>`).
+
+**Hermes** and **Copilot CLI** strip the environment they hand to MCP servers (Copilot passes only `PATH`), so their entries always carry an explicit `KONTEXTA_DATA_DIR`; Hermes also gets absolute command paths.
+
+---
+
 ## Install via npm
 
 If you only need the MCP server (no web UI), install via npm — no Docker required:

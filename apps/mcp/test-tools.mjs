@@ -550,6 +550,39 @@ function assert(cond, msg) {
     assert(r.some((p) => p.id === projectId), "registered project missing");
   });
 
+  await test("kxta never writes into a project repo (create, update, move, folders.create refused; KB still works)", async () => {
+    const repo = mkdtempSync(join(tmpdir(), "kontexta-repo-guard-"));
+    try {
+      writeFileSync(join(repo, "existing.md"), "# existing\n\nbody\n");
+      const reg = await call("projects.register", { name: "repo-guard", path: repo });
+      const pid = reg.project.id;
+      await call("projects.refresh_index", { project_id: pid });
+
+      const c = await call("files.create", { files: [{ title: "from-agent", content: "x", destination: "project", project_id: pid }] });
+      assert(c.created_count === 0 && c.error_count === 1, `project create not refused: ${JSON.stringify(c)}`);
+      assert(/knowledge/.test(c.errors[0].error), `refusal should point to the KB: ${c.errors[0].error}`);
+      assert(!existsSync(join(repo, "from-agent.md")), "file was written into the repo");
+
+      const f = await rpc("tools/call", { name: "folders.create", arguments: { project_id: pid, name: "docs" } });
+      assert(f.isError && /project repo/.test(f.content[0].text), "folders.create in repo not refused");
+      assert(!existsSync(join(repo, "docs")), "folder was created in the repo");
+
+      const list = await call("files.list", { project_id: pid });
+      const existing = (list.files ?? list).find((x) => /existing\.md$/.test(x.path));
+      assert(existing, `seed repo file not indexed: ${JSON.stringify(list).slice(0, 200)}`);
+      const u = await rpc("tools/call", { name: "files.update", arguments: { id: existing.id, content: "changed" } });
+      assert(u.isError && /project repo/.test(u.content[0].text), "files.update on repo file not refused");
+      assert(readFileSync(join(repo, "existing.md"), "utf8").includes("body"), "repo file was modified");
+      const m = await rpc("tools/call", { name: "files.move", arguments: { file_id: existing.id, new_path: join(repo, "moved.md") } });
+      assert(m.isError && /project repo/.test(m.content[0].text), "files.move on repo file not refused");
+
+      const kb = await call("files.create", { files: [{ title: "kb-ok", content: "x", destination: "knowledge", folder: "knowledge/notes", kind: "note" }] });
+      assert(kb.created_count === 1, "KB create should still work");
+    } finally {
+      rmSync(repo, { recursive: true, force: true });
+    }
+  });
+
   await test("projects.map", async () => {
     const r = await call("projects.map", { project_id: projectId });
     assert(typeof r.outline === "string", "missing outline");

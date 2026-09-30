@@ -9,6 +9,8 @@ Usage:
   kontexta doctor install-chromium   Download the Chromium build used for PDF export
   kontexta hooks <status|install|uninstall|enable|disable|reconcile|stage>
                                      Manage coding-agent hooks that feed the journal
+  kontexta connect <status|install|uninstall|approval|reconcile>
+                                     Register the kxta MCP server in your coding agents
   kontexta --version                 Print version
   kontexta --help                    Print this help
 `;
@@ -41,6 +43,10 @@ Usage:
   if (arg === 'hooks') {
     const { runHooks } = await import('./hooks.js');
     process.exit(await runHooks(process.argv.slice(3)));
+  }
+  if (arg === 'connect') {
+    const { runConnect } = await import('./connect.js');
+    process.exit(await runConnect(process.argv.slice(3)));
   }
   if (arg === 'start') {
     const { runStart } = await import('./start.js');

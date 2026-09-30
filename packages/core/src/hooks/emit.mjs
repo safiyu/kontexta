@@ -214,7 +214,8 @@ function adaptGemini(p) {
   }
 }
 
-const CODEX_SHELL_TOOLS = new Set(["shell", "local_shell", "exec_command", "bash", "container.exec"]);
+// Codex reports shell and unified-exec calls to hooks as the canonical tool name "Bash"; the older raw names stay for older builds.
+const CODEX_SHELL_TOOLS = new Set(["bash", "shell", "local_shell", "exec_command", "container.exec"]);
 function adaptCodex(p) {
   const sid = p.session_id ?? p.turn_id;
   switch (p.hook_event_name) {
@@ -222,7 +223,7 @@ function adaptCodex(p) {
     case "Stop": return str(p.last_assistant_message) ? [{ event: "agent_reply", text: p.last_assistant_message, sid }] : [];
     case "SubagentStop": return str(p.last_assistant_message) ? [{ event: "agent_reply", text: p.last_assistant_message, sid, subagent: true }] : [];
     case "PostToolUse": {
-      const c = CODEX_SHELL_TOOLS.has(p.tool_name) ? commandString(p.tool_input?.command ?? p.tool_input?.cmd) : null;
+      const c = CODEX_SHELL_TOOLS.has(String(p.tool_name).toLowerCase()) ? commandString(p.tool_input?.command ?? p.tool_input?.cmd) : null;
       return c ? [{ event: "shell", command: c, sid }] : [];
     }
     default: return [];
@@ -302,7 +303,42 @@ function adaptOpenCode(p) {
   return [];
 }
 
+// Antigravity payloads carry no prompt or reply text (only transcriptPath), so only shell commands and questions are captured.
+function adaptAntigravity(p) {
+  const sid = p.conversationId;
+  const tc = p.toolCall;
+  if (!tc || typeof tc !== "object") return [];
+  if (tc.name === "run_command") return str(tc.args?.CommandLine) ? [{ event: "shell", command: tc.args.CommandLine, sid }] : [];
+  if (tc.name === "ask_question" && Array.isArray(tc.args?.questions)) {
+    const questions = tc.args.questions.filter((q) => str(q?.question)).map((q) => ({ question: q.question }));
+    return questions.length ? [{ event: "agent_question", questions, sid }] : [];
+  }
+  return [];
+}
+
+// Hermes shell hooks name the event in the payload; user_message is a string, or content parts on a multimodal turn.
+function hermesText(v) {
+  if (str(v)) return v;
+  if (!Array.isArray(v)) return null;
+  const t = v.filter((part) => part?.type === "text" && str(part.text)).map((part) => part.text).join("\n");
+  return t || null;
+}
+
+function adaptHermes(p) {
+  const x = p.extra && typeof p.extra === "object" ? p.extra : {};
+  const sid = p.session_id;
+  switch (p.hook_event_name) {
+    case "pre_llm_call": { const t = hermesText(x.user_message); return t ? [{ event: "user_prompt", text: t, sid }] : []; }
+    case "post_llm_call": return str(x.assistant_response) ? [{ event: "agent_reply", text: x.assistant_response, sid }] : [];
+    case "post_tool_call": { const c = p.tool_name === "terminal" ? commandString(p.tool_input?.command) : null; return c ? [{ event: "shell", command: c, sid }] : []; }
+    case "subagent_stop": return str(x.child_summary) ? [{ event: "agent_reply", text: x.child_summary, sid, subagent: true }] : [];
+    default: return [];
+  }
+}
+
 export const ADAPTERS = {
+  hermes: adaptHermes,
+  antigravity: adaptAntigravity,
   "claude-code": adaptClaudeCode,
   gemini: adaptGemini,
   codex: adaptCodex,
@@ -381,6 +417,7 @@ export async function run(argv = process.argv.slice(2), env = process.env) {
     : str(payload.tool_info?.cwd) ? payload.tool_info.cwd
     : Array.isArray(payload.workspace_roots) && str(payload.workspace_roots[0]) ? payload.workspace_roots[0]
     : Array.isArray(payload.workspaceRoots) && str(payload.workspaceRoots[0]) ? payload.workspaceRoots[0]
+    : Array.isArray(payload.workspacePaths) && str(payload.workspacePaths[0]) ? payload.workspacePaths[0]
     : process.cwd();
   const git = gitBranch(cwd);
   const ctx = { ts: new Date().toISOString(), agent, cwd, branch: git?.branch, caps: readCaps(dataDir) };

@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { AlertCircle, Copy, Check } from "lucide-react";
 import { Dialog } from "@/components/ui/dialog";
 import { useAgents, type ToggleResult } from "@/hooks/use-agents";
+import { McpControls } from "@/components/agents/mcp-controls";
 
 interface FirstRunWizardProps {
   open: boolean;
@@ -17,12 +18,12 @@ interface ProfileSections { name: string; role: string; vision: string; roadmap:
 
 const TITLES: Record<number, string> = {
   1: "Which coding agents do you use?",
-  2: "Install hooks",
+  2: "Connect your agents",
   3: "Set Up Your Profile",
 };
 const DESCRIPTIONS: Record<number, string> = {
   1: "Pick the agents you use. Kontexta installs hooks for them so your conversations and shell commands reach the journal - agents you leave off are ignored everywhere.",
-  2: "Result of installing hooks for each agent you selected.",
+  2: "Hooks are installed for each agent you selected. You can also register the kxta MCP server in each one and choose how much it may do without asking.",
   3: "Help AI agents understand you better by filling in your profile.",
 };
 const FIELD = "w-full rounded-md border border-[var(--border)] bg-[var(--bg-primary)] px-3 py-2 text-sm text-[var(--text-primary)]";
@@ -30,7 +31,7 @@ const PRIMARY = "btn btn-md btn-primary";
 const SECONDARY = "btn btn-md btn-outline";
 
 export function FirstRunWizard({ open, onClose, initialStep = 1, onSaved }: FirstRunWizardProps) {
-  const { state, setEnabled, hooksAction } = useAgents();
+  const { state, setEnabled, hooksAction, mcpAction } = useAgents();
   const [step, setStep] = useState(initialStep);
   const [sections, setSections] = useState<ProfileSections>({ name: "", role: "", vision: "", roadmap: "", preferences: "", sessionCodingStyle: "", teamMembersAndRoles: "", notes: "" });
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -123,7 +124,13 @@ export function FirstRunWizard({ open, onClose, initialStep = 1, onSaved }: Firs
     );
     else if (a.hooks_installed) body = <span>{a.name} installed ✓</span>;
     else body = <span className="text-[var(--text-secondary)]">Not installed yet.</span>;
-    return <li key={id} className="rounded-md border border-[var(--border)] p-3 text-sm"><div className="font-medium mb-1">{a.name}</div>{body}</li>;
+    return (
+      <li key={id} className="rounded-md border border-[var(--border)] p-3 text-sm space-y-2">
+        <div className="font-medium mb-1">{a.name}</div>
+        {body}
+        {a.mcp_supported && state && <McpControls agent={a} state={state} mcpAction={mcpAction} />}
+      </li>
+    );
   };
 
   return (

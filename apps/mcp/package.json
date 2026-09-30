@@ -1,6 +1,6 @@
 {
   "name": "kontexta-mcp",
-  "version": "5.1.3",
+  "version": "5.2.0",
   "description": "The local Brain and Hands for AI coding agents (MCP Server)",
   "keywords": [
     "mcp",
@@ -71,6 +71,7 @@
     "simple-git": "^3.27.0",
     "turndown": "^7.2.4",
     "undici": "^7.0.0",
+    "yaml": "^2.9.1",
     "zod": "^3.24.0"
   },
   "devDependencies": {

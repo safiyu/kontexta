@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { createPortal } from "react-dom";
 
 export interface SyncLogEntry {
   projectId: number | null;
@@ -63,7 +64,8 @@ export function SyncPopover({
     }
   };
 
-  return (
+  // Portal to body: the header's overflow-hidden and backdrop-blur would otherwise clip the popup and re-anchor its fixed position.
+  return createPortal(
     <>
       {/* outside-click backdrop */}
       <div className="fixed inset-0 z-40" onClick={onClose} />
@@ -160,6 +162,7 @@ export function SyncPopover({
           </div>
         )}
       </div>
-    </>
+    </>,
+    document.body,
   );
 }

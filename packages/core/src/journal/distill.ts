@@ -114,7 +114,7 @@ export async function distillJournal(opts: DistillJournalOpts): Promise<DistillR
       tasksTouched.push(bucket.task_slug);
 
       // Index — register the file in `files` table if not yet, then upsert journal_meta
-      const fileId = ensureFileRecord(filePath, fm.task, opts.projectId);
+      const fileId = ensureFileRecord(filePath, fm.task);
       upsertJournalMeta({
         file_id: fileId,
         project_id: opts.projectId,
@@ -405,12 +405,16 @@ function mergeFrontmatter(
   };
 }
 
-function ensureFileRecord(filePath: string, title: string, projectId: number): number {
+// Journal files are KB files (no project on the files row); journal_meta.project_id records the owning project.
+function ensureFileRecord(filePath: string, title: string): number {
   const db = getDatabase();
   const existing = db.prepare(`SELECT id FROM files WHERE path = ?`).get(filePath) as { id: number } | undefined;
-  if (existing) return existing.id;
+  if (existing) {
+    db.prepare(`UPDATE files SET project_id = NULL WHERE id = ? AND project_id IS NOT NULL`).run(existing.id);
+    return existing.id;
+  }
   const result = db.prepare(`
-    INSERT INTO files (path, title, project_id, storage_type) VALUES (?, ?, ?, 'local')
-  `).run(filePath, title, projectId);
+    INSERT INTO files (path, title, project_id, storage_type) VALUES (?, ?, NULL, 'local')
+  `).run(filePath, title);
   return Number(result.lastInsertRowid);
 }

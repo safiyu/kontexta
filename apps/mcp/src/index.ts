@@ -68,6 +68,7 @@ import { buildSchemaDoc } from "./hands/schema-doc.js";
 import { formatExecResult } from "./hands/formatter.js";
 import { killAllActiveChildren } from "./hands/executor.js";
 import { initCapture, shutdownCapture, wrapHandler, startGitPoller, appendVoluntaryEvent, getCurrentAgent, getCurrentSid } from "./journal-capture.js";
+import { refuseProjectDestination, refuseRepoFile, refuseProjectFolder } from "./repo-write-guard.js";
 import { registerJournalTools } from "./journal-tools.js";
 import { currentHooksBlock, enableAndInstallHooks, type HooksInstallResult } from "./hooks-block.js";
 import { registerCommitUpgradesTool } from "./journal-commit-upgrades-tool.js";
@@ -542,7 +543,7 @@ server.tool(
 
 server.tool(
   "files.create",
-  "Create one or more markdown, mermaid, or HTML files in the knowledge base or project (up to 200 per call). Pass a single-element `files` array for the one-file case. This operation writes each file to disk and adds it to the local SQLite FTS5 index. Destination can be 'knowledge' (global KB), 'project' (reference file inside a project repo), or 'kontexta' (internal Kontexta schema file). If destination is 'project' or 'kontexta', project_id is strictly required. If destination is 'knowledge', 'kind' is strictly required for md files — pick 'dictionary' (authoritative source-of-truth) or 'note' (informational snapshot); see the kind param for the rubric. No external auth required. Rate limits do not apply (local operation). Per-item failures are isolated to `errors[]` — the rest of the batch still commits; a single-item call still reports its failure the same way. Returns `{created_count, error_count, created, errors}`. If a destination directory does not exist, it will be created automatically. To modify an existing file, use 'files.update' instead. Pass format='mmd' on an item to create a Mermaid diagram file (.mmd) — for destination='knowledge' it's auto-routed to the KB's `mermaid/` bucket (`kind` ignored, not required); for destination='project' it's written wherever `folder` says, same as any project file. Pass format='html' for an HTML report — `destination` MUST be 'knowledge' (html reports are auto-routed to the KB's `html/` bucket; `kind` is ignored and not required for html). Format defaults to 'md'.",
+  "Create one or more markdown, mermaid, or HTML files in the knowledge base or project (up to 200 per call). Pass a single-element `files` array for the one-file case. This operation writes each file to disk and adds it to the local SQLite FTS5 index. Destination is 'knowledge' (global KB) or 'kontexta' (internal Kontexta schema file, project_id required). 'project' is REFUSED: nothing created through kxta is written into a project repo. If destination is 'knowledge', 'kind' is strictly required for md files — pick 'dictionary' (authoritative source-of-truth) or 'note' (informational snapshot); see the kind param for the rubric. No external auth required. Rate limits do not apply (local operation). Per-item failures are isolated to `errors[]` — the rest of the batch still commits; a single-item call still reports its failure the same way. Returns `{created_count, error_count, created, errors}`. If a destination directory does not exist, it will be created automatically. To modify an existing file, use 'files.update' instead. Pass format='mmd' on an item to create a Mermaid diagram file (.mmd) — for destination='knowledge' it's auto-routed to the KB's `mermaid/` bucket (`kind` ignored, not required); Pass format='html' for an HTML report — `destination` MUST be 'knowledge' (html reports are auto-routed to the KB's `html/` bucket; `kind` is ignored and not required for html). Format defaults to 'md'.",
   {
     files: z
       .array(
@@ -568,6 +569,11 @@ server.tool(
     for (let i = 0; i < files.length; i++) {
       const f = files[i];
       try {
+        const refusal = refuseProjectDestination(f.destination);
+        if (refusal) {
+          errors.push({ index: i, title: f.title, error: refusal });
+          continue;
+        }
         const resolved = resolveKindFolder({ destination: f.destination, folder: f.folder, kind: f.kind, format: f.format, title: f.title });
         if ("error" in resolved) {
           errors.push({ index: i, title: f.title, error: resolved.error });
@@ -1026,7 +1032,7 @@ server.tool(
 
 server.tool(
   "files.update",
-  "Rewrite a file. Default = full-body replacement: `content` becomes the entire file, triggering disk write + FTS5 re-index. Pass `section` to instead rewrite ONLY that heading's body (case-insensitive exact-string after trim; the heading line itself is preserved, siblings untouched) — saves context budget vs resending the whole file. Throws if `section` is set but the heading doesn't exist (this mode will NOT create a new section — append the section text via a full-body update first). Operates locally with no external auth or rate limits. Returns the updated file metadata including new estimated token counts.",
+  "Rewrite a KB file (project-repo files are refused: kxta never writes into a repo). Default = full-body replacement: `content` becomes the entire file, triggering disk write + FTS5 re-index. Pass `section` to instead rewrite ONLY that heading's body (case-insensitive exact-string after trim; the heading line itself is preserved, siblings untouched) — saves context budget vs resending the whole file. Throws if `section` is set but the heading doesn't exist (this mode will NOT create a new section — append the section text via a full-body update first). Operates locally with no external auth or rate limits. Returns the updated file metadata including new estimated token counts.",
   {
     id: z.number().describe("File ID"),
     content: z.string().describe("New content. With `section` set, this replaces just that heading's body; otherwise it becomes the entire file body."),
@@ -1034,10 +1040,12 @@ server.tool(
   },
   async ({ id, content, section }) => {
     try {
+      const target = readFile(id);
+      const refusal = refuseRepoFile(target);
+      if (refusal) throw new Error(refusal);
       let newBody = content;
       if (section !== undefined) {
-        const file = readFile(id);
-        newBody = replaceSection(file.content, section, content);
+        newBody = replaceSection(target.content, section, content);
       }
       const result = await updateFile(id, newBody, dataDir);
       return {
@@ -1890,7 +1898,7 @@ server.tool(
 
 server.tool(
   "folders.create",
-  "Create a folder under a project root or the KB. Idempotent — creating an existing folder succeeds. Nested paths like `notes/inbox` create intermediates. REJECTS: empty names, null bytes, leading path separators, and any segment equal to `..` (the call returns isError, no folder is touched). Side effect: a directory is mkdir'd on disk; no DB rows are written until a file lands inside. No external auth or rate limits. Returns `{path, base_path}`.",
+  "Create a folder in the KB (a `project_id` is refused: kxta never writes into a project repo). Idempotent — creating an existing folder succeeds. Nested paths like `notes/inbox` create intermediates. REJECTS: empty names, null bytes, leading path separators, and any segment equal to `..` (the call returns isError, no folder is touched). Side effect: a directory is mkdir'd on disk; no DB rows are written until a file lands inside. No external auth or rate limits. Returns `{path, base_path}`.",
   {
     project_id: z.number().nullable().optional().describe("Project ID. Pass null or omit to create the folder under the KB."),
     name: z.string().describe("Folder name (relative; supports nested paths via '/')"),
@@ -1898,6 +1906,8 @@ server.tool(
   async ({ project_id, name }) => {
     try {
       validateFolderName(name);
+      const refusal = refuseProjectFolder(project_id);
+      if (refusal) throw new Error(refusal);
       const base = resolveFolderBase(project_id);
       const path = createFolder(base, name, { dataDir });
       return {
@@ -1965,7 +1975,7 @@ server.tool(
 
 server.tool(
   "files.move",
-  "Move/rename a file. Destination 'new_path' must be absolute and resolve INSIDE the file's owning project or global knowledge directory. Cross-project moves are rejected. Alternative: pass `kind='dictionary'|'note'` (with no `new_path`) to move a KB file into the mirrored path in the other class tree — subfolder path is preserved. Operates locally with no auth or limits.",
+  "Move/rename a KB file (project-repo files are refused). Destination 'new_path' must be absolute and resolve INSIDE the file's owning project or global knowledge directory. Cross-project moves are rejected. Alternative: pass `kind='dictionary'|'note'` (with no `new_path`) to move a KB file into the mirrored path in the other class tree — subfolder path is preserved. Operates locally with no auth or limits.",
   {
     file_id: z.number().describe("File ID"),
     new_path: z.string().optional().describe("Absolute destination path"),
@@ -1975,6 +1985,8 @@ server.tool(
   async ({ file_id, new_path, kind }) => {
     try {
       const file = readFile(file_id);
+      const refusal = refuseRepoFile(file);
+      if (refusal) throw new Error(refusal);
 
       if (kind && !new_path) {
         if (file.storage_type !== "local") {

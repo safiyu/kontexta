@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Copy, Check } from "lucide-react";
 import { useAgents, type AgentInfo, type InstallOutcome } from "@/hooks/use-agents";
+import { McpControls } from "./mcp-controls";
 
 function statusText(a: AgentInfo, mode: string): string {
   if (!a.hooks_supported) return "MCP capture only";
@@ -21,7 +22,7 @@ function outcomeMessage(o: InstallOutcome | null | undefined, verb: "install" | 
 }
 
 export function AgentsPanel() {
-  const { state, loading, setEnabled, hooksAction } = useAgents();
+  const { state, loading, setEnabled, hooksAction, mcpAction } = useAgents();
   const [messages, setMessages] = useState<Record<string, string>>({});
   const [copied, setCopied] = useState<string | null>(null);
 
@@ -50,7 +51,7 @@ export function AgentsPanel() {
   return (
     <div className="max-w-3xl mx-auto space-y-3">
       <p className="text-sm text-[var(--text-secondary)]">
-        Enable the coding agents you use. Kontexta installs hooks so the journal also captures your prompts, the agent&apos;s replies and the shell commands it runs.
+        Enable the coding agents you use. Kontexta installs hooks so the journal also captures your prompts, the agent&apos;s replies and the shell commands it runs, and can register the kxta MCP server in each agent for you.
         Agents that are off are ignored everywhere. Per-agent limits: docs/HOOKS.md.
       </p>
       <ul className="divide-y divide-[var(--border)] border border-[var(--border)] rounded">
@@ -90,6 +91,8 @@ export function AgentsPanel() {
                 </button>
               </div>
             )}
+            {a.enabled && a.mcp_supported && <McpControls agent={a} state={state} mcpAction={mcpAction} />}
+            {a.enabled && !a.mcp_supported && <p className="text-xs text-[var(--text-secondary)]">MCP: add kxta by hand with the INSTALL tab snippet.</p>}
             {messages[a.id] && <p className="text-xs text-[var(--text-secondary)]" role="status">{messages[a.id]}</p>}
           </li>
         ))}

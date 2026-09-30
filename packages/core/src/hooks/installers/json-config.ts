@@ -26,6 +26,15 @@ export function emitCommand(ctx: InstallCtx, agent: string, event?: string): str
   return parts.join(" ");
 }
 
+// PowerShell twin of emitCommand: single quotes keep `$` and spaces literal, and an embedded quote is doubled.
+const psq = (s: string) => `'${s.replace(/'/g, "''")}'`;
+export function psEmitCommand(ctx: InstallCtx, agent: string, event?: string): string {
+  const nc = nodeCmdOf(ctx);
+  const parts = [nc === "node" ? "node" : `& ${psq(nc)}`, psq(stagedEmitterPath(hostDirOf(ctx))), "--agent", agent, "--data-dir", psq(hostDirOf(ctx))];
+  if (event) parts.push("--event", event);
+  return parts.join(" ");
+}
+
 export function isOwned(command: unknown): boolean {
   return typeof command === "string" && (/hooks[\\/]emit\.mjs/).test(command);
 }
@@ -52,15 +61,11 @@ function danglingLinkTarget(path: string): string | null {
   } catch { return null; }
 }
 
-export function writeJsonConfig(path: string, value: unknown, dryRun = false): boolean {
-  const next = JSON.stringify(value, null, 2) + "\n";
+// Atomic write that goes through symlinks (dotfile managers) and keeps the target's mode: replacing the path itself would break the link and can widen a 0600 file.
+export function writeTextConfig(path: string, next: string, dryRun = false): boolean {
   const exists = existsSync(path);
-  const current = exists ? readFileSync(path, "utf8") : null;
-  let same = false;
-  if (current !== null) { try { same = JSON.stringify(JSON.parse(current)) === JSON.stringify(value); } catch { /* empty or unparsable → rewrite */ } }
-  if (same) return false;
+  if (exists && readFileSync(path, "utf8") === next) return false;
   if (dryRun) return true;
-  // Write through symlinks (dotfile managers) and keep the target's mode: replacing the path itself would break the link and can widen a 0600 file.
   const real = exists ? realpathSync(path) : danglingLinkTarget(path) ?? path;
   const mode = exists ? statSync(real).mode & 0o777 : 0o644;
   mkdirSync(dirname(real), { recursive: true });
@@ -69,4 +74,13 @@ export function writeJsonConfig(path: string, value: unknown, dryRun = false): b
   chmodSync(tmp, mode);
   renameSync(tmp, real);
   return true;
+}
+
+export function writeJsonConfig(path: string, value: unknown, dryRun = false): boolean {
+  const next = JSON.stringify(value, null, 2) + "\n";
+  const current = existsSync(path) ? readFileSync(path, "utf8") : null;
+  let same = false;
+  if (current !== null) { try { same = JSON.stringify(JSON.parse(current)) === JSON.stringify(value); } catch { /* empty or unparsable → rewrite */ } }
+  if (same) return false;
+  return writeTextConfig(path, next, dryRun);
 }

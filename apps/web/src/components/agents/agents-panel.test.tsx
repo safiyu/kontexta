@@ -90,4 +90,21 @@ describe("AgentsPanel", () => {
     render(<AgentsPanel />);
     expect(await screen.findByText(/Replace <DATA_DIR> with the absolute path/)).toBeTruthy();
   });
+
+  it("offers MCP controls for enabled, MCP-capable agents only, and points the rest at the snippets", async () => {
+    state = {
+      ...state,
+      destructive_tools: ["files.delete"], mcp_docker_commands: {},
+      agents: [
+        row({ enabled: true, mcp_supported: true, mcp_installed: false, mcp_approval: "prompt", mcp_approval_supported: true }),
+        row({ id: "cursor", name: "Cursor", enabled: false, mcp_supported: true, mcp_installed: false, mcp_approval: "prompt" }),
+        row({ id: "codex", name: "Codex CLI", enabled: true, mcp_supported: false }),
+      ],
+    };
+    mockFetch();
+    render(<AgentsPanel />);
+    expect(await screen.findByRole("button", { name: "Connect MCP for Claude Code" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Connect MCP for Cursor" })).toBeNull();
+    expect(screen.getByText(/INSTALL tab snippet/i)).toBeTruthy();
+  });
 });

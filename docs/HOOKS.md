@@ -34,20 +34,24 @@ Caps live in `<data dir>/kontexta.json`:
 |---|---|---|---|---|---|---|
 | Claude Code | `~/.claude/settings.json` | ✓ | ✓ (incl. subagents) | ✓ | ✓ | — |
 | Gemini CLI | `~/.gemini/settings.json` | ✓ | ✓ | ✗ | ✓ | No question tool exposed to hooks. |
-| Codex CLI | `~/.codex/hooks.json` | ✓ | ✓ | ✗ | ✓ | Codex only runs hooks you have trusted: run `/hooks` in Codex to review and trust them, and re-trust after a reinstall. Older versions may also need `codex_hooks = true` in `~/.codex/config.toml`. |
-| GitHub Copilot CLI | `~/.copilot/hooks/kontexta.json` (or `$COPILOT_HOME/hooks/`) | ✓ | subagents only | ✗ | ✓ | Main-agent `agentStop` exposes no message text yet. Verified against GitHub's hooks reference (2026-09-29). Windows uses the same file (`command` is cross-platform). |
+| Codex CLI | `~/.codex/hooks.json` | ✓ | ✓ | ✗ | ✓ | Shell commands are matched as `Bash`, per Codex's hook docs (earlier builds of this installer used raw tool names that never matched; the next reconcile repairs it, and Codex asks you to re-trust). Codex only runs hooks you have trusted: run `/hooks` in Codex to review and trust them, and re-trust after a reinstall. Older versions may also need `codex_hooks = true` in `~/.codex/config.toml`. |
+| GitHub Copilot CLI | `~/.copilot/hooks/kontexta.json` (or `$COPILOT_HOME/hooks/`) | ✓ | subagents only | ✗ | ✓ | Writes the documented `bash` and `powershell` keys (plus `command`). Main-agent `agentStop` exposes no message text yet. Verified against GitHub's hooks reference (2026-09-29). Windows uses the same file (`command` is cross-platform). |
 | Cursor | `~/.cursor/hooks.json` | ✓ | ✓ (per message) | ✗ | ✓ | Replies arrive per assistant message, not per turn. |
 | Windsurf | `~/.codeium/windsurf/hooks.json` | ✓ | ✓ | ✗ | ✓ | Payload has no event name; kontexta passes `--event`. Docs were unreachable at verification time — medium-low confidence. |
+| Antigravity | `~/.gemini/config/hooks.json` (entry `kontexta-journal`) | ✗ | ✗ | questions only | ✓ | Payloads carry no prompt or reply text, only a `transcriptPath`; reading it needs a documented transcript format. Documented for Antigravity 2.0 — confirm the CLI (`agy`) reads the same file. Verified against Google's hooks page as pasted by the user (2026-09-30). |
+| Hermes | `~/.hermes/config.yaml` (`hooks:` shell hooks) | ✓ | ✓ | ✗ | ✓ | Hermes asks you to approve each hook on first use (`hermes hooks list` shows status); gateway and other non-interactive runs need `--accept-hooks`, `HERMES_ACCEPT_HOOKS=1` or `hooks_auto_accept: true`. Only the default profile is configured. Built from Hermes' shell-hooks docs as pasted by the user (2026-09-30). |
 | Kiro | not supported | ✗ | ✗ | ✗ | ✗ | See [Not supported](#not-supported). MCP capture only. |
 | Cline | `~/Documents/Cline/Hooks/{UserPromptSubmit,PostToolUse}` | ✓ | ✗ | ✗ | ✓ | No turn-end hook exists yet. Existing non-kontexta hook files are never overwritten. |
 | OpenCode | `~/.config/opencode/plugins/kontexta.ts` | ✓ | ✗ | ✗ | ✓ | Replies are not exposed to plugins. |
-| Claude Desktop, Antigravity, Continue, Aider, Hermes | — | ✗ | ✗ | ✗ | ✗ | No hook API. MCP capture only. |
+| Claude Desktop, Continue, Aider | — | ✗ | ✗ | ✗ | ✗ | No hook API. MCP capture only. |
 
 ### Not supported
 
 - **Kiro** — its hooks exist only inside a custom agent's config (`~/.kiro/agents/*.json`, `hooks` key) and Kiro CLI does not currently run them in interactive sessions ([kirodotdev/Kiro#11620](https://github.com/kirodotdev/Kiro/issues/11620), checked 2026-09-29), so an installer would report success and capture nothing. Kiro stays MCP-only. `emit.mjs` still contains a Kiro adapter, ready for when that is fixed and an installer can be written.
 
 When an agent ships a missing capability, update its adapter in `packages/core/src/hooks/emit.mjs`, add a fixture under `packages/core/tests/hooks/fixtures/<agent>/`, and update this table.
+
+Hooks feed the journal; the MCP server lets the agent call kxta. Register that too with `kontexta connect` (see [MCP.md](MCP.md#connect-your-agents-automatically)).
 
 ## Install paths
 

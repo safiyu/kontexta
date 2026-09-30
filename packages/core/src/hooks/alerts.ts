@@ -6,9 +6,9 @@ export interface HooksAlert { agent: string; name: string; installed: boolean; v
 export interface HooksBlock { install_mode: InstallMode; alerts: HooksAlert[]; prompt: string | null }
 
 // A relative host path (compose's ./kontexta-data default) can't be resolved from inside the container, so it is treated as unknown.
-const isAbsoluteHostPath = (p: string): boolean => /^(\/|[A-Za-z]:[\\/]|\\\\)/.test(p);
+export const isAbsoluteHostPath = (p: string): boolean => /^(\/|[A-Za-z]:[\\/]|\\\\)/.test(p);
 // Escape for use inside double quotes in a POSIX shell.
-const dq = (s: string): string => s.replace(/(["\\$`])/g, "\\$1");
+export const dq = (s: string): string => s.replace(/(["\\$`])/g, "\\$1");
 
 export function dockerInstallCommand(o: { agent: string; version: string; hostDataDir?: string | null }): string {
   const dir = o.hostDataDir && isAbsoluteHostPath(o.hostDataDir) ? dq(o.hostDataDir) : "<DATA_DIR>";

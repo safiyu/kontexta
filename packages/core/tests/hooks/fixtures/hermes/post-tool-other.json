@@ -1,0 +1,13 @@
+{
+  "hook_event_name": "post_tool_call",
+  "tool_name": "read_file",
+  "tool_input": {
+    "path": "/a.py"
+  },
+  "session_id": "sess_abc123",
+  "cwd": "/home/user/project",
+  "profile": "default",
+  "extra": {
+    "result": "{}"
+  }
+}
