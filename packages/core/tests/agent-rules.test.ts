@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { RULE_BLOCK_VERSION, RULES_BLOCK_BODY, SCAFFOLDS, detectAgentContextFiles, parseMarker, injectOrUpdate, syncAgentRules } from "../src/agent-rules/index.js";
+import { RULE_BLOCK_VERSION, RULES_BLOCK_BODY, RULES_REFERENCE_BODY, KONTEXTA_MD, SCAFFOLDS, detectAgentContextFiles, parseMarker, injectOrUpdate, syncAgentRules } from "../src/agent-rules/index.js";
 import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, rmSync, readFileSync, existsSync, readdirSync as readdirSyncForTest } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
@@ -10,12 +10,27 @@ describe("agent-rules constants", () => {
     expect(RULE_BLOCK_VERSION).toMatch(/^\d+\.\d+\.\d+$/);
   });
 
-  it("RULES_BLOCK_BODY contains BEGIN/END markers carrying the version", () => {
+  it("RULES_BLOCK_BODY (stub) contains BEGIN/END markers carrying the version", () => {
     expect(RULES_BLOCK_BODY).toContain(`<!-- BEGIN kontexta:rules v${RULE_BLOCK_VERSION} -->`);
     expect(RULES_BLOCK_BODY).toContain(`<!-- END kontexta:rules v${RULE_BLOCK_VERSION} -->`);
   });
 
-  it("RULES_BLOCK_BODY mentions every required workflow rule", () => {
+  it("RULES_BLOCK_BODY (stub) contains essential constraints and links to KONTEXTA.md", () => {
+    for (const phrase of [
+      "All KB writes go through kontexta",
+      "Search before reading",
+      "journal.suggested_action",
+      "Confirm Hands tokens",
+      "Tag new KB files",
+      "admin.get_profile",
+      "Strict folder structure in Knowledge Base",
+      "KONTEXTA.md",
+    ]) {
+      expect(RULES_BLOCK_BODY).toContain(phrase);
+    }
+  });
+
+  it("RULES_REFERENCE_BODY (full reference) mentions every required workflow rule", () => {
     for (const phrase of [
       "Search before reading",
       "All KB writes go through kontexta",
@@ -28,11 +43,12 @@ describe("agent-rules constants", () => {
       "Save specs to a canonical location",
       "Tag new KB files",
       '`admin.overview({mode: "whats_new"})` early',
+      "## Folder structure",
     ]) {
-      expect(RULES_BLOCK_BODY).toContain(phrase);
+      expect(RULES_REFERENCE_BODY).toContain(phrase);
     }
-    expect(RULES_BLOCK_BODY).toContain("### Core rules");
-    expect(RULES_BLOCK_BODY).toContain("### Tool reference");
+    expect(RULES_REFERENCE_BODY).toContain("## Core rules");
+    expect(RULES_REFERENCE_BODY).toContain("## Tool reference");
   });
 
   it("SCAFFOLDS covers every supported agent and returns a path + header", () => {
@@ -233,29 +249,35 @@ describe("syncAgentRules", () => {
   it("update mode: injects block into an existing CLAUDE.md", () => {
     writeFileSync(join(dir, "CLAUDE.md"), "# Existing\n\nUser content.\n");
     const result = syncAgentRules({ projectPath: dir, project, files: ["CLAUDE.md"] });
-    expect(result.written).toEqual([
-      { path: "CLAUDE.md", action: "updated", version: RULE_BLOCK_VERSION },
-    ]);
-    expect(result.skipped).toEqual([]);
+    const claudeEntry = result.written.find((w) => w.path === "CLAUDE.md");
+    expect(claudeEntry).toEqual({ path: "CLAUDE.md", action: "updated", version: RULE_BLOCK_VERSION });
     const after = readFileSync(join(dir, "CLAUDE.md"), "utf8");
     expect(after).toContain("# Existing");
     expect(after).toContain("User content.");
     expect(after).toContain(`<!-- BEGIN kontexta:rules v${RULE_BLOCK_VERSION} -->`);
   });
 
+  it("writes KONTEXTA.md with full rules reference", () => {
+    const result = syncAgentRules({ projectPath: dir, project, files: [], targetAgent: "claude-code" });
+    expect(existsSync(join(dir, "KONTEXTA.md"))).toBe(true);
+    expect(result.reference).toMatchObject({ path: "KONTEXTA.md", version: RULE_BLOCK_VERSION });
+    const content = readFileSync(join(dir, "KONTEXTA.md"), "utf8");
+    expect(content).toContain("## Tool reference");
+    expect(content).toContain("## Core rules");
+    expect(content).not.toContain("<!--"); // HTML authoring comments stripped
+  });
+
   it("update mode: skipped when block already at current version", () => {
     syncAgentRules({ projectPath: dir, project, files: [], targetAgent: "claude-code" });
     const result = syncAgentRules({ projectPath: dir, project, files: ["CLAUDE.md"] });
-    expect(result.written).toEqual([
-      { path: "CLAUDE.md", action: "skipped", version: RULE_BLOCK_VERSION },
-    ]);
+    const claudeEntry = result.written.find((w) => w.path === "CLAUDE.md");
+    expect(claudeEntry).toEqual({ path: "CLAUDE.md", action: "skipped", version: RULE_BLOCK_VERSION });
   });
 
   it("create mode: scaffolds CLAUDE.md when targetAgent='claude-code' and no file exists", () => {
     const result = syncAgentRules({ projectPath: dir, project, files: [], targetAgent: "claude-code" });
-    expect(result.written).toEqual([
-      { path: "CLAUDE.md", action: "created", version: RULE_BLOCK_VERSION },
-    ]);
+    const claudeEntry = result.written.find((w) => w.path === "CLAUDE.md");
+    expect(claudeEntry).toEqual({ path: "CLAUDE.md", action: "created", version: RULE_BLOCK_VERSION });
     const content = readFileSync(join(dir, "CLAUDE.md"), "utf8");
     expect(content).toContain("# Demo");
     expect(content).toContain("A demo project");
@@ -264,8 +286,9 @@ describe("syncAgentRules", () => {
 
   it("create mode: scaffolds nested .cursor/rules/kontexta.mdc with frontmatter", () => {
     const result = syncAgentRules({ projectPath: dir, project, files: [], targetAgent: "cursor" });
-    expect(result.written[0].path).toBe(".cursor/rules/kontexta.mdc");
-    expect(result.written[0].action).toBe("created");
+    const cursorEntry = result.written.find((w) => w.path === ".cursor/rules/kontexta.mdc");
+    expect(cursorEntry).toBeDefined();
+    expect(cursorEntry!.action).toBe("created");
     const content = readFileSync(join(dir, ".cursor/rules/kontexta.mdc"), "utf8");
     expect(content).toContain("alwaysApply: true");
     expect(content).toContain(`<!-- BEGIN kontexta:rules v${RULE_BLOCK_VERSION} -->`);
@@ -281,14 +304,14 @@ describe("syncAgentRules", () => {
       throw err;
     }
     const result = syncAgentRules({ projectPath: dir, project, files: ["CLAUDE.md"] });
-    expect(result.written).toEqual([]);
-    expect(result.skipped[0]).toMatchObject({ path: "CLAUDE.md", reason: "symlink" });
+    expect(result.written.find((w) => w.path === "CLAUDE.md")).toBeUndefined();
+    expect(result.skipped.find((s) => s.path === "CLAUDE.md")?.reason).toBe("symlink");
   });
 
   it("update mode: refuses paths outside project root", () => {
     const result = syncAgentRules({ projectPath: dir, project, files: ["../escape.md"] });
-    expect(result.written).toEqual([]);
-    expect(result.skipped[0].reason).toBe("escape");
+    expect(result.written.find((w) => w.path === "../escape.md")).toBeUndefined();
+    expect(result.skipped.find((s) => s.path === "../escape.md")?.reason).toBe("escape");
   });
 
   it("update mode: missing target file", () => {
@@ -315,9 +338,8 @@ describe("syncAgentRules", () => {
       files: ["CLAUDE.md"],
       targetAgent: "cursor",
     });
-    expect(result.written).toEqual([
-      { path: "CLAUDE.md", action: "updated", version: RULE_BLOCK_VERSION },
-    ]);
+    const claudeEntry = result.written.find((w) => w.path === "CLAUDE.md");
+    expect(claudeEntry).toEqual({ path: "CLAUDE.md", action: "updated", version: RULE_BLOCK_VERSION });
     expect(existsSync(join(dir, ".cursor/rules/kontexta.mdc"))).toBe(false);
   });
 
@@ -328,7 +350,7 @@ describe("syncAgentRules", () => {
   });
 });
 
-describe("rules-block.md structural integrity", () => {
+describe("rules-block.md (stub) structural integrity", () => {
   const __dirnameLocal = dirname(fileURLToPath(import.meta.url));
   const rulesPath = join(__dirnameLocal, "..", "src", "agent-rules", "rules-block.md");
   const raw = readFileSync(rulesPath, "utf8");
@@ -337,6 +359,16 @@ describe("rules-block.md structural integrity", () => {
     expect(raw).toContain("<!-- BEGIN kontexta:rules v{{VERSION}} -->");
     expect(raw).toContain("<!-- END kontexta:rules v{{VERSION}} -->");
   });
+
+  it("references KONTEXTA.md", () => {
+    expect(raw).toContain("KONTEXTA.md");
+  });
+});
+
+describe("rules-reference.md (full reference) structural integrity", () => {
+  const __dirnameLocal = dirname(fileURLToPath(import.meta.url));
+  const refPath = join(__dirnameLocal, "..", "src", "agent-rules", "rules-reference.md");
+  const raw = readFileSync(refPath, "utf8");
 
   it("every routing row has exactly 4 cells", () => {
     const lines = raw.split("\n");
@@ -366,10 +398,6 @@ describe("rules-block.md structural integrity", () => {
   });
 
   it("every MCP tool registered in apps/mcp has a routing row", () => {
-    // Tool registrations live in apps/mcp/src/index.ts AND in extracted
-    // per-feature files (journal-tools.ts, calendar-tools.ts, etc.) that
-    // index.ts wires up via register*Tools(server) calls. Scan all of them
-    // so this check reflects every tool actually exposed by the server.
     const mcpSrcDir = join(__dirnameLocal, "..", "..", "..", "apps", "mcp", "src");
     const toolFiles = [
       "index.ts",

@@ -1,5 +1,13 @@
 # Changelog
 
+## 5.2.1 — Compact agent rules stub, KONTEXTA.md reference, strict KB folder structure (2026-09-30)
+
+### Changed
+
+- **Compact agent rules stub & KONTEXTA.md reference:** Split agent rules into a compact stub (`rules-block.md`, ~38 lines) injected into agent context files (`CLAUDE.md`, `GEMINI.md`, `AGENTS.md`, etc.), referencing a project-root `KONTEXTA.md` containing the full tool routing matrix and workflow guidance. Rules version bumped to `3.2.0`.
+- **Strict KB folder structure:** Injected rules now explicitly mandate the Knowledge Base folder hierarchy (`html/`, `mermaid/`, `journal/`, `knowledge/dictionary/`, `knowledge/notes/`) and forbid placing context or diagram files directly in the project workspace.
+- **Agent rules constraints:** Added `admin.get_profile` to core constraints for reading user role, preferences, and goals.
+
 ## 5.2.0 — MCP installer, Antigravity & Hermes hooks, journals in the KB (2026-09-30)
 
 ### Added
