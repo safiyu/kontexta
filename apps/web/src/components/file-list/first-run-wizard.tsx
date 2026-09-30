@@ -21,7 +21,7 @@ const TITLES: Record<number, string> = {
   3: "Set Up Your Profile",
 };
 const DESCRIPTIONS: Record<number, string> = {
-  1: "Pick the agents you use. Kontexta installs hooks for them so your conversations and shell commands reach the journal — agents you leave off are ignored everywhere.",
+  1: "Pick the agents you use. Kontexta installs hooks for them so your conversations and shell commands reach the journal - agents you leave off are ignored everywhere.",
   2: "Result of installing hooks for each agent you selected.",
   3: "Help AI agents understand you better by filling in your profile.",
 };
@@ -101,7 +101,7 @@ export function FirstRunWizard({ open, onClose, initialStep = 1, onSaved }: Firs
     const failure = retryErr !== undefined ? retryErr : (r?.install && !r.install.ok ? `Install failed: ${r.install.error}` : null);
     const dockerCmd = r?.docker_command ?? state?.docker_commands[id] ?? null;
     let body: React.ReactNode;
-    if (!a.hooks_supported) body = <span className="text-[var(--text-secondary)]">MCP capture only — this agent has no hook API.</span>;
+    if (!a.hooks_supported) body = <span className="text-[var(--text-secondary)]">MCP capture only - this agent has no hook API.</span>;
     else if (state?.install_mode === "docker" && dockerCmd) body = (
       <div className="space-y-1">
         {dockerCmd.includes("<DATA_DIR>") && (
@@ -160,7 +160,7 @@ export function FirstRunWizard({ open, onClose, initialStep = 1, onSaved }: Firs
           <div className="space-y-4">
             <ul className="space-y-2">
               {[...selected].map((id) => hooksRow(id))}
-              {selected.size === 0 && <li className="text-sm text-[var(--text-secondary)]">No agents enabled — you can enable them later from Configure → AGENTS.</li>}
+              {selected.size === 0 && <li className="text-sm text-[var(--text-secondary)]">No agents enabled - you can enable them later from Configure → AGENTS.</li>}
             </ul>
             <div className="flex justify-end gap-2 pt-4">
               <button className={SECONDARY} onClick={() => setStep(1)}>Back</button>
@@ -172,13 +172,13 @@ export function FirstRunWizard({ open, onClose, initialStep = 1, onSaved }: Firs
         {step === 3 && (
           <div className="space-y-4">
             {([
-              { key: "name", label: "Name", multiline: false, placeholder: "e.g. Safiyu" },
-              { key: "role", label: "Role", multiline: false, placeholder: "e.g. Data engineer" },
-              { key: "vision", label: "Vision", multiline: false, placeholder: "e.g. reduce operational load on the SAP replication path" },
-              { key: "roadmap", label: "Roadmap", multiline: false, placeholder: "e.g. sprint 7 CDC observability" },
-              { key: "preferences", label: "Preferences", multiline: false, placeholder: "e.g. TypeScript, terse responses" },
-              { key: "sessionCodingStyle", label: "Session coding style", multiline: true, placeholder: "e.g. one-line comments only; no auto push to git" },
-              { key: "teamMembersAndRoles", label: "Team members & roles", multiline: true, placeholder: "e.g. Alice — PM\nBob — SRE" },
+              { key: "name", label: "Name", multiline: false, placeholder: "e.g. Alex" },
+              { key: "role", label: "Role", multiline: false, placeholder: "e.g. Full-stack engineer" },
+              { key: "vision", label: "Vision", multiline: false, placeholder: "e.g. Improve API performance and developer workflows" },
+              { key: "roadmap", label: "Roadmap", multiline: false, placeholder: "e.g. Q3 auth refactor; performance benchmarking" },
+              { key: "preferences", label: "Preferences", multiline: false, placeholder: "e.g. TypeScript, concise explanations, TDD" },
+              { key: "sessionCodingStyle", label: "Session coding style", multiline: true, placeholder: "e.g. one-line comments only; no auto push to git; ask before migrations" },
+              { key: "teamMembersAndRoles", label: "Team members & roles", multiline: true, placeholder: "e.g. Alice - Product Manager\nBob - DevOps / SRE" },
               { key: "notes", label: "Notes", multiline: true, placeholder: "Free-form scratch space." },
             ] as const).map(({ key, label, multiline, placeholder }) => (
               <div key={key}>

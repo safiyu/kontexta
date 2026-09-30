@@ -19,11 +19,12 @@ function parseId(raw: string): number | null {
   return Number.isInteger(n) && n > 0 ? n : null;
 }
 
-function projectPath(id: number): string | null {
+function getProjectRecord(id: number): { exists: boolean; path: string | null } {
   const row = getDatabase()
     .prepare("SELECT path FROM projects WHERE id = ?")
     .get(id) as { path: string | null } | undefined;
-  return row?.path ?? null;
+  if (!row) return { exists: false, path: null };
+  return { exists: true, path: row.path };
 }
 
 export async function GET(
@@ -37,9 +38,16 @@ export async function GET(
   const n = parseId(id);
   if (n === null)
     return NextResponse.json({ error: "Invalid id" }, { status: 400 });
-  const root = projectPath(n);
-  if (!root)
+  const { exists, path: root } = getProjectRecord(n);
+  if (!exists)
     return NextResponse.json({ error: "Project not found" }, { status: 404 });
+  if (!root)
+    return NextResponse.json({
+      exists: false,
+      raw: null,
+      parsed: null,
+      mtimeMs: null,
+    });
   const file = join(root, "kontexta.json");
   if (!existsSync(file))
     return NextResponse.json({
@@ -77,9 +85,14 @@ export async function PUT(
   const n = parseId(id);
   if (n === null)
     return NextResponse.json({ error: "Invalid id" }, { status: 400 });
-  const root = projectPath(n);
-  if (!root)
+  const { exists, path: root } = getProjectRecord(n);
+  if (!exists)
     return NextResponse.json({ error: "Project not found" }, { status: 404 });
+  if (!root)
+    return NextResponse.json(
+      { error: "Cannot save hands configuration: project has no directory on disk" },
+      { status: 400 },
+    );
 
   let body: any;
   try {
@@ -157,9 +170,11 @@ export async function DELETE(
   const n = parseId(id);
   if (n === null)
     return NextResponse.json({ error: "Invalid id" }, { status: 400 });
-  const root = projectPath(n);
-  if (!root)
+  const { exists, path: root } = getProjectRecord(n);
+  if (!exists)
     return NextResponse.json({ error: "Project not found" }, { status: 404 });
+  if (!root)
+    return NextResponse.json({ deleted: false });
   const file = join(root, "kontexta.json");
   if (!existsSync(file)) {
     // Already absent — idempotent success.

@@ -79,7 +79,7 @@ export function StatusBar({ globalRemoteUrl, status, lastDoneAt, stage, onOpenCo
         <button
           onClick={onOpenConfigure}
           className="ml-auto text-[var(--accent)] hover:underline"
-          title={`You're on v${versionCheck.currentVersion} — open Configure for update instructions`}
+          title={`You're on v${versionCheck.currentVersion} - open Configure for update instructions`}
         >
           ⬆ v{versionCheck.latestVersion} available
         </button>

@@ -58,7 +58,7 @@ export function TopBar({
       if (res.ok && body?.success) {
         const t = body.totals ?? { newly_indexed: 0, refreshed: 0, pruned: 0, errors: 0 };
         toast.success(
-          `Reindexed ${body.scopes?.length ?? 0} scope(s) in ${body.duration_ms ?? "?"}ms — ` +
+          `Reindexed ${body.scopes?.length ?? 0} scope(s) in ${body.duration_ms ?? "?"}ms - ` +
           `+${t.newly_indexed} new, ${t.refreshed} updated, ${t.pruned} removed` +
           (t.errors ? `, ${t.errors} scope error(s)` : ""),
         );
@@ -82,7 +82,7 @@ export function TopBar({
   const modifier = isMac ? "⌘" : "Ctrl";
 
   return (
-    <header className="sticky top-0 z-50 h-16 bg-[var(--bg-secondary)]/80 backdrop-blur-xl flex flex-nowrap items-center px-6 border-b border-[var(--border)] gap-3 overflow-visible transition-all">
+    <header className="sticky top-0 z-50 h-16 bg-[var(--bg-secondary)]/80 backdrop-blur-xl flex flex-nowrap items-center px-4 sm:px-6 border-b border-[var(--border)] gap-2 sm:gap-3 overflow-hidden transition-all">
       <div className="flex items-center gap-0 group cursor-pointer shrink-0" onClick={() => router.push("/")}>
         <AnimatedLogo size="sm" />
         <span
@@ -92,10 +92,12 @@ export function TopBar({
         </span>
       </div>
 
-      <div className="flex-1 min-w-0 flex justify-center px-4">
+      <div className="flex-1 min-w-[36px] sm:min-w-[140px] flex justify-center px-1 sm:px-4">
         <button
           onClick={onSearch}
-          className="w-full max-w-[440px] min-w-0 h-10 px-4 bg-[var(--bg-tertiary)]/50 text-[13px] text-[var(--text-secondary)] rounded-xl hover:bg-[var(--bg-secondary)] transition-all flex items-center gap-3 border border-[var(--border)] group focus-glow whitespace-nowrap"
+          className="w-full max-w-[440px] h-10 px-2 sm:px-4 bg-[var(--bg-tertiary)]/50 text-[13px] text-[var(--text-secondary)] rounded-xl hover:bg-[var(--bg-secondary)] transition-all flex items-center justify-center sm:justify-start gap-2 sm:gap-3 border border-[var(--border)] group focus-glow whitespace-nowrap overflow-hidden shrink"
+          aria-label="Search context"
+          title={`Search context (${modifier}K)`}
         >
           <svg
             viewBox="0 0 24 24"
@@ -104,20 +106,20 @@ export function TopBar({
             strokeWidth="2.5"
             strokeLinecap="round"
             strokeLinejoin="round"
-            className="w-4 h-4 opacity-50 group-hover:opacity-100 transition-opacity"
+            className="w-4 h-4 opacity-50 group-hover:opacity-100 transition-opacity shrink-0"
           >
             <circle cx="11" cy="11" r="7" />
             <line x1="21" y1="21" x2="16.65" y2="16.65" />
           </svg>
-          <span className="flex-1 text-left opacity-60 group-hover:opacity-100">Search context...</span>
-          <kbd className="text-[10px] font-mono text-[var(--text-secondary)] bg-[var(--bg-secondary)] px-2 py-1 rounded-md border border-[var(--border)] shadow-sm opacity-50">{modifier}K</kbd>
+          <span className="hidden sm:inline flex-1 text-left opacity-60 group-hover:opacity-100 truncate">Search context...</span>
+          <kbd className="hidden md:inline-block text-[10px] font-mono text-[var(--text-secondary)] bg-[var(--bg-secondary)] px-2 py-1 rounded-md border border-[var(--border)] shadow-sm opacity-50 shrink-0">{modifier}K</kbd>
         </button>
       </div>
 
-      <div className="flex items-center gap-2 shrink-0 flex-nowrap">
+      <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 flex-nowrap">
         <button
           onClick={() => router.push("/calendar")}
-          className="btn btn-md !font-mono font-bold uppercase tracking-wider text-[var(--accent)] bp-toolbar-btn whitespace-nowrap shrink-0"
+          className="btn btn-sm sm:btn-md !font-mono font-bold uppercase tracking-wider text-[var(--accent)] bp-toolbar-btn whitespace-nowrap shrink-0"
           aria-label="Open Calendar"
           title="Open Calendar"
         >
@@ -126,7 +128,7 @@ export function TopBar({
 
         <button
           onClick={() => setSyncOpen((o) => !o)}
-          className="btn btn-md !font-mono font-bold uppercase tracking-wider text-[var(--accent)] bp-toolbar-btn whitespace-nowrap shrink-0"
+          className="btn btn-sm sm:btn-md !font-mono font-bold uppercase tracking-wider text-[var(--accent)] bp-toolbar-btn whitespace-nowrap shrink-0"
           aria-label="Sync menu"
           title="Open sync menu"
         >
@@ -136,8 +138,8 @@ export function TopBar({
         <button
           onClick={handleReindex}
           disabled={reindexing}
-          className={`btn btn-md !font-mono font-bold uppercase tracking-wider text-[var(--accent)] bp-toolbar-btn whitespace-nowrap shrink-0 ${reindexing ? "opacity-50" : ""}`}
-          aria-label="Reindex — scan disk to add new files and remove orphan rows"
+          className={`btn btn-sm sm:btn-md !font-mono font-bold uppercase tracking-wider text-[var(--accent)] bp-toolbar-btn whitespace-nowrap shrink-0 ${reindexing ? "opacity-50" : ""}`}
+          aria-label="Reindex - scan disk to add new files and remove orphan rows"
           title="Reindex Knowledge Base + all projects: add new files and drop orphan rows"
         >
           {reindexing ? "Reindexing…" : "Reindex"}
@@ -145,7 +147,7 @@ export function TopBar({
 
         <button
           onClick={onConfigure}
-          className="btn btn-md !font-mono font-bold uppercase tracking-wider text-[var(--accent)] bp-toolbar-btn whitespace-nowrap shrink-0"
+          className="btn btn-sm sm:btn-md !font-mono font-bold uppercase tracking-wider text-[var(--accent)] bp-toolbar-btn whitespace-nowrap shrink-0"
           aria-label="Configure Kontexta"
         >
           Configure
@@ -153,7 +155,7 @@ export function TopBar({
 
         <button
           onClick={onAbout}
-          className="btn btn-md !font-mono font-bold uppercase tracking-wider text-[var(--accent)] bp-toolbar-btn whitespace-nowrap shrink-0"
+          className="btn btn-sm sm:btn-md !font-mono font-bold uppercase tracking-wider text-[var(--accent)] bp-toolbar-btn whitespace-nowrap shrink-0"
           aria-label="About Kontexta"
         >
           About
@@ -162,7 +164,7 @@ export function TopBar({
         <DropdownMenu
           trigger={
             <button
-              className="btn btn-md !font-mono font-bold uppercase tracking-wider text-[var(--accent)] bp-toolbar-btn whitespace-nowrap shrink-0"
+              className="btn btn-sm sm:btn-md !font-mono font-bold uppercase tracking-wider text-[var(--accent)] bp-toolbar-btn whitespace-nowrap shrink-0"
               aria-label="Publish menu"
               title="Publish documentation"
             >
@@ -226,7 +228,7 @@ export function TopBar({
             onClick={() => setTheme(theme === "light" ? "dark" : "light")}
             className="px-2 h-5 rounded-md border border-[var(--border)] font-mono text-[10px] uppercase tracking-wider text-[var(--text-secondary)] hover:text-[var(--accent)] hover:border-[var(--accent)] transition-colors inline-flex items-center gap-1 whitespace-nowrap shrink-0"
             aria-label="Toggle theme (light / dark)"
-            title={`Theme: ${theme} — click to toggle`}
+            title={`Theme: ${theme} - click to toggle`}
           >
             {theme === "light" ? (
               <Sun className="w-3 h-3" aria-hidden />

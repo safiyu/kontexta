@@ -10,14 +10,14 @@ import {
 type IconRender = (className: string) => React.ReactNode;
 
 const REQUIRED = [
-  { key: "name",               title: "Name",                    hint: "How the agent should address you.",                                                icon: ((c: string) => <User className={c} aria-hidden />) as IconRender,          placeholder: "e.g. Safiyu" },
-  { key: "role",               title: "Role",                    hint: "Your role, focus, and areas of expertise.",                                        icon: ((c: string) => <Briefcase className={c} aria-hidden />) as IconRender,     placeholder: "e.g. Data engineer, SLT CDC ownership" },
-  { key: "vision",             title: "Vision",                  hint: "Where you want your work to go over the medium term.",                              icon: ((c: string) => <Target className={c} aria-hidden />) as IconRender,        placeholder: "e.g. reduce operational load on the SAP replication path" },
-  { key: "roadmap",            title: "Roadmap",                 hint: "Active initiatives, upcoming milestones, current themes.",                          icon: ((c: string) => <Route className={c} aria-hidden />) as IconRender,         placeholder: "e.g. sprint 7 CDC observability; Q4 dedup redesign" },
-  { key: "preferences",        title: "Preferences",             hint: "General working style, tools, and communication quirks.",                           icon: ((c: string) => <Settings className={c} aria-hidden />) as IconRender,      placeholder: "e.g. prefers TypeScript, terse responses, red‑green TDD" },
-  { key: "sessionCodingStyle", title: "Session coding style",    hint: "Hard rules the agent must honor every session. Comment style, git etiquette, review gates.", icon: ((c: string) => <Code2 className={c} aria-hidden />) as IconRender,         placeholder: "e.g. one‑line comments only; no auto push to git; ask before schema migrations" },
-  { key: "teamMembers",        title: "Team members and roles",  hint: "People you work with, so the agent names them correctly in summaries and updates.",   icon: ((c: string) => <Users className={c} aria-hidden />) as IconRender,         placeholder: "e.g. Alice — PM, sprint planning\nBob — SRE, on‑call" },
-  { key: "notes",              title: "Notes",                   hint: "Anything else worth remembering that doesn't fit elsewhere.",                       icon: ((c: string) => <StickyNote className={c} aria-hidden />) as IconRender,    placeholder: "Free‑form scratch space." },
+  { key: "name", title: "Name", hint: "How the agent should address you.", icon: ((c: string) => <User className={c} aria-hidden />) as IconRender, placeholder: "e.g. Safiyu" },
+  { key: "role", title: "Role", hint: "Your role, focus, and areas of expertise.", icon: ((c: string) => <Briefcase className={c} aria-hidden />) as IconRender, placeholder: "e.g. Full-stack engineer, platform core" },
+  { key: "vision", title: "Vision", hint: "Where you want your work to go over the medium term.", icon: ((c: string) => <Target className={c} aria-hidden />) as IconRender, placeholder: "e.g. Improve API performance and streamline developer workflows" },
+  { key: "roadmap", title: "Roadmap", hint: "Active initiatives, upcoming milestones, current themes.", icon: ((c: string) => <Route className={c} aria-hidden />) as IconRender, placeholder: "e.g. Q3 auth refactor; performance benchmarking" },
+  { key: "preferences", title: "Preferences", hint: "General working style, tools, and communication quirks.", icon: ((c: string) => <Settings className={c} aria-hidden />) as IconRender, placeholder: "e.g. Prefers TypeScript, concise explanations, test-driven development" },
+  { key: "sessionCodingStyle", title: "Session coding style", hint: "Hard rules the agent must honor every session. Comment style, git etiquette, review gates.", icon: ((c: string) => <Code2 className={c} aria-hidden />) as IconRender, placeholder: "e.g. one-line comments only; no auto push to git; ask before schema migrations" },
+  { key: "teamMembers", title: "Team members and roles", hint: "People you work with, so the agent names them correctly in summaries and updates.", icon: ((c: string) => <Users className={c} aria-hidden />) as IconRender, placeholder: "e.g. Alice - Product Manager\nBob - DevOps / SRE" },
+  { key: "notes", title: "Notes", hint: "Anything else worth remembering that doesn't fit elsewhere.", icon: ((c: string) => <StickyNote className={c} aria-hidden />) as IconRender, placeholder: "Free-form scratch space." },
 ] as const;
 
 type SectionKey = typeof REQUIRED[number]["key"];
@@ -403,7 +403,7 @@ export function ProfileEditor({ onDirtyChange, onChanged }: ProfileEditorProps) 
                         </div>
                         {warn && (
                           <p className="text-[10px] text-amber-accent mb-2">
-                            {titleEmpty ? "Give this section a title, or it will be lost on save." : `Title collides with the required "${c.title.trim()}" section — pick a different name.`}
+                            {titleEmpty ? "Give this section a title, or it will be lost on save." : `Title collides with the required "${c.title.trim()}" section - pick a different name.`}
                           </p>
                         )}
                         <textarea

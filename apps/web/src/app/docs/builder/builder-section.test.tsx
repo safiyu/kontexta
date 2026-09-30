@@ -205,4 +205,47 @@ describe("BuilderSection", () => {
       expect(screen.getByTitle("tool 'run-tests' rejected: argv[0] must be literal")).toBeTruthy(),
     );
   });
+
+  it("filters out projects without disk path and selects the first disk-backed project", async () => {
+    const requestedProjectIds: string[] = [];
+    global.fetch = vi.fn(async (url: string) => {
+      if (url.endsWith("/api/projects")) {
+        return {
+          ok: true,
+          json: async () => [
+            { id: 2, name: "Default (unregistered work)", path: null },
+            { id: 1, name: "demo-app", path: "/tmp/demo-app" },
+          ],
+        };
+      }
+      if (url.includes("/api/projects") && url.endsWith("/hands-config")) {
+        const match = url.match(/\/api\/projects\/(\d+)\/hands-config/);
+        if (match) requestedProjectIds.push(match[1]);
+        return {
+          ok: true,
+          json: async () => ({
+            exists: true,
+            raw: JSON.stringify({ version: "1", tools: { test: { description: "test", command: ["ls"] } } }),
+            parsed: { version: "1", tools: { test: { description: "test", command: ["ls"] } } },
+            mtimeMs: 100,
+          }),
+        };
+      }
+      if (url.includes("/api/hands/validate")) {
+        return { ok: true, json: async () => ({ found: true, tools: {}, disabled: [], warnings: [], errors: [] }) };
+      }
+      return { ok: true, json: async () => ({}) };
+    }) as any;
+
+    render(<BuilderSection />);
+    await waitFor(() => expect(screen.getByText("test")).toBeTruthy());
+
+    // Verified that hands-config was requested ONLY for project 1 (demo-app), NOT project 2
+    expect(requestedProjectIds).toEqual(["1"]);
+    // Verified that Default (unregistered work) is not in the dropdown options
+    expect(screen.queryByText("Default (unregistered work)")).toBeNull();
+    expect(screen.getByText("demo-app")).toBeTruthy();
+    // And no error message is displayed
+    expect(screen.queryByText(/Failed to load project configuration/i)).toBeNull();
+  });
 });

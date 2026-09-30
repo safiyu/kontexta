@@ -160,7 +160,7 @@ export function GitWizardModal({ isOpen, onClose, onSave, currentUrl }: GitWizar
                     type="text"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
-                    placeholder="e.g. safiyu"
+                    placeholder="e.g. username"
                     className="bg-[var(--bg-primary)] border border-[var(--border)] rounded px-3 py-2 text-xs text-[var(--text-primary)] placeholder:text-[var(--muted)] outline-none focus:border-[var(--accent)] transition-colors"
                   />
                 </div>

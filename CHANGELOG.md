@@ -1,5 +1,14 @@
 # Changelog
 
+## 5.1.3 — Hands & Journal config 404 fix, responsive top bar, generic profiles (2026-09-30)
+
+### Fixed
+
+- **Hands Tools & Journal Config 404 for diskless/unregistered projects**: Handled `path: null` gracefully in `/api/projects/[id]/hands-config` and `/api/projects/[id]/journal-config` so projects like "Default (unregistered work)" do not error with HTTP 404. Filtered project pickers to disk-backed projects and reset stale errors on switch.
+- **Top bar search overlap on small viewports**: Made header responsive with `overflow-hidden`, collapsible search bar on mobile screens, and scaled action buttons.
+- **Generic profile placeholders**: Replaced personal/private domain examples with generic software engineering placeholders across profile editor, git wizard, and first-run wizard.
+- **Git Sync PAT & Auth hints**: Added visual format guidance and token security clarification for Git remote configuration in the sync popover.
+
 ## 5.1.2 — First-run wizard streamline & onboarding fixes (2026-09-30)
 
 ### Changed
