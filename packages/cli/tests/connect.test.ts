@@ -22,7 +22,7 @@ describe('kontexta connect', () => {
       expect(r.code, r.err).toBe(0);
       const args = JSON.parse(readFileSync(join(home, '.cursor', 'mcp.json'), 'utf8')).mcpServers.kxta.args;
       expect(args).toEqual(['-y', 'kontexta', 'mcp']);
-      r = cli(['connect', 'status', '--json'], env);
+      r = cli(['connect', 'status', '--json', '--home', home], env);
       expect(JSON.parse(r.out).find((x: { id: string }) => x.id === 'cursor')).toMatchObject({ installed: true });
       expect(cli(['connect'], env).code).toBe(2);
     } finally { rmSync(home, { recursive: true, force: true }); rmSync(data, { recursive: true, force: true }); }
