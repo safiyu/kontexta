@@ -142,7 +142,7 @@ export async function POST(req: NextRequest) {
 
   await withLock(lockKey, async () => {
     // Collision avoidance must compare against the actual on-disk filename
-    // createFile will produce — that's `slugify(stem) + ".md"`, NOT the
+    // createFile will produce: that's `slugify(stem) + ".md"`, NOT the
     // original upload name. Otherwise `Auth Notes.md` and `auth-notes.md`
     // both slug to `auth-notes.md` and clobber each other.
     // Path-segment-exact match: avoid the suffix-ish hazard where
@@ -225,7 +225,7 @@ export async function POST(req: NextRequest) {
     // what gets written.
     const originalStem = original.slice(0, -ext.length);
     const slugStem = slugify(originalStem) || "untitled";
-    // createFile only knows md|mmd|html — collapse .markdown to .md so final_name reports the truth.
+    // createFile only knows md|mmd|html: collapse .markdown to .md so final_name reports the truth.
     const writeExt = ext === ".markdown" ? ".md" : ext;
     const desiredBasename = `${slugStem}${writeExt}`;
     const finalBasename = nextAvailableName(existingBasenames, desiredBasename);

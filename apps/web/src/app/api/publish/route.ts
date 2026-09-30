@@ -82,12 +82,12 @@ export async function POST(request: NextRequest) {
 
     const result = runPipeline(config);
 
-    // Write every pipeline output straight from result.outputs — avoids regenerating llms.txt with a second call.
+    // Write every pipeline output straight from result.outputs: avoids regenerating llms.txt with a second call.
     for (const out of result.outputs) {
       writeFileSync(join(outputDir, out.relPath), out.content, "utf-8");
     }
 
-    // Index outputs in the KB (default location only — createFile's own upsert makes this idempotent); skipHtmlSanitize is safe since this is our own trusted pipeline output, not agent/user content.
+    // Index outputs in the KB (default location only: createFile's own upsert makes this idempotent); skipHtmlSanitize is safe since this is our own trusted pipeline output, not agent/user content.
     if (outputDir === defaultOutput) {
       for (const out of result.outputs) {
         const ext = out.relPath.split(".").pop()?.toLowerCase();
@@ -96,7 +96,7 @@ export async function POST(request: NextRequest) {
         else if (ext === "md") format = "md";
         if (!format) continue;
         const title = basename(out.relPath, `.${ext}`);
-        // Preserve nested output paths so sectionA/page.html and sectionB/page.html get distinct KB rows — flat folder collapsed the two into one row via ON CONFLICT(path).
+        // Preserve nested output paths so sectionA/page.html and sectionB/page.html get distinct KB rows: flat folder collapsed the two into one row via ON CONFLICT(path).
         const relDir = dirname(out.relPath).replace(/\\/g, "/");
         const nested = relDir === "." || relDir === "" ? "" : `/${relDir}`;
         const folder = format === "html" ? `html/publish${nested}` : `knowledge/publish${nested}`;

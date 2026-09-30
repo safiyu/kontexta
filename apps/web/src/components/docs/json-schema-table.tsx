@@ -29,7 +29,7 @@ function formatNotes(p: PropSchema): string {
   if (p.minimum !== undefined) parts.push(`min: ${p.minimum}`);
   if (p.maximum !== undefined) parts.push(`max: ${p.maximum}`);
   if (p.description) parts.push(p.description);
-  return parts.join(" — ");
+  return parts.join(", ");
 }
 
 export function JsonSchemaTable({ schema }: { schema: ObjectSchema }) {

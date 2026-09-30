@@ -43,7 +43,7 @@ export function buildHooksBlock(o: { installMode: InstallMode; version: string; 
     }
   }
   if (silent.length > 0) {
-    lines.push(`Hooks for ${silent.map((a) => a.name).join(", ")} are installed but no events have arrived in over a week — run \`kontexta hooks status\` to check.`);
+    lines.push(`Hooks for ${silent.map((a) => a.name).join(", ")} are installed but no events have arrived in over a week. Run \`kontexta hooks status\` to check.`);
   }
   return { install_mode: o.installMode, alerts, prompt: lines.join(" ") };
 }

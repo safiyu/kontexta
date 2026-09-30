@@ -94,7 +94,7 @@ export function CalendarClient() {
 
   function handleSlotClick(day: Date, hour?: number) {
     // Entities may have been added elsewhere (MCP, another tab) since this
-    // page loaded — refetch so the dialog's dropdown is never stale.
+    // page loaded: refetch so the dialog's dropdown is never stale.
     refreshEntities();
     const start = new Date(day);
     start.setHours(hour ?? 9, 0, 0, 0);

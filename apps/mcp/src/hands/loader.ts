@@ -73,7 +73,7 @@ function validateTool(name: string, def: any, projectRoot: string): ToolValidati
     if (typeof e !== "string") return reject("command elements must be strings");
   }
   if (!isLiteralArgv0(def.command[0])) return reject("argv[0] must be literal (no {{param}})");
-  // Reject relative argv[0] — would resolve against project cwd and run shipped binaries.
+  // Reject relative argv[0]: would resolve against project cwd and run shipped binaries.
   const argv0 = def.command[0];
   if (!isAbsolute(argv0) && (argv0.includes("/") || argv0.includes(sep))) {
     return reject("argv[0] must be absolute or a bare command name (no relative paths)");

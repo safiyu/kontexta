@@ -34,7 +34,7 @@ export function useSyncStatus(globalRemoteUrl: string | null): UseSyncStatusResu
     // State lives in this useEffect's scope (NOT inside an async IIFE) so
     // the cleanup returned to React can flip `cancelled` and close the
     // socket synchronously on unmount. Returning the cleanup from inside
-    // an async function would lose it — useEffect ignores the returned Promise.
+    // an async function would lose it: useEffect ignores the returned Promise.
     const state: {
       reconnect: ReturnType<typeof setTimeout> | null;
       cancelled: boolean;

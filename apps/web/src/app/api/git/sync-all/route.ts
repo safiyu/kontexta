@@ -68,7 +68,7 @@ export async function POST(req: NextRequest) {
               type: "sync:error",
               projectId: project.id,
               at: Date.now(),
-              message: `${project.name}: timeout — remaining projects skipped`,
+              message: `${project.name}: timeout, remaining projects skipped`,
             });
           }
         }

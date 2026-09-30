@@ -8,7 +8,7 @@ describe("DATA_DIR", () => {
     // test, before this file's own beforeEach). Changing the env var here
     // simulates what happens mid test-suite: a later test file sets a fresh
     // temp dir, but a route reading the stale top-level export would never
-    // see it — which is exactly how test runs were writing real files into
+    // see it: which is exactly how test runs were writing real files into
     // the production knowledge base instead of the test sandbox.
     const freshDir = path.join(path.sep, "tmp", "kxta-web-datadir-regression-check");
     process.env.KONTEXTA_DATA_DIR = freshDir;

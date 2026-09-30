@@ -43,7 +43,7 @@ export function attachWebSocketServer(watchPaths: string[]) {
     .filter(Boolean);
   const requiredToken = (process.env.KONTEXTA_WS_TOKEN || "").trim();
 
-  // No own socket — we ride on Next.js's HTTP server via the upgrade event.
+  // No own socket: we ride on Next.js's HTTP server via the upgrade event.
   wss = new WebSocketServer({ noServer: true });
   globalThis.__kontextaWss = wss;
 
@@ -58,7 +58,7 @@ export function attachWebSocketServer(watchPaths: string[]) {
     } catch {
       return;
     }
-    // Not ours (e.g. Next.js HMR) — leave the socket alone so Next's own
+    // Not ours (e.g. Next.js HMR): leave the socket alone so Next's own
     // upgrade listener can handle it. Never destroy it here.
     if (pathname !== WS_PATH) return;
     wss!.handleUpgrade(req, socket, head, (ws) => {

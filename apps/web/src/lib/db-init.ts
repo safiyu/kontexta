@@ -7,12 +7,12 @@ export function ensureDbInitialized() {
   // from kxta-core's own (test-resettable) resolution.
   //
   // getDataDir() caches its result in-process and only re-resolves after
-  // resetDataDirCache() is called — by design, so a single process doesn't
+  // resetDataDirCache() is called: by design, so a single process doesn't
   // re-read env vars/the cache file on every call. That's harmless in
   // production (the env never changes mid-process) but broke test
   // isolation two ways at once: (1) DATA_DIR used to be a plain constant
-  // evaluated once at module-import time — before any test's beforeEach
-  // could set KONTEXTA_DATA_DIR — so it permanently cached whatever
+  // evaluated once at module-import time: before any test's beforeEach
+  // could set KONTEXTA_DATA_DIR: so it permanently cached whatever
   // directory existed at that first import; (2) even after making DATA_DIR
   // a `let` reassigned here, calling getDataDir() again is a no-op while
   // its own cache is still populated, so it kept returning the same stale
@@ -39,7 +39,7 @@ export function ensureDbInitialized() {
 
 let hooksStagedFor: string | null = null;
 
-// Runs once per data dir per process; failures are logged, never fatal — the dashboard must come up even if hooks staging can't write.
+// Runs once per data dir per process; failures are logged, never fatal: the dashboard must come up even if hooks staging can't write.
 export function ensureHooksStaged(): void {
   if (hooksStagedFor === DATA_DIR) return;
   hooksStagedFor = DATA_DIR;

@@ -15,7 +15,7 @@ export interface TemplateVars {
   isDefaultDir: boolean;
   /** Human-readable default path for this OS, e.g. ~/.local/share/kontexta */
   defaultDirDisplay: string;
-  /** True when this dashboard was launched via `npx kontexta start` — the `kontexta` package is confirmed locally installed. */
+  /** True when this dashboard was launched via `npx kontexta start`: the `kontexta` package is confirmed locally installed. */
   hasLocalCliMcp: boolean;
 }
 
@@ -26,12 +26,12 @@ export interface Snippet {
   configPath?: string;
 }
 
-// A detected local `kontexta` install (from `npx kontexta start`) beats the generic kontexta-mcp default — same server either way.
+// A detected local `kontexta` install (from `npx kontexta start`) beats the generic kontexta-mcp default: same server either way.
 function npmArgs(vars: TemplateVars): string[] {
   return vars.hasLocalCliMcp ? ["-y", "kontexta", "mcp"] : ["-y", "kontexta-mcp"];
 }
 // Escape a value for a YAML double-quoted scalar (the `mcp_servers` block pasted
-// into Hermes/Continue config). YAML — like JSON — treats `\` as an escape
+// into Hermes/Continue config). YAML: like JSON: treats `\` as an escape
 // character, so an unescaped Windows path (C:\Users\...) is INVALID YAML (`\U`
 // is read as a unicode escape) and the whole block fails to parse. The JSON
 // snippets never hit this because JSON.stringify escapes for us; the hand-built
@@ -42,14 +42,14 @@ function yamlDq(s: string): string {
 function npmNotes(vars: TemplateVars, install: Install): string[] {
   if (install !== "npm") return [];
   return vars.hasLocalCliMcp
-    ? ["Detected a local kontexta install — using its bundled MCP server. Alternative: npx -y kontexta-mcp."]
-    : ["Alternative: npx kontexta mcp — same MCP server, bundled with the one-click dashboard package."];
+    ? ["Detected a local kontexta install, using its bundled MCP server. Alternative: npx -y kontexta-mcp."]
+    : ["Alternative: npx kontexta mcp (same MCP server, bundled with the one-click dashboard package)."];
 }
 
 function dataDirNote(vars: TemplateVars, install: Install): string {
   if (install === "docker") return `Data directory: ${vars.hostDataDir || vars.dataDir} (mounted into container)`;
-  if (vars.isDefaultDir) return `Data directory: ${vars.defaultDirDisplay} (OS default — no override needed)`;
-  return `Data directory: ${vars.dataDir} (custom — set via KONTEXTA_DATA_DIR)`;
+  if (vars.isDefaultDir) return `Data directory: ${vars.defaultDirDisplay} (OS default, no override needed)`;
+  return `Data directory: ${vars.dataDir} (custom, set via KONTEXTA_DATA_DIR)`;
 }
 
 function genericJson(vars: TemplateVars, install: Install): Snippet {
@@ -62,7 +62,7 @@ function genericJson(vars: TemplateVars, install: Install): Snippet {
         ? npmArgs(vars)
         : [vars.sourceEntrypoint];
   // For docker, always include the data dir env. For npm/source, omit it when
-  // using the OS default — the MCP server auto-discovers the path from the
+  // using the OS default: the MCP server auto-discovers the path from the
   // ~/.kontexta_datadir cache written by the web app.
   const env = install === "docker" || !vars.isDefaultDir
     ? { KONTEXTA_DATA_DIR: vars.dataDir }
@@ -81,7 +81,7 @@ function claudeCodeShell(vars: TemplateVars, install: Install): Snippet {
       : install === "npm"
         ? `-- npx ${npmArgs(vars).join(" ")}`
         : `-- node ${vars.sourceEntrypoint}`;
-  // Omit -e KONTEXTA_DATA_DIR for npm/source when using the OS default — the
+  // Omit -e KONTEXTA_DATA_DIR for npm/source when using the OS default: the
   // MCP server auto-discovers the path from ~/.kontexta_datadir written by the web app.
   const envFlag = install === "docker" || !vars.isDefaultDir
     ? `\n  -e KONTEXTA_DATA_DIR=${vars.dataDir} \\`
@@ -237,8 +237,8 @@ ${args.map(a => `      - "${yamlDq(a)}"`).join("\n")}${envBlock}`;
     notes: [
       dataDirNote(vars, install),
       ...npmNotes(vars, install),
-      "Paste this under the existing `mcp_servers` key (create it if missing) in ~/.hermes/config.yaml — or $HERMES_HOME/config.yaml when a profile/home override is set. Never put API keys in config.yaml; those belong in .env.",
-      "After editing, restart Hermes — MCP servers are loaded at startup only, there is no hot-reload.",
+      "Paste this under the existing `mcp_servers` key (create it if missing) in ~/.hermes/config.yaml, or $HERMES_HOME/config.yaml when a profile/home override is set. Never put API keys in config.yaml; those belong in .env.",
+      "After editing, restart Hermes. MCP servers are loaded at startup only, there is no hot-reload.",
       "Windows: bare `npx` fails to spawn (it is a .cmd shim); point `command` at the full path, e.g. \"C:/Program Files/nodejs/npx.cmd\".",
     ],
     configPath: "~/.hermes/config.yaml (mcp_servers)"
@@ -264,14 +264,14 @@ const CLIENT_CONFIG_PATHS: Record<Client, string> = {
   "claude-code": "Run this command in your terminal to configure Claude Code.",
   "claude-desktop": "macOS: ~/Library/Application Support/Claude/claude_desktop_config.json\nWindows: %APPDATA%\\Claude\\claude_desktop_config.json",
   "cursor": "Settings → Features → MCP (or paste into your configuration file)",
-  "codex": "~/.codex/config.toml ([mcp_servers.kxta]) — written by `codex mcp add`",
+  "codex": "~/.codex/config.toml ([mcp_servers.kxta]), written by `codex mcp add`",
   "gemini": "~/.gemini/settings.json",
   "antigravity": "~/.gemini/config/mcp_config.json",
   "continue": "~/.continue/mcpServers/kontexta.yaml",
   "aider": ".aider.conf.yml (global or project-local)",
   "cline": "~/.cline/mcp_settings.json (Cline extension for VS Code / Cursor)",
-  "copilot": "~/.copilot/mcp-config.json (or $COPILOT_HOME/mcp-config.json) — GitHub Copilot CLI",
-  "hermes": "~/.hermes/config.yaml (or $HERMES_HOME/config.yaml) — under the `mcp_servers` key. Restart Hermes after editing.",
+  "copilot": "~/.copilot/mcp-config.json (or $COPILOT_HOME/mcp-config.json), GitHub Copilot CLI",
+  "hermes": "~/.hermes/config.yaml (or $HERMES_HOME/config.yaml), under the `mcp_servers` key. Restart Hermes after editing.",
   "generic": "Paste into your AI client's MCP configuration settings or file."
 };
 

@@ -28,7 +28,7 @@ function loadVersion(): string {
   return cachedVersion;
 }
 
-/** True when the resolved dataDir looks like a temp/test path — never show these in snippets. */
+/** True when the resolved dataDir looks like a temp/test path: never show these in snippets. */
 function isTempPath(p: string): boolean {
   const lower = p.toLowerCase();
   return (
@@ -54,7 +54,7 @@ export async function GET(req: NextRequest) {
 
   const defaultDir = defaultDataDir();
   const defaultDirDisplay = defaultDataDirDisplay();
-  // Never surface a temp/test dataDir (e.g. from a dev test run) — fall back to the OS default instead.
+  // Never surface a temp/test dataDir (e.g. from a dev test run): fall back to the OS default instead.
   const rawDataDir = DATA_DIR;
   const dataDir = isTempPath(rawDataDir) ? defaultDir : rawDataDir;
   const isDefaultDir = path.resolve(dataDir) === path.resolve(defaultDir);

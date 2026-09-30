@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { refreshIndex } from "kxta-core";
 import { DATA_DIR, ensureDbInitialized } from "@/lib/db-init";
 
-// Per-projectId in-flight set — concurrent refreshes of the same project
+// Per-projectId in-flight set: concurrent refreshes of the same project
 // race on the SQLite write lock and can duplicate `files` rows. Refreshes
 // of different projects are independent.
 const _refreshInFlight = new Set<number | null>();

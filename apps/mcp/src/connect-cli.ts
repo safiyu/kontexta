@@ -10,7 +10,7 @@ import {
   type McpOutcome, type McpApproval, type InstallMode,
 } from "kxta-core";
 
-const USAGE = `kontexta connect — register the kxta MCP server in your coding agents
+const USAGE = `kontexta connect: register the kxta MCP server in your coding agents
 
 Usage:
   kontexta connect status [--json]
@@ -43,7 +43,7 @@ function mcpPackageVersion(): string {
 function report(outcomes: McpOutcome[], json: boolean): number {
   if (json) { print(JSON.stringify(outcomes, null, 2)); return outcomes.every((o) => o.ok) ? 0 : 1; }
   for (const o of outcomes) {
-    if (!o.ok) print(`${o.agent}: FAILED — ${o.error}`);
+    if (!o.ok) print(`${o.agent}: FAILED, ${o.error}`);
     else print(`${o.agent}: ${o.changed ? "connected" : "already up to date"}${o.approval !== "prompt" ? ` (approval: ${o.approval})` : ""}${o.path ? `  ${o.path}` : ""}`);
     for (const n of o.notes) print(`  note: ${n}`);
   }

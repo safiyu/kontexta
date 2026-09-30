@@ -121,7 +121,7 @@ export default function HomePage() {
     }
   };
 
-  // Single global fetch — `allFiles` is the source of truth for both the
+  // Single global fetch: `allFiles` is the source of truth for both the
   // project view and the KB view. `files` is the project-scoped slice
   // derived in JS to avoid a duplicate /api/files round-trip on every
   // section switch (the previous code ran two near-identical fetches at
@@ -129,7 +129,7 @@ export default function HomePage() {
   const { files: allFiles, loading: filesLoading, refresh: refreshAllFiles } = useFiles({});
   const refreshFiles = refreshAllFiles;
   const files = useMemo(() => {
-    // Hide profile.md from the middle file-list pane — it stays accessible from the folder tree (knowledgeFiles) as a dedicated UserCircle entry.
+    // Hide profile.md from the middle file-list pane: it stays accessible from the folder tree (knowledgeFiles) as a dedicated UserCircle entry.
     let base = allFiles.filter((f) => !(f.project_id === null && /(^|[\\/])knowledge[\\/]profile\.md$/i.test(f.path)));
     if (selectedSection === "favorites") base = base.filter((f) => f.favorite);
     else if (selectedSection === "projects" && selectedProjectId !== null) base = base.filter((f) => f.project_id === selectedProjectId);
@@ -138,7 +138,7 @@ export default function HomePage() {
   }, [allFiles, selectedSection, selectedProjectId, selectedTag]);
   const knowledgeFiles = useMemo(() => allFiles.filter((f) => !f.project_id), [allFiles]);
 
-  // Refresh tags whenever the file set changes — counts depend on membership.
+  // Refresh tags whenever the file set changes: counts depend on membership.
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -152,7 +152,7 @@ export default function HomePage() {
     return () => { cancelled = true; };
   }, [allFiles]);
 
-  // Tag is its own axis — clear the other filters so the file list only reflects the tag. Dirty check runs before any state change so a Cancel leaves the UI untouched.
+  // Tag is its own axis: clear the other filters so the file list only reflects the tag. Dirty check runs before any state change so a Cancel leaves the UI untouched.
   const handleSelectTag = (tag: string | null) => {
     if (tag && !guardDiscard(() => handleSelectTag(tag))) return;
     setSelectedTag(tag);

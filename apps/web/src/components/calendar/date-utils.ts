@@ -18,7 +18,7 @@ export function fromDatetimeLocalValue(value: string): string {
   return new Date(value).toISOString();
 }
 
-// --- Date math (Monday week start — change WEEK_START_OFFSET to switch) ---
+// --- Date math (Monday week start: change WEEK_START_OFFSET to switch) ---
 
 export function startOfDay(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -44,7 +44,7 @@ export function startOfWeek(d: Date): Date {
   return startOfDay(addDays(d, -day));
 }
 
-/** 28/35/42 cells (4-6 weeks x 7 days), Monday-first — exactly enough weeks to cover the month. */
+/** 28/35/42 cells (4-6 weeks x 7 days), Monday-first: exactly enough weeks to cover the month. */
 export function monthGrid(anchor: Date): Date[] {
   const first = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
   const last = new Date(anchor.getFullYear(), anchor.getMonth() + 1, 0);
@@ -85,7 +85,7 @@ export function visibleRange(view: ViewMode, anchor: Date): { from: Date; to: Da
   return { from: start, to: addDays(start, 30) };
 }
 
-/** Half-open day membership — an event ending exactly at midnight does NOT touch the next day. */
+/** Half-open day membership: an event ending exactly at midnight does NOT touch the next day. */
 export function eventTouchesDay(ev: { starts_at: string; ends_at: string }, day: Date): boolean {
   const dayStart = startOfDay(day).getTime();
   const dayEnd = dayStart + 86_400_000;
@@ -95,7 +95,7 @@ export function eventTouchesDay(ev: { starts_at: string; ends_at: string }, day:
 const ALL_DAY_THRESHOLD_MIN = 23 * 60; // 1380 minutes
 
 /** True if `ev`, clamped to `day`'s bounds, covers at least ALL_DAY_THRESHOLD_MIN
- *  minutes of that day — i.e. effectively a full-day event for rendering purposes. */
+ *  minutes of that day: i.e. effectively a full-day event for rendering purposes. */
 export function isAllDayForDay(ev: CalendarEvent, day: Date): boolean {
   if (!eventTouchesDay(ev, day)) return false;
   const dayStart = startOfDay(day).getTime();

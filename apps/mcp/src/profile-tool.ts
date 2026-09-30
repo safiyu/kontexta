@@ -19,7 +19,7 @@ export function handleGetProfile(dataDir: string): GetProfileResult {
       path: rel,
       content: null,
       missing_sections: [...REQUIRED_SECTIONS],
-      hint: "Profile not yet set up — ask the user to fill it in via the web UI or by editing knowledge/profile.md",
+      hint: "Profile not yet set up: ask the user to fill it in via the web UI or by editing knowledge/profile.md",
     };
   }
   const content = readFileSync(abs, "utf8");

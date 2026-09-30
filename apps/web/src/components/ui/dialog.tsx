@@ -42,7 +42,7 @@ export function Dialog({
         {/*
           Position lives on this outer Content element ONLY. The visible
           panel (below) carries the open animation on a separate element so
-          the two never fight over the `transform` property — a CSS
+          the two never fight over the `transform` property: a CSS
           animation's keyframes override `transform` outright for their
           duration regardless of how the base value was set (Tailwind
           classes here, Radix's own inline transform for popper-positioned

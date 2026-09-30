@@ -27,7 +27,7 @@ export function DeleteConfirmDialog({
         <>
           Delete &quot;<span className="font-bold text-[var(--text-primary)]">{title}</span>&quot;? Knowledge
           Base files are recoverable from git history (Time Travel). Project files are only removed from the
-          index — the file on disk is untouched.
+          index. The file on disk is untouched.
         </>
       }
       confirmLabel="Delete"

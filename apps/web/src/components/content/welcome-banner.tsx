@@ -85,7 +85,7 @@ export function WelcomeBanner() {
     return (
       <div className="h-full flex items-center justify-center text-[var(--text-secondary)] p-6">
         <div className="text-center max-w-md">
-          <p className="text-sm">Couldn&apos;t load your briefing{error ? ` — ${error}` : ""}.</p>
+          <p className="text-sm">Couldn&apos;t load your briefing{error ? `: ${error}` : ""}.</p>
         </div>
       </div>
     );
@@ -113,7 +113,7 @@ export function WelcomeBanner() {
           </div>
         </header>
 
-        {/* Conflicts (only when present — front and center) */}
+        {/* Conflicts (only when present: front and center) */}
         {hasConflicts && (
           <section className="rounded-xl border border-[var(--danger)]/40 bg-[var(--danger)]/5 overflow-hidden">
             <header className="flex items-center gap-3 px-4 py-3 border-b border-[var(--danger)]/30 bg-[var(--danger)]/10">
@@ -231,7 +231,7 @@ export function WelcomeBanner() {
             <div className="min-w-0 flex-1">
               <h3 className="text-[13px] font-bold uppercase tracking-widest text-[var(--text-primary)]">Set up your profile</h3>
               <p className="mt-1 text-[12px] text-[var(--text-secondary)]">
-                Kontexta hands your profile to the agent on every session start — coding rules, roadmap, team roster. Create one to make sessions consistent.
+                Kontexta hands your profile to the agent on every session start: coding rules, roadmap, team roster. Create one to make sessions consistent.
               </p>
             </div>
           </section>

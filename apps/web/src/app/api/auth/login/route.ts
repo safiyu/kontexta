@@ -88,7 +88,7 @@ export async function POST(req: NextRequest) {
   const response = NextResponse.json({ success: true });
   response.cookies.set("kontexta_session", token, {
     httpOnly: true,
-    // Do not force secure:true — Kontexta is commonly deployed over HTTP
+    // Do not force secure:true, Kontexta is commonly deployed over HTTP
     // (Docker on a local machine or behind a reverse proxy). Secure cookies
     // would be silently dropped by browsers over HTTP, breaking the login flow.
     // Users who expose Kontexta over HTTPS can enable a reverse proxy; the

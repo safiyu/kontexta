@@ -41,12 +41,12 @@ function withLinks(entity: CalendarEntity) {
 export function registerCalendarTools(server: any): void {
   server.tool(
     "calendar.entities.add",
-    "SIDE-EFFECTFUL. Create a new tracked entity — any named thing you schedule events against (a server, a delivery van, a store location, a piece of equipment, a room, etc.). Not idempotent: a duplicate name (case-insensitive) throws. Returns `{entity}`. Use `calendar.entities.link` afterwards to record dependencies for conflict detection.",
+    "SIDE-EFFECTFUL. Create a new tracked entity: any named thing you schedule events against (a server, a delivery van, a store location, a piece of equipment, a room, etc.). Not idempotent: a duplicate name (case-insensitive) throws. Returns `{entity}`. Use `calendar.entities.link` afterwards to record dependencies for conflict detection.",
     {
       name: z.string().min(1).describe("Unique display name for the entity (case-insensitive)."),
       kind: z.string().optional().describe("Freeform category, e.g. 'server', 'vehicle', 'location', 'equipment'."),
       notes: z.string().optional().describe("Freeform notes."),
-      timezone: z.string().optional().describe("Optional IANA timezone (e.g. 'Europe/Berlin') for display only — does not affect stored event times."),
+      timezone: z.string().optional().describe("Optional IANA timezone (e.g. 'Europe/Berlin') for display only, does not affect stored event times."),
     },
     async (input: { name: string; kind?: string; notes?: string; timezone?: string }) => {
       try {
@@ -80,7 +80,7 @@ export function registerCalendarTools(server: any): void {
 
   server.tool(
     "calendar.entities.delete",
-    "DESTRUCTIVE. Permanently delete an entity AND cascade-delete every event and link attached to it. Not idempotent — deleting an unknown id throws. Returns `{success, deleted_events, deleted_links}`. To deactivate without losing history, use `calendar.entities.update` with `active: false` instead.",
+    "DESTRUCTIVE. Permanently delete an entity AND cascade-delete every event and link attached to it. Not idempotent: deleting an unknown id throws. Returns `{success, deleted_events, deleted_links}`. To deactivate without losing history, use `calendar.entities.update` with `active: false` instead.",
     { id: z.number().int().describe("Entity id to delete.") },
     async ({ id }: { id: number }) => {
       try {
@@ -107,10 +107,10 @@ export function registerCalendarTools(server: any): void {
 
   server.tool(
     "calendar.entities.link",
-    "SIDE-EFFECTFUL. Create or update a directed dependency edge between two entities (e.g. \"A feeds B\"), or remove one with `remove: true`. Idempotent — upserts the label on repeat calls; removing an absent link is a no-op. Used by `calendar.events.conflicts`/`calendar.events.list` to flag overlaps across connected entities (one hop, either direction). Returns `{link}` or `{removed}`.",
+    "SIDE-EFFECTFUL. Create or update a directed dependency edge between two entities (e.g. \"A feeds B\"), or remove one with `remove: true`. Idempotent, upserts the label on repeat calls; removing an absent link is a no-op. Used by `calendar.events.conflicts`/`calendar.events.list` to flag overlaps across connected entities (one hop, either direction). Returns `{link}` or `{removed}`.",
     {
-      from: z.string().describe("Source entity — name (case-insensitive) or numeric id."),
-      to: z.string().describe("Target entity — name (case-insensitive) or numeric id."),
+      from: z.string().describe("Source entity, name (case-insensitive) or numeric id."),
+      to: z.string().describe("Target entity, name (case-insensitive) or numeric id."),
       label: z.string().optional().describe("Freeform label for the relationship, e.g. 'feeds', 'depends on'."),
       remove: z.boolean().optional().describe("If true, remove the link instead of creating/updating it."),
     },
@@ -132,9 +132,9 @@ export function registerCalendarTools(server: any): void {
 
   server.tool(
     "calendar.events.add",
-    "SIDE-EFFECTFUL. Add a one-off time window (downtime, maintenance, a delivery, a shift, an inspection, etc.) to an entity. NOT idempotent — calling this twice creates two events. `starts_at`/`ends_at` must be ISO 8601 with an explicit timezone (`Z` or `±HH:MM`) — naive timestamps are rejected because their meaning would be ambiguous once stored as UTC. Returns `{event}`. Follow up with `calendar.events.conflicts` to check for overlaps.",
+    "SIDE-EFFECTFUL. Add a one-off time window (downtime, maintenance, a delivery, a shift, an inspection, etc.) to an entity. NOT idempotent: calling this twice creates two events. `starts_at`/`ends_at` must be ISO 8601 with an explicit timezone (`Z` or `±HH:MM`), naive timestamps are rejected because their meaning would be ambiguous once stored as UTC. Returns `{event}`. Follow up with `calendar.events.conflicts` to check for overlaps.",
     {
-      entity: z.string().describe("Entity the event applies to — name (case-insensitive) or numeric id."),
+      entity: z.string().describe("Entity the event applies to, name (case-insensitive) or numeric id."),
       type: z.string().min(1).describe("Freeform event type, e.g. 'downtime', 'maintenance', 'delivery', 'shift'."),
       title: z.string().min(1).describe("Short title for the event."),
       starts_at: z.string().describe("ISO 8601 timestamp with explicit timezone, e.g. '2026-08-03T02:00:00+05:30'."),
@@ -156,10 +156,10 @@ export function registerCalendarTools(server: any): void {
 
   server.tool(
     "calendar.events.update",
-    "SIDE-EFFECTFUL. Patch an existing event (move it, retitle it, re-home it to a different entity, etc.). The merged result is re-validated — shrinking `ends_at` below `starts_at` throws. Returns `{event}`.",
+    "SIDE-EFFECTFUL. Patch an existing event (move it, retitle it, re-home it to a different entity, etc.). The merged result is re-validated: shrinking `ends_at` below `starts_at` throws. Returns `{event}`.",
     {
       id: z.number().int().describe("Event id."),
-      entity: z.string().optional().describe("Move the event to a different entity — name or numeric id."),
+      entity: z.string().optional().describe("Move the event to a different entity, name or numeric id."),
       type: z.string().min(1).optional().describe("Freeform event type, e.g. 'downtime', 'maintenance', 'delivery'."),
       title: z.string().min(1).optional().describe("Short title for the event."),
       starts_at: z.string().optional().describe("ISO 8601 timestamp with explicit timezone."),
@@ -181,7 +181,7 @@ export function registerCalendarTools(server: any): void {
 
   server.tool(
     "calendar.events.delete",
-    "DESTRUCTIVE. Delete one event by id. Idempotent — deleting an already-absent id is a no-op. Returns `{success, existed}`.",
+    "DESTRUCTIVE. Delete one event by id. Idempotent: deleting an already-absent id is a no-op. Returns `{success, existed}`.",
     { id: z.number().int().describe("Event id to delete.") },
     async ({ id }: { id: number }) => {
       const existed = deleteEvent(id);
@@ -191,11 +191,11 @@ export function registerCalendarTools(server: any): void {
 
   server.tool(
     "calendar.events.list",
-    "Read-only; no side effects, auth, or rate limits. List events overlapping a window (half-open — an event ending exactly at `from` is excluded), optionally filtered by entity/type. Set `include_conflicts` to also run conflict detection over the same window and attach it. Returns `{events, count, conflicts?}`. For conflicts alone, prefer `calendar.events.conflicts`.",
+    "Read-only; no side effects, auth, or rate limits. List events overlapping a window (half-open: an event ending exactly at `from` is excluded), optionally filtered by entity/type. Set `include_conflicts` to also run conflict detection over the same window and attach it. Returns `{events, count, conflicts?}`. For conflicts alone, prefer `calendar.events.conflicts`.",
     {
       from: z.string().optional().describe("Window start, ISO 8601 with explicit timezone."),
       to: z.string().optional().describe("Window end, ISO 8601 with explicit timezone."),
-      entity: z.string().optional().describe("Filter to one entity — name or numeric id."),
+      entity: z.string().optional().describe("Filter to one entity, name or numeric id."),
       type: z.string().optional().describe("Filter to an exact event type."),
       limit: z.number().int().positive().optional().describe("Max rows (default 500)."),
       include_conflicts: z.boolean().optional().describe("If true, also compute conflicts for `from`..`to` (both required when set) and include them in the response."),
@@ -224,11 +224,11 @@ export function registerCalendarTools(server: any): void {
 
   server.tool(
     "calendar.events.conflicts",
-    `Read-only; no side effects, auth, or rate limits. Report scheduling conflicts in a window: overlaps on the same entity (\`overlap\`), overlaps between linked entities one hop apart (\`linked_overlap\`), and gaps smaller than a minimum buffer (\`insufficient_buffer\`). Computed on demand — nothing is persisted. Buffer defaults to the \`${"calendar.min_buffer_minutes"}\` setting (0 = off); pass \`buffer_minutes\` to override for this call. Returns \`{conflicts, count, buffer_minutes, events_considered}\`. See also \`calendar.events.list\` with \`include_conflicts\`.`,
+    `Read-only; no side effects, auth, or rate limits. Report scheduling conflicts in a window: overlaps on the same entity (\`overlap\`), overlaps between linked entities one hop apart (\`linked_overlap\`), and gaps smaller than a minimum buffer (\`insufficient_buffer\`). Computed on demand, nothing is persisted. Buffer defaults to the \`${"calendar.min_buffer_minutes"}\` setting (0 = off); pass \`buffer_minutes\` to override for this call. Returns \`{conflicts, count, buffer_minutes, events_considered}\`. See also \`calendar.events.list\` with \`include_conflicts\`.`,
     {
       from: z.string().describe("Window start, ISO 8601 with explicit timezone."),
       to: z.string().describe("Window end, ISO 8601 with explicit timezone."),
-      entity: z.string().optional().describe("Scope to one entity (and its linked neighbors) — name or numeric id."),
+      entity: z.string().optional().describe("Scope to one entity (and its linked neighbors), name or numeric id."),
       buffer_minutes: z.number().int().min(0).optional().describe("Override the configured minimum gap between events, in minutes. 0 disables buffer checks."),
     },
     async (input: { from: string; to: string; entity?: string; buffer_minutes?: number }) => {
@@ -253,7 +253,7 @@ export function registerCalendarTools(server: any): void {
     {
       from: z.string().describe("Window start, ISO 8601 with explicit timezone."),
       to: z.string().describe("Window end, ISO 8601 with explicit timezone."),
-      entity: z.string().optional().describe("Filter to one entity — name or numeric id."),
+      entity: z.string().optional().describe("Filter to one entity, name or numeric id."),
       calendar_name: z.string().optional().describe("Calendar display name (X-WR-CALNAME). Defaults to 'Kontexta Calendar'."),
     },
     async (input: { from: string; to: string; entity?: string; calendar_name?: string }) => {

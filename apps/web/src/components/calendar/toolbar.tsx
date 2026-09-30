@@ -60,7 +60,7 @@ export function CalendarToolbar({
 
   return (
     <div className="border-b border-[var(--border)]">
-      {/* Row 1: navigation + range + view switcher — never competes with filters/actions for space. */}
+      {/* Row 1: navigation + range + view switcher, never competes with filters/actions for space. */}
       <div className="px-4 pt-3 pb-2 flex items-center gap-2">
         <div className="flex items-center gap-1">
           <button className="btn btn-sm" onClick={() => onNavigate(-1)} aria-label="Previous">
@@ -160,7 +160,7 @@ export function CalendarToolbar({
         </div>
       </div>
 
-      {/* Row 2: filters + actions — has the full width to itself, so it only wraps at genuinely narrow widths. */}
+      {/* Row 2: filters + actions, has the full width to itself, so it only wraps at genuinely narrow widths. */}
       <div className="px-4 pb-3 flex items-center gap-2 flex-wrap">
         <select
           value={entityFilter ?? ""}

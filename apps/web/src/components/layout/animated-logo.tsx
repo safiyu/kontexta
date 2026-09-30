@@ -21,7 +21,7 @@ const CONFIG = {
     darkSrc: "/logo-dark.png",
     imgClass: "h-[56px] w-auto",
     floatClass: "",
-    // Top-bar uses a static logo — orbits are reserved for the About dialog.
+    // Top-bar uses a static logo: orbits are reserved for the About dialog.
     particles: [] as ParticleDef[],
     orbitRadius: 0,
   },

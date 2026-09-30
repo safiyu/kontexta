@@ -8,7 +8,7 @@ import {
   type AgentHookOutcome,
 } from "kxta-core";
 
-const USAGE = `kontexta hooks — install coding-agent hooks that feed the journal
+const USAGE = `kontexta hooks: install coding-agent hooks that feed the journal
 
 Usage:
   kontexta hooks status [--json]
@@ -28,7 +28,7 @@ function print(s: string) { process.stdout.write(s.endsWith("\n") ? s : s + "\n"
 function report(outcomes: AgentHookOutcome[], json: boolean): number {
   if (json) { print(JSON.stringify(outcomes, null, 2)); return outcomes.every((o) => o.ok) ? 0 : 1; }
   for (const o of outcomes) {
-    if (!o.ok) print(`${o.agent}: FAILED — ${o.error}`);
+    if (!o.ok) print(`${o.agent}: FAILED, ${o.error}`);
     else print(`${o.agent}: ${o.changed ? "installed" : "already up to date"}${o.path ? ` (${o.path})` : ""}`);
     for (const n of o.notes) print(`  note: ${n}`);
   }

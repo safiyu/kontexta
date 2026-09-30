@@ -80,7 +80,7 @@ export function verifySession(token: string): { ip?: string; t: number } | null 
 
 /**
  * Resolve client IP from the request. Forwarded headers are trusted ONLY when
- * the auth_trust_proxy_headers setting is enabled — otherwise a caller could
+ * the auth_trust_proxy_headers setting is enabled: otherwise a caller could
  * spoof an arbitrary IP to dodge per-IP rate limiting. Returns "direct" for
  * connections without a trustable header so all direct clients share a single
  * rate-limit bucket (better than collapsing on the literal "unknown").
@@ -132,7 +132,7 @@ export function isBypassed(ip: string | undefined): boolean {
 /**
  * Checks if the current request is authenticated.
  * Call this at the top of protected API routes.
- * Returns true (open) if the settings table isn't ready yet — the error
+ * Returns true (open) if the settings table isn't ready yet: the error
  * will surface as a 500 from the actual DB call, not a silent auth bypass.
  */
 export function checkAuth(req: Request | { cookies: { get: (name: string) => { value: string } | undefined }, headers: Headers }): boolean {
@@ -142,7 +142,7 @@ export function checkAuth(req: Request | { cookies: { get: (name: string) => { v
     hash = getSetting("auth_password_hash");
   } catch {
     // Settings table doesn't exist yet (race during first boot/HMR).
-    // Return true to avoid blocking the app — the page itself will still 
+    // Return true to avoid blocking the app: the page itself will still 
     // fail gracefully if anything else tries to touch the DB.
     return true;
   }

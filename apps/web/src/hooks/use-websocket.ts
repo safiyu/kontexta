@@ -9,7 +9,7 @@ export function useWebSocket(onEvent: (event: { type: string; path: string }) =>
     // Connection state lives in this useEffect's scope (NOT inside the async
     // IIFE) so the cleanup returned to React can flip `cancelled` and close
     // the socket synchronously on unmount. Returning the cleanup from inside
-    // an async function would lose it — useEffect ignores the returned Promise.
+    // an async function would lose it: useEffect ignores the returned Promise.
     const state: {
       ws: WebSocket | null;
       reconnectTimer: ReturnType<typeof setTimeout> | null;
@@ -71,7 +71,7 @@ export function useWebSocket(onEvent: (event: { type: string; path: string }) =>
       ws.onclose = (ev) => {
         if (state.cancelled) return;
         // Auth failure (server returns 1008 / 4401). Hammering achieves
-        // nothing — token won't change without reload.
+        // nothing: token won't change without reload.
         if (ev.code === 1008 || ev.code === 4401) {
           console.warn("[Kontexta] WS auth failed; stopping reconnect attempts");
           state.stopReconnecting = true;

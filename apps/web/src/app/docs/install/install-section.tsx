@@ -73,7 +73,7 @@ export function InstallSection() {
         </label>
       </div>
       {nothingEnabled && (
-        <p className="mb-3 text-xs text-[var(--text-secondary)]">No agents enabled yet — enable the agents you use in the AGENTS tab to see their config here. Enabling an agent installs kontexta hooks into that agent&apos;s config file (you can uninstall them there too).</p>
+        <p className="mb-3 text-xs text-[var(--text-secondary)]">No agents enabled yet. Enable the agents you use in the AGENTS tab to see their config here. Enabling an agent installs kontexta hooks into that agent&apos;s config file (you can uninstall them there too).</p>
       )}
       {agentsState && !nothingEnabled && (
         <p className="mb-3 text-xs text-[var(--text-secondary)]">Missing an agent? Enable it in the AGENTS tab.</p>

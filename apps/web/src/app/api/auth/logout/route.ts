@@ -32,7 +32,7 @@ function isSameOrigin(req: NextRequest): boolean {
   // Build the candidate host list. `Host` is what Next.js bound to, but on
   // reverse-proxied deploys (Cloud Workstations, nginx, Cloudflare Tunnel,
   // Docker w/ host-network rewriting) it's the INTERNAL hostname while the
-  // browser's Origin is the PUBLIC one — so also accept `x-forwarded-host`.
+  // browser's Origin is the PUBLIC one: so also accept `x-forwarded-host`.
   // The forwarded list is a chain; the first entry is the originally-reached
   // host that we care about.
   const candidates: string[] = [];
@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
     httpOnly: true,
     sameSite: "lax",
     path: "/",
-    // No maxAge — this is a session cookie, cleared on browser close or login.
+    // No maxAge: this is a session cookie, cleared on browser close or login.
   });
   return response;
 }

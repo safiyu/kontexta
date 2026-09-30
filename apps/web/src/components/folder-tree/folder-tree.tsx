@@ -62,7 +62,7 @@ const FolderIcon = ({ className }: { className?: string }) => (
 );
 
 // Fixed KB layout (4.6.0): only these four folders may sit at knowledge/ root,
-// so the pane always renders them — even empty — instead of hiding buckets that
+// so the pane always renders them: even empty: instead of hiding buckets that
 // happen to have no files yet.
 const KB_BUCKETS: { name: string; label: string; icon: (props: { className?: string }) => ReactNode }[] = [
   { name: "journal",   label: "Journal",   icon: (p) => <CalendarDays {...p} /> },
@@ -91,7 +91,7 @@ function TagSection({
   if (nonEmpty.length === 0) return null;
   const q = query.trim().toLowerCase();
   const filtered = q ? nonEmpty.filter((t) => t.name.toLowerCase().includes(q)) : nonEmpty;
-  // Ignore the top-10 cap while searching — users expect the full match set.
+  // Ignore the top-10 cap while searching: users expect the full match set.
   const visible = q || showAll ? filtered : filtered.slice(0, TAGS_COLLAPSED_LIMIT);
   const hidden = filtered.length - visible.length;
   return (
@@ -347,7 +347,7 @@ export function FolderTree({
                 bucketByName.set(lowered, child);
               }
             }
-            // Anything that isn't one of the four buckets is legacy off-spec —
+            // Anything that isn't one of the four buckets is legacy off-spec,
             // render it below the fixed buckets so it stays visible until
             // migrated, but doesn't muddle the primary layout.
             const legacy = (knowledgeFolderTree?.children ?? []).filter(

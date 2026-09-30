@@ -20,7 +20,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   let docker_command: string | null = null;
   let note: string | null = null;
   if (body.enabled) {
-    if (!meta.hooksSupported) note = `${meta.name} has no hook API — MCP capture only.`;
+    if (!meta.hooksSupported) note = `${meta.name} has no hook API; MCP capture only.`;
     else if (detectInstallMode() === "docker") docker_command = dockerCommandFor(id);
     else install = installHooks([id], installOpts())[0];
   }

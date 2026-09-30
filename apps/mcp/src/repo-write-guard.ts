@@ -1,5 +1,5 @@
 // Anything written through kxta lands in the knowledge base; agents may still write repo files with their own tools.
-const WHY = "Nothing created through kxta is written into a project repo — use destination 'knowledge' (the knowledge base) instead.";
+const WHY = "Nothing created through kxta is written into a project repo: use destination 'knowledge' (the knowledge base) instead.";
 
 export function refuseProjectDestination(destination: string): string | null {
   return destination === "project" ? `destination 'project' is not allowed. ${WHY}` : null;

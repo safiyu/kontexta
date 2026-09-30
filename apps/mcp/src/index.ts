@@ -95,7 +95,7 @@ function getAgentRulesWarning(projectId?: number | null): string | null {
       projects = db.prepare("SELECT id, path, name FROM projects").all();
     }
 
-    // Projects with zero detected context files have NEVER been onboarded —
+    // Projects with zero detected context files have NEVER been onboarded,
     // distinct from "outdated" (a file exists but predates the current
     // rulesVersion). Both need admin.onboard_agent, so both are surfaced
     // here; without this, a project that skipped its one-shot
@@ -224,11 +224,11 @@ type ResolveKindResult = { folder: string | undefined; warning?: string } | { er
 function resolveKindFolder({ destination, folder, kind, format, title }: ResolveKindArgs): ResolveKindResult {
   if (destination !== "knowledge") {
     // HTML reports only make sense in the KB's html/ bucket (see
-    // resources.export_report) — silently allowing destination='project'
+    // resources.export_report): silently allowing destination='project'
     // here means a report lands inside the user's own repo instead, with
     // no error and no way to find it via the reports UI.
     if (format === "html") {
-      return { error: "format='html' requires destination='knowledge' — HTML reports must live in the KB's html/ bucket, not a project or kontexta destination." };
+      return { error: "format='html' requires destination='knowledge', HTML reports must live in the KB's html/ bucket, not a project or kontexta destination." };
     }
     return { folder };
   }
@@ -244,7 +244,7 @@ function resolveKindFolder({ destination, folder, kind, format, title }: Resolve
 
   // HTML reports always live under html/, never nested inside
   // knowledge/dictionary or knowledge/notes (layout.ts requires .md
-  // there). `kind` doesn't apply — content_class for html/ paths is
+  // there). `kind` doesn't apply: content_class for html/ paths is
   // inferred as "note" from the path alone (see computeContentClass).
   if (format === "html") {
     const alreadyHtmlScoped = norm === "html" || norm.startsWith("html/");
@@ -255,7 +255,7 @@ function resolveKindFolder({ destination, folder, kind, format, title }: Resolve
   // (layout.ts), so an unrouted .mmd file would always fail at write
   // time. Unlike html, mermaid diagrams committed inside a project's own
   // repo are a legitimate use case, so this only applies to destination
-  // === "knowledge" — no destination restriction like html has.
+  // === "knowledge": no destination restriction like html has.
   if (format === "mmd") {
     const alreadyMermaidScoped = norm === "mermaid" || norm.startsWith("mermaid/");
     return { folder: alreadyMermaidScoped ? folder : (norm ? `mermaid/${norm}` : "mermaid") };
@@ -263,7 +263,7 @@ function resolveKindFolder({ destination, folder, kind, format, title }: Resolve
 
   if (!kind) return { error: "kind is required for destination='knowledge': must be 'dictionary' or 'note'" };
 
-  // Non-KB buckets (html/mermaid) also skip rewrite — their layout forbids nesting under knowledge/.
+  // Non-KB buckets (html/mermaid) also skip rewrite: their layout forbids nesting under knowledge/.
   const CLASS_PREFIXES = ["knowledge/dictionary", "knowledge/notes", "knowledge/urlclips", "journal", "html", "mermaid"];
   const alreadyClassScoped = CLASS_PREFIXES.some((p) => norm === p || norm.startsWith(p + "/"));
 
@@ -272,7 +272,7 @@ function resolveKindFolder({ destination, folder, kind, format, title }: Resolve
     const impliedNote = norm.startsWith("knowledge/notes");
     const impliedClass = impliedDict ? "dictionary" : impliedNote ? "note" : null;
     if (impliedClass && impliedClass !== kind) {
-      return { folder, warning: `kind='${kind}' but folder targets '${impliedClass}' tree — path wins; content_class will be '${impliedClass}'.` };
+      return { folder, warning: `kind='${kind}' but folder targets '${impliedClass}' tree, path wins; content_class will be '${impliedClass}'.` };
     }
     return { folder };
   }
@@ -281,7 +281,7 @@ function resolveKindFolder({ destination, folder, kind, format, title }: Resolve
   return { folder: norm ? `${classRoot}/${norm}` : classRoot };
 }
 
-// Format as UTC — server/user timezone divergence would silently mislead otherwise.
+// Format as UTC: server/user timezone divergence would silently mislead otherwise.
 function fmtWhen(iso: string): string {
   const d = new Date(iso);
   if (isNaN(d.getTime())) return iso;
@@ -317,7 +317,7 @@ function buildCalendarSection(now: Date): string {
       lines.push("");
       lines.push(`⚠️ CONFLICTS (${conflicts.length})`);
       for (const c of conflicts.slice(0, 5)) {
-        lines.push(`  ${c.kind}: "${c.event_a.title}" (${entityName(c.event_a.entity_id)}) vs "${c.event_b.title}" (${entityName(c.event_b.entity_id)}) — ${c.reason}`);
+        lines.push(`  ${c.kind}: "${c.event_a.title}" (${entityName(c.event_a.entity_id)}) vs "${c.event_b.title}" (${entityName(c.event_b.entity_id)}), ${c.reason}`);
       }
     }
     return lines.join("\n");
@@ -348,16 +348,16 @@ function loadProfileInstructions(): string | undefined {
   const empty = profileExists ? getEmptySections(content) : [];
 
   const header =
-    `👋 Kontexta welcome — ${today}\n\n` +
-    `This is the user's session context. Read and honor it for the rest of this session — especially "Session coding style" (comment style, git etiquette, review-before-push) and "Team members and roles" (who's who when writing updates or referencing people).`;
+    `👋 Kontexta welcome: ${today}\n\n` +
+    `This is the user's session context. Read and honor it for the rest of this session: especially "Session coding style" (comment style, git etiquette, review-before-push) and "Team members and roles" (who's who when writing updates or referencing people).`;
 
   const profileBlock = profileExists && content
     ? `📋 PROFILE (knowledge/profile.md)\n${content}`
-    : `📋 PROFILE\n  (not set up yet — nudge the user to fill it in at knowledge/profile.md or the dashboard's profile pane)`;
+    : `📋 PROFILE\n  (not set up yet, nudge the user to fill it in at knowledge/profile.md or the dashboard's profile pane)`;
 
   const calendarBlock = buildCalendarSection(now);
   const freshness = profileExists ? profileFreshnessNote(path, empty) : "";
-  // Recurring nudge — projects.register's onboarding prompt fires once, at
+  // Recurring nudge: projects.register's onboarding prompt fires once, at
   // register time; if the calling agent doesn't relay it in the moment
   // there was previously no second chance to see it. Surfacing it here
   // means it comes back every session until admin.onboard_agent is run.
@@ -434,7 +434,7 @@ process.on("SIGTERM", () => { if (!_shutdownInFlight) { _shutdownInFlight = true
 
 // Auto-wrap every tool registration that follows. journal.write is excluded
 // because the auto-wrap re-enters journal recording, and journal.write itself
-// records journal events — including it would loop.
+// records journal events: including it would loop.
 const _origServerTool = server.tool.bind(server);
 (server as any).tool = function (name: string, ...rest: any[]): any {
   if (name === "journal.write") {
@@ -448,10 +448,10 @@ const _origServerTool = server.tool.bind(server);
 };
 
 // Excluded from wrapHandler (see above) so it does NOT get the
-// journal-backlog envelope injected — it IS the journal write path.
+// journal-backlog envelope injected: it IS the journal write path.
 server.tool(
   "journal.write",
-  "Write one event to the current project's journal. `kind: 'append'` = timestamped entry in today's daily journal file in the Knowledge Base (creates the file if it doesn't exist; both calls on the same calendar day return the same file_id; returns `{file_id}`). `kind: 'note'` = free-form decision/abandonment/observation, stored as an `agent_note` event in Layer 1 (surfaces in distilled task entries; returns `{ok, recorded_at}`). `kind: 'intent'` = topic/intent pivot — use when the user redirects what you're working on so the distillation step splits task buckets correctly (returns `{ok, recorded_at}`). Required fields depend on `kind`: 'append'/'note' need `text`; 'intent' needs `summary`.",
+  "Write one event to the current project's journal. `kind: 'append'` = timestamped entry in today's daily journal file in the Knowledge Base (creates the file if it doesn't exist; both calls on the same calendar day return the same file_id; returns `{file_id}`). `kind: 'note'` = free-form decision/abandonment/observation, stored as an `agent_note` event in Layer 1 (surfaces in distilled task entries; returns `{ok, recorded_at}`). `kind: 'intent'` = topic/intent pivot, use when the user redirects what you're working on so the distillation step splits task buckets correctly (returns `{ok, recorded_at}`). Required fields depend on `kind`: 'append'/'note' need `text`; 'intent' needs `summary`.",
   {
     kind: z.enum(["append", "note", "intent"]).describe("Event kind. Selects which body fields are required and how the event is stored."),
     text: z.string().optional().describe("Required for kind='append' or kind='note'. Body of the entry."),
@@ -489,7 +489,7 @@ server.tool(
         } else {
           // Create a new daily journal file.
           const timestamp = new Date().toISOString().replace("T", " ").slice(0, 19);
-          const content = `# Journal — ${today}\n\n---\n**${timestamp}** ${text}\n`;
+          const content = `# Journal: ${today}\n\n---\n**${timestamp}** ${text}\n`;
           const result = await createFile({
             title,
             content,
@@ -543,7 +543,7 @@ server.tool(
 
 server.tool(
   "files.create",
-  "Create one or more markdown, mermaid, or HTML files in the knowledge base or project (up to 200 per call). Pass a single-element `files` array for the one-file case. This operation writes each file to disk and adds it to the local SQLite FTS5 index. Destination is 'knowledge' (global KB) or 'kontexta' (internal Kontexta schema file, project_id required). 'project' is REFUSED: nothing created through kxta is written into a project repo. If destination is 'knowledge', 'kind' is strictly required for md files — pick 'dictionary' (authoritative source-of-truth) or 'note' (informational snapshot); see the kind param for the rubric. No external auth required. Rate limits do not apply (local operation). Per-item failures are isolated to `errors[]` — the rest of the batch still commits; a single-item call still reports its failure the same way. Returns `{created_count, error_count, created, errors}`. If a destination directory does not exist, it will be created automatically. To modify an existing file, use 'files.update' instead. Pass format='mmd' on an item to create a Mermaid diagram file (.mmd) — for destination='knowledge' it's auto-routed to the KB's `mermaid/` bucket (`kind` ignored, not required); Pass format='html' for an HTML report — `destination` MUST be 'knowledge' (html reports are auto-routed to the KB's `html/` bucket; `kind` is ignored and not required for html). Format defaults to 'md'.",
+  "Create one or more markdown, mermaid, or HTML files in the knowledge base or project (up to 200 per call). Pass a single-element `files` array for the one-file case. This operation writes each file to disk and adds it to the local SQLite FTS5 index. Destination is 'knowledge' (global KB) or 'kontexta' (internal Kontexta schema file, project_id required). 'project' is REFUSED: nothing created through kxta is written into a project repo. If destination is 'knowledge', 'kind' is strictly required for md files, pick 'dictionary' (authoritative source-of-truth) or 'note' (informational snapshot); see the kind param for the rubric. No external auth required. Rate limits do not apply (local operation). Per-item failures are isolated to `errors[]`, the rest of the batch still commits; a single-item call still reports its failure the same way. Returns `{created_count, error_count, created, errors}`. If a destination directory does not exist, it will be created automatically. To modify an existing file, use 'files.update' instead. Pass format='mmd' on an item to create a Mermaid diagram file (.mmd), for destination='knowledge' it's auto-routed to the KB's `mermaid/` bucket (`kind` ignored, not required); Pass format='html' for an HTML report, `destination` MUST be 'knowledge' (html reports are auto-routed to the KB's `html/` bucket; `kind` is ignored and not required for html). Format defaults to 'md'.",
   {
     files: z
       .array(
@@ -613,7 +613,7 @@ server.tool(
 
 server.tool(
   "resources.add_report",
-  "Write an image or other binary resource into the shared reports/resources/ folder. Returns { filename, size, src, url } — embed the report's <img>/<a> tags with `src` exactly as given (e.g. `<img src=\"resources/chart.png\">`); it is the only form that resolves correctly both in the dashboard viewer and in PDF/PNG export. Do not use `url` inside report HTML — it only works in the dashboard. Bytes are passed base64-encoded.",
+  "Write an image or other binary resource into the shared reports/resources/ folder. Returns { filename, size, src, url }: embed the report's <img>/<a> tags with `src` exactly as given (e.g. `<img src=\"resources/chart.png\">`); it is the only form that resolves correctly both in the dashboard viewer and in PDF/PNG export. Do not use `url` inside report HTML: it only works in the dashboard. Bytes are passed base64-encoded.",
   {
     filename: z.string().describe("Requested filename with extension"),
     bytes_base64: z.string().describe("Base64-encoded file bytes"),
@@ -646,7 +646,7 @@ server.tool(
 
 server.tool(
   "resources.export_report",
-  "Export an existing HTML report as PDF or PNG. Returns { url } for the web-served download (requires an authenticated dashboard request) by default. Set inline_bytes=true to render in-process and get { bytes_base64 } instead — only available when running via the full `kontexta` CLI, not the standalone kontexta-mcp package; falls back to { url } with a note if unavailable.",
+  "Export an existing HTML report as PDF or PNG. Returns { url } for the web-served download (requires an authenticated dashboard request) by default. Set inline_bytes=true to render in-process and get { bytes_base64 } instead: only available when running via the full `kontexta` CLI, not the standalone kontexta-mcp package; falls back to { url } with a note if unavailable.",
   {
     id: z.number().describe("File ID of the HTML report to export."),
     format: z.enum(["pdf", "png"]).default("pdf").describe("Output format: 'pdf' or 'png'."),
@@ -657,7 +657,7 @@ server.tool(
     if (!inline_bytes) return { content: [{ type: "text", text: JSON.stringify({ url }, null, 2) }] };
     try {
       const { readFile } = await import("kxta-core");
-      // kxta-publish is intentionally undeclared here (private/workspace-only) — only resolves under the bundled `kontexta` CLI; the catch below covers the standalone package.
+      // kxta-publish is intentionally undeclared here (private/workspace-only): only resolves under the bundled `kontexta` CLI; the catch below covers the standalone package.
       const mod: any = await import("kxta-publish/render/html-export" as any);
       const { join } = await import("node:path");
       const f = readFile(id);
@@ -673,7 +673,7 @@ server.tool(
 
 server.tool(
   "files.read",
-  "Read one or more files, in full or in part. Modes: single-by-id (`id`), single-by-path (`path`, absolute on-disk path — must be exactly as indexed), batch-by-id (`ids`, up to 200), partial-by-heading (`id`+`section`), partial-by-line-range (`id`+`lines`). Exactly one of `id`/`path`/`ids` is required. `section` and `lines` are mutually exclusive and only valid with `id` (not `ids` or `path`). Read-only; no side effects, auth, or rate limits. Response shape: a single file object (with `content`, tags, est_tokens) for `id`/`path`; a partial-content object for `section`/`lines`; `{files, total_est_tokens, error_count, errors}` for `ids` (per-ID failures isolated, batch never partial-throws). Prefer `files.describe` to inspect without paying body tokens.",
+  "Read one or more files, in full or in part. Modes: single-by-id (`id`), single-by-path (`path`, absolute on-disk path, must be exactly as indexed), batch-by-id (`ids`, up to 200), partial-by-heading (`id`+`section`), partial-by-line-range (`id`+`lines`). Exactly one of `id`/`path`/`ids` is required. `section` and `lines` are mutually exclusive and only valid with `id` (not `ids` or `path`). Read-only; no side effects, auth, or rate limits. Response shape: a single file object (with `content`, tags, est_tokens) for `id`/`path`; a partial-content object for `section`/`lines`; `{files, total_est_tokens, error_count, errors}` for `ids` (per-ID failures isolated, batch never partial-throws). Prefer `files.describe` to inspect without paying body tokens.",
   {
     id: z.number().int().positive().optional().describe("Single file by ID."),
     path: z.string().optional().describe("Single file by absolute on-disk path (must match exactly what Kontexta indexed)."),
@@ -909,7 +909,7 @@ server.tool(
 
 server.tool(
   "files.regex_search",
-  "Match a JS regex against file bodies. Default mode scans every file in scope (project, KB, or all) and returns per-file hits with line numbers — slower than FTS `files.search` because it reads each file's content; use only when FTS misses substrings, URLs, or code identifiers. Pass `file_id` to instead scan just that one file (catches what FTS misses within a single known file); response shape changes to `{file_id, path, pattern, match_count, truncated, matches}`. Read-only; no side effects, auth, or rate limits. Multi-file mode capped at 500 files / 10 hits per file by default (`files_truncated` reports the cap); single-file mode capped at 100 hits by default, max 500. `project_id`/`kind` are ignored when `file_id` is set. Invalid regex throws.",
+  "Match a JS regex against file bodies. Default mode scans every file in scope (project, KB, or all) and returns per-file hits with line numbers: slower than FTS `files.search` because it reads each file's content; use only when FTS misses substrings, URLs, or code identifiers. Pass `file_id` to instead scan just that one file (catches what FTS misses within a single known file); response shape changes to `{file_id, path, pattern, match_count, truncated, matches}`. Read-only; no side effects, auth, or rate limits. Multi-file mode capped at 500 files / 10 hits per file by default (`files_truncated` reports the cap); single-file mode capped at 100 hits by default, max 500. `project_id`/`kind` are ignored when `file_id` is set. Invalid regex throws.",
   {
     pattern: z.string().describe("JavaScript RegExp source"),
     file_id: z.number().optional().describe("Scan only this file instead of every file in scope. When set, `project_id`/`kind`/`max_files`/`max_matches_per_file` are ignored in favor of `max_matches`."),
@@ -1032,7 +1032,7 @@ server.tool(
 
 server.tool(
   "files.update",
-  "Rewrite a KB file (project-repo files are refused: kxta never writes into a repo). Default = full-body replacement: `content` becomes the entire file, triggering disk write + FTS5 re-index. Pass `section` to instead rewrite ONLY that heading's body (case-insensitive exact-string after trim; the heading line itself is preserved, siblings untouched) — saves context budget vs resending the whole file. Throws if `section` is set but the heading doesn't exist (this mode will NOT create a new section — append the section text via a full-body update first). Operates locally with no external auth or rate limits. Returns the updated file metadata including new estimated token counts.",
+  "Rewrite a KB file (project-repo files are refused: kxta never writes into a repo). Default = full-body replacement: `content` becomes the entire file, triggering disk write + FTS5 re-index. Pass `section` to instead rewrite ONLY that heading's body (case-insensitive exact-string after trim; the heading line itself is preserved, siblings untouched), saves context budget vs resending the whole file. Throws if `section` is set but the heading doesn't exist (this mode will NOT create a new section, append the section text via a full-body update first). Operates locally with no external auth or rate limits. Returns the updated file metadata including new estimated token counts.",
   {
     id: z.number().describe("File ID"),
     content: z.string().describe("New content. With `section` set, this replaces just that heading's body; otherwise it becomes the entire file body."),
@@ -1062,7 +1062,7 @@ server.tool(
 
 server.tool(
   "files.delete",
-  "DESTRUCTIVE. Permanently delete one or more files by ID (up to 500 per call). Pass a single-element `ids` array for the one-file case. KB files are unlinked from disk AND removed from the FTS5 index; project reference files only have their index entry removed (the file on disk is left alone so the watcher does not fight your editor). Not idempotent — deleting an unknown ID surfaces as a per-item error. No external auth or rate limits. Per-ID failures are isolated to `errors[]` and the rest of the batch still commits — partial success is the norm, always inspect `error_count`. Returns `{deleted_count, error_count, deleted, errors}`. Use only when the file is truly obsolete; to deprioritise without losing data, untag (`tags.remove`) or unfavorite (`tags.set_favorite`) instead. To preview the set before deleting, run `files.list` with the same filter and confirm the IDs.",
+  "DESTRUCTIVE. Permanently delete one or more files by ID (up to 500 per call). Pass a single-element `ids` array for the one-file case. KB files are unlinked from disk AND removed from the FTS5 index; project reference files only have their index entry removed (the file on disk is left alone so the watcher does not fight your editor). Not idempotent: deleting an unknown ID surfaces as a per-item error. No external auth or rate limits. Per-ID failures are isolated to `errors[]` and the rest of the batch still commits: partial success is the norm, always inspect `error_count`. Returns `{deleted_count, error_count, deleted, errors}`. Use only when the file is truly obsolete; to deprioritise without losing data, untag (`tags.remove`) or unfavorite (`tags.set_favorite`) instead. To preview the set before deleting, run `files.list` with the same filter and confirm the IDs.",
   {
     ids: z.array(z.number()).min(1).max(500).describe("File IDs to delete. Single-element array = one-file case. Max 500 per call."),
   },
@@ -1128,7 +1128,7 @@ server.tool(
 
 server.tool(
   "files.search",
-  "Full-text (SQLite FTS5) keyword search across files. Default mode returns ranked matches with inline match_excerpt and title_highlight (no follow-up `files.read` needed for snippets) plus tags, est_tokens, size_bytes, content_class, and aggregate `total_est_tokens`. Pass `include_bodies: true` to instead get a single prompt-ready bundle: matched bodies concatenated into XML `<document>` blocks or markdown headers + fences (see `format`/`max_tokens`), capped at the token budget — files are added in rank order until the next would exceed it, the rest going to `meta.skipped[]`. Use `include_bodies` instead of `files.search` + N×`files.read` when you need several related files as one context blob. Read-only; no side effects, auth, or rate limits. Ordering: dictionary hits sort above everything else for the same query (dictionary-wins on conflict), then BM25 rank. FTS is tokenised: it WILL miss URLs, hyphenated terms, and partial substrings — fall back to `files.regex_search` for those. `project_id: null` searches only the KB; omit the field to span everything; `tags[]` requires ALL listed tags to match; `kind` narrows to one content class.",
+  "Full-text (SQLite FTS5) keyword search across files. Default mode returns ranked matches with inline match_excerpt and title_highlight (no follow-up `files.read` needed for snippets) plus tags, est_tokens, size_bytes, content_class, and aggregate `total_est_tokens`. Pass `include_bodies: true` to instead get a single prompt-ready bundle: matched bodies concatenated into XML `<document>` blocks or markdown headers + fences (see `format`/`max_tokens`), capped at the token budget, files are added in rank order until the next would exceed it, the rest going to `meta.skipped[]`. Use `include_bodies` instead of `files.search` + N×`files.read` when you need several related files as one context blob. Read-only; no side effects, auth, or rate limits. Ordering: dictionary hits sort above everything else for the same query (dictionary-wins on conflict), then BM25 rank. FTS is tokenised: it WILL miss URLs, hyphenated terms, and partial substrings, fall back to `files.regex_search` for those. `project_id: null` searches only the KB; omit the field to span everything; `tags[]` requires ALL listed tags to match; `kind` narrows to one content class.",
   {
     query: z.string().describe("Search query"),
     project_id: z.number().nullable().optional().describe("Filter by project ID. Pass null to search ONLY Knowledge Base files."),
@@ -1181,7 +1181,7 @@ server.tool(
 
 server.tool(
   "tags.add",
-  "Append tags to ONE file. Additive — existing tags are preserved; re-adding an existing tag is a no-op (idempotent per tag). New tag names auto-create rows in the global `tags` table. Persists to local SQLite. No external auth or rate limits. Returns `{success: true}`; throws if file_id is unknown. Use to label a single file. To tag every file matching a query in one call use `tags.search`; to remove tags use `tags.remove`.",
+  "Append tags to ONE file. Additive: existing tags are preserved; re-adding an existing tag is a no-op (idempotent per tag). New tag names auto-create rows in the global `tags` table. Persists to local SQLite. No external auth or rate limits. Returns `{success: true}`; throws if file_id is unknown. Use to label a single file. To tag every file matching a query in one call use `tags.search`; to remove tags use `tags.remove`.",
   {
     file_id: z.number().describe("File ID"),
     tags: z.array(z.string()).describe("Array of tag names to add"),
@@ -1196,7 +1196,7 @@ server.tool(
 
 server.tool(
   "tags.remove",
-  "Detach one or more tag IDs from ONE file. Destructive on the link only — does NOT delete the file or the global tag definition (orphan tags survive in `tags.list`). Idempotent: removing an already-absent tag is a no-op. No external auth or rate limits. Returns `{success: true}`. Note: takes tag IDs (integers), not names — fetch them via `tags.list`. To remove ALL tags from many files via a query, see `tags.search` (additive only) — there is no bulk-untag-by-query tool.",
+  "Detach one or more tag IDs from ONE file. Destructive on the link only: does NOT delete the file or the global tag definition (orphan tags survive in `tags.list`). Idempotent: removing an already-absent tag is a no-op. No external auth or rate limits. Returns `{success: true}`. Note: takes tag IDs (integers), not names, fetch them via `tags.list`. To remove ALL tags from many files via a query, see `tags.search` (additive only), there is no bulk-untag-by-query tool.",
   {
     file_id: z.number().describe("File ID"),
     tag_ids: z.array(z.number()).describe("Array of tag IDs to remove"),
@@ -1211,7 +1211,7 @@ server.tool(
 
 server.tool(
   "tags.set_favorite",
-  "Set or clear the favorite flag on one file (idempotent — re-setting the same value is a no-op; not a toggle, you pass the desired state). Persists to local SQLite. No external auth or rate limits. Returns `{success: true}`. Use to curate quick-access pins; `files.list` / `files.search` accept `favorite: true` to filter to the pinned set.",
+  "Set or clear the favorite flag on one file (idempotent: re-setting the same value is a no-op; not a toggle, you pass the desired state). Persists to local SQLite. No external auth or rate limits. Returns `{success: true}`. Use to curate quick-access pins; `files.list` / `files.search` accept `favorite: true` to filter to the pinned set.",
   {
     file_id: z.number().describe("File ID"),
     favorite: z.boolean().describe("Favorite status"),
@@ -1267,7 +1267,7 @@ server.tool(
   "projects.register",
   `Register a new project and link it to the Kontexta knowledge system.
 
-SIDE EFFECTS: Writes project metadata to disk (persisted in the Kontexta data directory). Scans the project root recursively to discover and index all markdown files into the local database. Registers any kontexta.json-declared Hands tools found in the project root. This operation is idempotent — re-registering an existing project updates its metadata without data loss.
+SIDE EFFECTS: Writes project metadata to disk (persisted in the Kontexta data directory). Scans the project root recursively to discover and index all markdown files into the local database. Registers any kontexta.json-declared Hands tools found in the project root. This operation is idempotent, re-registering an existing project updates its metadata without data loss.
 
 AUTH / RATE LIMITS: None. Operates entirely on the local file system.
 
@@ -1329,18 +1329,18 @@ ERROR CONDITIONS: Returns isError=true if path is missing or unresolvable. Scan 
             .map((s) => `${s.path} (found ${s.version ?? "none"})`)
             .join(", ");
           recommendationReason =
-            `Your project's agent instructions file is out of date — it still references kontexta workflow rules from an older release. ` +
+            `Your project's agent instructions file is out of date: it still references kontexta workflow rules from an older release. ` +
             `Files needing an update: ${versions}. Latest rules version is v${RULE_BLOCK_VERSION}. ` +
             `Run admin.onboard_agent to refresh the kontexta rules block in-place (your existing project content is preserved).`;
         } else {
           recommendationReason =
-            `Found ${detected.join(", ")} with kontexta workflow rules already at the latest version (v${RULE_BLOCK_VERSION}). No action needed — your AI agent will load these rules automatically every session.`;
+            `Found ${detected.join(", ")} with kontexta workflow rules already at the latest version (v${RULE_BLOCK_VERSION}). No action needed: your AI agent will load these rules automatically every session.`;
         }
       } else {
         recommendationReason =
           `No AI agent instructions file (e.g. CLAUDE.md, AGENTS.md, GEMINI.md, ANTIGRAVITY.md, .cursor/rules, .continue/rules, .aider/kontexta.md) was found in this project. ` +
           `These files are how coding agents (Claude Code, Codex, Cursor, Gemini, Aider, etc.) load project-specific context at the start of every session. ` +
-          `Without one, your agent won't know this project is registered with kontexta and will skip the search/read/journal workflow — wasting tokens re-reading files it could have looked up. ` +
+          `Without one, your agent won't know this project is registered with kontexta and will skip the search/read/journal workflow: wasting tokens re-reading files it could have looked up. ` +
           `Run admin.onboard_agent with target_agent set to your coding tool to scaffold the right file (CLAUDE.md for Claude Code, .aider/kontexta.md for Aider, etc.) pre-populated with kontexta workflow rules.`;
       }
 
@@ -1415,7 +1415,7 @@ ERROR CONDITIONS: Returns isError=true if path is missing or unresolvable. Scan 
 
 server.tool(
   "admin.onboard_agent",
-  `Write or update the kontexta workflow rules block in a project's agent context file(s). Idempotent — uses fenced markers + version to skip no-op writes.
+  `Write or update the kontexta workflow rules block in a project's agent context file(s). Idempotent: uses fenced markers + version to skip no-op writes.
 
 MANDATORY: This tool modifies project configuration files. You MUST seek explicit user consent before calling this tool. Set 'confirm: true' only after the user has agreed.
 
@@ -1518,7 +1518,7 @@ PARAMETERS:
 RETURNS: { transferred: [{ source_path, kb_id, kb_path, est_tokens }], skipped: [{ source_path, reason }], next_action }
 Skip reasons: "missing" | "symlink" | "outside_project" | "already_transferred_same_content" | "read_error" | "write_error".
 
-IDEMPOTENT: re-running with the same files copies nothing if the content is unchanged — duplicate transfers are detected via SHA-256 hash comparison against existing project KB rows.`,
+IDEMPOTENT: re-running with the same files copies nothing if the content is unchanged, duplicate transfers are detected via SHA-256 hash comparison against existing project KB rows.`,
   {
     project_id: z.number().describe("Project ID returned from register_project"),
     confirm: z.boolean().describe("MANDATORY: Set to true only after obtaining explicit user consent."),
@@ -1564,7 +1564,7 @@ IDEMPOTENT: re-running with the same files copies nothing if the content is unch
       const skipped: Array<{ source_path: string; reason: string }> = [];
 
       for (const rel of targetRels) {
-        // Containment check — reject absolute paths, "..", null bytes.
+        // Containment check: reject absolute paths, "..", null bytes.
         let abs: string;
         try {
           abs = assertPathInside(projectPath, rel);
@@ -1637,7 +1637,7 @@ IDEMPOTENT: re-running with the same files copies nothing if the content is unch
 
 server.tool(
   "admin.commit_backup",
-  "SIDE-EFFECTFUL — TOUCHES THE NETWORK. Sync the project's KB data into its git backup directory, create a commit, and `git push` to `origin`. AUTH: relies on the local user's git credentials (SSH agent, credential helper, etc.) — there is no in-server auth. Kontexta does not rate-limit, but the remote may. Idempotent in steady state: a no-op commit is skipped, but the push still runs. Throws if the project has no configured backup repo or if push fails (network, auth, conflict). Returns `{success, copied_files_count, copied_paths}`. Use after a batch of KB writes to get changes off-machine.",
+  "SIDE-EFFECTFUL: TOUCHES THE NETWORK. Sync the project's KB data into its git backup directory, create a commit, and `git push` to `origin`. AUTH: relies on the local user's git credentials (SSH agent, credential helper, etc.), there is no in-server auth. Kontexta does not rate-limit, but the remote may. Idempotent in steady state: a no-op commit is skipped, but the push still runs. Throws if the project has no configured backup repo or if push fails (network, auth, conflict). Returns `{success, copied_files_count, copied_paths}`. Use after a batch of KB writes to get changes off-machine.",
   {
     project_id: z.number().describe("Project ID"),
   },
@@ -1671,7 +1671,7 @@ server.tool(
 
 server.tool(
   "resources.clip_url",
-  "SIDE-EFFECTFUL — fetches an EXTERNAL URL and writes a NEW KB file. Downloads the page, extracts the main article via Readability, converts to markdown, and saves it under `knowledge/urlclips/`. Auto-classified as content_class='dictionary' (clipped external references are treated as authoritative reference material). NOT idempotent / no de-dup — re-clipping the same URL creates a second file. AUTH: anonymous by default; pass `headers` (e.g. `{Cookie: 'session=...'}` or `{Authorization: 'Bearer ...'}`) to clip behind logins. Kontexta does not rate-limit but the upstream may throttle. On auth-required pages returns isError with `code: AUTH_REQUIRED`, optional `login_url`, and a hint to retry with `headers`. Returns `{file_id, path, title, source}`. Use to ingest external docs into the KB.",
+  "SIDE-EFFECTFUL: fetches an EXTERNAL URL and writes a NEW KB file. Downloads the page, extracts the main article via Readability, converts to markdown, and saves it under `knowledge/urlclips/`. Auto-classified as content_class='dictionary' (clipped external references are treated as authoritative reference material). NOT idempotent / no de-dup: re-clipping the same URL creates a second file. AUTH: anonymous by default; pass `headers` (e.g. `{Cookie: 'session=...'}` or `{Authorization: 'Bearer ...'}`) to clip behind logins. Kontexta does not rate-limit but the upstream may throttle. On auth-required pages returns isError with `code: AUTH_REQUIRED`, optional `login_url`, and a hint to retry with `headers`. Returns `{file_id, path, title, source}`. Use to ingest external docs into the KB.",
   {
     url: z.string().url().describe("The URL to clip"),
     title: z.string().optional().describe("Optional title override (defaults to the page's <title>)"),
@@ -1751,7 +1751,7 @@ server.tool(
 
 server.tool(
   "files.get_diff",
-  "Return the unified diff of one file between two commit hashes (typically obtained from `files.get_history` for the same file). Read-only; no side effects, auth, or rate limits. Order matters — `commit_a` is treated as the earlier side; reversing the args inverts the diff. Throws if either hash is unknown to the file's repo. Use after `files.get_history` to see WHAT changed, not just THAT it changed.",
+  "Return the unified diff of one file between two commit hashes (typically obtained from `files.get_history` for the same file). Read-only; no side effects, auth, or rate limits. Order matters: `commit_a` is treated as the earlier side; reversing the args inverts the diff. Throws if either hash is unknown to the file's repo. Use after `files.get_history` to see WHAT changed, not just THAT it changed.",
   {
     file_id: z.number().describe("ID of the file"),
     commit_a: z.string().describe("Earlier commit hash (from get_history)"),
@@ -1812,7 +1812,7 @@ server.tool(
 
 server.tool(
   "files.read_outline",
-  "Return a flat list of markdown headings for one file (level, text, line, byteStart, byteEnd). Read-only; no side effects, auth, or rate limits. Use as a cheap probe before `files.read({ id, section })` or `files.update({ file_id, section, content })` so you don't spend tokens on the full body just to learn what sections exist. Empty outline means the file has no markdown headings (it may still have content — fall back to `files.read` in full or `files.read({ id, lines })`).",
+  "Return a flat list of markdown headings for one file (level, text, line, byteStart, byteEnd). Read-only; no side effects, auth, or rate limits. Use as a cheap probe before `files.read({ id, section })` or `files.update({ file_id, section, content })` so you don't spend tokens on the full body just to learn what sections exist. Empty outline means the file has no markdown headings (it may still have content: fall back to `files.read` in full or `files.read({ id, lines })`).",
   {
     file_id: z.number().describe("File ID"),
   },
@@ -1898,7 +1898,7 @@ server.tool(
 
 server.tool(
   "folders.create",
-  "Create a folder in the KB (a `project_id` is refused: kxta never writes into a project repo). Idempotent — creating an existing folder succeeds. Nested paths like `notes/inbox` create intermediates. REJECTS: empty names, null bytes, leading path separators, and any segment equal to `..` (the call returns isError, no folder is touched). Side effect: a directory is mkdir'd on disk; no DB rows are written until a file lands inside. No external auth or rate limits. Returns `{path, base_path}`.",
+  "Create a folder in the KB (a `project_id` is refused: kxta never writes into a project repo). Idempotent, creating an existing folder succeeds. Nested paths like `notes/inbox` create intermediates. REJECTS: empty names, null bytes, leading path separators, and any segment equal to `..` (the call returns isError, no folder is touched). Side effect: a directory is mkdir'd on disk; no DB rows are written until a file lands inside. No external auth or rate limits. Returns `{path, base_path}`.",
   {
     project_id: z.number().nullable().optional().describe("Project ID. Pass null or omit to create the folder under the KB."),
     name: z.string().describe("Folder name (relative; supports nested paths via '/')"),
@@ -1924,7 +1924,7 @@ server.tool(
 
 server.tool(
   "folders.delete",
-  "DESTRUCTIVE — recursively delete a folder under the KB AND every file inside it (disk + FTS rows). REFUSES (returns isError) when `project_id` is supplied: deleting inside a registered project would race the file watcher and re-ingest the contents — remove project content via your editor instead. Same name validation as `folders.create`. Not recoverable from Kontexta after the call (only the git backup, if configured, retains it). No external auth or rate limits. Returns `{success: true}`.",
+  "DESTRUCTIVE: recursively delete a folder under the KB AND every file inside it (disk + FTS rows). REFUSES (returns isError) when `project_id` is supplied: deleting inside a registered project would race the file watcher and re-ingest the contents, remove project content via your editor instead. Same name validation as `folders.create`. Not recoverable from Kontexta after the call (only the git backup, if configured, retains it). No external auth or rate limits. Returns `{success: true}`.",
   {
     project_id: z.number().nullable().optional().describe("Project ID. Pass null or omit to delete from the KB. Project IDs are rejected."),
     name: z.string().describe("Folder name (relative)"),
@@ -1950,13 +1950,13 @@ server.tool(
           ],
         };
       }
-      // Refuse deleting a bare bucket name — would wipe the whole bucket and orphan DB rows.
+      // Refuse deleting a bare bucket name: would wipe the whole bucket and orphan DB rows.
       const KB_BUCKETS_TOP = new Set(["journal", "knowledge", "mermaid", "html"]);
       const segments = name.split(/[/\\]/).filter(Boolean);
       if (segments.length === 1 && KB_BUCKETS_TOP.has(segments[0])) {
         return {
           isError: true,
-          content: [{ type: "text", text: JSON.stringify({ error: `Cannot delete the '${segments[0]}' bucket — part of the fixed KB layout.` }, null, 2) }],
+          content: [{ type: "text", text: JSON.stringify({ error: `Cannot delete the '${segments[0]}' bucket, part of the fixed KB layout.` }, null, 2) }],
         };
       }
       const base = resolveFolderBase(null);
@@ -1975,7 +1975,7 @@ server.tool(
 
 server.tool(
   "files.move",
-  "Move/rename a KB file (project-repo files are refused). Destination 'new_path' must be absolute and resolve INSIDE the file's owning project or global knowledge directory. Cross-project moves are rejected. Alternative: pass `kind='dictionary'|'note'` (with no `new_path`) to move a KB file into the mirrored path in the other class tree — subfolder path is preserved. Operates locally with no auth or limits.",
+  "Move/rename a KB file (project-repo files are refused). Destination 'new_path' must be absolute and resolve INSIDE the file's owning project or global knowledge directory. Cross-project moves are rejected. Alternative: pass `kind='dictionary'|'note'` (with no `new_path`) to move a KB file into the mirrored path in the other class tree, subfolder path is preserved. Operates locally with no auth or limits.",
   {
     file_id: z.number().describe("File ID"),
     new_path: z.string().optional().describe("Absolute destination path"),
@@ -2018,7 +2018,7 @@ server.tool(
       } else {
         base = join(dataDir, "knowledge");
       }
-      // Use realpath to follow symlinks before the containment check —
+      // Use realpath to follow symlinks before the containment check,
       // path.resolve() only normalises `.`/`..`, so a symlink inside the
       // vault pointing outside (e.g. knowledge/escape -> /etc) would let
       // moveFile write through it. realpath the dest's PARENT since the
@@ -2043,7 +2043,7 @@ server.tool(
       }
       // Defense-in-depth: also confirm the SOURCE lives under the same base.
       // If a project was re-registered to a new path after this file was
-      // ingested, fileRecord.path can point outside the current base — and
+      // ingested, fileRecord.path can point outside the current base: and
       // without this check moveFile would relocate that orphan into the
       // project root.
       let srcResolved: string;
@@ -2071,7 +2071,7 @@ server.tool(
 
 server.tool(
   "files.find_related",
-  "Find other files sharing tags with the given file, ranked by `shared_tag_count` descending. Read-only; no side effects, auth, or rate limits. Returns annotated file rows with `shared_tag_count` and `shared_tags`. Empty result means the file has no tags or no other file shares them — try `files.search`/`files.regex_search` for content-based discovery, or `tags.suggest` to bootstrap labels first. `kind` narrows to one content class. Default limit 10.",
+  "Find other files sharing tags with the given file, ranked by `shared_tag_count` descending. Read-only; no side effects, auth, or rate limits. Returns annotated file rows with `shared_tag_count` and `shared_tags`. Empty result means the file has no tags or no other file shares them: try `files.search`/`files.regex_search` for content-based discovery, or `tags.suggest` to bootstrap labels first. `kind` narrows to one content class. Default limit 10.",
   {
     file_id: z.number().describe("ID of the file to find relations for"),
     limit: z.number().optional().describe("Maximum number of related files to return (default 10)"),
@@ -2100,12 +2100,12 @@ server.tool(
 
 server.tool(
   "tags.search",
-  "Bulk-tag — run an FTS `search` and append `add_tags` to every matching file in one call. Side effect: each match gets `addTags` applied (additive, idempotent per tag); the matched files themselves are NOT modified beyond their tag links. Per-file failures isolated to `errors[]`. No external auth or rate limits. There is NO dry-run flag, so ALWAYS run `files.search` with the same query first to verify the match set before tagging. The `tags[]` filter requires existing tags to ALL match (it scopes the search; it does not control which tags get added). Returns `{matched_count, tagged_count, tags_applied, tagged_ids, errors}`.",
+  "Bulk-tag: run an FTS `search` and append `add_tags` to every matching file in one call. Side effect: each match gets `addTags` applied (additive, idempotent per tag); the matched files themselves are NOT modified beyond their tag links. Per-file failures isolated to `errors[]`. No external auth or rate limits. There is NO dry-run flag, so ALWAYS run `files.search` with the same query first to verify the match set before tagging. The `tags[]` filter requires existing tags to ALL match (it scopes the search; it does not control which tags get added). Returns `{matched_count, tagged_count, tags_applied, tagged_ids, errors}`.",
   {
     query: z.string().describe("Full-text search query"),
     add_tags: z.array(z.string()).min(1).describe("Tags to add to every matching file"),
     project_id: z.number().nullable().optional().describe("Scope search to a specific project. Pass null for KB-only results."),
-    tags: z.array(z.string()).optional().describe("Filter — only matches that already carry ALL of these tags"),
+    tags: z.array(z.string()).optional().describe("Filter, only matches that already carry ALL of these tags"),
     favorite: z.boolean().optional().describe("If true, restrict to favorited files only."),
   },
   async ({ query, add_tags, project_id, tags, favorite }) => {
@@ -2156,7 +2156,7 @@ server.tool(
 
 server.tool(
   "admin.overview",
-  "Vault-state snapshot. `mode: 'stats'` = aggregate counts for a scope: `file_count`, `untagged_count`, `favorite_count`, `top_tags`. With `project_id` omitted (everything), also returns `by_project` breakdown. `include_token_total: true` stat()s every matching file on disk to compute a body-size estimate — measurably slower on large vaults; default false. `mode: 'whats_new'` = list files created or modified since a checkpoint (`since`, REQUIRED for this mode — ISO-8601 like `2025-01-15T00:00:00Z` or relative durations like `1h`/`7d`/`2w`; invalid formats throw); CAVEAT: hard-deleted files are NOT surfaced, only mtime-driven changes. Both modes: `project_id: null` = KB only; omit = everything. Read-only; no side effects, auth, or rate limits. Use `stats` as a cheap dashboard or to spot untagged content for cleanup (for live disk-vs-index drift use `files.diff_against_disk`); use `whats_new` at session start to catch up.",
+  "Vault-state snapshot. `mode: 'stats'` = aggregate counts for a scope: `file_count`, `untagged_count`, `favorite_count`, `top_tags`. With `project_id` omitted (everything), also returns `by_project` breakdown. `include_token_total: true` stat()s every matching file on disk to compute a body-size estimate, measurably slower on large vaults; default false. `mode: 'whats_new'` = list files created or modified since a checkpoint (`since`, REQUIRED for this mode, ISO-8601 like `2025-01-15T00:00:00Z` or relative durations like `1h`/`7d`/`2w`; invalid formats throw); CAVEAT: hard-deleted files are NOT surfaced, only mtime-driven changes. Both modes: `project_id: null` = KB only; omit = everything. Read-only; no side effects, auth, or rate limits. Use `stats` as a cheap dashboard or to spot untagged content for cleanup (for live disk-vs-index drift use `files.diff_against_disk`); use `whats_new` at session start to catch up.",
   {
     mode: z.enum(["stats", "whats_new"]).describe("Which snapshot to return. 'whats_new' requires `since`."),
     project_id: z.number().nullable().optional().describe("Filter to a single project. Pass null for KB-only. Omit for everything."),
@@ -2314,7 +2314,7 @@ server.tool(
 
 server.tool(
   "tags.suggest",
-  "Propose tags for a file by mining the existing tag corpus via FTS — picks distinctive terms from the file (≥4 chars, stopword-filtered) and returns tags applied to other files that score high on those terms. No LLM, no network. Already-applied tags are excluded so the suggestions are net-new. Read-only; no side effects, auth, or rate limits. Returns `{file_id, path, existing_tags, suggestions: [{tag, score, sources}]}`. Empty suggestions = no distinctive terms or no overlap with the existing taxonomy yet — bootstrap with `tags.add` first. Default limit 10, max 50. Suggestions are NOT auto-applied.",
+  "Propose tags for a file by mining the existing tag corpus via FTS: picks distinctive terms from the file (≥4 chars, stopword-filtered) and returns tags applied to other files that score high on those terms. No LLM, no network. Already-applied tags are excluded so the suggestions are net-new. Read-only; no side effects, auth, or rate limits. Returns `{file_id, path, existing_tags, suggestions: [{tag, score, sources}]}`. Empty suggestions = no distinctive terms or no overlap with the existing taxonomy yet, bootstrap with `tags.add` first. Default limit 10, max 50. Suggestions are NOT auto-applied.",
   {
     file_id: z.number().describe("File ID to suggest tags for"),
     limit: z.number().int().positive().max(50).optional().describe("Max suggestions to return (default 10)"),
@@ -2411,7 +2411,7 @@ server.tool(
 
 server.tool(
   "files.diff_against_disk",
-  "Diagnose drift between one file's disk content and its FTS index. Status is one of `in_sync`, `diverged`, `disk_unreadable`, or `no_index_row`. On divergence returns sizes, line counts, the first divergent line number, and the disk vs index sample for that line — NOT a full diff (use `files.get_diff` for full diffs between commits). Read-only; no side effects, auth, or rate limits. Use when search results look stale; if status is `diverged` or `no_index_row`, run `projects.refresh_index` to fix.",
+  "Diagnose drift between one file's disk content and its FTS index. Status is one of `in_sync`, `diverged`, `disk_unreadable`, or `no_index_row`. On divergence returns sizes, line counts, the first divergent line number, and the disk vs index sample for that line: NOT a full diff (use `files.get_diff` for full diffs between commits). Read-only; no side effects, auth, or rate limits. Use when search results look stale; if status is `diverged` or `no_index_row`, run `projects.refresh_index` to fix.",
   {
     file_id: z.number().describe("File ID"),
   },
@@ -2543,7 +2543,7 @@ server.tool(
 
 server.tool(
   "projects.refresh_index",
-  "Reconcile the FTS index against disk. For a project (`project_id` set), re-runs `discoverFiles`. For the KB (`project_id` null/omitted), walks `knowledge/`, ingests new .md files, reindexes any whose content hash drifted, and PRUNES rows for files no longer on disk. SIDE-EFFECTFUL: writes/updates/deletes file and FTS rows (the prune is destructive on stale index rows but never deletes files from disk). Idempotent — running twice is a near no-op. Skips files >5MB and standard junk dirs (`node_modules`, `.git`, `dist`, `build`, etc.). No external auth or rate limits. Returns `{scope, newly_indexed, refreshed, pruned}`. Use after editing files outside Kontexta, or when `files.diff_against_disk` reports drift.",
+  "Reconcile the FTS index against disk. For a project (`project_id` set), re-runs `discoverFiles`. For the KB (`project_id` null/omitted), walks `knowledge/`, ingests new .md files, reindexes any whose content hash drifted, and PRUNES rows for files no longer on disk. SIDE-EFFECTFUL: writes/updates/deletes file and FTS rows (the prune is destructive on stale index rows but never deletes files from disk). Idempotent, running twice is a near no-op. Skips files >5MB and standard junk dirs (`node_modules`, `.git`, `dist`, `build`, etc.). No external auth or rate limits. Returns `{scope, newly_indexed, refreshed, pruned}`. Use after editing files outside Kontexta, or when `files.diff_against_disk` reports drift.",
   {
     project_id: z.number().nullable().optional().describe("Project ID. Pass null or omit to reindex the Knowledge Base."),
   },
@@ -2569,7 +2569,7 @@ server.tool(
 
 server.tool(
   "projects.map",
-  "Return a compact indented outline of folders, file titles, tags, and IDs in a single dense block — substantially fewer tokens than the equivalent `files.list` JSON for the same scope. Read-only; no side effects, auth, or rate limits. Capped at `max_lines` (default 5000); the response reports `est_tokens` and emits a `warning` field if it exceeds `KONTEXTA_PROJECT_TOKEN_WARN`. `project_id: null` = KB only; omit = everything. Defaults: include_tags=true, show_titles=true. Use to orient yourself in an unfamiliar vault or project; for keyword lookup use `files.search`.",
+  "Return a compact indented outline of folders, file titles, tags, and IDs in a single dense block: substantially fewer tokens than the equivalent `files.list` JSON for the same scope. Read-only; no side effects, auth, or rate limits. Capped at `max_lines` (default 5000); the response reports `est_tokens` and emits a `warning` field if it exceeds `KONTEXTA_PROJECT_TOKEN_WARN`. `project_id: null` = KB only; omit = everything. Defaults: include_tags=true, show_titles=true. Use to orient yourself in an unfamiliar vault or project; for keyword lookup use `files.search`.",
   {
     project_id: z.number().nullable().optional().describe("Restrict to a single project. Pass null for knowledge-base-only files. Omit for everything."),
     include_tags: z.boolean().optional().describe("Append #tags inline. Default true. Set false to shrink the outline."),
@@ -2667,7 +2667,7 @@ server.resource(
 
 server.tool(
   "hands.list",
-  "List every Hands command tool currently registered, with project scope, tool name, danger level, confirmation flag, and description. Hands tools come from per-project `kontexta.json` files loaded at register time. Pass `schema: true` to instead get the complete `kontexta.json` authoring reference (JSON schema, validation rules, security guarantees, limitations, annotated example) — a static document, unrelated to any specific registered hand. Read-only; no side effects, auth, or rate limits. Use the default list mode to discover what side-effectful project commands the agent is permitted to run; use `schema: true` when helping a user write or fix a `kontexta.json`; reload after editing one with `hands.reload`.",
+  "List every Hands command tool currently registered, with project scope, tool name, danger level, confirmation flag, and description. Hands tools come from per-project `kontexta.json` files loaded at register time. Pass `schema: true` to instead get the complete `kontexta.json` authoring reference (JSON schema, validation rules, security guarantees, limitations, annotated example), a static document, unrelated to any specific registered hand. Read-only; no side effects, auth, or rate limits. Use the default list mode to discover what side-effectful project commands the agent is permitted to run; use `schema: true` when helping a user write or fix a `kontexta.json`; reload after editing one with `hands.reload`.",
   {
     schema: z.boolean().optional().describe("If true, return the kontexta.json authoring reference document instead of the registered-hands list. Default false."),
   },
@@ -2682,7 +2682,7 @@ server.tool(
 
 server.tool(
   "hands.reload",
-  "Re-scan every registered project's `kontexta.json` and rebuild the live Hands tool registry — newly-declared tools become callable immediately, removed tools disappear from `tools/list`. SIDE EFFECT is on the running MCP session's tool inventory only (no disk writes). Idempotent. No external auth or rate limits. Takes no parameters. Returns per-project load results (counts of registered/disabled tools and any validation warnings). Use after editing a `kontexta.json` mid-session; for the schema see `hands.list({ schema: true })`.",
+  "Re-scan every registered project's `kontexta.json` and rebuild the live Hands tool registry: newly-declared tools become callable immediately, removed tools disappear from `tools/list`. SIDE EFFECT is on the running MCP session's tool inventory only (no disk writes). Idempotent. No external auth or rate limits. Takes no parameters. Returns per-project load results (counts of registered/disabled tools and any validation warnings). Use after editing a `kontexta.json` mid-session; for the schema see `hands.list({ schema: true })`.",
   {},
   async () => {
     const projects = listProjects()
@@ -2695,7 +2695,7 @@ server.tool(
 
 server.tool(
   "hands.confirm",
-  "Approve and EXECUTE a previously-issued Hands invocation by its single-use approval token. The token is returned by any confirm-required Hands tool; tokens expire after 60 seconds and CANNOT be reused. Side effect equals whatever the underlying Hand does — this can be highly destructive (running arbitrary shell commands, modifying files, etc.), so only call when the user has authorised the pending action. The token IS the auth (no external auth, no rate limits). Invalid, expired, or already-consumed tokens return an inert text response, NOT an error.",
+  "Approve and EXECUTE a previously-issued Hands invocation by its single-use approval token. The token is returned by any confirm-required Hands tool; tokens expire after 60 seconds and CANNOT be reused. Side effect equals whatever the underlying Hand does: this can be highly destructive (running arbitrary shell commands, modifying files, etc.), so only call when the user has authorised the pending action. The token IS the auth (no external auth, no rate limits). Invalid, expired, or already-consumed tokens return an inert text response, NOT an error.",
   { token: z.string().describe("The approval token from the pending response") },
   async ({ token }) => {
     const pending = handsRegistry.getConfirmStore().consume(token);

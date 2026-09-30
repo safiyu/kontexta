@@ -15,7 +15,7 @@ describe("DropdownMenu", () => {
       />
     );
     const trigger = screen.getByRole("button", { name: "Open menu" });
-    // Radix's dropdown trigger opens on pointerdown, not click — jsdom's
+    // Radix's dropdown trigger opens on pointerdown, not click: jsdom's
     // fireEvent.click doesn't dispatch pointer events, so drive it directly.
     fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: "mouse" });
     fireEvent.pointerUp(trigger, { button: 0, ctrlKey: false, pointerType: "mouse" });

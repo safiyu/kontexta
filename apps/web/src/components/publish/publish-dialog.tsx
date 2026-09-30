@@ -112,7 +112,7 @@ export function PublishDialog({ isOpen, onClose, mode = "publish", onSwitchToPub
         const data = await res.json();
         setLastBuilt(data?.lastBuilt ?? null);
       }
-    } catch { /* swallow — footer line just won't render */ }
+    } catch { /* swallow: footer line just won't render */ }
   };
 
   useEffect(() => {
@@ -159,7 +159,7 @@ export function PublishDialog({ isOpen, onClose, mode = "publish", onSwitchToPub
         const list: string[] = data.folders || [];
         setFolders(list);
         // Auto-select everything by default. Previously the dialog loaded
-        // with zero selections — the orange Publish button stayed disabled
+        // with zero selections: the orange Publish button stayed disabled
         // (no onClick fires from a disabled <button>) and to the user it
         // looked like "click does nothing, no error". The user can still
         // untick anything they don't want before publishing.
@@ -224,7 +224,7 @@ export function PublishDialog({ isOpen, onClose, mode = "publish", onSwitchToPub
         // Success: close the dialog and bubble the result up so the parent
         // can show a persistent toast (dismissable, with View Published).
         // Previously the success panel was rendered at the bottom of the
-        // dialog where the user wouldn't see it without scrolling — they
+        // dialog where the user wouldn't see it without scrolling: they
         // could publish from the top and have no idea anything happened.
         onPublishSuccess?.(data);
         onClose();
@@ -308,7 +308,7 @@ export function PublishDialog({ isOpen, onClose, mode = "publish", onSwitchToPub
               )}
             </div>
           ) : (
-            /* Publish Mode — original form */
+            /* Publish Mode: original form */
             <div className="flex-1 overflow-y-auto p-6 space-y-6">
               {/* Source Scope Selection */}
               <div>
@@ -527,7 +527,7 @@ export function PublishDialog({ isOpen, onClose, mode = "publish", onSwitchToPub
                 </div>
               )}
 
-              {/* Success no longer rendered here — bubbled up to a parent toast.
+              {/* Success no longer rendered here: bubbled up to a parent toast.
                   Only failures stay in the dialog so the user can fix and retry. */}
             </div>
           )}

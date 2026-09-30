@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
     projectId !== null &&
     (typeof projectId !== "number" || !Number.isInteger(projectId) || projectId <= 0)
   ) {
-    // Reject 0 explicitly — SQLite ids start at 1, and the `if (projectId)`
+    // Reject 0 explicitly: SQLite ids start at 1, and the `if (projectId)`
     // truthy check below would otherwise route 0 silently to the KB branch.
     return NextResponse.json({ error: "projectId must be a positive integer (omit or send null for the knowledge base)" }, { status: 400 });
   }
@@ -123,19 +123,19 @@ export async function DELETE(req: NextRequest) {
     const { deleteFolder } = await import("kxta-core");
 
     if (projectIdNum === null) {
-      // Refuse deleting a bare bucket name — would wipe the whole bucket and orphan DB rows.
+      // Refuse deleting a bare bucket name: would wipe the whole bucket and orphan DB rows.
       const KB_BUCKETS = new Set(["journal", "knowledge", "mermaid", "html"]);
       const topSegment = folderName.split(/[/\\]/).filter(Boolean)[0];
       if (topSegment && KB_BUCKETS.has(topSegment) && folderName.split(/[/\\]/).filter(Boolean).length === 1) {
         return NextResponse.json(
-          { error: `Cannot delete the '${topSegment}' bucket — it's part of the fixed knowledge base layout. Delete subfolders inside it instead.` },
+          { error: `Cannot delete the '${topSegment}' bucket. It's part of the fixed knowledge base layout. Delete subfolders inside it instead.` },
           { status: 400 }
         );
       }
-      // KB folder — safe to delete from disk.
+      // KB folder: safe to delete from disk.
       deleteFolder(projectPath, folderName);
     } else {
-      // Project folder — refuse. Un-indexing alone was a no-op: the
+      // Project folder: refuse. Un-indexing alone was a no-op: the
       // watcher (or the next "Scan for New Files") would re-ingest every
       // .md under the folder seconds later, making the deletion appear
       // to succeed and then silently revert. Until we have a persistent

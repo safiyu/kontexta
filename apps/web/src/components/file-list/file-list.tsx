@@ -120,13 +120,13 @@ export function FileList({
           const normalizedBase = norm(base) + "/";
           if (selectedFolder) {
             // Recursive: show every file under the selected folder, not
-            // just direct children — otherwise picking a folder with only
+            // just direct children: otherwise picking a folder with only
             // subfolders looks empty.
             const folderPrefix = normalizedBase + norm(selectedFolder);
             result = result.filter((f) => isUnderFolder(f.path, folderPrefix));
           } else {
             // No folder selected: show ALL files in the project (recursive),
-            // not just files directly at the project root — many projects
+            // not just files directly at the project root: many projects
             // keep all their context files in subfolders (e.g. `.claude/`).
             result = result.filter((f) => f.project_id === selectedProject.id);
           }
@@ -140,19 +140,19 @@ export function FileList({
       // files is already pre-filtered by page.tsx, and favorites ignore folders
       result = [...files];
     } else if (selectedSection === "tags") {
-      // The parent already filtered `files` by the selected tag — show them as-is.
+      // The parent already filtered `files` by the selected tag: show them as-is.
       result = [...files];
     } else if (selectedSection === "knowledge") {
       result = result.filter((f) => !f.project_id);
       if (basePath) {
         const normalizedBase = norm(basePath) + "/";
         if (selectedFolder) {
-          // Recursive — same reasoning as the projects branch above.
+          // Recursive: same reasoning as the projects branch above.
           const folderPrefix = normalizedBase + norm(selectedFolder);
           result = result.filter((f) => isUnderFolder(f.path, folderPrefix));
         } else {
           // KB root: show all KB files (recursive). The folder tree
-          // shows nested files at every depth — middle pane should match
+          // shows nested files at every depth: middle pane should match
           // it. The previous "direct children only" comment was wrong:
           // KB files all have !project_id, no cross-project leakage risk.
           // Already filtered by !project_id above.

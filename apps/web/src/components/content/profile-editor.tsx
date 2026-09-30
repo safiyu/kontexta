@@ -36,7 +36,7 @@ function keyForTitle(title: string): SectionKey | null {
 function parseProfile(content: string): Parsed {
   const required: SectionMap = { name: "", role: "", vision: "", roadmap: "", preferences: "", sessionCodingStyle: "", teamMembers: "", notes: "" };
   const custom: CustomSection[] = [];
-  // Strip a leading `# Profile` H1 — the profile file uses a fixed H1 that assembleProfile re-adds.
+  // Strip a leading `# Profile` H1: the profile file uses a fixed H1 that assembleProfile re-adds.
   const withoutH1 = content.replace(/^\s*#\s+Profile\s*$/m, "");
   const lines = withoutH1.split("\n");
   let preambleBuf: string[] = [];
@@ -78,7 +78,7 @@ function assemble(parsed: Parsed): string {
   for (const c of parsed.custom) {
     const title = c.title.trim();
     if (!title) continue; // Empty title would emit a stray `## ` marker.
-    if (REQUIRED_TITLES_LOWER.has(title.toLowerCase())) continue; // Collision — parse would swallow it into the required section.
+    if (REQUIRED_TITLES_LOWER.has(title.toLowerCase())) continue; // Collision: parse would swallow it into the required section.
     out.push(`## ${title}`, c.body || "", "");
   }
   return out.join("\n").replace(/\n{3,}/g, "\n\n");
@@ -229,7 +229,7 @@ export function ProfileEditor({ onDirtyChange, onChanged }: ProfileEditorProps) 
 
   return (
     <div className="h-full flex flex-col animate-fade-in bg-[var(--bg-primary)]">
-      {/* Sticky action bar — always accessible while scrolling. */}
+      {/* Sticky action bar: always accessible while scrolling. */}
       <div className="h-11 px-5 border-b border-[var(--border)] flex items-center gap-3 sticky top-0 bg-[var(--bg-primary)] z-20">
         <div className="flex items-center gap-2 text-[var(--text-primary)]">
           <UserCircle className="w-4 h-4 text-[var(--accent)]" aria-hidden />
@@ -280,7 +280,7 @@ export function ProfileEditor({ onDirtyChange, onChanged }: ProfileEditorProps) 
           />
         ) : (
           <div className="max-w-3xl mx-auto px-6 py-8 space-y-8">
-            {/* Hero: avatar + Name + Role — the profile "identity card". */}
+            {/* Hero: avatar + Name + Role, the profile "identity card". */}
             <header className="flex items-start gap-5">
               <div className="shrink-0 w-16 h-16 rounded-2xl bg-gradient-to-br from-[var(--accent-soft)] to-[var(--bg-secondary)] border border-[var(--border)] flex items-center justify-center">
                 <UserCircle className="w-9 h-9 text-[var(--accent)]" aria-hidden />
@@ -312,7 +312,7 @@ export function ProfileEditor({ onDirtyChange, onChanged }: ProfileEditorProps) 
               </div>
             )}
 
-            {/* Section cards — one per required section. */}
+            {/* Section cards: one per required section. */}
             <div className="space-y-4">
               {REQUIRED.map((r) => {
                 const value = parsed.required[r.key];
@@ -350,7 +350,7 @@ export function ProfileEditor({ onDirtyChange, onChanged }: ProfileEditorProps) 
               })}
             </div>
 
-            {/* Custom sections — same card shape as required so it feels one continuous surface. */}
+            {/* Custom sections: same card shape as required so it feels one continuous surface. */}
             <section className="rounded-xl border border-dashed border-[var(--border)] bg-[var(--bg-secondary)]/30 p-4">
               <header className="flex items-center gap-3 mb-3">
                 <div className="shrink-0 w-9 h-9 rounded-lg bg-[var(--bg-primary)] text-[var(--text-secondary)] flex items-center justify-center">
