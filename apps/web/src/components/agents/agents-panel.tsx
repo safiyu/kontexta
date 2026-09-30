@@ -6,10 +6,10 @@ import { useAgents, type AgentInfo, type InstallOutcome } from "@/hooks/use-agen
 
 function statusText(a: AgentInfo, mode: string): string {
   if (!a.hooks_supported) return "MCP capture only";
-  if (!a.enabled) return "—";
+  if (!a.enabled) return "-";
   if (a.hooks_verified_at) return `verified · last event ${new Date(a.last_hook_event_at ?? a.hooks_verified_at).toLocaleString()}`;
   if (mode === "docker") return "run the command below on your machine";
-  if (a.hooks_installed) return `installed${a.emitter_stale ? " (emitter outdated)" : ""} — waiting for the first event`;
+  if (a.hooks_installed) return `installed${a.emitter_stale ? " (emitter outdated)" : ""} - waiting for the first event`;
   return "not installed";
 }
 

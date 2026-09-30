@@ -16,7 +16,7 @@ const REQUIRED = [
   { key: "roadmap", title: "Roadmap", hint: "Active initiatives, upcoming milestones, current themes.", icon: ((c: string) => <Route className={c} aria-hidden />) as IconRender, placeholder: "e.g. Q3 auth refactor; performance benchmarking" },
   { key: "preferences", title: "Preferences", hint: "General working style, tools, and communication quirks.", icon: ((c: string) => <Settings className={c} aria-hidden />) as IconRender, placeholder: "e.g. Prefers TypeScript, concise explanations, test-driven development" },
   { key: "sessionCodingStyle", title: "Session coding style", hint: "Hard rules the agent must honor every session. Comment style, git etiquette, review gates.", icon: ((c: string) => <Code2 className={c} aria-hidden />) as IconRender, placeholder: "e.g. one-line comments only; no auto push to git; ask before schema migrations" },
-  { key: "teamMembers", title: "Team members and roles", hint: "People you work with, so the agent names them correctly in summaries and updates.", icon: ((c: string) => <Users className={c} aria-hidden />) as IconRender, placeholder: "e.g. Alice — Product Manager\nBob — DevOps / SRE" },
+  { key: "teamMembers", title: "Team members and roles", hint: "People you work with, so the agent names them correctly in summaries and updates.", icon: ((c: string) => <Users className={c} aria-hidden />) as IconRender, placeholder: "e.g. Alice - Product Manager\nBob - DevOps / SRE" },
   { key: "notes", title: "Notes", hint: "Anything else worth remembering that doesn't fit elsewhere.", icon: ((c: string) => <StickyNote className={c} aria-hidden />) as IconRender, placeholder: "Free-form scratch space." },
 ] as const;
 
@@ -403,7 +403,7 @@ export function ProfileEditor({ onDirtyChange, onChanged }: ProfileEditorProps) 
                         </div>
                         {warn && (
                           <p className="text-[10px] text-amber-accent mb-2">
-                            {titleEmpty ? "Give this section a title, or it will be lost on save." : `Title collides with the required "${c.title.trim()}" section — pick a different name.`}
+                            {titleEmpty ? "Give this section a title, or it will be lost on save." : `Title collides with the required "${c.title.trim()}" section - pick a different name.`}
                           </p>
                         )}
                         <textarea

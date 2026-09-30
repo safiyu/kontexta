@@ -97,7 +97,7 @@ export function SyncPopover({
                   <span className="text-[var(--text-secondary)]">{new Date(e.at).toLocaleTimeString()}</span>
                   <span className="text-[var(--text-primary)] truncate">
                     {e.projectId === null ? "all projects" : `project #${e.projectId}`}
-                    {e.message ? ` — ${e.message}` : ""}
+                    {e.message ? ` - ${e.message}` : ""}
                   </span>
                 </div>
               ))

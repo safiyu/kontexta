@@ -73,7 +73,7 @@ export function UploadFilesDialog({ open, onClose, projects, defaultProjectId, d
     e.preventDefault();
     if (files.length === 0) return;
     if (requireFolder && !folder) {
-      setError("Pick a KB folder (journal, knowledge, mermaid, or html — or a subfolder).");
+      setError("Pick a KB folder (journal, knowledge, mermaid, or html - or a subfolder).");
       return;
     }
     if (mismatched.length > 0) {
@@ -158,7 +158,7 @@ export function UploadFilesDialog({ open, onClose, projects, defaultProjectId, d
                   onChange={(e) => setProjectId(e.target.value === "" ? "" : Number(e.target.value))}
                   className="w-full bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-amber-accent/50 cursor-pointer"
                 >
-                  <option value="">— Knowledge Base —</option>
+                  <option value="">- Knowledge Base -</option>
                   {projects.map((p) => (
                     <option key={p.id} value={p.id}>{p.name}</option>
                   ))}
@@ -167,7 +167,7 @@ export function UploadFilesDialog({ open, onClose, projects, defaultProjectId, d
               <div>
                 <label className="block text-[10px] font-bold text-[var(--text-secondary)] tracking-widest mb-1.5">FOLDER</label>
                 {isKb && bucketFilteredFolders.length === 0 ? (
-                  // Fresh install has no subfolders yet — offer a text input hinting the four bucket names.
+                  // Fresh install has no subfolders yet - offer a text input hinting the four bucket names.
                   <>
                     <input
                       type="text"
@@ -190,9 +190,9 @@ export function UploadFilesDialog({ open, onClose, projects, defaultProjectId, d
                     required={requireFolder}
                   >
                     {requireFolder ? (
-                      <option value="" disabled>— Pick a KB folder —</option>
+                      <option value="" disabled>- Pick a KB folder -</option>
                     ) : (
-                      <option value="">— Root level —</option>
+                      <option value="">- Root level -</option>
                     )}
                     {bucketFilteredFolders.map((f) => (
                       <option key={f} value={f}>{f}</option>

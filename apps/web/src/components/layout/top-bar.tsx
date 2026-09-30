@@ -58,7 +58,7 @@ export function TopBar({
       if (res.ok && body?.success) {
         const t = body.totals ?? { newly_indexed: 0, refreshed: 0, pruned: 0, errors: 0 };
         toast.success(
-          `Reindexed ${body.scopes?.length ?? 0} scope(s) in ${body.duration_ms ?? "?"}ms — ` +
+          `Reindexed ${body.scopes?.length ?? 0} scope(s) in ${body.duration_ms ?? "?"}ms - ` +
           `+${t.newly_indexed} new, ${t.refreshed} updated, ${t.pruned} removed` +
           (t.errors ? `, ${t.errors} scope error(s)` : ""),
         );
@@ -139,7 +139,7 @@ export function TopBar({
           onClick={handleReindex}
           disabled={reindexing}
           className={`btn btn-sm sm:btn-md !font-mono font-bold uppercase tracking-wider text-[var(--accent)] bp-toolbar-btn whitespace-nowrap shrink-0 ${reindexing ? "opacity-50" : ""}`}
-          aria-label="Reindex — scan disk to add new files and remove orphan rows"
+          aria-label="Reindex - scan disk to add new files and remove orphan rows"
           title="Reindex Knowledge Base + all projects: add new files and drop orphan rows"
         >
           {reindexing ? "Reindexing…" : "Reindex"}
@@ -228,7 +228,7 @@ export function TopBar({
             onClick={() => setTheme(theme === "light" ? "dark" : "light")}
             className="px-2 h-5 rounded-md border border-[var(--border)] font-mono text-[10px] uppercase tracking-wider text-[var(--text-secondary)] hover:text-[var(--accent)] hover:border-[var(--accent)] transition-colors inline-flex items-center gap-1 whitespace-nowrap shrink-0"
             aria-label="Toggle theme (light / dark)"
-            title={`Theme: ${theme} — click to toggle`}
+            title={`Theme: ${theme} - click to toggle`}
           >
             {theme === "light" ? (
               <Sun className="w-3 h-3" aria-hidden />

@@ -39,7 +39,7 @@ export function HtmlEditor({
         body: JSON.stringify({ content: value, expected_updated_at: expectedUpdatedAt }),
       });
       if (res.status === 409) {
-        toast.error("This file changed elsewhere since you opened it — reload before saving to avoid overwriting the newer version.");
+        toast.error("This file changed elsewhere since you opened it - reload before saving to avoid overwriting the newer version.");
         return;
       }
       if (!res.ok) {
