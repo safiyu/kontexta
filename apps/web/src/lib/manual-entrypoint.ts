@@ -53,10 +53,26 @@ export function resolveMarkerEntrypoint(startDir?: string): string | null {
   return found;
 }
 
-// The marker, else a built checkout: what the installer needs to register a source install.
+// Where to look from: this module's own path, then the working directory. Turbopack dev reports a virtual import.meta.url that is not a real folder, but the dev server runs from apps/web inside the checkout.
+function starts(startDir?: string): string[] {
+  if (startDir) return [startDir];
+  const out = [moduleDir()];
+  try { const cwd = process.cwd(); if (!out.includes(cwd)) out.push(cwd); } catch { /* cwd removed */ }
+  return out;
+}
+
+// An explicit KONTEXTA_MCP_ENTRYPOINT (when the file exists), else the marker, else a built checkout: what the installer needs to register a source install.
+export function resolveManualEntrypointFrom(from: string[]): string | null {
+  const override = process.env.KONTEXTA_MCP_ENTRYPOINT;
+  if (override && existsSync(override)) return path.resolve(override);
+  for (const dir of from) { const m = fromMarker(dir); if (m) return m; }
+  for (const dir of from) { const c = fromCheckout(dir); if (c) return c; }
+  return null;
+}
+
 export function resolveManualEntrypoint(startDir?: string): string | null {
   if (!startDir && cache.any) return cache.any;
-  const found = fromMarker(startDir ?? moduleDir()) ?? fromCheckout(startDir ?? moduleDir());
+  const found = resolveManualEntrypointFrom(starts(startDir));
   if (found && !startDir) cache.any = found;
   return found;
 }
