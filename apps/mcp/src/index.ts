@@ -2106,13 +2106,13 @@ server.tool(
           ],
         };
       }
-      // Refuse deleting a bare bucket name: would wipe the whole bucket and orphan DB rows.
-      const KB_BUCKETS_TOP = new Set(["journal", "knowledge", "mermaid", "html"]);
+      // Refuse deleting root knowledge folders: would wipe fixed buckets or the whole KB.
       const segments = name.split(/[/\\]/).filter(Boolean);
-      if (segments.length === 1 && KB_BUCKETS_TOP.has(segments[0])) {
+      if (segments.length <= 1) {
+        const top = segments[0] || name;
         return {
           isError: true,
-          content: [{ type: "text", text: JSON.stringify({ error: `Cannot delete the '${segments[0]}' bucket, part of the fixed KB layout.` }, null, 2) }],
+          content: [{ type: "text", text: JSON.stringify({ error: `Cannot delete root knowledge folder '${top}', part of the fixed KB layout. Delete subfolders inside it instead.` }, null, 2) }],
         };
       }
       const base = resolveFolderBase(null);

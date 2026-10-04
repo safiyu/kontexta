@@ -1,7 +1,21 @@
 import { describe, test, expect } from "vitest";
-import { bucketOf, formatForFolder, isHtmlResources, acceptForFolder, fileFitsFolder } from "./kb-layout";
+import { bucketOf, isRootKnowledgeFolder, formatForFolder, isHtmlResources, acceptForFolder, fileFitsFolder } from "./kb-layout";
 
 describe("kb-layout", () => {
+  test("isRootKnowledgeFolder detects root folders and allows subfolders", () => {
+    expect(isRootKnowledgeFolder("journal")).toBe(true);
+    expect(isRootKnowledgeFolder("knowledge")).toBe(true);
+    expect(isRootKnowledgeFolder("mermaid")).toBe(true);
+    expect(isRootKnowledgeFolder("html")).toBe(true);
+    expect(isRootKnowledgeFolder("custom-root")).toBe(true);
+    expect(isRootKnowledgeFolder("journal/2026")).toBe(false);
+    expect(isRootKnowledgeFolder("knowledge/notes")).toBe(false);
+    expect(isRootKnowledgeFolder("mermaid/diagrams")).toBe(false);
+    expect(isRootKnowledgeFolder("html/reports")).toBe(false);
+    expect(isRootKnowledgeFolder("")).toBe(false);
+    expect(isRootKnowledgeFolder(null)).toBe(false);
+    expect(isRootKnowledgeFolder(undefined)).toBe(false);
+  });
   test("bucketOf recognizes the four buckets under both separators", () => {
     expect(bucketOf("journal")).toBe("journal");
     expect(bucketOf("journal/2026")).toBe("journal");

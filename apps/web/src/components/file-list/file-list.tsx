@@ -11,6 +11,7 @@ import { OnboardModal } from "./onboard-modal";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { DropdownMenu } from "@/components/ui/dropdown-menu";
 import { EmptyState } from "@/components/ui/empty-state";
+import { isRootKnowledgeFolder } from "@/lib/kb-layout";
 
 interface Project {
   id: number;
@@ -434,7 +435,10 @@ export function FileList({
             title="Folder is empty"
             hint="This folder doesn't contain any indexed context files."
             action={
-              selectedSection === "knowledge" && selectedFolder && onDeleteFolder ? (
+              selectedSection === "knowledge" &&
+              selectedFolder &&
+              !isRootKnowledgeFolder(selectedFolder) &&
+              onDeleteFolder ? (
                 <div className="flex flex-col items-center gap-3">
                   <div className="h-px w-16 bg-[var(--border)]" />
                   <button
