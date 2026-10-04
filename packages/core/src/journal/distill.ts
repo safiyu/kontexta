@@ -2,7 +2,7 @@
 import { readFileSync, readdirSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { RawEvent, DistillResult, JournalFrontmatter } from "./types.js";
-import { groupEvents, lastBranchOf } from "./topic-detector.js";
+import { groupEvents, lastBranchOf, classifyTaskCategory } from "./topic-detector.js";
 import { renderMechanicalEntry, touchedFilesOf } from "./renderer.js";
 import { readHighWater, writeHighWater } from "./high-water.js";
 import { upsertJournalMeta, openTasksForProject, gitRefsForFiles } from "./repository.js";
@@ -94,7 +94,7 @@ export async function distillJournal(opts: DistillJournalOpts): Promise<DistillR
       const filename = `task-${bucket.task_slug}.md`;
       const filePath = join(dir, filename);
 
-      let fm: JournalFrontmatter = buildFrontmatter(bucket, opts.projectSlug);
+      let fm: JournalFrontmatter = await buildFrontmatter(bucket, opts.projectSlug);
       const entry = renderMechanicalEntry({
         task_slug: bucket.task_slug,
         events: bucket.events,
@@ -259,10 +259,10 @@ function loadOpenTasks(opts: DistillJournalOpts): JournalFrontmatter[] {
   });
 }
 
-function buildFrontmatter(
+async function buildFrontmatter(
   bucket: { task_slug: string; events: RawEvent[]; is_new: boolean; branches?: string[] },
   projectSlug: string,
-): JournalFrontmatter {
+): Promise<JournalFrontmatter> {
   const events = bucket.events;
   const touched = touchedFilesOf(events);
   // git_context events are consumed by the grouper rather than bucketed, so the bucket carries the branches that were current.
@@ -275,7 +275,16 @@ function buildFrontmatter(
   ])];
   const startedAt = events[0].ts;
   const lastActiveAt = events[events.length - 1].ts;
-  return {
+  
+  // Classify task category (async, may fall back to heuristic)
+  let category: string | undefined;
+  try {
+    category = await classifyTaskCategory(events);
+  } catch {
+    // Best-effort: skip category if classification fails
+  }
+  
+  const frontmatter: JournalFrontmatter = {
     task: bucket.task_slug,
     project: projectSlug,
     tags: ["mechanical"],
@@ -286,6 +295,13 @@ function buildFrontmatter(
     last_active_at: lastActiveAt,
     distilled_from: [`raw/${startedAt.slice(0, 10)}.jsonl`], // approximate; refine if multi-day
   };
+  
+  // Inject category if available
+  if (category) {
+    frontmatter.category = category;
+  }
+  
+  return frontmatter;
 }
 
 function gitRefsFor(fm: JournalFrontmatter): Array<{ ref_type: "branch" | "commit" | "ticket"; ref_value: string }> {

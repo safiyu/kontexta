@@ -185,10 +185,18 @@ export function search(filters: SearchFilters): FileRecordWithRank[] {
 
   // Dictionary-wins ordering: authoritative KB hits sort above everything
   // else regardless of BM25 rank; then FTS rank; then files.id tiebreak.
+  // When raw_bm25_order is true, skip reordering and use raw BM25 rank.
   const limit = Number.isInteger(filters.limit) && (filters.limit as number) > 0
     ? Math.min(filters.limit as number, 1000)
     : 50;
-  sql += ` ORDER BY (files.content_class = 'dictionary') DESC, rank, files.id LIMIT ${limit}`;
+  if (filters.raw_bm25_order) {
+    // Raw BM25 order — no dictionary boost, unbiased candidate pool
+    sql += ` ORDER BY rank, files.id LIMIT ${limit}`;
+  } else {
+    // Dictionary-wins ordering: authoritative KB hits sort above everything
+    // else regardless of BM25 rank; then FTS rank; then files.id tiebreak.
+    sql += ` ORDER BY (files.content_class = 'dictionary') DESC, rank, files.id LIMIT ${limit}`;
+  }
 
   const stmt = db.prepare(sql);
   try {

@@ -51,5 +51,8 @@ export * from "./hooks/index.js";
 export * from "./mcp-install/index.js";
 export * from "./profile/index.js";
 export * from "./calendar/index.js";
+export * from "./inference/index.js";
+export * from "./rerank/index.js";
+export * from "./decision/index.js";
 export { writeResource, readResource, listResources, deleteResource, resourceUrlFor, resourceSrcFor, mimeFor } from "./reports/resources.js";
 export { sanitizeHtml } from "./reports/sanitize.js";

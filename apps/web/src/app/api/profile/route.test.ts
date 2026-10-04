@@ -4,6 +4,7 @@ import { NextRequest } from "next/server";
 import { join } from "node:path";
 import { mkdtempSync, writeFileSync, rmSync, mkdirSync, existsSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
+import { closeDatabase, resetDataDirCache, getDataDir, profileRelPath } from "kxta-core";
 
 describe("profile API route", () => {
   let tmpDir: string;
@@ -11,6 +12,11 @@ describe("profile API route", () => {
   beforeEach(() => {
     tmpDir = mkdtempSync(join(tmpdir(), "kontexta-profile-api-test-"));
     process.env.KONTEXTA_DATA_DIR = tmpDir;
+    // The web test pool runs all files in one process (singleFork). Clear the
+    // cached data dir so the fresh KONTEXTA_DATA_DIR above is honored — a stale
+    // value from another test file would otherwise make getDataDir() resolve to
+    // the wrong directory and silently break per-test isolation.
+    resetDataDirCache();
   });
 
   afterEach(() => {
@@ -25,7 +31,8 @@ describe("profile API route", () => {
     // data dir alone no longer reaches the exists:false branch. Delete the
     // auto-scaffolded file after the auth-triggered DB init to still exercise it.
     await GET(new NextRequest("http://localhost/api/profile"));
-    const profilePath = join(tmpDir, "knowledge/profile.md");
+    // Delete from the authoritative location the route actually reads from.
+    const profilePath = join(getDataDir(), profileRelPath());
     rmSync(profilePath, { force: true });
 
     const res = await GET(new NextRequest("http://localhost/api/profile"));

@@ -12,7 +12,7 @@ interface ScopeReport {
   error?: string;
 }
 
-// Single in-flight slot: reindex touches every project + the KB; running two
+// Single in-flight slot — reindex touches every project + the KB; running two
 // in parallel would just contend on the same per-scope withLock and waste
 // time. A second concurrent request gets 409 so the UI can show a clear
 // "already running" state instead of queuing silently.

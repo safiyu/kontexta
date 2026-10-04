@@ -55,6 +55,12 @@ import {
   syncAgentRows,
   type AgentId,
   type RawEvent,
+  getAllStatuses,
+  rerankCandidates,
+  arbitrateCandidates,
+  setInferenceDevice,
+  setModelCacheDirOverride,
+  rerankEngine,
 } from "kxta-core";
 import RE2Class from "./re2-compat.js";
 import type RE2 from "re2";
@@ -82,6 +88,78 @@ const dataDir = getDataDir();
 const PROJECT_TOKEN_WARN_THRESHOLD = Number(
   process.env.KONTEXTA_PROJECT_TOKEN_WARN ?? 100_000
 );
+
+interface KontextaConfig {
+  system1?: {
+    device?: "cpu" | "gpu" | "auto" | "wasm";
+    cache_dir?: string;
+  };
+  search?: {
+    rerank?: {
+      enabled?: boolean;
+      model?: string;
+      candidate_limit?: number;
+      dictionary_boost?: number;
+      timeout_ms?: number;
+    };
+    verdicts?: {
+      intent_routing?: boolean;
+      sufficiency_check?: boolean;
+      relevance_floor?: number;
+    };
+  };
+  journal?: {
+    mode?: "lenient" | "strict" | "mechanical-only";
+    distillation?: {
+      decision_engine?: {
+        enabled?: boolean;
+        event_triage?: boolean;
+        topic_pivot_detection?: boolean;
+        task_categorization?: boolean;
+      };
+    };
+  };
+}
+
+let _kontextaConfigCache: { config: KontextaConfig; ts: number } | null = null;
+
+function readKontextaConfig(): KontextaConfig {
+  const now = Date.now();
+  if (_kontextaConfigCache && now - _kontextaConfigCache.ts < 5000) {
+    return _kontextaConfigCache.config;
+  }
+  const paths = [
+    `${getDataDir()}/kontexta.json`,
+    `${process.cwd()}/kontexta.json`,
+  ];
+  let config: KontextaConfig = {};
+  for (const p of paths) {
+    if (existsSync(p)) {
+      try {
+        config = JSON.parse(readFileSync(p, "utf8"));
+        break;
+      } catch {}
+    }
+  }
+  _kontextaConfigCache = { config, ts: now };
+  return config;
+}
+
+/**
+ * Apply system1 device/cache_dir config to the inference runtime.
+ * Idempotent: safe to call on every read since the setters are cheap.
+ */
+function applySystem1Config(): void {
+  const cfg = readKontextaConfig();
+  const device = cfg.system1?.device;
+  if (device) {
+    setInferenceDevice(device === "auto" ? null : device);
+  }
+  const cacheDir = cfg.system1?.cache_dir;
+  if (cacheDir) {
+    setModelCacheDirOverride(resolve(cacheDir, process.cwd()));
+  }
+}
 
 function getAgentRulesWarning(projectId?: number | null): string | null {
   try {
@@ -1139,18 +1217,41 @@ server.tool(
     include_bodies: z.boolean().optional().describe("If true, return a single prompt-ready bundle of matched bodies instead of a match list. Response shape changes to `{bundle, meta: {included, skipped, ...}}`. Default false."),
     format: z.enum(["xml", "markdown"]).optional().describe("Bundle format when `include_bodies` is true. xml = Anthropic-recommended <document> tags (default); markdown = ## headers + fenced blocks. Ignored otherwise."),
     max_tokens: z.number().int().positive().optional().describe("Token budget when `include_bodies` is true (default 50000). Files added in rank order until the next would exceed; remainder go to `meta.skipped[]`. Ignored otherwise."),
+    rerank: z.boolean().optional().describe("When true, rerank search matches using local cross-encoder neural model and soft content-class arbitration. Defaults to kontexta.json search.rerank.enabled (or true if model available)."),
+    check_sufficiency: z.boolean().optional().describe("When include_bodies is true, evaluate retrieval sufficiency with non-autoregressive decision model. Default true."),
   },
-  async ({ query, project_id, tags, favorite, kind, include_bodies, format, max_tokens }) => {
+  async ({ query, project_id, tags, favorite, kind, include_bodies, format, max_tokens, rerank, check_sufficiency }) => {
     const filters: any = { query };
     if (project_id !== undefined) filters.project_id = project_id;
     if (tags !== undefined) filters.tags = tags;
     if (favorite !== undefined) filters.favorite = favorite;
     if (kind !== undefined) filters.content_class = kind;
 
+    const cfg = readKontextaConfig();
+    applySystem1Config();
+    const shouldRerank = rerank ?? cfg.search?.rerank?.enabled ?? true;
+    const shouldCheckSufficiency = check_sufficiency ?? cfg.search?.verdicts?.sufficiency_check ?? true;
+    const candidateLimit = cfg.search?.rerank?.candidate_limit ?? 30;
+    const dictionaryBoost = cfg.search?.rerank?.dictionary_boost;
+    const relevanceFloor = cfg.search?.verdicts?.relevance_floor;
+    const rerankModel = cfg.search?.rerank?.model;
+    const rerankTimeoutMs = cfg.search?.rerank?.timeout_ms;
+
     if (include_bodies) {
       let bundleResult;
       try {
-        bundleResult = await bundleSearch(filters, { format: format ?? "xml", max_tokens: max_tokens ?? 50000 });
+        bundleResult = await bundleSearch(filters, {
+          format: format ?? "xml",
+          max_tokens: max_tokens ?? 50000,
+          rerank: shouldRerank,
+          check_sufficiency: shouldCheckSufficiency,
+          candidate_limit: candidateLimit,
+          dictionary_boost: dictionaryBoost,
+          relevance_floor: relevanceFloor,
+          intent_routing: cfg.search?.verdicts?.intent_routing,
+          model: rerankModel,
+          timeout_ms: rerankTimeoutMs,
+        });
       } catch (e: any) {
         if (e instanceof FtsQueryError) {
           return { isError: true, content: [{ type: "text", text: e.message }] };
@@ -1162,9 +1263,62 @@ server.tool(
       };
     }
 
-    let result;
+    let result: any[];
+    let rerankFallback = false;
     try {
-      result = search(filters);
+      if (shouldRerank) {
+        const rawHits = search({ ...filters, limit: candidateLimit, raw_bm25_order: true });
+        if (rawHits.length > 1) {
+          const candidates = rawHits.map((h) => {
+            let content = "";
+            try {
+              content = readFile(h.id).content;
+            } catch {}
+            return {
+              id: h.id,
+              title: h.title,
+              path: h.path,
+              content,
+              content_class: h.content_class ?? null,
+              project_id: h.project_id ?? null,
+              bm25_rank: h.rank,
+            };
+          });
+          const scored = await rerankCandidates(filters.query, candidates, {
+            model: rerankModel,
+            timeout_ms: rerankTimeoutMs,
+            candidate_limit: candidateLimit,
+            dictionary_boost: dictionaryBoost,
+          });
+          if (scored && scored.length > 0) {
+            let arbitrated = arbitrateCandidates(scored, { dictionary_boost: dictionaryBoost });
+            // Apply the configured relevance floor (default 0.15) to the
+            // reranked list. If the floor prunes everything, keep the full
+            // ranked set rather than returning an empty result for a query
+            // that clearly has matches.
+            if (relevanceFloor !== undefined) {
+              const kept = arbitrated.filter((a) => a.final_score >= relevanceFloor);
+              if (kept.length > 0) arbitrated = kept;
+            }
+            const scoreMap = new Map(arbitrated.map((a) => [a.id, a.final_score]));
+            rawHits.sort((a, b) => (scoreMap.get(b.id) ?? 0) - (scoreMap.get(a.id) ?? 0));
+            result = rawHits.map((h) => ({
+              ...h,
+              rerank_score: scoreMap.get(h.id),
+            }));
+          } else {
+            // Reranker unavailable (model missing, timeout, or error):
+            // fall back to the FULL legacy search so recall is not capped
+            // at the candidate pool size.
+            rerankFallback = true;
+            result = search(filters);
+          }
+        } else {
+          result = rawHits;
+        }
+      } else {
+        result = search(filters);
+      }
     } catch (e: any) {
       if (e instanceof FtsQueryError) {
         return { isError: true, content: [{ type: "text", text: e.message }] };
@@ -1174,7 +1328,7 @@ server.tool(
     const annotated = attachTags(result.map(annotateTokens));
     const total_est_tokens = annotated.reduce((s, f) => s + (f.est_tokens ?? 0), 0);
     return {
-      content: [{ type: "text", text: JSON.stringify({ matches: annotated, total_est_tokens }, null, 2) }],
+      content: [{ type: "text", text: JSON.stringify({ matches: annotated, total_est_tokens, ...(rerankFallback ? { rerank_fallback: true, note: "reranker unavailable; results in BM25 order" } : {}) }, null, 2) }],
     };
   }
 );
@@ -2297,6 +2451,16 @@ server.tool(
                 ...(byProject ? { by_project: byProject } : {}),
                 ...(totalEstTokens !== null ? { total_est_tokens: totalEstTokens } : {}),
                 rules_warning: getAgentRulesWarning(project_id),
+                system1: (() => {
+                  const st = rerankEngine.getStatus();
+                  return {
+                    ready: st.loaded,
+                    device: st.device,
+                    model: st.model,
+                    cache_dir: st.cache_dir,
+                    loaded_models: getAllStatuses().map((s) => s.modelId),
+                  };
+                })(),
               },
               null,
               2

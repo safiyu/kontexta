@@ -1,6 +1,6 @@
 {
   "name": "kxta-core",
-  "version": "5.2.0",
+  "version": "6.0.0",
   "description": "Core context and command engines for Kontexta",
   "private": true,
   "type": "module",
@@ -13,6 +13,7 @@
     "dev": "tsc --watch"
   },
   "dependencies": {
+    "@huggingface/transformers": "^4.3.0",
     "@mozilla/readability": "^0.6.0",
     "better-sqlite3": "^12.10.0",
     "chokidar": "^4.0.0",

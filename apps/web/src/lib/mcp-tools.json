@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-30T12:18:06.071Z",
+  "generatedAt": "2026-10-04T22:11:00.809Z",
   "tools": [
     {
       "name": "admin.refresh_session_context",
@@ -542,6 +542,14 @@
             "type": "integer",
             "exclusiveMinimum": 0,
             "description": "Token budget when `include_bodies` is true (default 50000). Files added in rank order until the next would exceed; remainder go to `meta.skipped[]`. Ignored otherwise."
+          },
+          "rerank": {
+            "type": "boolean",
+            "description": "When true, rerank search matches using local cross-encoder neural model and soft content-class arbitration. Defaults to kontexta.json search.rerank.enabled (or true if model available)."
+          },
+          "check_sufficiency": {
+            "type": "boolean",
+            "description": "When include_bodies is true, evaluate retrieval sufficiency with non-autoregressive decision model. Default true."
           }
         },
         "required": [
