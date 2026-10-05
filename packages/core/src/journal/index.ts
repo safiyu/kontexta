@@ -17,6 +17,11 @@ export {
 } from "./repository.js";
 export type { UpsertJournalMetaInput, JournalMetaRow } from "./repository.js";
 export { distillJournal } from "./distill.js";
+export { readJournalIntelligence } from "./intelligence-config.js";
+export type { JournalIntelligence } from "./intelligence-config.js";
+export { splitBucketsOnPivots, isTopicPrompt, PIVOT_THRESHOLD } from "./pivot.js";
+export { gradeEvent, gradeShellCommand, commandVerbs } from "./event-triage.js";
+export type { TriageResult } from "./event-triage.js";
 export type { DistillJournalOpts } from "./distill.js";
 export { checkGit } from "./git-watcher.js";
 export type { GitWatcherState } from "./git-watcher.js";

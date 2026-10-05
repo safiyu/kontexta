@@ -17,6 +17,8 @@ export interface HighWater {
   last_branch?: string | null;
   /** Session id → the readable task name that session was given, so its later batches join the same task. */
   session_tasks?: Record<string, string>;
+  /** Session id → its last prompts, so topic-pivot detection compares across distill runs. */
+  session_prompts?: Record<string, string[]>;
 }
 
 function pathFor(baseDir: string, projectSlug: string): string {
