@@ -1,5 +1,24 @@
 # Changelog
 
+## 6.1.0 - Journal topic-shift detection and event triage (2026-10-05)
+
+### Added
+
+- **Topic-shift detection in journals.** A typed prompt that is semantically far from the previous two prompts in the same session now starts a new task, so one long session no longer becomes one giant journal entry. It uses a small on-device sentence-embedding model (`all-MiniLM-L6-v2`, int8), bundled in `kontexta-reranker-model` 1.1.0, with no network call. The last prompts per session are remembered between distill runs, so a shift on a batch boundary is still caught. Measured on 109 hand-labelled prompt pairs from real journals: precision 0.63, recall 0.77, cross-validated F1 about 0.7 (the keyword rules it replaces scored 0.23). Tune sensitivity with `journal.distillation.decision_engine.pivot_threshold` (default 0.16; lower splits less).
+- **Event triage by what a command does.** Shell commands are graded 0 to 4 from their parsed structure (read-only, changes files, commit or push, release or deploy), ignoring heredoc bodies, quoted strings and PR text. Read-only commands are listed as one `read-only, not listed` line in journal entries instead of one line each (44% of shell events in a real journal).
+- **The `decision_engine` switches now work.** `enabled`, `event_triage`, `topic_pivot_detection` and `task_categorization` under `journal.distillation.decision_engine` were declared in 6.0.0 but never read. They are read from `kontexta.json` now.
+
+### Changed
+
+- **Removed the keyword-based pivot detector and text-matching triage grader added in 6.0.0.** Neither was connected to the distiller. On real journals the grader marked 11% of events "high signal", mostly wrongly, because it matched words inside heredocs and PR bodies.
+- `kontexta-reranker-model` 1.1.0 carries both models; a workflow now verifies the pinned weights on CI whenever the package changes.
+
+### Notes
+
+- The 6.0.0 notes said journals "detect when you shift to a different topic" and that search "can verify if the retrieved results provide enough information". The first was not active until this release. The second still returns a fixed verdict.
+- Pivots are detected between typed prompts, so a session of pure tool calls is never split. The model is English-trained, and the threshold was tuned on one user's journals.
+- Task categories remain keyword-based.
+
 ## 6.0.0 — Smart Search & Journal Improvements (2026-10-05)
 
 ### Added
