@@ -20,6 +20,7 @@
 - **Event triage:** read-only commands like `cat build.log` are graded as noise.
 - **Decision engine:** the timeout timer is cleared after each call; sufficiency checks no longer send the excerpts twice.
 - **Model cache:** falls back to `os.homedir()` when `HOME` is unset.
+- **Search results too large for agents:** `files_search` with `include_bodies` now defaults to a 12,000-token budget (was 50,000), which fit under typical MCP client output limits. The agent rules now tell agents to search without bodies first and read the top hit.
 - **Protected root folders:** Fixed an issue where top-level knowledge base folders could be accidentally deleted from the web dashboard.
 
 ### Breaking

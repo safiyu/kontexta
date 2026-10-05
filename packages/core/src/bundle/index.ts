@@ -136,7 +136,7 @@ export async function bundleSearch(
   opts: BundleOptions = {}
 ): Promise<BundleResult> {
   const format: BundleFormat = opts.format ?? "xml";
-  const max_tokens = opts.max_tokens ?? 50000;
+  const max_tokens = opts.max_tokens ?? 12000;
   const skipped: BundleSkippedItem[] = [];
 
   let queryIntent: string | undefined;

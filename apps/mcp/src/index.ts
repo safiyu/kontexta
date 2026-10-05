@@ -1216,7 +1216,7 @@ server.tool(
       .describe("Filter by content class. dictionary = authoritative KB (system IDs, mappings, glossaries), note = informational KB, journal = time-log, project = project file. Omit to see all classes with dictionary-first ordering."),
     include_bodies: z.boolean().optional().describe("If true, return a single prompt-ready bundle of matched bodies instead of a match list. Response shape changes to `{bundle, meta: {included, skipped, ...}}`. Default false."),
     format: z.enum(["xml", "markdown"]).optional().describe("Bundle format when `include_bodies` is true. xml = Anthropic-recommended <document> tags (default); markdown = ## headers + fenced blocks. Ignored otherwise."),
-    max_tokens: z.number().int().positive().optional().describe("Token budget when `include_bodies` is true (default 50000). Files added in rank order until the next would exceed; remainder go to `meta.skipped[]`. Ignored otherwise."),
+    max_tokens: z.number().int().positive().optional().describe("Token budget when `include_bodies` is true (default 12000). Files added in rank order until the next would exceed; remainder go to `meta.skipped[]`. Ignored otherwise."),
     rerank: z.boolean().optional().describe("When true, rerank search matches using local cross-encoder neural model and soft content-class arbitration. Defaults to kontexta.json search.rerank.enabled (or true if model available)."),
     check_sufficiency: z.boolean().optional().describe("When include_bodies is true, evaluate retrieval sufficiency with non-autoregressive decision model. Default true."),
   },
@@ -1242,7 +1242,7 @@ server.tool(
       try {
         bundleResult = await bundleSearch(filters, {
           format: format ?? "xml",
-          max_tokens: max_tokens ?? 50000,
+          max_tokens: max_tokens ?? 12000,
           rerank: shouldRerank,
           check_sufficiency: shouldCheckSufficiency,
           candidate_limit: candidateLimit,

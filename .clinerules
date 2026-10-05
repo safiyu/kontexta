@@ -11,11 +11,11 @@ This project is registered with kontexta. Honor these rules to keep the index, h
 
 **Print the session welcome as your first message.** On the very first turn of any new session, call `admin_refresh_session_context` and print a brief greeting to the user based on what it returns — today's date, their name from the profile, upcoming events / conflicts if any, a nudge if the profile is empty or stale. 1–3 lines, not a report. Two reasons: (1) if the client lazy-loads MCP servers, this is what actually triggers `initialize`; (2) the user sees kontexta is connected and knows what context you have. Skip if the user's first message is already a work request — do the work.
 
-**Search before reading.** Use `files_search` (pass `include_bodies: true` for token-budgeted bodies) or `files_regex_search` to find context first. Skipping straight to `files_read` on a guessed path wastes tokens and often misses the right file.
+**Search before reading.** Use `files_search` (ranked matches with excerpts; add `include_bodies: true` only when you need several files at once, with a small `max_tokens`) or `files_regex_search` to find context first, then `files_read` the top hit. Skipping straight to `files_read` on a guessed path wastes tokens and often misses the right file.
 
 **All KB writes go through kontexta.** Use `files_create` / `files_update` (pass `section` for a surgical single-heading edit) / `journal_write`. **Never** edit a KB file with raw filesystem tools (Edit/Write/cat) — the watcher and FTS index will diverge until `projects_refresh_index` runs, and subsequent searches will return stale results.
 
-**Batch reads. Don't loop `files_read`.** Need ≥2 files? Call `files_read` with `ids: [...]` (one round-trip, up to 200 IDs) or `files_search` with `include_bodies: true` (token-budgeted blob). Looping single-ID `files_read` calls wastes round-trips and inflates response overhead.
+**Batch reads. Don't loop `files_read`.** Need ≥2 files? Call `files_read` with `ids: [...]` (one round-trip, up to 200 IDs) or `files_search` with `include_bodies: true` and a modest `max_tokens` (default 12000). Looping single-ID `files_read` calls wastes round-trips and inflates response overhead.
 
 **Address `journal.suggested_action` before the next tool call.** Many tool responses include a `journal` envelope. If `journal.suggested_action` is set (e.g., `"journal_distill"`), call that tool before issuing your next tool. To dismiss for the rest of the session, pass `journal_acknowledge: true` on your next tool call.
 
@@ -44,7 +44,7 @@ KIs are curated, distilled KB files — the highest-signal context in the vault.
 They save tokens and prevent redundant research when used correctly.
 
 **Check KIs before independent research.** At the start of any task, run 
-`files_search` (optionally `include_bodies: true`) over the KB for the task topic. If a matching KI 
+`files_search` over the KB for the task topic (no bodies first; `files_read` the best hit). If a matching KI 
 exists, read it before writing code, designing architecture, or forming a plan. 
 Skipping this step is the single most common source of duplicated work.
 
@@ -78,7 +78,7 @@ The matrix below is grouped by intent. For each tool: when to reach for it, the 
 
 | Tool | When | Not when | Use instead |
 |---|---|---|---|
-| `files_search` | Natural-language keyword across KB (FTS); pass `include_bodies: true` for a token-budgeted bundle of hits + bodies | Substrings, URLs, code idents | `files_regex_search` |
+| `files_search` | Natural-language keyword across KB (FTS); `include_bodies: true` returns a bundle of hits + bodies capped at `max_tokens` (default 12000); use it sparingly | Substrings, URLs, code idents | `files_regex_search` |
 | `files_regex_search` | Substrings, URLs, code identifiers across files; pass `file_id` to scan just one known file | Natural-language queries | `files_search` |
 | `files_find_related` | Discover siblings via tag overlap | Text content matching | `files_search` |
 | `tags_suggest` | Propose tags for an existing file | Finding files by tag | `files_find_related` |

@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-05T09:48:30.584Z",
+  "generatedAt": "2026-10-05T14:10:28.852Z",
   "tools": [
     {
       "name": "admin_refresh_session_context",
@@ -541,7 +541,7 @@
           "max_tokens": {
             "type": "integer",
             "exclusiveMinimum": 0,
-            "description": "Token budget when `include_bodies` is true (default 50000). Files added in rank order until the next would exceed; remainder go to `meta.skipped[]`. Ignored otherwise."
+            "description": "Token budget when `include_bodies` is true (default 12000). Files added in rank order until the next would exceed; remainder go to `meta.skipped[]`. Ignored otherwise."
           },
           "rerank": {
             "type": "boolean",
