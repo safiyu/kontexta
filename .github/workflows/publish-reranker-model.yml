@@ -1,0 +1,52 @@
+name: Publish kontexta-reranker-model
+
+# Manual, token-based publish for the model package. Needed for the very first
+# release (npm trusted publishing cannot create a new package) and usable any
+# time the model package changes without a kontexta release. Skips when the
+# version in packages/reranker-model/package.json is already on the registry.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write   # provenance attestation
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Check NPM_TOKEN is configured
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "$NPM_TOKEN" ]; then
+            echo "::error::Repository secret NPM_TOKEN is not set. Create a granular access token on npmjs.com with publish rights and add it as NPM_TOKEN."
+            exit 1
+          fi
+
+      - name: Fetch and verify weights
+        run: node packages/reranker-model/scripts/fetch-weights.mjs
+
+      - name: Publish (skipped when this version already exists)
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          NAME=$(node -p "require('./packages/reranker-model/package.json').name")
+          VER=$(node -p "require('./packages/reranker-model/package.json').version")
+          if npm view "$NAME@$VER" version >/dev/null 2>&1; then
+            echo "$NAME@$VER already on npm; nothing to do"
+            exit 0
+          fi
+          npm publish ./packages/reranker-model --access public --provenance
+          echo "Published $NAME@$VER"
