@@ -87,6 +87,7 @@ COPY --from=builder /app/apps/web/.next/static ./apps/web/.next/static
 # file-tracing resolves __dirname at runtime.
 COPY --from=builder /app/packages/core/src/db/migrations ./packages/core/src/db/migrations
 COPY --from=builder /app/packages/core/src/agent-rules/rules-block.md ./packages/core/src/agent-rules/rules-block.md
+COPY --from=builder /app/packages/core/src/agent-rules/rules-reference.md ./packages/core/src/agent-rules/rules-reference.md
 COPY --from=builder /app/packages/core/src/hooks/emit.mjs ./packages/core/src/hooks/emit.mjs
 
 # Copy deployed MCP server

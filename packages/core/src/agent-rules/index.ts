@@ -110,22 +110,22 @@ export const SCAFFOLDS: Record<AgentId, ScaffoldDef> = {
   generic:       { path: "CLAUDE.md", header: claudeStyleHeader },
 };
 
-function loadRulesBlockBody(): string {
+/** Shared candidate-path builder for rules-block.md and rules-reference.md. */
+function rulesCandidates(filename: string): string[] {
   const here = dirname(fileURLToPath(import.meta.url));
-  // We check multiple candidates to handle different deployment environments:
-  // 1. Standard tsc build: dist/agent-rules/rules-block.md (here/rules-block.md)
-  // 2. Tsup bundle (MCP): apps/mcp/dist/agent-rules/rules-block.md (here/agent-rules/rules-block.md)
-  // 3. Next.js standalone: handles monorepo flattening or relative tracing.
-  const candidates = [
-    join(here, "rules-block.md"),
-    join(here, "agent-rules", "rules-block.md"),
-    join(here, "..", "..", "src", "agent-rules", "rules-block.md"), // dist/agent-rules → package root → src/agent-rules
-    join(process.cwd(), "packages", "core", "src", "agent-rules", "rules-block.md"),
-    join(process.cwd(), "packages", "core", "dist", "agent-rules", "rules-block.md"),
-    // Next.js standalone: server.js chdirs into apps/web, so monorepo root is two up
-    join(process.cwd(), "..", "..", "packages", "core", "src", "agent-rules", "rules-block.md"),
-    join(process.cwd(), "..", "..", "packages", "core", "dist", "agent-rules", "rules-block.md"),
+  return [
+    join(here, filename),
+    join(here, "agent-rules", filename),
+    join(here, "..", "..", "src", "agent-rules", filename),
+    join(process.cwd(), "packages", "core", "src", "agent-rules", filename),
+    join(process.cwd(), "packages", "core", "dist", "agent-rules", filename),
+    join(process.cwd(), "..", "..", "packages", "core", "src", "agent-rules", filename),
+    join(process.cwd(), "..", "..", "packages", "core", "dist", "agent-rules", filename),
   ];
+}
+
+function loadMarkdownAsset(filename: string, marker: string | null): string {
+  const candidates = rulesCandidates(filename);
   const errors: string[] = [];
   for (const p of candidates) {
     try {
@@ -134,26 +134,37 @@ function loadRulesBlockBody(): string {
         continue;
       }
       const raw = readFileSync(p, "utf8");
-      const beginIdx = raw.indexOf("<!-- BEGIN kontexta:rules");
-      if (beginIdx === -1) {
-        errors.push(`missing BEGIN marker: ${p}`);
-        continue;
+      if (marker) {
+        const beginIdx = raw.indexOf(marker);
+        if (beginIdx === -1) {
+          errors.push(`missing marker: ${p}`);
+          continue;
+        }
+        return raw.slice(beginIdx).replace(/\{\{VERSION\}\}/g, RULE_BLOCK_VERSION);
       }
-      return raw.slice(beginIdx).replace(/\{\{VERSION\}\}/g, RULE_BLOCK_VERSION);
+      return raw.replace(/\{\{VERSION\}\}/g, RULE_BLOCK_VERSION);
     } catch (e: any) {
       errors.push(`error reading ${p}: ${e.message}`);
     }
   }
   throw new Error(
-    `rules-block.md not found or invalid. Checked:\n- ${candidates.join("\n- ")}\nDetails:\n- ${errors.join("\n- ")}`
+    `${filename} not found or invalid. Checked:\n- ${candidates.join("\n- ")}\nDetails:\n- ${errors.join("\n- ")}`
   );
+}
+
+function loadRulesBlockBody(): string {
+  return loadMarkdownAsset("rules-block.md", "<!-- BEGIN kontexta:rules");
+}
+
+function loadRulesReferenceBody(): string {
+  return loadMarkdownAsset("rules-reference.md", null);
 }
 
 // Try eagerly so existing `import { RULES_BLOCK_BODY }` consumers still see
 // the content, but DON'T throw if the asset is missing — previously a missing
 // rules-block.md broke every `import "kxta-core"` (web, MCP, publish, etc.)
 // even for callers that never touch agent-rules. The deferred error surfaces
-// only when getRulesBlockBody() is actually called.
+// only when getRulesBlockBody() / getRulesReferenceBody() is actually called.
 let _rulesBlockBody: string | null = null;
 let _rulesBlockError: Error | null = null;
 try {
@@ -163,7 +174,6 @@ try {
 }
 export function getRulesBlockBody(): string {
   if (_rulesBlockBody != null) return _rulesBlockBody;
-  // Retry once in case the file appeared after module load (HMR / lazy copy).
   try {
     _rulesBlockBody = loadRulesBlockBody();
     _rulesBlockError = null;
@@ -174,6 +184,26 @@ export function getRulesBlockBody(): string {
   }
 }
 export const RULES_BLOCK_BODY = _rulesBlockBody ?? "";
+
+let _rulesReferenceBody: string | null = null;
+try {
+  _rulesReferenceBody = loadRulesReferenceBody();
+} catch {
+  // Non-fatal: reference file is only needed when syncAgentRules writes KONTEXTA.md
+}
+export function getRulesReferenceBody(): string {
+  if (_rulesReferenceBody != null) return _rulesReferenceBody;
+  try {
+    _rulesReferenceBody = loadRulesReferenceBody();
+    return _rulesReferenceBody;
+  } catch (e: any) {
+    throw e instanceof Error ? e : new Error(String(e));
+  }
+}
+export const RULES_REFERENCE_BODY = _rulesReferenceBody ?? "";
+
+/** File name for the full rules reference at the project root. */
+export const KONTEXTA_MD = "KONTEXTA.md";
 
 // Note: .aider.conf.yml is intentionally NOT in this list. It's a YAML file;
 // injectOrUpdate writes HTML-comment markers (<!-- BEGIN... -->) which would
@@ -319,6 +349,7 @@ export interface SyncSkippedEntry {
 export interface SyncResult {
   written: SyncResultEntry[];
   skipped: SyncSkippedEntry[];
+  reference?: SyncResultEntry;
   optional_hook_snippet?: string;          // backward compat (SessionStart only)
   optional_hook_install_path?: string;
   optional_hook_snippets?: {
@@ -377,6 +408,32 @@ export function syncAgentRules(opts: SyncOpts): SyncResult {
   const written: SyncResultEntry[] = [];
   const skipped: SyncSkippedEntry[] = [];
 
+  let reference: SyncResultEntry | undefined;
+  // Always write/update KONTEXTA.md with the full rules reference.
+  try {
+    const refBody = getRulesReferenceBody();
+    const kontextaPath = resolveInside(projectPath, KONTEXTA_MD);
+    if (kontextaPath) {
+      // Strip the HTML comment header (authoring notes) — only the rendered content goes to the project.
+      const headerEnd = refBody.indexOf("-->");
+      const cleanBody = headerEnd !== -1 ? refBody.slice(headerEnd + 3).replace(/^\n+/, "") : refBody;
+      let needsWrite = true;
+      const alreadyExists = existsSync(kontextaPath);
+      try {
+        const existing = readFileSync(kontextaPath, "utf8");
+        if (existing === cleanBody) needsWrite = false;
+      } catch { /* file doesn't exist yet, write it */ }
+      if (needsWrite) {
+        atomicWrite(kontextaPath, cleanBody);
+        reference = { path: KONTEXTA_MD, action: alreadyExists ? "updated" : "created", version: RULE_BLOCK_VERSION };
+      } else {
+        reference = { path: KONTEXTA_MD, action: "skipped", version: RULE_BLOCK_VERSION };
+      }
+    }
+  } catch (e: any) {
+    // Non-fatal: if rules-reference.md is unavailable, agent stubs still work.
+  }
+
   if (files.length === 0) {
     if (!targetAgent) {
       throw new Error("syncAgentRules: targetAgent required when files is empty");
@@ -386,7 +443,7 @@ export function syncAgentRules(opts: SyncOpts): SyncResult {
     const absPath = resolveInside(projectPath, relPath);
     if (!absPath) {
       skipped.push({ path: relPath, reason: "escape" });
-      return { written, skipped };
+      return { written, skipped, ...(reference ? { reference } : {}) };
     }
     const initial = scaffold.header(project) + getRulesBlockBody();
     atomicWrite(absPath, initial);
@@ -394,6 +451,7 @@ export function syncAgentRules(opts: SyncOpts): SyncResult {
     return {
       written,
       skipped,
+      ...(reference ? { reference } : {}),
       optional_hook_snippet: SESSION_START_HOOK_SNIPPET,
       optional_hook_install_path: "~/.claude/settings.json (Claude Code only)",
       optional_hook_snippets: {
@@ -467,6 +525,7 @@ export function syncAgentRules(opts: SyncOpts): SyncResult {
   return {
     written,
     skipped,
+    ...(reference ? { reference } : {}),
     optional_hook_snippet: SESSION_START_HOOK_SNIPPET,
     optional_hook_install_path: "~/.claude/settings.json (Claude Code only)",
     optional_hook_snippets: {

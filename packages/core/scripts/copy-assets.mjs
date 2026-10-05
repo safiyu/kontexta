@@ -29,6 +29,7 @@ function copyDirRecursive(src, dst) {
 const moves = [
   { from: join(pkgRoot, "src", "db", "migrations"), to: join(pkgRoot, "dist", "db", "migrations"), kind: "dir" },
   { from: join(pkgRoot, "src", "agent-rules", "rules-block.md"), to: join(pkgRoot, "dist", "agent-rules", "rules-block.md"), kind: "file" },
+  { from: join(pkgRoot, "src", "agent-rules", "rules-reference.md"), to: join(pkgRoot, "dist", "agent-rules", "rules-reference.md"), kind: "file" },
   { from: join(pkgRoot, "src", "hooks", "emit.mjs"), to: join(pkgRoot, "dist", "hooks", "emit.mjs"), kind: "file" },
 ];
 

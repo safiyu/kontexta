@@ -18,6 +18,8 @@ export { computeContentClass, type ComputeContentClassArgs } from "./content-cla
 export {
   RULE_BLOCK_VERSION,
   RULES_BLOCK_BODY,
+  RULES_REFERENCE_BODY,
+  KONTEXTA_MD,
   SCAFFOLDS,
   detectAgentContextFiles,
   parseMarker,
