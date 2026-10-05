@@ -75,6 +75,19 @@ jobs:
       - name: Run smoke tests
         run: pnpm -C apps/mcp test
 
+      - name: Fetch reranker weights
+        run: pnpm -C packages/reranker-model run fetch-weights
+
+      - name: Publish kontexta-reranker-model to npm (skipped when this version already exists)
+        run: |
+          NAME=$(node -p "require('./packages/reranker-model/package.json').name")
+          VER=$(node -p "require('./packages/reranker-model/package.json').version")
+          if npm view "$NAME@$VER" version >/dev/null 2>&1; then
+            echo "$NAME@$VER already on npm; skipping"
+          else
+            npx -y npm@latest publish ./packages/reranker-model --access public --provenance
+          fi
+
       - name: Publish kontexta-mcp to npm
         run: npx -y npm@latest publish ./apps/mcp --access public --provenance
 

@@ -10,6 +10,7 @@
 
 import type { ModelRuntimeConfig, ModelSessionStatus, ExecutionDevice } from "./types.js";
 import { getModelCacheDir, modelCachePath, isModelCachedLocally, invalidateModelCache } from "./cache-manager.js";
+import { resolveBundledModelsDir } from "./bundled.js";
 
 /**
  * Runtime state for a single loaded model.
@@ -199,10 +200,15 @@ class InferenceRuntime {
   ): Promise<unknown> {
     const { AutoTokenizer, AutoModelForSequenceClassification, pipeline, env } = await import("@huggingface/transformers");
 
-    const cacheDir = config.cacheDir ?? getModelCacheDir();
-    env.cacheDir = cacheDir;
+    env.cacheDir = config.cacheDir ?? getModelCacheDir();
     env.allowLocalModels = true;
-    env.allowRemoteModels = true;
+    const bundled = resolveBundledModelsDir(config.modelId);
+    if (bundled) {
+      env.localModelPath = bundled;
+      env.allowRemoteModels = false;
+    } else {
+      env.allowRemoteModels = true;
+    }
 
     // Set device preference for transformers
     if (device === "cpu" && env.backends?.onnx?.wasm) {

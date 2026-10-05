@@ -27,6 +27,7 @@
     "better-sqlite3": "^12.10.0",
     "jsdom": "^29.1.1",
     "kontexta-mcp": "workspace:*",
+    "kontexta-reranker-model": "^1.0.0",
     "kxta-core": "workspace:*",
     "kxta-publish": "workspace:*",
     "lucide-react": "^1.21.0",

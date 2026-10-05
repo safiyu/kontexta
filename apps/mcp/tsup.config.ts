@@ -3,7 +3,7 @@ import { mkdirSync, copyFileSync, readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 export default defineConfig({
-  entry: ["src/index.ts", "src/hooks-cli.ts", "src/connect-cli.ts", "src/models-cli.ts"],
+  entry: ["src/index.ts", "src/hooks-cli.ts", "src/connect-cli.ts"],
   outDir: "dist",
   format: ["esm"],
   target: "node22",

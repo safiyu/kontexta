@@ -55,15 +55,6 @@ export async function runStart(): Promise<never> {
     }
   }
 
-  if (!process.env.KONTEXTA_NO_MODELS) {
-    try {
-      const { runModelsEnsure } = await import('./models.js');
-      runModelsEnsure({ ...process.env, KONTEXTA_DATA_DIR: data.path });
-    } catch (e: any) {
-      process.stderr.write(`reranker model check skipped: ${e?.message ?? e}\n`);
-    }
-  }
-
   const rawPort = process.env.PORT;
   const preferred = rawPort && /^\d+$/.test(rawPort) ? Number(rawPort) : 23002;
   if (rawPort && !/^\d+$/.test(rawPort)) {

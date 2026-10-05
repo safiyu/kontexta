@@ -7,7 +7,7 @@
 - **Smarter search ranking:** Search matches are now automatically re-ordered using a built-in local AI model to surface the most relevant notes and documents first.
 - **Context sufficiency checks:** The search system can now verify if the retrieved results provide enough information to answer your request.
 
-- **Reranker model ready at startup:** `kontexta start` downloads the search reranker model on first run (3-minute cap) before serving. Skip with `KONTEXTA_NO_MODELS=1` or `search.rerank.enabled: false`; a failed download falls back to BM25 order.
+- **Reranker model bundled:** the search reranker weights now ship in the `kontexta-reranker-model` npm package (a dependency of `kontexta` and `kontexta-mcp`) and in the Docker image, so nothing is downloaded from Hugging Face at runtime. Previously a corporate proxy blocking the HF CDN silently disabled reranking on every search.
 
 ### Changed
 

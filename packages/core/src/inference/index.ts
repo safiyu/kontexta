@@ -27,8 +27,8 @@ export {
   _resetCacheDir,
 } from "./cache-manager.js";
 
-// Model prefetch
-export { ensureModelCached } from "./prefetch.js";
+// Bundled weights (kontexta-reranker-model)
+export { resolveBundledModelsDir } from "./bundled.js";
 
 // Runtime singleton
 export {

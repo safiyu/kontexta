@@ -96,7 +96,6 @@ jobs:
         env:
           PORT: '45600'
           KONTEXTA_NO_OPEN: '1'
-          KONTEXTA_NO_MODELS: '1'
           KONTEXTA_DATA_DIR: ${{ runner.temp }}/kontexta-vault
         run: |
           kontexta start &

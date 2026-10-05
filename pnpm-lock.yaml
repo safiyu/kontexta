@@ -47,6 +47,9 @@ importers:
       jsdom:
         specifier: ^29.1.1
         version: 29.1.1(@noble/hashes@1.8.0)
+      kontexta-reranker-model:
+        specifier: ^1.0.0
+        version: link:../../packages/reranker-model
       re2:
         specifier: ^1.24.1
         version: 1.24.1
@@ -178,6 +181,9 @@ importers:
       kontexta-mcp:
         specifier: workspace:*
         version: link:../mcp
+      kontexta-reranker-model:
+        specifier: ^1.0.0
+        version: link:../../packages/reranker-model
       kxta-core:
         specifier: workspace:*
         version: link:../../packages/core
@@ -350,6 +356,9 @@ importers:
       jsdom:
         specifier: ^29.1.1
         version: 29.1.1(@noble/hashes@1.8.0)
+      kontexta-reranker-model:
+        specifier: ^1.0.0
+        version: link:../reranker-model
       lucide-react:
         specifier: ^1.21.0
         version: 1.21.0(react@19.2.6)
@@ -496,6 +505,8 @@ importers:
       vitest:
         specifier: ^3.0.0
         version: 3.2.4(@types/debug@4.1.13)(@types/node@22.19.19)(jiti@1.21.7)(jsdom@29.1.1(@noble/hashes@1.8.0))(yaml@2.9.1)
+
+  packages/reranker-model: {}
 
 packages:
 
