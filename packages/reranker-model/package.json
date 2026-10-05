@@ -1,7 +1,7 @@
 {
   "name": "kontexta-reranker-model",
-  "version": "1.0.0",
-  "description": "Bundled ONNX weights for Kontexta's search reranker (Xenova/ms-marco-MiniLM-L-6-v2), so no model download is needed at runtime",
+  "version": "1.1.0",
+  "description": "Bundled ONNX weights for Kontexta on-device models (search reranker, journal topic-pivot embeddings), so no model download is needed at runtime",
   "type": "module",
   "license": "Apache-2.0",
   "author": "safiyu",

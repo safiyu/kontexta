@@ -30,6 +30,10 @@ export {
 // Bundled weights (kontexta-reranker-model)
 export { resolveBundledModelsDir } from "./bundled.js";
 
+// Sentence embeddings (journal topic-pivot detection)
+export { EMBEDDING_MODEL_ID, embedTexts, cosineSimilarity, meanVector } from "./embeddings.js";
+export type { EmbedFn } from "./embeddings.js";
+
 // Runtime singleton
 export {
   inferenceRuntime,

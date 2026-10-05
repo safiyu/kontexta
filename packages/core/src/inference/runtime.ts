@@ -232,6 +232,7 @@ class InferenceRuntime {
       config.modelId,
       {
         progress_callback: () => {},
+        ...(config.dtype ? { dtype: config.dtype } : {}),
       }
     );
 
