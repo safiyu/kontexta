@@ -25,6 +25,16 @@ export function bucketOf(folder: string | null | undefined): KbBucket | null {
 }
 
 /**
+ * True if the folder is a root KB folder (e.g. "journal", "knowledge", "mermaid", "html", or any top-level folder).
+ * Root knowledge folders cannot be deleted.
+ */
+export function isRootKnowledgeFolder(folder: string | null | undefined): boolean {
+  if (!folder) return false;
+  const parts = segments(folder);
+  return parts.length <= 1;
+}
+
+/**
  * The one file format each bucket accepts (outside html/resources, which
  * allows anything and returns null here).
  */

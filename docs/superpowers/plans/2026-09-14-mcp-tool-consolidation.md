@@ -21,27 +21,27 @@
 
 ---
 
-### Task 1: Merge `files.create_many` into `files.create`
+### Task 1: Merge `files_create_many` into `files_create`
 
 **Files:**
-- Modify: `apps/mcp/src/index.ts:433-467` (rewrite `files.create` registration)
-- Delete: `apps/mcp/src/index.ts:1997-...` (whole `files.create_many` registration block)
-- Modify: `scripts/build-smithery-bundle.mjs` (remove `files.create_many` from `NEUTRAL_TOOLS`)
-- Modify: `packages/core/src/journal/patterns/tool-classes.ts` (add `"files.create_many"` to LEGACY_WRITE_PREFIXES-style block if not already covered)
-- Modify: `apps/mcp/test-tools.mjs` (rename any `files.create_many` calls to `files.create` with array input)
+- Modify: `apps/mcp/src/index.ts:433-467` (rewrite `files_create` registration)
+- Delete: `apps/mcp/src/index.ts:1997-...` (whole `files_create_many` registration block)
+- Modify: `scripts/build-smithery-bundle.mjs` (remove `files_create_many` from `NEUTRAL_TOOLS`)
+- Modify: `packages/core/src/journal/patterns/tool-classes.ts` (add `"files_create_many"` to LEGACY_WRITE_PREFIXES-style block if not already covered)
+- Modify: `apps/mcp/test-tools.mjs` (rename any `files_create_many` calls to `files_create` with array input)
 
 **Interfaces:**
-- Produces: `files.create({ files: FileCreateInput[] })` where `FileCreateInput` is the current single-file zod object (title, content, destination, project_id?, folder?, tags?, format?, kind?). Length-1 array = single-file case.
+- Produces: `files_create({ files: FileCreateInput[] })` where `FileCreateInput` is the current single-file zod object (title, content, destination, project_id?, folder?, tags?, format?, kind?). Length-1 array = single-file case.
 
-- [ ] **Step 1: Read current `files.create_many` handler** at `apps/mcp/src/index.ts:1997` to capture its exact validation + return shape.
+- [ ] **Step 1: Read current `files_create_many` handler** at `apps/mcp/src/index.ts:1997` to capture its exact validation + return shape.
 
-- [ ] **Step 2: Add failing smoke-test case** in `apps/mcp/test-tools.mjs` — a single `files.create` call with `{ files: [<one entry>] }` returns a single-element array. Run to confirm it fails (old shape didn't accept arrays).
+- [ ] **Step 2: Add failing smoke-test case** in `apps/mcp/test-tools.mjs` — a single `files_create` call with `{ files: [<one entry>] }` returns a single-element array. Run to confirm it fails (old shape didn't accept arrays).
 
-- [ ] **Step 3: Rewrite `files.create` registration** — new zod schema:
+- [ ] **Step 3: Rewrite `files_create` registration** — new zod schema:
 
 ```ts
 server.tool(
-  "files.create",
+  "files_create",
   "Create one or more markdown/mermaid/HTML files ... [merged description]",
   {
     files: z.array(z.object({
@@ -72,11 +72,11 @@ server.tool(
 );
 ```
 
-- [ ] **Step 4: Delete `files.create_many` registration block** (currently ~lines 1997 through its closing `);`).
+- [ ] **Step 4: Delete `files_create_many` registration block** (currently ~lines 1997 through its closing `);`).
 
-- [ ] **Step 5: Remove `"files.create_many"` from `NEUTRAL_TOOLS`** in `scripts/build-smithery-bundle.mjs`.
+- [ ] **Step 5: Remove `"files_create_many"` from `NEUTRAL_TOOLS`** in `scripts/build-smithery-bundle.mjs`.
 
-- [ ] **Step 6: Add `"files.create_many"` to LEGACY block** in `packages/core/src/journal/patterns/tool-classes.ts` — it should already match a `create_` prefix, so no change may be needed. Verify with `grep create_ packages/core/src/journal/patterns/tool-classes.ts`.
+- [ ] **Step 6: Add `"files_create_many"` to LEGACY block** in `packages/core/src/journal/patterns/tool-classes.ts` — it should already match a `create_` prefix, so no change may be needed. Verify with `grep create_ packages/core/src/journal/patterns/tool-classes.ts`.
 
 - [ ] **Step 7: Build + smoke test**:
 ```bash
@@ -90,31 +90,31 @@ Expected: all pass, smithery build reports 70 tools (one less).
 - [ ] **Step 8: Commit**:
 ```bash
 git add apps/mcp/src/index.ts apps/mcp/test-tools.mjs scripts/build-smithery-bundle.mjs packages/core/src/journal/patterns/tool-classes.ts apps/web/src/lib/mcp-tools.json
-git commit -m "refactor(mcp): merge files.create_many into files.create (breaking)"
+git commit -m "refactor(mcp): merge files_create_many into files_create (breaking)"
 ```
 
 ---
 
-### Task 2: Merge `files.delete_many` into `files.delete`
+### Task 2: Merge `files_delete_many` into `files_delete`
 
 **Files:**
-- Modify: `apps/mcp/src/index.ts:906` (rewrite `files.delete` registration)
-- Delete: `apps/mcp/src/index.ts:2062-...` (`files.delete_many` block)
-- Modify: `scripts/build-smithery-bundle.mjs` (remove `files.delete_many` from `DESTRUCTIVE_TOOLS`)
+- Modify: `apps/mcp/src/index.ts:906` (rewrite `files_delete` registration)
+- Delete: `apps/mcp/src/index.ts:2062-...` (`files_delete_many` block)
+- Modify: `scripts/build-smithery-bundle.mjs` (remove `files_delete_many` from `DESTRUCTIVE_TOOLS`)
 - Modify: `apps/mcp/test-tools.mjs`
 
 **Interfaces:**
-- Produces: `files.delete({ ids: number[] })` — length-1 = single-file case; returns `{ deleted: number[], errors: {id, error}[] }`.
+- Produces: `files_delete({ ids: number[] })` — length-1 = single-file case; returns `{ deleted: number[], errors: {id, error}[] }`.
 
-- [ ] **Step 1: Read current `files.delete_many` handler** at `apps/mcp/src/index.ts:2062` for its exact error-isolation pattern.
+- [ ] **Step 1: Read current `files_delete_many` handler** at `apps/mcp/src/index.ts:2062` for its exact error-isolation pattern.
 
-- [ ] **Step 2: Add failing smoke-test case** — `files.delete({ ids: [<one_id>] })` returns `{ deleted: [id], errors: [] }`.
+- [ ] **Step 2: Add failing smoke-test case** — `files_delete({ ids: [<one_id>] })` returns `{ deleted: [id], errors: [] }`.
 
-- [ ] **Step 3: Rewrite `files.delete` registration**:
+- [ ] **Step 3: Rewrite `files_delete` registration**:
 
 ```ts
 server.tool(
-  "files.delete",
+  "files_delete",
   "DESTRUCTIVE. Delete one or more files by ID. Removes each file from disk, FTS index, tag links, and (if configured) commits a deletion to the file's git backup. Per-file failures are isolated to `errors[]` — the tool never partial-throws. Returns `{ deleted: number[], errors: { id, error }[] }`.",
   { ids: z.array(z.number().int().positive()).min(1).describe("File IDs to delete. Length-1 array = single-file case.") },
   async ({ ids }) => {
@@ -133,54 +133,54 @@ server.tool(
 );
 ```
 
-- [ ] **Step 4: Delete `files.delete_many` registration block.**
+- [ ] **Step 4: Delete `files_delete_many` registration block.**
 
-- [ ] **Step 5: Remove `"files.delete_many"` from `DESTRUCTIVE_TOOLS`** in `scripts/build-smithery-bundle.mjs`.
+- [ ] **Step 5: Remove `"files_delete_many"` from `DESTRUCTIVE_TOOLS`** in `scripts/build-smithery-bundle.mjs`.
 
-- [ ] **Step 6: Update `apps/mcp/test-tools.mjs`** — every existing `files.delete` call currently passes `{ id }`; change to `{ ids: [id] }`. Add a multi-id case.
+- [ ] **Step 6: Update `apps/mcp/test-tools.mjs`** — every existing `files_delete` call currently passes `{ id }`; change to `{ ids: [id] }`. Add a multi-id case.
 
 - [ ] **Step 7: Build + smoke test + smithery dry-run** (69 tools expected).
 
 - [ ] **Step 8: Commit**:
 ```bash
-git commit -m "refactor(mcp): merge files.delete_many into files.delete (breaking)"
+git commit -m "refactor(mcp): merge files_delete_many into files_delete (breaking)"
 ```
 
 ---
 
-### Task 3: Unify the read family — `files.read` absorbs `read_many`, `read_by_path`, `read_section`, `read_lines`
+### Task 3: Unify the read family — `files_read` absorbs `read_many`, `read_by_path`, `read_section`, `read_lines`
 
 **Files:**
-- Modify: `apps/mcp/src/index.ts:530` (rewrite `files.read`)
+- Modify: `apps/mcp/src/index.ts:530` (rewrite `files_read`)
 - Delete: registrations at `544` (`read_many`), `702` (`read_lines`), `1675` (`read_section`), `2149` (`read_by_path`)
 - Modify: `scripts/build-smithery-bundle.mjs` (remove 4 names from `READ_ONLY_TOOLS`)
 - Modify: `packages/core/src/journal/patterns/tool-classes.ts` (add legacy names to READ_ONLY_TOOL_NAMES set — they already are; verify)
 - Modify: `apps/mcp/test-tools.mjs`
 
 **Interfaces:**
-- Produces: `files.read({ id?, path?, ids?, section?, lines? })`. Validation: exactly one of `{id, path, ids}`; `section` XOR `lines`; partial-read modifiers require single-file mode. Returns single object for `id | path`, array for `ids`.
+- Produces: `files_read({ id?, path?, ids?, section?, lines? })`. Validation: exactly one of `{id, path, ids}`; `section` XOR `lines`; partial-read modifiers require single-file mode. Returns single object for `id | path`, array for `ids`.
 
-- [ ] **Step 1: Read each of the four handlers** (`files.read`, `files.read_many`, `files.read_by_path`, `files.read_section`, `files.read_lines`) to capture the exact single-shape return payloads. `files.read_outline` stays as-is — do not touch it.
+- [ ] **Step 1: Read each of the four handlers** (`files_read`, `files_read_many`, `files_read_by_path`, `files_read_section`, `files_read_lines`) to capture the exact single-shape return payloads. `files_read_outline` stays as-is — do not touch it.
 
 - [ ] **Step 2: Add failing smoke-test cases** — one per input mode:
 ```js
 // pseudocode
-await callTool("files.read", { id: SEED_ID_1 });                          // full body, single
-await callTool("files.read", { path: SEED_PATH_1 });                      // full body via path
-await callTool("files.read", { ids: [SEED_ID_1, SEED_ID_2] });            // array
-await callTool("files.read", { id: SEED_ID_1, section: "Setup" });        // partial by heading
-await callTool("files.read", { id: SEED_ID_1, lines: { from: 1, to: 5 } }); // partial by lines
+await callTool("files_read", { id: SEED_ID_1 });                          // full body, single
+await callTool("files_read", { path: SEED_PATH_1 });                      // full body via path
+await callTool("files_read", { ids: [SEED_ID_1, SEED_ID_2] });            // array
+await callTool("files_read", { id: SEED_ID_1, section: "Setup" });        // partial by heading
+await callTool("files_read", { id: SEED_ID_1, lines: { from: 1, to: 5 } }); // partial by lines
 // Error cases
-await callTool("files.read", { id: 1, path: "x" });          // → isError, mutually exclusive
-await callTool("files.read", { ids: [1], section: "x" });    // → isError, partial requires single
-await callTool("files.read", { id: 1, section: "s", lines: { from: 1, to: 2 } }); // → isError, section XOR lines
+await callTool("files_read", { id: 1, path: "x" });          // → isError, mutually exclusive
+await callTool("files_read", { ids: [1], section: "x" });    // → isError, partial requires single
+await callTool("files_read", { id: 1, section: "s", lines: { from: 1, to: 2 } }); // → isError, section XOR lines
 ```
 
-- [ ] **Step 3: Rewrite `files.read` registration** — union input, dispatcher handler:
+- [ ] **Step 3: Rewrite `files_read` registration** — union input, dispatcher handler:
 
 ```ts
 server.tool(
-  "files.read",
+  "files_read",
   "Read one or more files. Modes: single-by-id (`id`), single-by-path (`path`), batch-by-id (`ids`), partial-by-heading (`id`+`section`), partial-by-line-range (`id`+`lines`). Exactly one identifier mode is required. Partial modifiers (`section`, `lines`) are mutually exclusive and require `id` (not `ids`). Read-only; no side effects. Response shape: single file object for `id`/`path`/partial modes; `{ files: [...], count }` for `ids`.",
   {
     id: z.number().int().positive().optional().describe("Single file by ID."),
@@ -242,9 +242,9 @@ function errorPayload(msg: string) { return { isError: true, content: [{ type: "
 
 Note: `extractSection` may already exist under a different name (`readSection` helper) — reuse rather than re-implementing.
 
-- [ ] **Step 4: Delete four old registrations** — `files.read_many` (line 544), `files.read_lines` (702), `files.read_section` (1675), `files.read_by_path` (2149).
+- [ ] **Step 4: Delete four old registrations** — `files_read_many` (line 544), `files_read_lines` (702), `files_read_section` (1675), `files_read_by_path` (2149).
 
-- [ ] **Step 5: Update `READ_ONLY_TOOLS` set** in `scripts/build-smithery-bundle.mjs` — remove 4 names (`files.read_by_path`, `files.read_many`, `files.read_section`, `files.read_lines`).
+- [ ] **Step 5: Update `READ_ONLY_TOOLS` set** in `scripts/build-smithery-bundle.mjs` — remove 4 names (`files_read_by_path`, `files_read_many`, `files_read_section`, `files_read_lines`).
 
 - [ ] **Step 6: Verify `tool-classes.ts` legacy set** already lists those 4 legacy names (grep). Add any missing.
 
@@ -254,30 +254,30 @@ Note: `extractSection` may already exist under a different name (`readSection` h
 
 - [ ] **Step 9: Commit**:
 ```bash
-git commit -m "refactor(mcp): unify read family into files.read with union input (breaking)"
+git commit -m "refactor(mcp): unify read family into files_read with union input (breaking)"
 ```
 
 ---
 
-### Task 4: Merge `files.update_section` into `files.update`
+### Task 4: Merge `files_update_section` into `files_update`
 
 **Files:**
-- Modify: `apps/mcp/src/index.ts:891` (rewrite `files.update`), delete `1724` (`files.update_section`)
-- Modify: `scripts/build-smithery-bundle.mjs` (remove `files.update_section` from `NEUTRAL_TOOLS`)
+- Modify: `apps/mcp/src/index.ts:891` (rewrite `files_update`), delete `1724` (`files_update_section`)
+- Modify: `scripts/build-smithery-bundle.mjs` (remove `files_update_section` from `NEUTRAL_TOOLS`)
 - Modify: `apps/mcp/test-tools.mjs`
 
 **Interfaces:**
-- Produces: `files.update({ file_id, content, section? })`. When `section` is set, `content` becomes the new body of just that heading (current `files.update_section` behavior); otherwise it's a full-body replacement.
+- Produces: `files_update({ file_id, content, section? })`. When `section` is set, `content` becomes the new body of just that heading (current `files_update_section` behavior); otherwise it's a full-body replacement.
 
 - [ ] **Step 1: Read current handlers** at lines 891 and 1724 to reuse `replaceSection` helper.
 
-- [ ] **Step 2: Add failing smoke-test case** — `files.update({ file_id, content: "X", section: "Setup" })` rewrites just that section; without `section` it replaces the whole body.
+- [ ] **Step 2: Add failing smoke-test case** — `files_update({ file_id, content: "X", section: "Setup" })` rewrites just that section; without `section` it replaces the whole body.
 
-- [ ] **Step 3: Rewrite `files.update` registration**:
+- [ ] **Step 3: Rewrite `files_update` registration**:
 
 ```ts
 server.tool(
-  "files.update",
+  "files_update",
   "Rewrite a file. Default = full-body replacement. Pass `section` to rewrite ONLY that heading's body (the heading line is preserved; siblings untouched). Persists via disk → FTS reindex → git commit. Throws if `section` is set but the heading doesn't exist. Returns the updated file metadata.",
   {
     file_id: z.number().int().positive(),
@@ -300,7 +300,7 @@ server.tool(
 );
 ```
 
-- [ ] **Step 4: Delete `files.update_section` block.**
+- [ ] **Step 4: Delete `files_update_section` block.**
 
 - [ ] **Step 5: Registry updates** — remove from smithery `NEUTRAL_TOOLS`; verify legacy name in `tool-classes.ts` (already covered by `update_` prefix).
 
@@ -310,28 +310,28 @@ server.tool(
 
 - [ ] **Step 8: Commit**:
 ```bash
-git commit -m "refactor(mcp): fold files.update_section into files.update (breaking)"
+git commit -m "refactor(mcp): fold files_update_section into files_update (breaking)"
 ```
 
 ---
 
-### Task 5: Merge `files.bundle_search` into `files.search`
+### Task 5: Merge `files_bundle_search` into `files_search`
 
 **Files:**
-- Modify: `apps/mcp/src/index.ts:954` (rewrite `files.search`), delete `989` (`files.bundle_search`)
-- Modify: `scripts/build-smithery-bundle.mjs` (remove `files.bundle_search` from `READ_ONLY_TOOLS`)
+- Modify: `apps/mcp/src/index.ts:954` (rewrite `files_search`), delete `989` (`files_bundle_search`)
+- Modify: `scripts/build-smithery-bundle.mjs` (remove `files_bundle_search` from `READ_ONLY_TOOLS`)
 - Modify: `apps/mcp/test-tools.mjs`
 
 **Interfaces:**
-- Produces: `files.search({ query, ..., include_bodies?: boolean })`. When `include_bodies: true`, each match includes the file body inline (current `files.bundle_search` shape).
+- Produces: `files_search({ query, ..., include_bodies?: boolean })`. When `include_bodies: true`, each match includes the file body inline (current `files_bundle_search` shape).
 
 - [ ] **Step 1: Read current handlers** to reuse the bundle-body annotation.
 
 - [ ] **Step 2: Add failing smoke test** — same query with and without `include_bodies`; without = no body field, with = body present + `total_est_tokens` reflects bodies.
 
-- [ ] **Step 3: Rewrite `files.search`** — add `include_bodies` param; when true, map each match to `{...match, body: readFile(match.id).content}` and re-annotate token totals.
+- [ ] **Step 3: Rewrite `files_search`** — add `include_bodies` param; when true, map each match to `{...match, body: readFile(match.id).content}` and re-annotate token totals.
 
-- [ ] **Step 4: Delete `files.bundle_search` block.**
+- [ ] **Step 4: Delete `files_bundle_search` block.**
 
 - [ ] **Step 5: Registry updates** — remove from smithery `READ_ONLY_TOOLS`; verify legacy in `tool-classes.ts` (already `bundle_search`).
 
@@ -341,28 +341,28 @@ git commit -m "refactor(mcp): fold files.update_section into files.update (break
 
 - [ ] **Step 8: Commit**:
 ```bash
-git commit -m "refactor(mcp): fold files.bundle_search into files.search via include_bodies (breaking)"
+git commit -m "refactor(mcp): fold files_bundle_search into files_search via include_bodies (breaking)"
 ```
 
 ---
 
-### Task 6: Merge `files.grep` into `files.regex_search`
+### Task 6: Merge `files_grep` into `files_regex_search`
 
 **Files:**
-- Modify: `apps/mcp/src/index.ts:803` (rewrite `files.regex_search`), delete `748` (`files.grep`)
-- Modify: `scripts/build-smithery-bundle.mjs` (remove `files.grep` from `READ_ONLY_TOOLS`)
+- Modify: `apps/mcp/src/index.ts:803` (rewrite `files_regex_search`), delete `748` (`files_grep`)
+- Modify: `scripts/build-smithery-bundle.mjs` (remove `files_grep` from `READ_ONLY_TOOLS`)
 - Modify: `apps/mcp/test-tools.mjs`
 
 **Interfaces:**
-- Produces: `files.regex_search({ pattern, ..., file_id?: number })`. When `file_id` is set, scope narrows to that one file (current `files.grep` behavior).
+- Produces: `files_regex_search({ pattern, ..., file_id?: number })`. When `file_id` is set, scope narrows to that one file (current `files_grep` behavior).
 
 - [ ] **Step 1: Read both handlers** to reuse the single-file regex path.
 
 - [ ] **Step 2: Add failing smoke test** — regex_search over a corpus vs the same regex with `file_id` set (single-file scan).
 
-- [ ] **Step 3: Rewrite `files.regex_search`** — add optional `file_id` at the top of the handler; when present, short-circuit to the single-file scanning branch that `files.grep` uses today.
+- [ ] **Step 3: Rewrite `files_regex_search`** — add optional `file_id` at the top of the handler; when present, short-circuit to the single-file scanning branch that `files_grep` uses today.
 
-- [ ] **Step 4: Delete `files.grep` block.**
+- [ ] **Step 4: Delete `files_grep` block.**
 
 - [ ] **Step 5: Registry updates** — remove from smithery `READ_ONLY_TOOLS`; verify legacy in `tool-classes.ts`.
 
@@ -372,39 +372,39 @@ git commit -m "refactor(mcp): fold files.bundle_search into files.search via inc
 
 - [ ] **Step 8: Commit**:
 ```bash
-git commit -m "refactor(mcp): fold files.grep into files.regex_search via file_id (breaking)"
+git commit -m "refactor(mcp): fold files_grep into files_regex_search via file_id (breaking)"
 ```
 
 ---
 
-### Task 7: Merge `journal.note` + `journal.intent` into `journal.append` → rename to `journal.write`
+### Task 7: Merge `journal_note` + `journal_intent` into `journal_append` → rename to `journal_write`
 
 **Files:**
-- Modify: `apps/mcp/src/index.ts:378` (delete `journal.append` registration) AND `apps/mcp/src/index.ts:365-367` (update auto-wrap exclusion — see below)
-- Modify: `apps/mcp/src/journal-tools.ts` (rewrite `journal.note` block as new `journal.write`, delete `journal.intent`)
-- Modify: `scripts/build-smithery-bundle.mjs` — remove `journal.append`, `journal.note`, `journal.intent` from `NEUTRAL_TOOLS`; add `journal.write`
-- Modify: `packages/core/src/journal/patterns/tool-classes.ts` (add `journal.write` to write-set)
+- Modify: `apps/mcp/src/index.ts:378` (delete `journal_append` registration) AND `apps/mcp/src/index.ts:365-367` (update auto-wrap exclusion — see below)
+- Modify: `apps/mcp/src/journal-tools.ts` (rewrite `journal_note` block as new `journal_write`, delete `journal_intent`)
+- Modify: `scripts/build-smithery-bundle.mjs` — remove `journal_append`, `journal_note`, `journal_intent` from `NEUTRAL_TOOLS`; add `journal_write`
+- Modify: `packages/core/src/journal/patterns/tool-classes.ts` (add `journal_write` to write-set)
 - Modify: `apps/mcp/test-tools.mjs`
 
 **Interfaces:**
-- Produces: `journal.write({ kind: "append" | "note" | "intent", ... })`. Kind-specific fields:
+- Produces: `journal_write({ kind: "append" | "note" | "intent", ... })`. Kind-specific fields:
   - `append`: `text: string`, `project_id?: number`
   - `note`: `text: string`, `tags?: string[]`
   - `intent`: `summary: string`
 
-- [ ] **Step 1: Read all three current handlers** (`journal.append` in index.ts, `journal.note` and `journal.intent` in journal-tools.ts).
+- [ ] **Step 1: Read all three current handlers** (`journal_append` in index.ts, `journal_note` and `journal_intent` in journal-tools.ts).
 
 - [ ] **Step 2: Add failing smoke tests** — one call per `kind`.
 
-- [ ] **Step 3: Update the auto-wrap exclusion** in `apps/mcp/src/index.ts:365` — change `if (name === "journal.append")` to `if (name === "journal.write")`. The reason for excluding stays the same (re-entrance).
+- [ ] **Step 3: Update the auto-wrap exclusion** in `apps/mcp/src/index.ts:365` — change `if (name === "journal_append")` to `if (name === "journal_write")`. The reason for excluding stays the same (re-entrance).
 
-- [ ] **Step 4: Delete `journal.append` block in index.ts** (lines 378-430).
+- [ ] **Step 4: Delete `journal_append` block in index.ts** (lines 378-430).
 
-- [ ] **Step 5: Rewrite `journal.note` block in journal-tools.ts as `journal.write`** with dispatcher:
+- [ ] **Step 5: Rewrite `journal_note` block in journal-tools.ts as `journal_write`** with dispatcher:
 
 ```ts
 server.tool(
-  "journal.write",
+  "journal_write",
   "Write one event to the current project's journal. `kind: 'append'` = timestamped entry in today's daily journal file (returns `{ file_id }`). `kind: 'note'` = free-form observation stored as an `agent_note` event (surfaces in distilled entries). `kind: 'intent'` = topic pivot; distillation uses it to split task buckets. Body fields depend on kind (see params).",
   {
     kind: z.enum(["append", "note", "intent"]).describe("Event kind. Selects which body fields are required."),
@@ -416,7 +416,7 @@ server.tool(
   async ({ kind, text, summary, tags, project_id }) => {
     if (kind === "append") {
       if (!text) return errorPayload("kind='append' requires `text`");
-      // ... paste the entire current journal.append body (find-or-create daily file, append timestamped line)
+      // ... paste the entire current journal_append body (find-or-create daily file, append timestamped line)
     }
     if (kind === "note") {
       if (!text) return errorPayload("kind='note' requires `text`");
@@ -434,11 +434,11 @@ server.tool(
 );
 ```
 
-Note: the 'append' branch needs the full body from the current `journal.append` handler (readFile/updateFile/createFile logic — copy verbatim). Because that logic lives in index.ts today (with imports we need), you may need to move the necessary imports (`getDatabase`, `readFile`, `updateFile`, `createFile`, `dataDir`) into journal-tools.ts, OR keep the append branch registered in index.ts and only fold note+intent. **Choose:** if imports are extensive, keep the file boundary — put `journal.write` in index.ts and delete the journal-tools.ts note/intent registrations. Document the choice in the commit.
+Note: the 'append' branch needs the full body from the current `journal_append` handler (readFile/updateFile/createFile logic — copy verbatim). Because that logic lives in index.ts today (with imports we need), you may need to move the necessary imports (`getDatabase`, `readFile`, `updateFile`, `createFile`, `dataDir`) into journal-tools.ts, OR keep the append branch registered in index.ts and only fold note+intent. **Choose:** if imports are extensive, keep the file boundary — put `journal_write` in index.ts and delete the journal-tools.ts note/intent registrations. Document the choice in the commit.
 
-- [ ] **Step 6: Delete `journal.intent` block in journal-tools.ts.**
+- [ ] **Step 6: Delete `journal_intent` block in journal-tools.ts.**
 
-- [ ] **Step 7: Registry updates** — smithery: drop 3 names, add `journal.write`. tool-classes.ts: add `journal.write` to WRITE_TOOL_NAMES, keep the 3 legacy names in place.
+- [ ] **Step 7: Registry updates** — smithery: drop 3 names, add `journal_write`. tool-classes.ts: add `journal_write` to WRITE_TOOL_NAMES, keep the 3 legacy names in place.
 
 - [ ] **Step 8: Smoke test updates.**
 
@@ -446,30 +446,30 @@ Note: the 'append' branch needs the full body from the current `journal.append` 
 
 - [ ] **Step 10: Commit**:
 ```bash
-git commit -m "refactor(mcp): collapse journal.append/note/intent into journal.write (breaking)"
+git commit -m "refactor(mcp): collapse journal_append/note/intent into journal_write (breaking)"
 ```
 
 ---
 
-### Task 8: Merge `hands.describe_schema` into `hands.list`
+### Task 8: Merge `hands_describe_schema` into `hands_list`
 
 **Files:**
-- Modify: `apps/mcp/src/index.ts:2701` (rewrite `hands.list`), delete `2742` (`hands.describe_schema`)
-- Modify: `scripts/build-smithery-bundle.mjs` (remove `hands.describe_schema` from `READ_ONLY_TOOLS`)
+- Modify: `apps/mcp/src/index.ts:2701` (rewrite `hands_list`), delete `2742` (`hands_describe_schema`)
+- Modify: `scripts/build-smithery-bundle.mjs` (remove `hands_describe_schema` from `READ_ONLY_TOOLS`)
 - Modify: `apps/mcp/test-tools.mjs`
 
 **Interfaces:**
-- Produces: `hands.list({ id? })`. When `id` is set, returns the schema for that single hand; when absent, returns the list.
+- Produces: `hands_list({ id? })`. When `id` is set, returns the schema for that single hand; when absent, returns the list.
 
 - [ ] **Step 1: Read both handlers** at 2701 and 2742 to reuse the schema-lookup call.
 
-- [ ] **Step 2: Add failing smoke test** — `hands.list({})` returns array; `hands.list({ id: "<hand-id>" })` returns single schema.
+- [ ] **Step 2: Add failing smoke test** — `hands_list({})` returns array; `hands_list({ id: "<hand-id>" })` returns single schema.
 
-- [ ] **Step 3: Rewrite `hands.list`**:
+- [ ] **Step 3: Rewrite `hands_list`**:
 
 ```ts
 server.tool(
-  "hands.list",
+  "hands_list",
   "List every registered hand (dynamic per-project MCP tool). Pass `id` to return the schema for a single hand instead of the enumeration. Read-only.",
   { id: z.string().optional().describe("Hand id. When set, returns that hand's schema instead of the list.") },
   async ({ id }) => {
@@ -483,7 +483,7 @@ server.tool(
 );
 ```
 
-- [ ] **Step 4: Delete `hands.describe_schema` block.**
+- [ ] **Step 4: Delete `hands_describe_schema` block.**
 
 - [ ] **Step 5: Registry updates.**
 
@@ -493,21 +493,21 @@ server.tool(
 
 - [ ] **Step 8: Commit**:
 ```bash
-git commit -m "refactor(mcp): fold hands.describe_schema into hands.list via id (breaking)"
+git commit -m "refactor(mcp): fold hands_describe_schema into hands_list via id (breaking)"
 ```
 
 ---
 
-### Task 9: Merge `admin.stats` + `admin.whats_new` into `admin.overview`
+### Task 9: Merge `admin_stats` + `admin_whats_new` into `admin_overview`
 
 **Files:**
-- Modify: `apps/mcp/src/index.ts:2187` (rewrite `admin.stats` as `admin.overview`), delete `2558` (`admin.whats_new`)
-- Modify: `scripts/build-smithery-bundle.mjs` — remove `admin.stats` + `admin.whats_new` from `READ_ONLY_TOOLS`, add `admin.overview`
-- Modify: `packages/core/src/journal/patterns/tool-classes.ts` — add `admin.overview` to READ_ONLY_TOOL_NAMES, keep old two in legacy
+- Modify: `apps/mcp/src/index.ts:2187` (rewrite `admin_stats` as `admin_overview`), delete `2558` (`admin_whats_new`)
+- Modify: `scripts/build-smithery-bundle.mjs` — remove `admin_stats` + `admin_whats_new` from `READ_ONLY_TOOLS`, add `admin_overview`
+- Modify: `packages/core/src/journal/patterns/tool-classes.ts` — add `admin_overview` to READ_ONLY_TOOL_NAMES, keep old two in legacy
 - Modify: `apps/mcp/test-tools.mjs`
 
 **Interfaces:**
-- Produces: `admin.overview({ mode: "stats" | "whats_new", ... })`. Mode-specific fields:
+- Produces: `admin_overview({ mode: "stats" | "whats_new", ... })`. Mode-specific fields:
   - `stats`: `project_id?: number | null`, `top_tags?: number`, `include_token_total?: boolean` — returns `{file_count, untagged_count, favorite_count, top_tags, by_project?}`
   - `whats_new`: `since: string`, `project_id?: number | null`, `include_tags?: boolean`, `limit?: number` — returns `{since, until, count, total_est_tokens, files}`
 
@@ -515,9 +515,9 @@ git commit -m "refactor(mcp): fold hands.describe_schema into hands.list via id 
 
 - [ ] **Step 2: Add failing smoke tests** — one call per mode; verify response shape matches the mode.
 
-- [ ] **Step 3: Rewrite `admin.stats` as `admin.overview`** with mode dispatcher (paste bodies from both handlers verbatim into the two branches).
+- [ ] **Step 3: Rewrite `admin_stats` as `admin_overview`** with mode dispatcher (paste bodies from both handlers verbatim into the two branches).
 
-- [ ] **Step 4: Delete `admin.whats_new` block.**
+- [ ] **Step 4: Delete `admin_whats_new` block.**
 
 - [ ] **Step 5: Registry updates.**
 
@@ -527,7 +527,7 @@ git commit -m "refactor(mcp): fold hands.describe_schema into hands.list via id 
 
 - [ ] **Step 8: Commit**:
 ```bash
-git commit -m "refactor(mcp): merge admin.stats + admin.whats_new into admin.overview (breaking)"
+git commit -m "refactor(mcp): merge admin_stats + admin_whats_new into admin_overview (breaking)"
 ```
 
 ---
@@ -546,9 +546,9 @@ git commit -m "refactor(mcp): merge admin.stats + admin.whats_new into admin.ove
 grep -nE '`(files\.create_many|files\.delete_many|files\.read_many|files\.read_by_path|files\.read_section|files\.read_lines|files\.update_section|files\.bundle_search|files\.grep|journal\.append|journal\.note|journal\.intent|hands\.describe_schema|admin\.stats|admin\.whats_new)`' packages/core/src/agent-rules/rules-block.md
 ```
 
-- [ ] **Step 2: Rewrite each match** — replace with the merged tool + a note about which mode/param to use. Example: `files.read_many` → `files.read({ ids: [...] })`.
+- [ ] **Step 2: Rewrite each match** — replace with the merged tool + a note about which mode/param to use. Example: `files_read_many` → `files_read({ ids: [...] })`.
 
-- [ ] **Step 3: Rewrite `apps/web/src/lib/mcp-tool-categories.ts`** — remove the 13 dropped tools from their category lists; add mode notes to the merged tools (e.g. `files.read` now has "batch mode" and "partial read" annotations).
+- [ ] **Step 3: Rewrite `apps/web/src/lib/mcp-tool-categories.ts`** — remove the 13 dropped tools from their category lists; add mode notes to the merged tools (e.g. `files_read` now has "batch mode" and "partial read" annotations).
 
 - [ ] **Step 4: Rebuild web + verify manifest reflects new surface**:
 ```bash
@@ -587,17 +587,17 @@ sed -i '' 's/"rulesVersion": "2.6.1"/"rulesVersion": "3.0.0"/' package.json apps
 
 ### Breaking
 
-- **Removed 13 tools** in favor of merged/parameterised replacements. Existing agent context files must re-onboard via `admin.onboard_agent` (auto-triggered by `rulesVersion` bump to 3.0.0).
+- **Removed 13 tools** in favor of merged/parameterised replacements. Existing agent context files must re-onboard via `admin_onboard_agent` (auto-triggered by `rulesVersion` bump to 3.0.0).
 - Removed → replacement:
-  - `files.create_many` → `files.create({ files: [...] })`
-  - `files.delete_many` → `files.delete({ ids: [...] })`
-  - `files.read_many`, `files.read_by_path`, `files.read_section`, `files.read_lines` → `files.read({ id? | path? | ids?, section?, lines? })`
-  - `files.update_section` → `files.update({ ..., section })`
-  - `files.bundle_search` → `files.search({ ..., include_bodies: true })`
-  - `files.grep` → `files.regex_search({ ..., file_id })`
-  - `journal.append`, `journal.note`, `journal.intent` → `journal.write({ kind, ... })`
-  - `hands.describe_schema` → `hands.list({ id })`
-  - `admin.stats`, `admin.whats_new` → `admin.overview({ mode, ... })`
+  - `files_create_many` → `files_create({ files: [...] })`
+  - `files_delete_many` → `files_delete({ ids: [...] })`
+  - `files_read_many`, `files_read_by_path`, `files_read_section`, `files_read_lines` → `files_read({ id? | path? | ids?, section?, lines? })`
+  - `files_update_section` → `files_update({ ..., section })`
+  - `files_bundle_search` → `files_search({ ..., include_bodies: true })`
+  - `files_grep` → `files_regex_search({ ..., file_id })`
+  - `journal_append`, `journal_note`, `journal_intent` → `journal_write({ kind, ... })`
+  - `hands_describe_schema` → `hands_list({ id })`
+  - `admin_stats`, `admin_whats_new` → `admin_overview({ mode, ... })`
 - **Tool count 71 → 58.** Motivated by Glama feedback that the previous surface was too broad for agents to navigate reliably.
 ```
 
@@ -623,5 +623,5 @@ git commit -m "release: 5.0.0 — MCP tool surface consolidation (71 → 58 tool
 
 - **Spec coverage:** All 9 merges from the spec's Groups 1–3 are covered by Tasks 1–9. Cross-cutting registries are covered in each merge task; rules-block + web categories are Task 10; version + docs + verify are Task 11. Every ripple-file listed in the spec's "Ripple: files touched" section appears in at least one task's Files block.
 - **Placeholder scan:** Every step has actual code, exact file paths, and concrete commands. The one soft spot is Task 7's paragraph about "choose whether to move the append handler across files" — that's a real judgment call, not a placeholder; the guidance is explicit.
-- **Type consistency:** Every produced interface names the exact new tool + input keys. `files.read`'s union input is defined once (Task 3) and referenced consistently.
+- **Type consistency:** Every produced interface names the exact new tool + input keys. `files_read`'s union input is defined once (Task 3) and referenced consistently.
 - **Independent testability:** Every task ends in build + smoke + smithery dry-run + commit. A reviewer can accept/reject one merge without blocking the next.

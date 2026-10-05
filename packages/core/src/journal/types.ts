@@ -64,6 +64,7 @@ export interface JournalFrontmatter {
   started_at: string;
   last_active_at: string;
   distilled_from: string[]; // e.g. "raw/2026-05-12.jsonl@offset:0-89"
+  category?: string; // task category from distillation (debugging, refactoring, infra_ops, feature_dev, research_exploration, documentation)
 }
 
 export interface TaskBucket {

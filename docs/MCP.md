@@ -4,7 +4,7 @@
 
 Kontexta's MCP server is a **stdio** transport (`StdioServerTransport`). The host AI tool spawns it as a child process and communicates over stdin/stdout — no network port, no separate process to keep running.
 
-**Tool routing matrix.** When you call `admin.onboard_agent`, the rules block injected into your project's `CLAUDE.md` / `AGENTS.md` / `.cursor/rules/kontexta.mdc` includes a routing matrix for all MCP tools — for each tool, when to use it, when not to, and the better sibling. The block is versioned; bumping `rulesVersion` triggers re-injection on the next `admin.onboard_agent` call, and `admin.overview({mode: "whats_new"})` surfaces the prompt to update.
+**Tool routing matrix.** When you call `admin_onboard_agent`, the rules block injected into your project's `CLAUDE.md` / `AGENTS.md` / `.cursor/rules/kontexta.mdc` includes a routing matrix for all MCP tools — for each tool, when to use it, when not to, and the better sibling. The block is versioned; bumping `rulesVersion` triggers re-injection on the next `admin_onboard_agent` call, and `admin_overview({mode: "whats_new"})` surfaces the prompt to update.
 
 **Path & environment:**
 
@@ -24,18 +24,18 @@ Every KB file carries a `content_class` — an authority axis, separate from tag
 |---|---|---|---|
 | **`dictionary`** | AUTHORITATIVE — the file IS a source of truth. Editing is rare; if it disagrees with something else, it wins. | System-ID / MANDT / mapping tables, glossaries, PR templates, canonical architecture descriptions, runbooks, clipped external reference material. | `knowledge/dictionary/**` and `knowledge/urlclips/**` (clipped articles) |
 | **`note`** | INFORMATIONAL — a snapshot, a viewpoint, or working knowledge. Useful context but not authoritative. May go stale. | Sprint reviews, meeting prep, PR review findings, session summaries, story stubs, incident post-mortems, working thoughts, current-state write-ups. | `knowledge/notes/**` — plus `mermaid/**` and `html/**` (rendered artifacts) |
-| **`journal`** | Time-bucketed log auto-written by the `journal.*` tools. Never manually classified. | Daily activity, hands runs, `journal.write` notes. | `journal/**` |
+| **`journal`** | Time-bucketed log auto-written by the `journal.*` tools. Never manually classified. | Daily activity, hands runs, `journal_write` notes. | `journal/**` |
 | **`project`** | File that belongs to a registered project (lives in the project's repo, not the KB). Never manually classified. | Any file under a project's registered path. | Anywhere under a project root |
 
 **Ambiguity test.** For any file you're about to write, ask: *"if this file said something different from the code / the mapping table / the profile — who wins?"* If the file wins → `dictionary`. If the file loses (it's just describing a moment in time) → `note`.
 
-**Retrieval behavior.** Search ranks `dictionary` hits above everything else for the same query, regardless of BM25 score. This is the whole point of the distinction — factual look-ups prefer authoritative content; narrative queries still pick up notes but sort them below. Every read tool (`files.search`, `files.list`, `files.find_related`, `files.regex_search`) also accepts a `kind` filter to narrow to a single class.
+**Retrieval behavior.** Search ranks `dictionary` hits above everything else for the same query, regardless of BM25 score. This is the whole point of the distinction — factual look-ups prefer authoritative content; narrative queries still pick up notes but sort them below. Every read tool (`files_search`, `files_list`, `files_find_related`, `files_regex_search`) also accepts a `kind` filter to narrow to a single class.
 
-**Writing new files.** `files.create` REQUIRES `kind: "dictionary" | "note"` per item for KB destinations — agents must declare intent every time. There's no default fallback. The class routes the file to the right subfolder automatically: pass `kind: "dictionary"` and it lands in `knowledge/dictionary/...`; add an optional folder inside (e.g. `slt/`) to organize further.
+**Writing new files.** `files_create` REQUIRES `kind: "dictionary" | "note"` per item for KB destinations — agents must declare intent every time. There's no default fallback. The class routes the file to the right subfolder automatically: pass `kind: "dictionary"` and it lands in `knowledge/dictionary/...`; add an optional folder inside (e.g. `slt/`) to organize further.
 
-**Changing a class.** In the web UI, opening a KB file under `knowledge/{dictionary,notes,urlclips}` shows a small `Dictionary | Note` pill switch in the content-pane header — click the inactive side to move the file to the mirrored path in the other tree (subfolder preserved). From MCP: `files.move` with `kind: "dictionary" | "note"` and no `new_path` does the same server-side.
+**Changing a class.** In the web UI, opening a KB file under `knowledge/{dictionary,notes,urlclips}` shows a small `Dictionary | Note` pill switch in the content-pane header — click the inactive side to move the file to the mirrored path in the other tree (subfolder preserved). From MCP: `files_move` with `kind: "dictionary" | "note"` and no `new_path` does the same server-side.
 
-**Clipping.** `resources.clip_url` writes to `knowledge/urlclips/` and is auto-classified as `dictionary` — clipped external references are treated as authoritative by default. Move a clipped file into `knowledge/notes/` after the fact if it turned out to be informational.
+**Clipping.** `resources_clip_url` writes to `knowledge/urlclips/` and is auto-classified as `dictionary` — clipped external references are treated as authoritative by default. Move a clipped file into `knowledge/notes/` after the fact if it turned out to be informational.
 
 ---
 
@@ -67,7 +67,7 @@ Only user-level config is touched (never a project repo), only the `kxta` entry 
 
 Not yet automated: Antigravity (use the INSTALL tab snippet). Paths and formats come from each agent's documentation or a working config, and have not been exercised against the running agents; the `codex mcp add` argument syntax is from memory of the Codex CLI, so check `codex mcp list` after the first install.
 
-**Tool approval.** By default the agent asks before each kxta tool call. `--approval safe` allows every tool except the destructive ones (the delete tools, `files.restore`, `admin.commit_backup`); `--approval all` allows every tool, including those, and per-project hands tools that run scripts. The dashboard asks you to confirm `all` and lists exactly what it covers. Agents with "app UI only" keep asking: approve there. The kxta tools themselves never write into a project repo.
+**Tool approval.** By default the agent asks before each kxta tool call. `--approval safe` allows every tool except the destructive ones (the delete tools, `files_restore`, `admin_commit_backup`); `--approval all` allows every tool, including those, and per-project hands tools that run scripts. The dashboard asks you to confirm `all` and lists exactly what it covers. Agents with "app UI only" keep asking: approve there. The kxta tools themselves never write into a project repo.
 
 **Docker.** The container cannot edit files on your machine, so the dashboard shows a one-liner to run on the host (`docker run … connect install --home /host --host-data-dir … --no-db --agent <id>`).
 
@@ -119,8 +119,8 @@ Note the order: `-s` and `-e` are flags to `claude mcp add` and must appear **be
 
 Aider does **not** natively support MCP. Integration is file-based: Kontexta writes workflow rules into `.aider/kontexta.md`, which you then link in your Aider configuration.
 
-1. Run `projects.register` in any other agent (e.g. Claude Code or Cursor).
-2. Run `admin.onboard_agent` with `target_agent: aider`. This creates `.aider/kontexta.md`.
+1. Run `projects_register` in any other agent (e.g. Claude Code or Cursor).
+2. Run `admin_onboard_agent` with `target_agent: aider`. This creates `.aider/kontexta.md`.
 3. Add the following to your `.aider.conf.yml`:
 
 ```yaml
@@ -218,12 +218,12 @@ The Hands command-orchestration layer adds these top-level MCP tools, plus N dyn
 
 | Tool | What it does |
 | :--- | :--- |
-| `hands.list` | Lists every registered Hand across all projects: project, tool name, danger level, confirm-required flag, description. Pass `schema: true` to instead get the full authoring reference for `kontexta.json`: schema, validation rules, security guarantees, limitations, recommended practices, annotated example. |
-| `hands.reload` | Re-scans every registered project's `kontexta.json` and refreshes the registry. Use after editing a config mid-session. |
-| `hands.confirm` | Approves a pending execution by token. Single-use, expires in 60s, bound to the resolved invocation. |
+| `hands_list` | Lists every registered Hand across all projects: project, tool name, danger level, confirm-required flag, description. Pass `schema: true` to instead get the full authoring reference for `kontexta.json`: schema, validation rules, security guarantees, limitations, recommended practices, annotated example. |
+| `hands_reload` | Re-scans every registered project's `kontexta.json` and refreshes the registry. Use after editing a config mid-session. |
+| `hands_confirm` | Approves a pending execution by token. Single-use, expires in 60s, bound to the resolved invocation. |
 | `<project>__<tool-name>` | Dynamically registered per project from each `kontexta.json`. Namespaced with double-underscore for collision-free agent transcripts. |
 
-**Authoring reference:** `hands.list({ schema: true })` returns ~10 KB of Markdown — the single source of truth for what's valid in a `kontexta.json`. Read it via the MCP tool itself, or see [`kontexta.json` design spec](../docs/superpowers/specs/2026-05-02-hands-design.md).
+**Authoring reference:** `hands_list({ schema: true })` returns ~10 KB of Markdown — the single source of truth for what's valid in a `kontexta.json`. Read it via the MCP tool itself, or see [`kontexta.json` design spec](../docs/superpowers/specs/2026-05-02-hands-design.md).
 
 ---
 
@@ -235,65 +235,65 @@ The MCP server exposes 58 tools designed for agents that care about context-wind
 
 | Tool | What it does | Example prompt |
 | :--- | :--- | :--- |
-| `files.read` | Read by `id` or `path`; batch via `ids` (≤200); partial read via `section` (one heading's body) or `lines` (1-indexed range, clamps out-of-range). | "Read Kontexta file 42." / "Read lines 40-60 of the auth note." |
-| `files.read_outline` | Heading-only outline (level, text, line, byte range) — survey before pulling. | "What sections does the deployment doc have?" |
-| `files.describe` | Everything ABOUT a file without pulling its content: tags, size, history depth, related files, backlinks. Replaces 3-4 chained calls. | "Tell me about file 31 without loading it." |
-| `files.list` | Filter by project / tag / folder / favorite / untagged; results carry tags + tokens inline. | "List untagged KB files." |
+| `files_read` | Read by `id` or `path`; batch via `ids` (≤200); partial read via `section` (one heading's body) or `lines` (1-indexed range, clamps out-of-range). | "Read Kontexta file 42." / "Read lines 40-60 of the auth note." |
+| `files_read_outline` | Heading-only outline (level, text, line, byte range) — survey before pulling. | "What sections does the deployment doc have?" |
+| `files_describe` | Everything ABOUT a file without pulling its content: tags, size, history depth, related files, backlinks. Replaces 3-4 chained calls. | "Tell me about file 31 without loading it." |
+| `files_list` | Filter by project / tag / folder / favorite / untagged; results carry tags + tokens inline. | "List untagged KB files." |
 
 ### Writing
 
 | Tool | What it does | Example prompt |
 | :--- | :--- | :--- |
-| `files.create` | One file, or a `files` array for batch create (≤200). | "Save these three migration plans as separate files." |
-| `files.update` | Replace whole file content; auto-commits to git. Pass `section` to instead surgically replace one heading's body without touching siblings — same git/FTS path. | "Update the API contract note with these changes." / "Replace the 'Setup' section of the auth note with this." |
-| `files.delete` | One file, or an `ids` array for batch delete (≤500). KB files are unlinked from disk; project-reference files are only un-indexed. | "Delete files 12, 15, and 18." |
-| `files.move` | Rename / relocate. Validation refuses cross-project / cross-section moves. | "Rename file 7 to `archive/auth-2024.md`." |
-| `journal.write` | Record an event: `kind: "note"` (free-form decision/abandonment/observation, surfaces in distilled task entries), `kind: "intent"` (topic pivot so distillation knows the focus shifted), or `kind: "append"` (timestamped daily journal entry). | "Note: Abandoned the Redis cache approach due to serialization overhead." |
-| `journal.distill` | Run mechanical distillation on accumulated raw events. Writes per-topic markdown entries; idempotent. Defaults to current project. | "Distill the journal for this project." |
-| `journal.status` | Report the current backlog and high-water mark for the project's journal. | "Show me the journal status." |
-| `journal.housekeep` | Run journal retention/archival for a project. Idempotent. Prunes old raw .jsonl files and archives cold tasks. | "Run journal housekeeping for this project." |
-| `journal.commit_upgrades` | After dispatching subagents to upgrade mechanical entries to LLM-narrative, mark them as upgraded in the index. | "Mark these task slugs as upgraded." |
+| `files_create` | One file, or a `files` array for batch create (≤200). | "Save these three migration plans as separate files." |
+| `files_update` | Replace whole file content; auto-commits to git. Pass `section` to instead surgically replace one heading's body without touching siblings — same git/FTS path. | "Update the API contract note with these changes." / "Replace the 'Setup' section of the auth note with this." |
+| `files_delete` | One file, or an `ids` array for batch delete (≤500). KB files are unlinked from disk; project-reference files are only un-indexed. | "Delete files 12, 15, and 18." |
+| `files_move` | Rename / relocate. Validation refuses cross-project / cross-section moves. | "Rename file 7 to `archive/auth-2024.md`." |
+| `journal_write` | Record an event: `kind: "note"` (free-form decision/abandonment/observation, surfaces in distilled task entries), `kind: "intent"` (topic pivot so distillation knows the focus shifted), or `kind: "append"` (timestamped daily journal entry). | "Note: Abandoned the Redis cache approach due to serialization overhead." |
+| `journal_distill` | Run mechanical distillation on accumulated raw events. Writes per-topic markdown entries; idempotent. Defaults to current project. | "Distill the journal for this project." |
+| `journal_status` | Report the current backlog and high-water mark for the project's journal. | "Show me the journal status." |
+| `journal_housekeep` | Run journal retention/archival for a project. Idempotent. Prunes old raw .jsonl files and archives cold tasks. | "Run journal housekeeping for this project." |
+| `journal_commit_upgrades` | After dispatching subagents to upgrade mechanical entries to LLM-narrative, mark them as upgraded in the index. | "Mark these task slugs as upgraded." |
 
 ### Search
 
 | Tool | What it does | Example prompt |
 | :--- | :--- | :--- |
-| `files.search` | FTS5 full-text. Returns `match_excerpt` (16-token window with `<<<…>>>` markers) and `title_highlight` so agents see WHERE the match was without re-reading the file. Pass `include_bodies: true` to instead get matches concatenated into one prompt-ready blob (XML or Markdown), stopping at `max_tokens` budget with overflow in `meta.skipped[]`. | "Search for `OAuth` across all Kontexta." / "Bundle the top 5 deployment notes under 30k tokens." |
-| `files.find_related` | Files sharing tags with a given file, ranked by overlap. Surfaces context the same query wouldn't find. | "Find files related to the auth note." |
-| `files.regex_search` | Cross-file regex when FTS5's tokenizer misses (URLs, code identifiers, hyphenated terms); scope by project, or pass `file_id` for a single known file with line numbers. `max_files` / `max_matches_per_file` bound multi-file cost. | "Find every mention of `oa-data-rmspcockpit-[a-z]+` in the project." / "Find every `fact_*` table reference in file 83." |
+| `files_search` | FTS5 full-text. Returns `match_excerpt` (16-token window with `<<<…>>>` markers) and `title_highlight` so agents see WHERE the match was without re-reading the file. Pass `include_bodies: true` to instead get matches concatenated into one prompt-ready blob (XML or Markdown), stopping at `max_tokens` budget with overflow in `meta.skipped[]`. | "Search for `OAuth` across all Kontexta." / "Bundle the top 5 deployment notes under 30k tokens." |
+| `files_find_related` | Files sharing tags with a given file, ranked by overlap. Surfaces context the same query wouldn't find. | "Find files related to the auth note." |
+| `files_regex_search` | Cross-file regex when FTS5's tokenizer misses (URLs, code identifiers, hyphenated terms); scope by project, or pass `file_id` for a single known file with line numbers. `max_files` / `max_matches_per_file` bound multi-file cost. | "Find every mention of `oa-data-rmspcockpit-[a-z]+` in the project." / "Find every `fact_*` table reference in file 83." |
 
 ### Tagging & favorites
 
 | Tool | What it does | Example prompt |
 | :--- | :--- | :--- |
-| `tags.add`, `tags.remove`, `tags.list`, `tags.set_favorite` | The basics. | "Tag file 22 with `infra` and `2024-q4`." |
-| `tags.suggest` | Proposes tags from your existing corpus by FTS-matching the file's distinctive terms against tagged neighbors. No LLM. | "Suggest tags for file 31." |
-| `tags.search` | Run a search, then bulk-apply tags to every match. | "Tag every file matching 'kubernetes' with `infra`." |
+| `tags_add`, `tags_remove`, `tags_list`, `tags_set_favorite` | The basics. | "Tag file 22 with `infra` and `2024-q4`." |
+| `tags_suggest` | Proposes tags from your existing corpus by FTS-matching the file's distinctive terms against tagged neighbors. No LLM. | "Suggest tags for file 31." |
+| `tags_search` | Run a search, then bulk-apply tags to every match. | "Tag every file matching 'kubernetes' with `infra`." |
 
 ### Folders & projects
 
 | Tool | What it does | Example prompt |
 | :--- | :--- | :--- |
-| `folders.list`, `folders.create`, `folders.delete` | Folder CRUD. `folders.delete` refuses project folders (the watcher would re-ingest); KB only. | "Create a `journal` folder under the KB." |
-| `projects.register`, `projects.list` | Add an external repo as a project; Kontexta indexes its `.md` files. Warns when total tokens exceed `KONTEXTA_PROJECT_TOKEN_WARN`. The response also carries a `recommendation` field — update or create — telling the agent whether it should follow up with `admin.onboard_agent`. | "Register `~/code/foo` as a project." |
-| `admin.onboard_agent` | Writes or updates a fenced, version-stamped kontexta workflow rules block into a project's agent context file(s) — `CLAUDE.md` / `AGENTS.md` / `GEMINI.md` / `.cursor/rules/*.mdc` / `.continue/rules/*.md` / `.aider/kontexta.md` / `.clinerules` / `.github/copilot-instructions.md`. Idempotent (skips on same version, splices on bump). Update mode targets detected files; create mode scaffolds the canonical filename for the chosen `target_agent`. Run after `projects.register` when its recommendation suggests it, or any time to refresh the block. Pass `hooks: true` with `target_agent` to also enable that agent and install its conversation-capture hooks (Docker installs get the host command instead). | "Onboard this project for Claude Code." |
-| `projects.map` | Single-call indented outline of folders + file titles + tags + ids — typically 5× denser than `files.list`. | "Give me a map of the `acme` project." |
-| `admin.overview` | `mode: "stats"` for counts (files, untagged, favorites, top tags, by-project breakdown, optional total token cost); `mode: "whats_new"` for files created or modified since a checkpoint (`"30m"`, `"7d"`, ISO timestamp). | "How many untagged files are in the KB?" / "What changed in Kontexta in the last 24h?" |
+| `folders_list`, `folders_create`, `folders_delete` | Folder CRUD. `folders_delete` refuses project folders (the watcher would re-ingest); KB only. | "Create a `journal` folder under the KB." |
+| `projects_register`, `projects_list` | Add an external repo as a project; Kontexta indexes its `.md` files. Warns when total tokens exceed `KONTEXTA_PROJECT_TOKEN_WARN`. The response also carries a `recommendation` field — update or create — telling the agent whether it should follow up with `admin_onboard_agent`. | "Register `~/code/foo` as a project." |
+| `admin_onboard_agent` | Writes or updates a fenced, version-stamped kontexta workflow rules block into a project's agent context file(s) — `CLAUDE.md` / `AGENTS.md` / `GEMINI.md` / `.cursor/rules/*.mdc` / `.continue/rules/*.md` / `.aider/kontexta.md` / `.clinerules` / `.github/copilot-instructions.md`. Idempotent (skips on same version, splices on bump). Update mode targets detected files; create mode scaffolds the canonical filename for the chosen `target_agent`. Run after `projects_register` when its recommendation suggests it, or any time to refresh the block. Pass `hooks: true` with `target_agent` to also enable that agent and install its conversation-capture hooks (Docker installs get the host command instead). | "Onboard this project for Claude Code." |
+| `projects_map` | Single-call indented outline of folders + file titles + tags + ids — typically 5× denser than `files_list`. | "Give me a map of the `acme` project." |
+| `admin_overview` | `mode: "stats"` for counts (files, untagged, favorites, top tags, by-project breakdown, optional total token cost); `mode: "whats_new"` for files created or modified since a checkpoint (`"30m"`, `"7d"`, ISO timestamp). | "How many untagged files are in the KB?" / "What changed in Kontexta in the last 24h?" |
 
 ### Versioning & integrity
 
 | Tool | What it does | Example prompt |
 | :--- | :--- | :--- |
-| `files.get_history`, `files.get_diff`, `files.restore` | Per-file git log, unified diff between commits, restore to any commit. | "Diff the auth note between this week and last." |
-| `admin.commit_backup` | Sync a project's reference files to its global-vault backup tree (push to remote if configured). | "Back up the `acme` project." |
-| `files.diff_against_disk` | Reports drift between disk content and the FTS index (after external edits / sync merges). Returns `in_sync` / `diverged` / `disk_unreadable` / `no_index_row`. | "Did anything change on disk that I missed?" |
-| `projects.refresh_index` | Re-scan the KB (or one project) and reconcile the FTS index — picks up new files, refreshes drifted hashes, prunes vanished rows. The MCP server has no file watcher (the web app does), so this is the explicit fix-up after editor / sync writes. | "Refresh the KB index." |
+| `files_get_history`, `files_get_diff`, `files_restore` | Per-file git log, unified diff between commits, restore to any commit. | "Diff the auth note between this week and last." |
+| `admin_commit_backup` | Sync a project's reference files to its global-vault backup tree (push to remote if configured). | "Back up the `acme` project." |
+| `files_diff_against_disk` | Reports drift between disk content and the FTS index (after external edits / sync merges). Returns `in_sync` / `diverged` / `disk_unreadable` / `no_index_row`. | "Did anything change on disk that I missed?" |
+| `projects_refresh_index` | Re-scan the KB (or one project) and reconcile the FTS index — picks up new files, refreshes drifted hashes, prunes vanished rows. The MCP server has no file watcher (the web app does), so this is the explicit fix-up after editor / sync writes. | "Refresh the KB index." |
 
 ### Discovery
 
 | Tool | What it does | Example prompt |
 | :--- | :--- | :--- |
-| `resources.clip_url` | Fetch + Readability-extract a web page into the KB. Detects auth walls (Confluence, SSO, login pages) and returns `AUTH_REQUIRED` with a `login_url` so the agent can retry with `headers: { Cookie: … }`. | "Clip `https://wiki/confluence/…`; if it's gated, ask me for a cookie." |
+| `resources_clip_url` | Fetch + Readability-extract a web page into the KB. Detects auth walls (Confluence, SSO, login pages) and returns `AUTH_REQUIRED` with a `login_url` so the agent can retry with `headers: { Cookie: … }`. | "Clip `https://wiki/confluence/…`; if it's gated, ask me for a cookie." |
 
 ---
 
@@ -303,46 +303,46 @@ Every file-returning tool annotates its response with `size_bytes` and `est_toke
 
 | Tool | Response shape |
 | :--- | :--- |
-| `files.read` (single: `id`/`path`) | `{ ...file, size_bytes, est_tokens }` |
-| `files.read` (batch: `ids`) | `{ files: [...annotated], total_est_tokens, error_count, errors: [{ id, error }] }` |
-| `files.read` (partial: `section`) | `{ file_id, path, heading, level, line, content, size_bytes, est_tokens }` |
-| `files.read` (partial: `lines`) | `{ file_id, path, from, to, total_lines, content, size_bytes, est_tokens }` |
-| `files.create` | `{ created_count, error_count, created: [...annotated], errors: [{ index, title, error }] }` — per-item failures don't abort the batch |
-| `files.update`, `files.update` (with `section`) | `{ ...file, size_bytes, est_tokens }` |
-| `files.delete` | `{ deleted_count, error_count, deleted: [...ids], errors: [{ id, error }] }` — per-item failures don't abort the batch |
-| `files.list` | `{ files: [{ ...file, tags, size_bytes, est_tokens }], total_est_tokens }` |
-| `files.search` (default) | `{ matches: [{ ...file, tags, size_bytes, est_tokens, match_excerpt, title_highlight }], total_est_tokens }` — excerpts wrap hits in `<<<…>>>` markers |
-| `files.search` (`include_bodies: true`) | `{ bundle, meta: { query, format, total_est_tokens, included: [{id, path, est_tokens}], skipped: [{..., reason}] } }` |
-| `admin.overview` (`mode: "whats_new"`) | `{ since, until, count, total_est_tokens, files: [{ ...file, change: "created"\|"modified", tags, size_bytes, est_tokens }] }` |
-| `admin.overview` (`mode: "stats"`) | `{ scope, file_count, untagged_count, favorite_count, top_tags: [{name, count}], by_project?, total_est_tokens? }` |
-| `projects.map` | `{ stats: { files, folders, roots, truncated }, est_tokens, outline }` (outline is an indented text string with `[id] Title  #tag1 #tag2` per leaf) |
-| `projects.register` | `{ project, discovered_files_count, total_est_tokens, discovered_files: [...annotated], hands: { found, tools_registered, tools_disabled, warnings }, recommendation: { kind: "onboard_agent", mode: "update"\|"create", reason, target_files, next_tool, next_args }, warnings?, hooks?: { install_mode, alerts, prompt } }` — `hooks` appears only when an enabled agent needs attention |
-| `admin.onboard_agent` | `{ written: [{ path, action: "created"\|"updated"\|"skipped", version }], skipped: [{ path, reason }] }` |
-| `projects.list` | `[{ ...project, has_hands }]` |
-| `files.read_outline` | `{ file_id, path, title, outline: [{ level, text, line, byteStart, byteEnd }] }` |
-| `files.describe` | `{ id, path, title, project_id, project_name, folder, storage_type, tags, favorite, size_bytes, est_tokens, history_count, related: [{id, shared_tag_count}], backlinks: [{id, title, path}] }` — no `content` |
-| `files.regex_search` (single: `file_id`) | `{ file_id, path, pattern, match_count, truncated, matches: [{line, text}] }` |
-| `files.regex_search` (default: multi-file) | `{ pattern, files_scanned, files_truncated, file_hit_count, total_match_count, hits: [{file_id, path, title, match_count, matches: [{line, text}]}] }` |
-| `tags.search` | `{ matched_count, tagged_count, tags_applied, tagged_ids, errors }` |
-| `folders.list` | `{ folders: string[], base_path }` |
-| `files.move` | `{ ...file }` (post-move record) |
-| `tags.suggest` | `{ file_id, path, existing_tags: string[], suggestions: [{ tag, score, sources }] }` |
-| `files.diff_against_disk` | `{ status: "in_sync" \| "diverged" \| "disk_unreadable" \| "no_index_row", ...sizes, first_diff_line?, disk_sample?, index_sample? }` |
-| `projects.refresh_index` | `{ scope, newly_indexed, refreshed, pruned }` |
-| `journal.write` (`kind: "note"` or `"intent"`) | `{ ok: true, recorded_at: ISO_timestamp }` |
-| `journal.write` (`kind: "append"`) | `{ file_id }` |
-| `journal.distill` | `{ entries_written, topics_covered, high_water_advanced, events_processed }` |
-| `journal.status` | `{ slug, high_water, mode: "lenient" }` |
-| `journal.housekeep` | `{ raw_files_pruned, archived_tasks, pending_deletions_marked, purged }` |
-| `journal.commit_upgrades` | `{ updated, missing }` |
-| `resources.clip_url` (auth-walled) | `isError: true` with `{ code: "AUTH_REQUIRED", auth_required: true, login_url, signal, www_authenticate?, hint }` — retry with `headers: {"Cookie": "..."}` or `{"Authorization": "Bearer ..."}` |
-| `hands.list` (default) | `{ hands: [{ project, tool, full, danger, confirm, description, disabled }] }` |
-| `hands.list` (`schema: true`) | Markdown text — full authoring reference |
-| `hands.reload` | `{ totalRegistered, totalDisabled, perProject: [{ project, registered, disabled, warnings }] }` |
-| `hands.confirm` | Markdown text — same shape as a direct Hands tool execution result |
+| `files_read` (single: `id`/`path`) | `{ ...file, size_bytes, est_tokens }` |
+| `files_read` (batch: `ids`) | `{ files: [...annotated], total_est_tokens, error_count, errors: [{ id, error }] }` |
+| `files_read` (partial: `section`) | `{ file_id, path, heading, level, line, content, size_bytes, est_tokens }` |
+| `files_read` (partial: `lines`) | `{ file_id, path, from, to, total_lines, content, size_bytes, est_tokens }` |
+| `files_create` | `{ created_count, error_count, created: [...annotated], errors: [{ index, title, error }] }` — per-item failures don't abort the batch |
+| `files_update`, `files_update` (with `section`) | `{ ...file, size_bytes, est_tokens }` |
+| `files_delete` | `{ deleted_count, error_count, deleted: [...ids], errors: [{ id, error }] }` — per-item failures don't abort the batch |
+| `files_list` | `{ files: [{ ...file, tags, size_bytes, est_tokens }], total_est_tokens }` |
+| `files_search` (default) | `{ matches: [{ ...file, tags, size_bytes, est_tokens, match_excerpt, title_highlight }], total_est_tokens }` — excerpts wrap hits in `<<<…>>>` markers |
+| `files_search` (`include_bodies: true`) | `{ bundle, meta: { query, format, total_est_tokens, included: [{id, path, est_tokens}], skipped: [{..., reason}] } }` |
+| `admin_overview` (`mode: "whats_new"`) | `{ since, until, count, total_est_tokens, files: [{ ...file, change: "created"\|"modified", tags, size_bytes, est_tokens }] }` |
+| `admin_overview` (`mode: "stats"`) | `{ scope, file_count, untagged_count, favorite_count, top_tags: [{name, count}], by_project?, total_est_tokens? }` |
+| `projects_map` | `{ stats: { files, folders, roots, truncated }, est_tokens, outline }` (outline is an indented text string with `[id] Title  #tag1 #tag2` per leaf) |
+| `projects_register` | `{ project, discovered_files_count, total_est_tokens, discovered_files: [...annotated], hands: { found, tools_registered, tools_disabled, warnings }, recommendation: { kind: "onboard_agent", mode: "update"\|"create", reason, target_files, next_tool, next_args }, warnings?, hooks?: { install_mode, alerts, prompt } }` — `hooks` appears only when an enabled agent needs attention |
+| `admin_onboard_agent` | `{ written: [{ path, action: "created"\|"updated"\|"skipped", version }], skipped: [{ path, reason }] }` |
+| `projects_list` | `[{ ...project, has_hands }]` |
+| `files_read_outline` | `{ file_id, path, title, outline: [{ level, text, line, byteStart, byteEnd }] }` |
+| `files_describe` | `{ id, path, title, project_id, project_name, folder, storage_type, tags, favorite, size_bytes, est_tokens, history_count, related: [{id, shared_tag_count}], backlinks: [{id, title, path}] }` — no `content` |
+| `files_regex_search` (single: `file_id`) | `{ file_id, path, pattern, match_count, truncated, matches: [{line, text}] }` |
+| `files_regex_search` (default: multi-file) | `{ pattern, files_scanned, files_truncated, file_hit_count, total_match_count, hits: [{file_id, path, title, match_count, matches: [{line, text}]}] }` |
+| `tags_search` | `{ matched_count, tagged_count, tags_applied, tagged_ids, errors }` |
+| `folders_list` | `{ folders: string[], base_path }` |
+| `files_move` | `{ ...file }` (post-move record) |
+| `tags_suggest` | `{ file_id, path, existing_tags: string[], suggestions: [{ tag, score, sources }] }` |
+| `files_diff_against_disk` | `{ status: "in_sync" \| "diverged" \| "disk_unreadable" \| "no_index_row", ...sizes, first_diff_line?, disk_sample?, index_sample? }` |
+| `projects_refresh_index` | `{ scope, newly_indexed, refreshed, pruned }` |
+| `journal_write` (`kind: "note"` or `"intent"`) | `{ ok: true, recorded_at: ISO_timestamp }` |
+| `journal_write` (`kind: "append"`) | `{ file_id }` |
+| `journal_distill` | `{ entries_written, topics_covered, high_water_advanced, events_processed }` |
+| `journal_status` | `{ slug, high_water, mode: "lenient" }` |
+| `journal_housekeep` | `{ raw_files_pruned, archived_tasks, pending_deletions_marked, purged }` |
+| `journal_commit_upgrades` | `{ updated, missing }` |
+| `resources_clip_url` (auth-walled) | `isError: true` with `{ code: "AUTH_REQUIRED", auth_required: true, login_url, signal, www_authenticate?, hint }` — retry with `headers: {"Cookie": "..."}` or `{"Authorization": "Bearer ..."}` |
+| `hands_list` (default) | `{ hands: [{ project, tool, full, danger, confirm, description, disabled }] }` |
+| `hands_list` (`schema: true`) | Markdown text — full authoring reference |
+| `hands_reload` | `{ totalRegistered, totalDisabled, perProject: [{ project, registered, disabled, warnings }] }` |
+| `hands_confirm` | Markdown text — same shape as a direct Hands tool execution result |
 | `<project>__<tool-name>` | Markdown text — status, duration, working dir, fenced stdout, optional fenced stderr |
 
-**`files.search({ include_bodies: true })`** returns the matched files concatenated into a single prompt-ready blob — saves an agent the round-trips of a plain `files.search` + N × `files.read` when it needs several related files for context. Inputs mirror default `files.search` (`query`, `project_id`, `tags`, `favorite`) plus `format` (`"xml"` for Anthropic-recommended `<document>` tags, `"markdown"` for `##` headers + fenced blocks; default `"xml"`) and `max_tokens` (budget cap, default 50000). Files are added in rank order and the bundle stops at the first file that would exceed the budget; remaining hits land in `meta.skipped[]` with their estimated size so the agent can decide whether to re-call with a larger budget.
+**`files_search({ include_bodies: true })`** returns the matched files concatenated into a single prompt-ready blob — saves an agent the round-trips of a plain `files_search` + N × `files_read` when it needs several related files for context. Inputs mirror default `files_search` (`query`, `project_id`, `tags`, `favorite`) plus `format` (`"xml"` for Anthropic-recommended `<document>` tags, `"markdown"` for `##` headers + fenced blocks; default `"xml"`) and `max_tokens` (budget cap, default 50000). Files are added in rank order and the bundle stops at the first file that would exceed the budget; remaining hits land in `meta.skipped[]` with their estimated size so the agent can decide whether to re-call with a larger budget.
 
 > [!NOTE]
-> `files.list` and `files.search` previously returned bare arrays. Clients that pre-parsed the array directly need to read `.files` / `.matches` instead.
+> `files_list` and `files_search` previously returned bare arrays. Clients that pre-parsed the array directly need to read `.files` / `.matches` instead.

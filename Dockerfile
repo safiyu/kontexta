@@ -17,6 +17,7 @@ COPY apps/mcp/package.json ./apps/mcp/
 COPY apps/publish/package.json ./apps/publish/
 COPY packages/core/package.json ./packages/core/
 COPY packages/cli/package.json ./packages/cli/
+COPY packages/reranker-model/package.json ./packages/reranker-model/
 
 # Install dependencies
 RUN pnpm install --frozen-lockfile
@@ -35,6 +36,9 @@ RUN cd node_modules/.pnpm/re2@1.24.1/node_modules/re2 \
 
 # Copy the rest of the source code
 COPY . .
+
+# Reranker weights are git-ignored; fetch and verify them so the image reranks offline.
+RUN pnpm -C packages/reranker-model run fetch-weights
 
 # Skip manifest generation during Docker builds — gen:manifest spawns the MCP
 # binary which calls listProjects() → SQLite at startup, but no DB exists at
@@ -83,10 +87,14 @@ COPY --from=builder /app/apps/web/.next/static ./apps/web/.next/static
 # file-tracing resolves __dirname at runtime.
 COPY --from=builder /app/packages/core/src/db/migrations ./packages/core/src/db/migrations
 COPY --from=builder /app/packages/core/src/agent-rules/rules-block.md ./packages/core/src/agent-rules/rules-block.md
+COPY --from=builder /app/packages/core/src/agent-rules/rules-reference.md ./packages/core/src/agent-rules/rules-reference.md
 COPY --from=builder /app/packages/core/src/hooks/emit.mjs ./packages/core/src/hooks/emit.mjs
 
 # Copy deployed MCP server
 COPY --from=builder /app/mcp-deploy ./apps/mcp
+
+# Bundled reranker weights, resolvable from both the web server and the MCP server via /app/node_modules.
+COPY --from=builder /app/packages/reranker-model ./node_modules/kontexta-reranker-model
 COPY --chmod=755 docker-entrypoint.sh /app/docker-entrypoint.sh
 
 # Web UI on 23002. The file-watcher WebSocket shares this same port

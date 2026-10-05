@@ -33,8 +33,8 @@ describe("GET /api/agents (MCP fields)", () => {
     expect(j.agents.find((a: any) => a.id === "gemini").mcp_approval_supported).toBe(true);
     expect(j.agents.find((a: any) => a.id === "aider").mcp_supported).toBe(false);
     expect(j.agents.find((a: any) => a.id === "codex").mcp_supported).toBe(true);
-    expect(j.destructive_tools).toContain("files.delete");
-    expect(j.destructive_tools).not.toContain("files.read");
+    expect(j.destructive_tools).toContain("files_delete");
+    expect(j.destructive_tools).not.toContain("files_read");
     expect(j.mcp_docker_commands).toEqual({});
     expect(j.mcp_alerts).toEqual([]);
   });

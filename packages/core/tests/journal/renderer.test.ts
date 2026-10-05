@@ -69,7 +69,7 @@ describe("renderMechanicalEntry — evidence preservation", () => {
 
   it("renders notes even when a pattern does match", () => {
     const events = [
-      ...Array.from({ length: 5 }, (_, i) => ev({ ts: `2026-09-28T12:0${i}:00.000Z`, tool: "files.read" })),
+      ...Array.from({ length: 5 }, (_, i) => ev({ ts: `2026-09-28T12:0${i}:00.000Z`, tool: "files_read" })),
       ev({ event: "agent_note", tool: undefined, summary: "Confirmed: index walker skips journal tree." }),
     ];
     const out = renderMechanicalEntry({ task_slug: "orphan", events, now: "2026-09-28T12:07:00.000Z" });
@@ -100,11 +100,11 @@ describe("renderMechanicalEntry — evidence preservation", () => {
 
   it("summarises tool calls by name and count", () => {
     const events = [
-      ev({ tool: "files.update" }), ev({ tool: "files.update" }), ev({ tool: "files.create" }),
+      ev({ tool: "files_update" }), ev({ tool: "files_update" }), ev({ tool: "files_create" }),
     ];
     const out = renderMechanicalEntry({ task_slug: "orphan", events, now: "2026-09-28T12:00:00.000Z" });
-    expect(out).toMatch(/files\.update\s*×\s*2/);
-    expect(out).toMatch(/files\.create\s*×\s*1/);
+    expect(out).toMatch(/files_update\s*×\s*2/);
+    expect(out).toMatch(/files_create\s*×\s*1/);
   });
 
   it("carries tags from notes into the entry tags", () => {
@@ -115,7 +115,7 @@ describe("renderMechanicalEntry — evidence preservation", () => {
   });
 
   it("still reports no file activity when there is genuinely none", () => {
-    const events = [ev({ tool: "files.search" })];
+    const events = [ev({ tool: "files_search" })];
     const out = renderMechanicalEntry({ task_slug: "orphan", events, now: "2026-09-28T12:00:00.000Z" });
     expect(out).toContain("No file activity");
   });

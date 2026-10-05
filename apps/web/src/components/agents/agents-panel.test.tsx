@@ -94,7 +94,7 @@ describe("AgentsPanel", () => {
   it("offers MCP controls for enabled, MCP-capable agents only, and points the rest at the snippets", async () => {
     state = {
       ...state,
-      destructive_tools: ["files.delete"], mcp_docker_commands: {},
+      destructive_tools: ["files_delete"], mcp_docker_commands: {},
       agents: [
         row({ enabled: true, mcp_supported: true, mcp_installed: false, mcp_approval: "prompt", mcp_approval_supported: true }),
         row({ id: "cursor", name: "Cursor", enabled: false, mcp_supported: true, mcp_installed: false, mcp_approval: "prompt" }),

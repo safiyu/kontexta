@@ -1,6 +1,6 @@
 {
   "name": "kxta-core",
-  "version": "5.2.0",
+  "version": "6.0.0",
   "description": "Core context and command engines for Kontexta",
   "private": true,
   "type": "module",
@@ -13,12 +13,14 @@
     "dev": "tsc --watch"
   },
   "dependencies": {
+    "@huggingface/transformers": "^4.3.0",
     "@mozilla/readability": "^0.6.0",
     "better-sqlite3": "^12.10.0",
     "chokidar": "^4.0.0",
     "dompurify": "^3.4.14",
     "glob": "^11.0.0",
     "jsdom": "^29.1.1",
+    "kontexta-reranker-model": "^1.0.0",
     "simple-git": "^3.27.0",
     "smol-toml": "^1.9.0",
     "turndown": "^7.2.4",
@@ -33,5 +35,5 @@
     "typescript": "^5.7.0",
     "vitest": "^3.0.0"
   },
-  "rulesVersion": "3.1.0"
+  "rulesVersion": "3.2.0"
 }

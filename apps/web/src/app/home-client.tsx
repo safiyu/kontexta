@@ -23,6 +23,7 @@ import { useProjects } from "@/hooks/use-projects";
 import { useFiles } from "@/hooks/use-files";
 import { useFolders } from "@/hooks/use-folders";
 import { useWebSocket } from "@/hooks/use-websocket";
+import { isRootKnowledgeFolder } from "@/lib/kb-layout";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { Breadcrumb, type BreadcrumbSegment } from "@/components/layout/breadcrumb";
 import { StatusBar } from "@/components/layout/status-bar";
@@ -496,12 +497,20 @@ export default function HomePage() {
 
   const handleDeleteFolder = () => {
     if (selectedFolder) {
+      if (selectedSection === "knowledge" && isRootKnowledgeFolder(selectedFolder)) {
+        return;
+      }
       setDeleteFolderConfirmOpen(true);
     }
   };
 
   const onConfirmDeleteFolder = async () => {
     if (!selectedFolder) return;
+    if (selectedSection === "knowledge" && isRootKnowledgeFolder(selectedFolder)) {
+      toast.error("Cannot delete root knowledge folders");
+      setDeleteFolderConfirmOpen(false);
+      return;
+    }
     setDeletingFolder(true);
     try {
       const response = await fetch(`/api/folders?name=${encodeURIComponent(selectedFolder)}&projectId=${selectedProjectId || ""}`, {

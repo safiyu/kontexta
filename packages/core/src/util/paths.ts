@@ -207,7 +207,7 @@ export function ensureDataDir(): void {
   // Scaffold an empty profile.md at the KB root on fresh installs. Without
   // this, the only way to get one was via the web UI's PUT /api/profile
   // (which writes here directly) — CLI/MCP-only users had no discoverable
-  // path to a working profile, and files.create can't reach KB root itself
+  // path to a working profile, and files_create can't reach KB root itself
   // (kind-based routing always nests under knowledge/dictionary or notes).
   const profilePath = path.join(dataDir, profileRelPath());
   if (!fs.existsSync(profilePath)) {

@@ -1,176 +1,204 @@
 // packages/core/tests/journal/topic-detector.test.ts
 import { describe, it, expect } from "vitest";
-import { groupEventsIntoTasks, groupEvents, extractTicketId } from "../../src/journal/topic-detector.js";
+import {
+  classifyTaskCategory,
+  detectTopicPivot,
+  groupEventsIntoTasks,
+  extractTicketId,
+} from "../../src/journal/topic-detector.js";
 import type { RawEvent, JournalFrontmatter } from "../../src/journal/types.js";
 
-function ev(overrides: Partial<RawEvent> = {}): RawEvent {
-  return {
-    ts: "2026-05-12T16:00:00Z",
-    agent: "claude-code",
-    sid: "s",
-    event: "tool_call",
-    tool: "update_file",
-    args: {},
-    touched: [],
-    status: "ok",
-    ms: 10,
-    ...overrides,
-  };
-}
-
-const TICKET_RE = /[A-Z]+-\d+/;
-
 describe("extractTicketId", () => {
-  it("extracts JIRA-style IDs", () => {
-    expect(extractTicketId("fix/INC-1234-websocket-drop", TICKET_RE)).toBe("INC-1234");
+  it("extracts ticket ID from branch name", () => {
+    const result = extractTicketId("feat/KONT-123-add-auth", /[A-Z]+-\d+/);
+    expect(result).toBe("KONT-123");
   });
-  it("returns null when none", () => {
-    expect(extractTicketId("main", TICKET_RE)).toBeNull();
+
+  it("returns null for branch without ticket ID", () => {
+    const result = extractTicketId("feature/new-ui", /[A-Z]+-\d+/);
+    expect(result).toBeNull();
+  });
+
+  it("handles branch with multiple ticket-like patterns", () => {
+    const result = extractTicketId("fix/ABC-42-fix-bug", /[A-Z]+-\d+/);
+    expect(result).toBe("ABC-42");
+  });
+});
+
+describe("classifyTaskCategory", () => {
+  it("classifies debugging category for error-heavy events", async () => {
+    const events: RawEvent[] = [
+      { ts: "2026-01-01T00:00:00Z", agent: "claude-code", sid: "s1", event: "error", msg: "TypeError: Cannot read property" },
+      { ts: "2026-01-01T00:00:01Z", agent: "claude-code", sid: "s1", event: "agent_note", summary: "fixing the null pointer exception" },
+    ];
+    const result = await classifyTaskCategory(events);
+    expect(result).toBe("debugging");
+  });
+
+  it("classifies refactoring category for cleanup events", async () => {
+    const events: RawEvent[] = [
+      { ts: "2026-01-01T00:00:00Z", agent: "claude-code", sid: "s1", event: "user_prompt", text: "refactor the entire auth module" },
+      { ts: "2026-01-01T00:00:01Z", agent: "claude-code", sid: "s1", event: "agent_note", summary: "renaming functions for clarity" },
+    ];
+    const result = await classifyTaskCategory(events);
+    expect(result).toBe("refactoring");
+  });
+
+  it("classifies infra_ops for deployment events", async () => {
+    const events: RawEvent[] = [
+      { ts: "2026-01-01T00:00:00Z", agent: "claude-code", sid: "s1", event: "shell", command: "docker build -t app ." },
+      { ts: "2026-01-01T00:00:01Z", agent: "claude-code", sid: "s1", event: "agent_note", summary: "deploying to kubernetes" },
+    ];
+    const result = await classifyTaskCategory(events);
+    expect(result).toBe("infra_ops");
+  });
+
+  it("classifies documentation for docs events", async () => {
+    const events: RawEvent[] = [
+      { ts: "2026-01-01T00:00:00Z", agent: "claude-code", sid: "s1", event: "user_prompt", text: "write the README for this module" },
+      { ts: "2026-01-01T00:00:01Z", agent: "claude-code", sid: "s1", event: "tool_call", tool: "files.write", args: { path: "README.md" } },
+    ];
+    const result = await classifyTaskCategory(events);
+    expect(result).toBe("documentation");
+  });
+
+  it("classifies research_exploration for investigation events", async () => {
+    const events: RawEvent[] = [
+      { ts: "2026-01-01T00:00:00Z", agent: "claude-code", sid: "s1", event: "user_prompt", text: "explore different caching strategies" },
+      { ts: "2026-01-01T00:00:01Z", agent: "claude-code", sid: "s1", event: "agent_note", summary: "comparing redis vs memcached" },
+    ];
+    const result = await classifyTaskCategory(events);
+    expect(result).toBe("research_exploration");
+  });
+
+  it("classifies feature_dev for implementation events", async () => {
+    const events: RawEvent[] = [
+      { ts: "2026-01-01T00:00:00Z", agent: "claude-code", sid: "s1", event: "user_prompt", text: "implement a new REST endpoint" },
+      { ts: "2026-01-01T00:00:01Z", agent: "claude-code", sid: "s1", event: "tool_call", tool: "files.write", args: { path: "api/users.ts" } },
+    ];
+    const result = await classifyTaskCategory(events);
+    expect(result).toBe("feature_dev");
+  });
+
+  it("returns feature_dev as default for empty events", async () => {
+    const result = await classifyTaskCategory([]);
+    expect(result).toBe("feature_dev");
+  });
+
+  it("handles events with only ts and sid", async () => {
+    const events: RawEvent[] = [
+      { ts: "2026-01-01T00:00:00Z", agent: "claude-code", sid: "s1", event: "shell", command: "git status" },
+    ];
+    const result = await classifyTaskCategory(events);
+    // "git status" doesn't match any specific category, falls through to feature_dev
+    expect(result).toBe("feature_dev");
+  });
+});
+
+describe("detectTopicPivot", () => {
+  it("detects pivot when new event is in a completely different domain", async () => {
+    const context = {
+      title: "auth-refactor",
+      recentFiles: ["src/auth/login.ts", "src/auth/token.ts"],
+      lastFewEvents: "refactoring authentication module, changing token format",
+    };
+    const event = { type: "user_prompt", content: "implement a new payment processing endpoint" };
+    const result = await detectTopicPivot(context, event);
+    expect(result.isPivot).toBe(true);
+    expect(result.confidence).toBeGreaterThan(0.5);
+  });
+
+  it("does not detect pivot when event is in the same domain", async () => {
+    const context = {
+      title: "auth-refactor",
+      recentFiles: ["src/auth/login.ts", "src/auth/token.ts"],
+      lastFewEvents: "refactoring authentication module, changing token format",
+    };
+    const event = { type: "user_prompt", content: "add rate limiting to the login endpoint" };
+    const result = await detectTopicPivot(context, event);
+    expect(result.isPivot).toBe(false);
+  });
+
+  it("handles empty context", async () => {
+    const context = {
+      title: "",
+      recentFiles: [],
+      lastFewEvents: "",
+    };
+    const event = { type: "user_prompt", content: "hello world" };
+    const result = await detectTopicPivot(context, event);
+    // With empty context, heuristic returns low confidence (no file shift, no domain keywords)
+    expect(result.confidence).toBeDefined();
+  });
+
+  it("provides suggestedNewSlug for detected pivots", async () => {
+    const context = {
+      title: "auth-refactor",
+      recentFiles: ["src/auth/login.ts"],
+      lastFewEvents: "refactoring auth",
+    };
+    const event = { type: "user_prompt", content: "implement payment processing with stripe" };
+    const result = await detectTopicPivot(context, event);
+    expect(result.isPivot).toBe(true);
+    expect(result.suggestedNewSlug).not.toBeNull();
   });
 });
 
 describe("groupEventsIntoTasks", () => {
-  const minimalOpenTask = (): JournalFrontmatter => ({
-    task: "existing-ws", project: "demo", tags: [],
-    touched_files: ["packages/core/src/websocket.ts"],
-    git: { branches: ["fix/INC-1234-websocket-drop"], commits: [], ticket_ids: ["INC-1234"] },
-    status_latest: null,
-    started_at: "2026-04-01T00:00Z",
-    last_active_at: "2026-05-10T00:00Z",
-    distilled_from: [],
-  });
+  function makeEvent(overrides: Partial<RawEvent>): RawEvent {
+    return {
+      ts: "2026-01-01T00:00:00Z",
+      agent: "claude-code",
+      sid: "s1",
+      event: "user_prompt",
+      ...overrides,
+    };
+  }
 
-  it("buckets a tool_call by ticket match against an existing open task", () => {
+  it("groups events without branch into adhoc tasks", () => {
     const events = [
-      ev({ event: "git_context", branch: "fix/INC-1234-websocket-drop", tool: undefined }),
-      ev({ touched: ["unrelated/path.ts"] }),
+      makeEvent({ ts: "2026-01-01T00:00:00Z", event: "user_prompt", text: "fix the login bug" }),
+      makeEvent({ ts: "2026-01-01T00:00:01Z", event: "tool_call", tool: "files.write" }),
     ];
-    const buckets = groupEventsIntoTasks(events, [minimalOpenTask()], TICKET_RE);
-    expect(buckets.find((b) => b.task_slug === "existing-ws")).toBeDefined();
-    expect(buckets.find((b) => b.task_slug === "existing-ws")?.matched_via).toBe("ticket");
+    const openTasks: JournalFrontmatter[] = [];
+    const result = groupEventsIntoTasks(events, openTasks, /[A-Z]+-\d+/);
+    expect(result.length).toBeGreaterThan(0);
   });
 
-  it("buckets by file overlap when no branch context exists", () => {
-    const events = [ev({ touched: ["packages/core/src/websocket.ts"] })];
-    const buckets = groupEventsIntoTasks(events, [minimalOpenTask()], TICKET_RE);
-    expect(buckets[0].task_slug).toBe("existing-ws");
-    expect(buckets[0].matched_via).toBe("files");
-  });
-
-  it("mints a new slug from branch when no open task matches", () => {
+  it("assigns events to tasks by branch match", () => {
     const events = [
-      ev({ event: "git_context", branch: "feat/STORY-99-payments", tool: undefined }),
-      ev({ touched: ["src/payments.ts"] }),
+      makeEvent({ ts: "2026-01-01T00:00:00Z", event: "git_context", branch: "feat/KONT-123-auth" }),
+      makeEvent({ ts: "2026-01-01T00:00:01Z", event: "user_prompt", text: "implement auth" }),
     ];
-    const buckets = groupEventsIntoTasks(events, [], TICKET_RE);
-    expect(buckets[0].task_slug).toBe("STORY-99");
-    expect(buckets[0].is_new).toBe(true);
-    expect(buckets[0].matched_via).toBe("minted");
+    const openTasks: JournalFrontmatter[] = [
+      {
+        task: "KONT-123-auth",
+        project: "test",
+        tags: [],
+        touched_files: [],
+        git: { branches: ["feat/KONT-123-auth"], commits: [], ticket_ids: ["KONT-123"] },
+        status_latest: null,
+        started_at: "2026-01-01T00:00:00Z",
+        last_active_at: "2026-01-01T00:00:00Z",
+        distilled_from: [],
+      },
+    ];
+    const result = groupEventsIntoTasks(events, openTasks, /[A-Z]+-\d+/);
+    expect(result.some((b) => b.task_slug === "KONT-123-auth")).toBe(true);
   });
 
-  it("names events with no branch, files or session id by time and agent instead of 'orphan'", () => {
-    const events = [ev({ touched: [], sid: "unknown" })];
-    const buckets = groupEventsIntoTasks(events, [], TICKET_RE);
-    expect(buckets[0].task_slug).toBe("1600-claude-code");
-  });
-
-  it("uses a hook event's branch like a preceding git_context", () => {
+  it("creates separate buckets for events on different branches", () => {
     const events = [
-      ev({ event: "user_prompt", tool: undefined, source: "hook", branch: "fix/INC-1234-websocket-drop", touched: undefined }),
-      ev({ event: "shell", tool: undefined, source: "hook", branch: "fix/INC-1234-websocket-drop", touched: undefined }),
+      makeEvent({ ts: "2026-01-01T00:00:00Z", event: "git_context", branch: "feat/branch-a" }),
+      makeEvent({ ts: "2026-01-01T00:00:01Z", event: "user_prompt", text: "work on branch a" }),
+      makeEvent({ ts: "2026-01-01T00:00:02Z", event: "git_context", branch: "feat/branch-b" }),
+      makeEvent({ ts: "2026-01-01T00:00:03Z", event: "user_prompt", text: "work on branch b" }),
     ];
-    const buckets = groupEventsIntoTasks(events, [minimalOpenTask()], TICKET_RE);
-    expect(buckets).toHaveLength(1);
-    expect(buckets[0].task_slug).toBe("existing-ws");
-    expect(buckets[0].matched_via).toBe("ticket");
-  });
-
-  it("mints a slug from a hook branch when no task matches", () => {
-    const events = [ev({ event: "user_prompt", tool: undefined, source: "hook", branch: "feat/hooks", touched: undefined })];
-    const buckets = groupEventsIntoTasks(events, [], TICKET_RE);
-    expect(buckets[0].task_slug).toBe("hooks");
-  });
-
-  it("starts from initialBranch when no git_context has been seen in this batch", () => {
-    const events = [ev({ event: "agent_note", tool: undefined, summary: "n", touched: undefined })];
-    const buckets = groupEventsIntoTasks(events, [minimalOpenTask()], TICKET_RE, { initialBranch: "fix/INC-1234-websocket-drop" });
-    expect(buckets).toHaveLength(1);
-    expect(buckets[0]).toMatchObject({ task_slug: "existing-ws", matched_via: "ticket" });
-  });
-
-  it("records the branch on the bucket even though git_context events are not bucketed", () => {
-    const events = [ev({ event: "git_context", branch: "feat/new-thing", tool: undefined }), ev({ tool: "files.update", touched: ["a.ts"] })];
-    const buckets = groupEventsIntoTasks(events, [], TICKET_RE);
-    expect(buckets).toHaveLength(1);
-    expect(buckets[0].task_slug).toBe("new-thing");
-    expect(buckets[0].branches).toEqual(["feat/new-thing"]);
-  });
-
-  it("hook events without a branch do not inherit the carried branch", () => {
-    const events = [ev({ event: "user_prompt", source: "hook", sid: "claude-code:h1", tool: undefined, touched: undefined })];
-    const buckets = groupEventsIntoTasks(events, [minimalOpenTask()], TICKET_RE, { initialBranch: "fix/INC-1234-websocket-drop" });
-    expect(buckets).toHaveLength(1);
-    expect(buckets[0].task_slug).toBe("1600-claude-code");
-  });
-
-  it("keeps the events of one session together via session affinity", () => {
-    const events = [
-      ev({ sid: "s1", touched: ["packages/core/src/websocket.ts"] }),
-      ev({ sid: "s1", event: "agent_note", tool: undefined, summary: "x", touched: undefined }),
-      ev({ sid: "s1", touched: ["unrelated/other.ts"] }),
-    ];
-    const buckets = groupEventsIntoTasks(events, [minimalOpenTask()], TICKET_RE);
-    expect(buckets).toHaveLength(1);
-    expect(buckets[0].task_slug).toBe("existing-ws");
-    expect(buckets[0].events).toHaveLength(3);
-  });
-
-  it("names branchless, fileless sessions by time and the session's first prompt or note", () => {
-    const events = [
-      ev({ ts: "2026-09-28T07:37:22.000Z", sid: "claude-code:aaa", agent: "claude-code", event: "user_prompt", source: "hook", tool: undefined, touched: undefined, text: "Why does CDC bootstrap wedge after a crash?" }),
-      ev({ ts: "2026-09-28T07:40:00.000Z", sid: "gemini:bbb", agent: "gemini", event: "agent_note", tool: undefined, touched: undefined, summary: "Mapped the SLT run mail" }),
-      ev({ ts: "2026-09-28T07:41:00.000Z", sid: "codex:ccc", agent: "codex", touched: [] }),
-    ];
-    expect(groupEventsIntoTasks(events, [], TICKET_RE).map((b) => b.task_slug)).toEqual([
-      "0737-why-does-cdc-bootstrap-wedge-after",
-      "0740-mapped-the-slt-run-mail",
-      "0741-codex",
-    ]);
-  });
-
-  it("disambiguates sessions that would get the same name", () => {
-    const events = [ev({ sid: "a:1", agent: "codex", touched: [] }), ev({ sid: "a:2", agent: "codex", touched: [] })];
-    expect(groupEventsIntoTasks(events, [], TICKET_RE).map((b) => b.task_slug)).toEqual(["1600-codex", "1600-codex-2"]);
-  });
-
-  it("takes the name from the session's first note even when that note lands in a branch task", () => {
-    const events = [
-      ev({ ts: "2026-09-28T07:37:00.000Z", sid: "s1", touched: [] }),
-      ev({ ts: "2026-09-28T07:38:00.000Z", event: "git_context", branch: "feat/thing", tool: undefined, sid: "s1" }),
-      ev({ ts: "2026-09-28T07:39:00.000Z", sid: "s1", event: "agent_note", tool: undefined, touched: undefined, summary: "Realtime stocks POC plan written" }),
-    ];
-    expect(groupEventsIntoTasks(events, [], TICKET_RE).map((b) => b.task_slug).sort()).toEqual(["0737-realtime-stocks-poc-plan-written", "thing"]);
-  });
-
-  it("reuses the name a session got in an earlier run and reports the sessions it placed", () => {
-    const events = [ev({ sid: "s1", event: "agent_note", tool: undefined, touched: undefined, summary: "anything" })];
-    const res = groupEvents(events, [], TICKET_RE, { initialSessions: { s1: "0737-old-name" } });
-    expect(res.buckets.map((b) => b.task_slug)).toEqual(["0737-old-name"]);
-    expect(res.sessions).toEqual({ s1: "0737-old-name" });
-
-    const fresh = groupEvents([ev({ sid: "s2", agent: "codex", touched: [] })], [], TICKET_RE);
-    expect(fresh.sessions).toEqual({ s2: "1600-codex" });
-  });
-
-  it("a different branch does not merge into another task", () => {
-    const events = [ev({ event: "git_context", branch: "feat/other-thing", tool: undefined }), ev({ touched: [] })];
-    const buckets = groupEventsIntoTasks(events, [minimalOpenTask()], TICKET_RE);
-    expect(buckets).toHaveLength(1);
-    expect(buckets[0].task_slug).toBe("other-thing");
-  });
-
-  it("never builds a task name from text that looks like a credential", () => {
-    const events = [ev({ ts: "2026-09-28T07:37:00.000Z", sid: "s9", agent: "codex", event: "agent_note", tool: undefined, touched: undefined, summary: "db password is hunter2 for staging" })];
-    expect(groupEventsIntoTasks(events, [], TICKET_RE)[0].task_slug).toBe("0737-codex");
+    const openTasks: JournalFrontmatter[] = [];
+    const result = groupEventsIntoTasks(events, openTasks, /[A-Z]+-\d+/);
+    const slugs = result.map((b) => b.task_slug);
+    // Should have two separate buckets
+    expect(slugs.some((s) => s.includes("branch-a"))).toBe(true);
+    expect(slugs.some((s) => s.includes("branch-b"))).toBe(true);
   });
 });

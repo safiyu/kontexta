@@ -7,9 +7,9 @@ import type { McpCtx } from "../../src/mcp-install/types.js";
 import { MalformedConfigError } from "../../src/hooks/installers/json-config.js";
 
 const TOOLS = [
-  { name: "files.read", destructive: false },
-  { name: "files.delete", destructive: true },
-  { name: "tags.list", destructive: false },
+  { name: "files_read", destructive: false },
+  { name: "files_delete", destructive: true },
+  { name: "tags_list", destructive: false },
 ];
 const ENTRY = { command: "npx", args: ["-y", "kontexta-mcp"] };
 const read = (p: string) => JSON.parse(readFileSync(p, "utf8"));
@@ -136,9 +136,9 @@ describe("documented per-agent entry fields", () => {
     MCP_INSTALLERS.copilot.install(base());
     const p = join(home, ".copilot", "mcp-config.json");
     expect(read(p).mcpServers.kxta).toMatchObject({ type: "local", tools: ["*"], command: "npx" });
-    writeFileSync(p, JSON.stringify({ mcpServers: { kxta: { type: "local", command: "x", tools: ["files.read"] } } }));
+    writeFileSync(p, JSON.stringify({ mcpServers: { kxta: { type: "local", command: "x", tools: ["files_read"] } } }));
     MCP_INSTALLERS.copilot.install(base());
-    expect(read(p).mcpServers.kxta.tools).toEqual(["files.read"]);
+    expect(read(p).mcpServers.kxta.tools).toEqual(["files_read"]);
   });
 
   it("copilot honours COPILOT_HOME and asks for an explicit data dir because only PATH is inherited", () => {
@@ -179,7 +179,7 @@ describe("gemini allowlist (permissions.allow)", () => {
 
   it("safe writes explicit rules for non-destructive tools only", () => {
     MCP_INSTALLERS.gemini.install(ctx("safe"));
-    expect(allow()).toEqual(["mcp(kxta/files.read)", "mcp(kxta/tags.list)"]);
+    expect(allow()).toEqual(["mcp(kxta/files_read)", "mcp(kxta/tags_list)"]);
   });
 
   it("keeps the user's own rules, is idempotent, and switching level replaces only kxta rules", () => {
@@ -187,13 +187,13 @@ describe("gemini allowlist (permissions.allow)", () => {
     MCP_INSTALLERS.gemini.install(ctx("all"));
     expect(MCP_INSTALLERS.gemini.install(ctx("all", "all")).changed).toBe(false);
     MCP_INSTALLERS.gemini.install(ctx("safe", "all"));
-    expect(allow()).toEqual(["command(ls)", "mcp(other/*)", "mcp(kxta/files.read)", "mcp(kxta/tags.list)"]);
+    expect(allow()).toEqual(["command(ls)", "mcp(other/*)", "mcp(kxta/files_read)", "mcp(kxta/tags_list)"]);
   });
 
   it("prompt after prompt leaves hand-written kxta rules alone; prompt after all removes ours", () => {
-    writeFileSync(path(), JSON.stringify({ permissions: { allow: ["mcp(kxta/files.read)"] } }));
+    writeFileSync(path(), JSON.stringify({ permissions: { allow: ["mcp(kxta/files_read)"] } }));
     MCP_INSTALLERS.gemini.install(ctx("prompt", "prompt"));
-    expect(allow()).toEqual(["mcp(kxta/files.read)"]);
+    expect(allow()).toEqual(["mcp(kxta/files_read)"]);
     MCP_INSTALLERS.gemini.install(ctx("prompt", "all"));
     expect(read(path()).permissions).toBeUndefined();
   });
@@ -206,10 +206,10 @@ describe("gemini allowlist (permissions.allow)", () => {
   });
 
   it("uninstall keeps a hand-written kxta rule when we never applied an approval level", () => {
-    writeFileSync(path(), JSON.stringify({ permissions: { allow: ["mcp(kxta/files.read)"] } }));
+    writeFileSync(path(), JSON.stringify({ permissions: { allow: ["mcp(kxta/files_read)"] } }));
     MCP_INSTALLERS.gemini.install(ctx("prompt"));
     MCP_INSTALLERS.gemini.uninstall(ctx("prompt", "prompt"));
-    expect(allow()).toEqual(["mcp(kxta/files.read)"]);
+    expect(allow()).toEqual(["mcp(kxta/files_read)"]);
   });
 });
 
@@ -222,16 +222,16 @@ describe("cline alwaysAllow", () => {
 
   it("all lists every tool, safe skips destructive ones, prompt leaves it absent", () => {
     MCP_INSTALLERS.cline.install(ctx("all"));
-    expect(read(path()).mcpServers.kxta.alwaysAllow).toEqual(["files.read", "files.delete", "tags.list"]);
+    expect(read(path()).mcpServers.kxta.alwaysAllow).toEqual(["files_read", "files_delete", "tags_list"]);
     MCP_INSTALLERS.cline.install(ctx("safe", "all"));
-    expect(read(path()).mcpServers.kxta.alwaysAllow).toEqual(["files.read", "tags.list"]);
+    expect(read(path()).mcpServers.kxta.alwaysAllow).toEqual(["files_read", "tags_list"]);
     MCP_INSTALLERS.cline.install(ctx("prompt", "safe"));
     expect(read(path()).mcpServers.kxta.alwaysAllow).toBeUndefined();
   });
 
   it("prompt after prompt keeps a hand-set alwaysAllow and other fields like disabled", () => {
-    writeFileSync(path(), JSON.stringify({ mcpServers: { kxta: { command: "x", disabled: false, alwaysAllow: ["files.read"] } } }));
+    writeFileSync(path(), JSON.stringify({ mcpServers: { kxta: { command: "x", disabled: false, alwaysAllow: ["files_read"] } } }));
     MCP_INSTALLERS.cline.install(ctx("prompt", "prompt"));
-    expect(read(path()).mcpServers.kxta).toMatchObject({ command: "npx", disabled: false, alwaysAllow: ["files.read"] });
+    expect(read(path()).mcpServers.kxta).toMatchObject({ command: "npx", disabled: false, alwaysAllow: ["files_read"] });
   });
 });

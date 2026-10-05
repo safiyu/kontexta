@@ -3,7 +3,7 @@ import { mkdirSync, rmSync, existsSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createDatabase, closeDatabase } from "../../src/db/index.js";
-import { createFile, createFolder, moveFile } from "../../src/files/index.js";
+import { createFile, createFolder, deleteFolder, moveFile } from "../../src/files/index.js";
 
 let dataDir: string;
 
@@ -86,6 +86,23 @@ describe("createFolder enforces layout when base is the KB root", () => {
     const otherBase = join(dataDir, "elsewhere");
     mkdirSync(otherBase, { recursive: true });
     expect(() => createFolder(otherBase, "anything", { dataDir })).not.toThrow();
+  });
+});
+
+describe("deleteFolder enforces layout when base is the KB root", () => {
+  test("rejects deleting root knowledge folders", () => {
+    const base = join(dataDir, "knowledge");
+    for (const name of ["journal", "knowledge", "mermaid", "html"]) {
+      mkdirSync(join(base, name), { recursive: true });
+      expect(() => deleteFolder(base, name, { dataDir })).toThrow(/Cannot delete root knowledge folder/);
+    }
+  });
+
+  test("allows deleting subfolders inside an allowlist folder", () => {
+    const base = join(dataDir, "knowledge");
+    mkdirSync(join(base, "knowledge", "temp-sub"), { recursive: true });
+    expect(() => deleteFolder(base, "knowledge/temp-sub", { dataDir })).not.toThrow();
+    expect(existsSync(join(base, "knowledge", "temp-sub"))).toBe(false);
   });
 });
 

@@ -507,8 +507,17 @@ export function createFolder(projectPath: string, folderName: string, opts?: { d
 /**
  * Delete a folder (recursive)
  */
-export function deleteFolder(projectPath: string, folderName: string): void {
+export function deleteFolder(projectPath: string, folderName: string, opts?: { dataDir?: string }): void {
   const fullPath = assertPathInside(projectPath, folderName);
+  if (opts?.dataDir) {
+    const knowledgeDir = resolve(opts.dataDir, "knowledge");
+    if (resolve(projectPath) === knowledgeDir) {
+      const segments = folderName.split(/[/\\]/).filter(Boolean);
+      if (segments.length <= 1) {
+        throw new Error(`Cannot delete root knowledge folder '${folderName}'.`);
+      }
+    }
+  }
   rmSync(fullPath, { recursive: true, force: true });
 }
 

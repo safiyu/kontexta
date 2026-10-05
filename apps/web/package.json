@@ -1,6 +1,6 @@
 {
   "name": "kxta-web",
-  "version": "5.2.0",
+  "version": "6.0.0",
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack -p 23002",
@@ -27,6 +27,7 @@
     "better-sqlite3": "^12.10.0",
     "jsdom": "^29.1.1",
     "kontexta-mcp": "workspace:*",
+    "kontexta-reranker-model": "^1.0.0",
     "kxta-core": "workspace:*",
     "kxta-publish": "workspace:*",
     "lucide-react": "^1.21.0",
@@ -62,5 +63,5 @@
     "unzipper": "^0.12.3",
     "vitest": "^3.0.0"
   },
-  "rulesVersion": "3.1.0"
+  "rulesVersion": "3.2.0"
 }

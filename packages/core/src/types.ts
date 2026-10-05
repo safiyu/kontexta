@@ -82,4 +82,9 @@ export interface SearchFilters {
    * more than 50 files.
    */
   limit?: number;
+  /**
+   * When true, skip dictionary-first reordering and return raw BM25 order.
+   * Useful for feeding an unbiased candidate pool to the cross-encoder reranker.
+   */
+  raw_bm25_order?: boolean;
 }

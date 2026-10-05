@@ -4,7 +4,7 @@
 
 **Goal:** Put the hooks backbone in front of users: enable/disable agents in the dashboard (first-run wizard, Configure → Agents tab, alert banner, filtered configure section) and through MCP onboarding prompts, with install triggered by enabling an agent.
 
-**Architecture:** A small core layer (`install-mode`, `alerts`, `--host-data-dir`/`--no-db` for the Docker host path) feeds three thin surfaces that all read the same `agents` table: Next.js API routes + React components, and the MCP server's `projects.register` / `admin.onboard_agent` / session-context responses. No new MCP tool is added (surface stays at 58).
+**Architecture:** A small core layer (`install-mode`, `alerts`, `--host-data-dir`/`--no-db` for the Docker host path) feeds three thin surfaces that all read the same `agents` table: Next.js API routes + React components, and the MCP server's `projects_register` / `admin_onboard_agent` / session-context responses. No new MCP tool is added (surface stays at 58).
 
 **Tech Stack:** TypeScript, Next.js 15 route handlers, React 19 + Testing Library (jsdom), vitest (core/web/cli), node:test (mcp).
 
@@ -15,7 +15,7 @@
 - Every agent seeds `enabled = 0`. Disabled agents never appear in alerts, banners, MCP prompts, the configure section's client list, or wizard hook steps.
 - Enabling an agent installs its hooks immediately in `npm`/`source` mode. In `docker` mode nothing on the host is ever written by the container: the API/MCP return a copyable `docker run …` command instead.
 - All `/api/agents*` routes call `checkAuth(req)` first and return `401` when it fails; agent ids from the URL are validated with `isAgentId` before any DB or filesystem access.
-- MCP tool count stays 58: no new tools; `admin.onboard_agent` gains an optional `hooks: boolean` parameter only.
+- MCP tool count stays 58: no new tools; `admin_onboard_agent` gains an optional `hooks: boolean` parameter only.
 - MCP responses carry a `hooks` block **only when it has alerts to show** (no token bloat when there is nothing to do).
 - One-line comments only. No `Co-Authored-By` trailers. Never push. Do not commit unless the user asks (the tree already holds uncommitted Phase 1 / theme / Part A work).
 - Repo test conventions: core tests `packages/core/tests/**` (vitest); web tests colocated `*.test.ts(x)` (vitest; components need `// @vitest-environment jsdom`; `tests/setup.ts` gives each test a temp `KONTEXTA_DATA_DIR`/`KONTEXTA_DB_PATH`); mcp tests `apps/mcp/tests/*.test.mjs` (node:test against `dist/`); cli tests `packages/cli/tests/*.test.ts`.
@@ -183,7 +183,7 @@ describe("buildHooksBlock", () => {
     expect(b.alerts[0]).toMatchObject({ name: "Claude Code", installed: false, verified_at: null });
     expect(b.alerts[0].docker_command).toBeUndefined();
     expect(b.prompt).toContain("Claude Code");
-    expect(b.prompt).toContain("admin.onboard_agent");
+    expect(b.prompt).toContain("admin_onboard_agent");
     expect(b.prompt).toContain("hooks:true");
   });
 
@@ -192,7 +192,7 @@ describe("buildHooksBlock", () => {
     const b = buildHooksBlock({ installMode: "docker", version: "5.0.0", hostDataDir: "/srv/kx" });
     expect(b.alerts[0].docker_command).toContain("--agent codex");
     expect(b.prompt).toContain("docker");
-    expect(b.prompt).not.toContain("admin.onboard_agent");
+    expect(b.prompt).not.toContain("admin_onboard_agent");
   });
 
   it("installed-but-silent agents get a distinct 'no events' message", () => {
@@ -260,7 +260,7 @@ export function buildHooksBlock(o: { installMode: InstallMode; version: string; 
     lines.push(
       o.installMode === "docker"
         ? `Kontexta can capture your conversation and shell commands for ${names}. The container cannot edit files on your machine, so run the docker command from the dashboard's Configure → AGENTS tab (or hooks.alerts[].docker_command) on the host.`
-        : `Kontexta can capture your conversation and shell commands for ${names}. Install their hooks now? After the user agrees, call admin.onboard_agent with hooks:true, confirm:true and target_agent set to one of (${missing.map((a) => a.agent).join(" | ")}), or run \`kontexta hooks install --agent <id>\`.`,
+        : `Kontexta can capture your conversation and shell commands for ${names}. Install their hooks now? After the user agrees, call admin_onboard_agent with hooks:true, confirm:true and target_agent set to one of (${missing.map((a) => a.agent).join(" | ")}), or run \`kontexta hooks install --agent <id>\`.`,
     );
   }
   if (silent.length > 0) {
@@ -1505,7 +1505,7 @@ export function FirstRunWizard({ open, onClose, initialStep = 1, projects, onSav
               <div>
                 <label className="mb-1 block text-sm font-medium text-[var(--text-secondary)]">Target project</label>
                 <select value={selectedProject ?? ""} onChange={(e) => setSelectedProject(Number(e.target.value))} className="w-full rounded-md border px-3 py-2 text-sm">
-                  {projects.map((p) => <option key={p.id} value={p.id}>{p.name || `Project ${p.id}`}</option>)}
+                  {projects_map((p) => <option key={p.id} value={p.id}>{p.name || `Project ${p.id}`}</option>)}
                   <option value="">Knowledge Base (no project)</option>
                 </select>
               </div>
@@ -1642,11 +1642,11 @@ Expected: all PASS (existing tests unchanged: their mock returns a non-agents JS
 
 ---
 
-### Task 9: MCP surfaces — `hooks` block, `admin.onboard_agent({hooks:true})`, session-context nudge
+### Task 9: MCP surfaces — `hooks` block, `admin_onboard_agent({hooks:true})`, session-context nudge
 
 **Files:**
 - Create: `apps/mcp/src/hooks-block.ts`
-- Modify: `apps/mcp/src/index.ts` (imports; `projects.register` response; `admin.onboard_agent` schema/handler/description; `loadProfileInstructions`)
+- Modify: `apps/mcp/src/index.ts` (imports; `projects_register` response; `admin_onboard_agent` schema/handler/description; `loadProfileInstructions`)
 - Test: `apps/mcp/tests/hooks-onboarding.test.mjs`
 
 **Interfaces:**
@@ -1657,7 +1657,7 @@ function currentHooksBlock(version: string): HooksBlock | null      // null when
 interface HooksInstallResult { agent; mode; enabled: boolean; outcome?: AgentHookOutcome; docker_command?: string; note?: string; error?: string }
 function enableAndInstallHooks(agent: string, version: string): HooksInstallResult
 ```
-- Tool contract: `admin.onboard_agent` gains optional `hooks: boolean`. With `hooks:true` and `confirm:true`: `target_agent` is required (validated **before** any file is written); the response gains `hooks_install`. `projects.register`, `admin.onboard_agent` and the session context gain `hooks` / a `🪝` line **only when `currentHooksBlock` is non-null**.
+- Tool contract: `admin_onboard_agent` gains optional `hooks: boolean`. With `hooks:true` and `confirm:true`: `target_agent` is required (validated **before** any file is written); the response gains `hooks_install`. `projects_register`, `admin_onboard_agent` and the session context gain `hooks` / a `🪝` line **only when `currentHooksBlock` is non-null**.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1725,10 +1725,10 @@ test("no enabled agents → no hooks block anywhere", async () => {
   const f = fixture(); const s = startServer(f.env);
   try {
     await s.init();
-    const reg = await s.call("projects.register", { name: "demo", path: f.proj });
+    const reg = await s.call("projects_register", { name: "demo", path: f.proj });
     assert.equal(reg.isError, undefined);
     assert.equal("hooks" in json(reg), false);
-    const ctx = await s.call("admin.refresh_session_context");
+    const ctx = await s.call("admin_refresh_session_context");
     assert.ok(!ctx.content[0].text.includes("🪝"));
   } finally { s.stop(); f.cleanup(); }
 });
@@ -1739,15 +1739,15 @@ test("enabled agent → register carries alerts + PROMPT; onboard hooks:true ins
   const s = startServer(f.env);
   try {
     await s.init();
-    const reg = await s.call("projects.register", { name: "demo", path: f.proj });
+    const reg = await s.call("projects_register", { name: "demo", path: f.proj });
     const body = json(reg);
     assert.equal(body.hooks.install_mode, "npm");
     assert.deepEqual(body.hooks.alerts.map((a) => a.agent), ["claude-code"]);
     assert.ok(reg.content.some((c) => c.text.includes("PROMPT:") && c.text.includes("Claude Code")));
-    const before = await s.call("admin.refresh_session_context");
+    const before = await s.call("admin_refresh_session_context");
     assert.ok(before.content[0].text.includes("🪝") && before.content[0].text.includes("Claude Code"));
 
-    const done = await s.call("admin.onboard_agent", { project_id: body.project.id, confirm: true, target_agent: "claude-code", hooks: true });
+    const done = await s.call("admin_onboard_agent", { project_id: body.project.id, confirm: true, target_agent: "claude-code", hooks: true });
     assert.equal(done.isError, undefined, done.content[0].text);
     const out = json(done);
     assert.equal(out.hooks_install.outcome.ok, true);
@@ -1755,7 +1755,7 @@ test("enabled agent → register carries alerts + PROMPT; onboard hooks:true ins
     assert.ok(existsSync(join(f.home, ".claude", "settings.json")));
     assert.ok(existsSync(join(f.proj, "CLAUDE.md")));
 
-    const after = await s.call("admin.refresh_session_context");
+    const after = await s.call("admin_refresh_session_context");
     assert.ok(!after.content[0].text.includes("🪝"));
   } finally { s.stop(); f.cleanup(); }
 });
@@ -1766,9 +1766,9 @@ test("docker mode → onboard hooks:true returns the host command and writes not
   const s = startServer(f.env);
   try {
     await s.init();
-    const reg = json(await s.call("projects.register", { name: "demo", path: f.proj }));
+    const reg = json(await s.call("projects_register", { name: "demo", path: f.proj }));
     assert.match(reg.hooks.alerts[0].docker_command, /--agent gemini/);
-    const done = json(await s.call("admin.onboard_agent", { project_id: reg.project.id, confirm: true, target_agent: "gemini", hooks: true }));
+    const done = json(await s.call("admin_onboard_agent", { project_id: reg.project.id, confirm: true, target_agent: "gemini", hooks: true }));
     assert.match(done.hooks_install.docker_command, /--no-db/);
     assert.equal(done.hooks_install.outcome, undefined);
     assert.ok(!existsSync(join(f.home, ".gemini")));
@@ -1779,8 +1779,8 @@ test("hooks:true without target_agent errors before writing anything", async () 
   const f = fixture(); const s = startServer(f.env);
   try {
     await s.init();
-    const reg = json(await s.call("projects.register", { name: "demo", path: f.proj }));
-    const r = await s.call("admin.onboard_agent", { project_id: reg.project.id, confirm: true, hooks: true });
+    const reg = json(await s.call("projects_register", { name: "demo", path: f.proj }));
+    const r = await s.call("admin_onboard_agent", { project_id: reg.project.id, confirm: true, hooks: true });
     assert.equal(r.isError, true);
     assert.match(r.content[0].text, /target_agent is required/);
     assert.ok(!existsSync(join(f.proj, "CLAUDE.md")));
@@ -1791,8 +1791,8 @@ test("hooks:true for an agent with no hook API returns a note instead of failing
   const f = fixture(); const s = startServer(f.env);
   try {
     await s.init();
-    const reg = json(await s.call("projects.register", { name: "demo", path: f.proj }));
-    const r = await s.call("admin.onboard_agent", { project_id: reg.project.id, confirm: true, target_agent: "aider", hooks: true });
+    const reg = json(await s.call("projects_register", { name: "demo", path: f.proj }));
+    const r = await s.call("admin_onboard_agent", { project_id: reg.project.id, confirm: true, target_agent: "aider", hooks: true });
     assert.equal(r.isError, undefined, r.content[0].text);
     assert.match(json(r).hooks_install.note, /MCP capture only/);
     assert.ok(existsSync(join(f.proj, ".aider", "kontexta.md")));
@@ -1803,7 +1803,7 @@ test("hooks:true for an agent with no hook API returns a note instead of failing
 - [ ] **Step 2: Run to verify it fails**
 
 Run: `pnpm -C packages/core build && pnpm -C apps/mcp build && cd apps/mcp && node --test tests/hooks-onboarding.test.mjs`
-Expected: FAIL — no `hooks` key in `projects.register`, `hooks` param rejected/ignored by `admin.onboard_agent`.
+Expected: FAIL — no `hooks` key in `projects_register`, `hooks` param rejected/ignored by `admin_onboard_agent`.
 
 - [ ] **Step 3: Implement the helper**
 
@@ -1846,11 +1846,11 @@ export function enableAndInstallHooks(agent: string, version: string): HooksInst
 - [ ] **Step 4: Wire `index.ts`**
 
 1. Add `import { currentHooksBlock, enableAndInstallHooks, type HooksInstallResult } from "./hooks-block.js";` next to the other local imports.
-2. `projects.register`: directly before `const content: any[] = [` add `const hooksBlock = currentHooksBlock(pkgVersion);`; inside the JSON object after `rules_status: ruleStatuses,` add `...(hooksBlock ? { hooks: hooksBlock } : {}),`; after the existing `if (needsOnboarding && recommendation.prompt) { … }` block add:
+2. `projects_register`: directly before `const content: any[] = [` add `const hooksBlock = currentHooksBlock(pkgVersion);`; inside the JSON object after `rules_status: ruleStatuses,` add `...(hooksBlock ? { hooks: hooksBlock } : {}),`; after the existing `if (needsOnboarding && recommendation.prompt) { … }` block add:
 ```ts
       if (hooksBlock?.prompt) content.push({ type: "text", text: `\nPROMPT: ${hooksBlock.prompt}` });
 ```
-3. `admin.onboard_agent`: add `hooks: z.boolean().optional().describe("With target_agent, also enable that agent and install its conversation-capture hooks (npx/source) or return the host docker command. Ask the user first."),` to the schema; change the handler signature to `async ({ project_id, confirm, files, target_agent, hooks })`; directly after the existing `if (targetFiles.length === 0 && !target_agent) { … }` check add:
+3. `admin_onboard_agent`: add `hooks: z.boolean().optional().describe("With target_agent, also enable that agent and install its conversation-capture hooks (npx/source) or return the host docker command. Ask the user first."),` to the schema; change the handler signature to `async ({ project_id, confirm, files, target_agent, hooks })`; directly after the existing `if (targetFiles.length === 0 && !target_agent) { … }` check add:
 ```ts
       if (hooks === true && !target_agent) {
         return {
@@ -1907,7 +1907,7 @@ Expected: FAIL — phrase not present in the rules block.
 
 In `rules-block.md`, directly after the `**Address `journal.suggested_action` before the next tool call.**` paragraph add:
 ```
-**Relay `hooks` prompts once per session.** If a tool response carries a `hooks.prompt` (or the session welcome mentions hooks), tell the user once that kontexta can capture their conversation and shell commands for the agents they enabled. Only call `admin.onboard_agent` with `hooks: true` after they agree.
+**Relay `hooks` prompts once per session.** If a tool response carries a `hooks.prompt` (or the session welcome mentions hooks), tell the user once that kontexta can capture their conversation and shell commands for the agents they enabled. Only call `admin_onboard_agent` with `hooks: true` after they agree.
 ```
 Change `"rulesVersion": "3.0.0"` to `"3.1.0"` in the **root** `package.json`, then run `node scripts/sync-versions.js` from the repo root.
 
@@ -1922,8 +1922,8 @@ Expected: only `rulesVersion` lines change (glama.json's stale `2.6.0` also beco
 ```bash
 docker run --rm -v "$HOME":/host -v "<DATA_DIR>":/app/data safiyu/kontexta:<version> hooks install --home /host --host-data-dir "<DATA_DIR>" --no-db --agent <agent>
 ```
-and add: "`--host-data-dir` is the path baked into the agent's config (the host path); the container keeps using `/app/data` for staging. `--no-db` keeps the installer from opening the SQLite file the dashboard container is using; the dashboard learns the hooks work when the first event arrives (the agent shows as **verified**)." Add a section **Managing agents** describing: first-run wizard (agents → hooks → profile → onboard), Configure → AGENTS tab (toggle installs immediately outside Docker; Docker shows the command), the alert banner, and MCP onboarding (`admin.onboard_agent({hooks:true, target_agent, confirm:true})`, and the `hooks` block in `projects.register`).
-`docs/MCP.md`: in the `admin.onboard_agent` row (line ~242) append: "Pass `hooks: true` with `target_agent` to also enable that agent and install its conversation-capture hooks (Docker installs get the host command instead)." and in the `projects.register` returns table (line ~282) append `hooks?: { install_mode, alerts, prompt }` (present only when an enabled agent needs attention).
+and add: "`--host-data-dir` is the path baked into the agent's config (the host path); the container keeps using `/app/data` for staging. `--no-db` keeps the installer from opening the SQLite file the dashboard container is using; the dashboard learns the hooks work when the first event arrives (the agent shows as **verified**)." Add a section **Managing agents** describing: first-run wizard (agents → hooks → profile → onboard), Configure → AGENTS tab (toggle installs immediately outside Docker; Docker shows the command), the alert banner, and MCP onboarding (`admin_onboard_agent({hooks:true, target_agent, confirm:true})`, and the `hooks` block in `projects_register`).
+`docs/MCP.md`: in the `admin_onboard_agent` row (line ~242) append: "Pass `hooks: true` with `target_agent` to also enable that agent and install its conversation-capture hooks (Docker installs get the host command instead)." and in the `projects_register` returns table (line ~282) append `hooks?: { install_mode, alerts, prompt }` (present only when an enabled agent needs attention).
 
 - [ ] **Step 6: Run to verify it passes**
 

@@ -14,7 +14,7 @@ const configDir = dirname(fileURLToPath(import.meta.url));
 const NATIVE_SERVER_ONLY = [
   "better-sqlite3", "archiver", "jsdom", "oniguruma", "re2", "kontexta-mcp",
   // Not native either, but MUST stay unbundled: kxta-core locates co-located
-  // assets (db/migrations/*.sql, agent-rules/rules-block.md) via
+  // assets (db/migrations/*.sql, agent-rules/rules-block.md, rules-reference.md) via
   // fileURLToPath(import.meta.url). When webpack bundles it, import.meta.url
   // is frozen to the BUILD machine's absolute file:// URL: wrong on every
   // other machine, and fatal on Windows (fileURLToPath of a POSIX file URL
@@ -114,6 +114,7 @@ const nextConfig: NextConfig = {
       : {
           "**/*": [
             "../../packages/core/src/agent-rules/rules-block.md",
+            "../../packages/core/src/agent-rules/rules-reference.md",
             "../../packages/core/src/hooks/emit.mjs",
             "../../packages/core/src/db/migrations/*.sql",
             "../../CHANGELOG.md",

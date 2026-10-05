@@ -18,6 +18,8 @@ export { computeContentClass, type ComputeContentClassArgs } from "./content-cla
 export {
   RULE_BLOCK_VERSION,
   RULES_BLOCK_BODY,
+  RULES_REFERENCE_BODY,
+  KONTEXTA_MD,
   SCAFFOLDS,
   detectAgentContextFiles,
   parseMarker,
@@ -51,5 +53,8 @@ export * from "./hooks/index.js";
 export * from "./mcp-install/index.js";
 export * from "./profile/index.js";
 export * from "./calendar/index.js";
+export * from "./inference/index.js";
+export * from "./rerank/index.js";
+export * from "./decision/index.js";
 export { writeResource, readResource, listResources, deleteResource, resourceUrlFor, resourceSrcFor, mimeFor } from "./reports/resources.js";
 export { sanitizeHtml } from "./reports/sanitize.js";

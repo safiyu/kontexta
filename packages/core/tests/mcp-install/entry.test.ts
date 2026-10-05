@@ -80,11 +80,12 @@ describe("signature parts", () => {
 describe("generated tool list", () => {
   it("has the kxta tools with destructive ones flagged", () => {
     const names = KXTA_TOOLS.map((t) => t.name);
-    expect(names).toContain("files.create");
+    expect(names).toContain("files_create");
     expect(new Set(names).size).toBe(names.length);
-    for (const n of ["files.delete", "folders.delete", "files.restore", "admin.commit_backup"]) expect(KXTA_TOOLS.find((t) => t.name === n)?.destructive).toBe(true);
-    expect(KXTA_TOOLS.find((t) => t.name === "files.read")?.destructive).toBe(false);
+    for (const n of ["files_delete", "folders_delete", "files_restore", "admin_commit_backup"]) expect(KXTA_TOOLS.find((t) => t.name === n)?.destructive).toBe(true);
+    expect(KXTA_TOOLS.find((t) => t.name === "files_read")?.destructive).toBe(false);
     // Guard against a naming change silently turning destructive tools into "safe" ones.
-    for (const t of KXTA_TOOLS) if (/delete|restore|backup/i.test(t.name)) expect(t.destructive, t.name).toBe(true);
+    // Mirrors the name-based rule in apps/mcp/scripts/generate-manifest.js (isDestructive).
+    for (const t of KXTA_TOOLS) if (/(^|[_/])delete(_|$)/.test(t.name) || t.name === "files_restore" || t.name === "admin_commit_backup") expect(t.destructive, t.name).toBe(true);
   });
 });

@@ -1,26 +1,49 @@
 // packages/core/src/bundle/index.ts
-import { statSync } from "node:fs";
 import { getDatabase } from "../db/index.js";
 import { search } from "../metadata/index.js";
 import { readFile } from "../files/index.js";
 import { estimateTokensFromString } from "../util/tokens.js";
 import type { SearchFilters } from "../types.js";
+import { arbitrateCandidates, rerankCandidates } from "../rerank/index.js";
+import { pruneLowRelevanceCandidates } from "../decision/pruning.js";
+import { routeQueryIntent } from "../decision/intent-router.js";
+import { evaluateSufficiency } from "../decision/sufficiency.js";
+import type { RerankCandidate, ScoredCandidate } from "../rerank/types.js";
+import type { FileRecordWithRank } from "../metadata/index.js";
 
 export type BundleFormat = "xml" | "markdown";
 
 export interface BundleOptions {
   format?: BundleFormat;
   max_tokens?: number;
+  /** When true, rerank BM25 candidates with cross-encoder before packing */
+  rerank?: boolean;
+  /** Override candidate pool limit (default 30) */
+  candidate_limit?: number;
+  /** Override dictionary_boost for cross-encoder arbitration */
+  dictionary_boost?: number;
+  /** When true, evaluate retrieval sufficiency */
+  check_sufficiency?: boolean;
+  /** Minimum normalized score for a candidate to be packed (default 0.15). */
+  relevance_floor?: number;
+  /** When false, skip the pre-retrieval intent routing pass. */
+  intent_routing?: boolean;
+  /** Override the cross-encoder model identifier. */
+  model?: string;
+  /** Override the reranker hard timeout (ms). */
+  timeout_ms?: number;
 }
 
 export interface BundleIncludedItem {
   id: number;
   path: string;
   est_tokens: number;
+  /** Final reranked score, if reranking was applied */
+  rerank_score?: number;
 }
 
 export interface BundleSkippedItem extends BundleIncludedItem {
-  reason: "would_exceed_budget";
+  reason: "would_exceed_budget" | "below_relevance_threshold";
 }
 
 export interface BundleResult {
@@ -29,6 +52,12 @@ export interface BundleResult {
     query: string;
     format: BundleFormat;
     total_est_tokens: number;
+    intent?: string;
+    sufficiency?: {
+      satisfied: boolean;
+      confidence: number;
+    };
+    warning?: string;
     included: BundleIncludedItem[];
     skipped: BundleSkippedItem[];
   };
@@ -107,53 +136,172 @@ export async function bundleSearch(
   opts: BundleOptions = {}
 ): Promise<BundleResult> {
   const format: BundleFormat = opts.format ?? "xml";
-  const max_tokens = opts.max_tokens ?? 50000;
-
-  // Pass through a generous limit so a large token budget isn't silently
-  // capped at search()'s default of 50. Cap at 1000 (search()'s hard ceiling)
-  // — beyond that, a single bundle is unlikely to fit any usable budget.
-  const hits = search({ ...filters, limit: filters.limit ?? 1000 });
-
-  const included: BundleIncludedItem[] = [];
+  const max_tokens = opts.max_tokens ?? 12000;
   const skipped: BundleSkippedItem[] = [];
+
+  let queryIntent: string | undefined;
+  let dictionaryBoost = opts.dictionary_boost;
+
+  // Step 1: Pre-retrieval Query Intent Routing (if reranking is enabled and intent routing not disabled)
+  if (opts.rerank && opts.intent_routing !== false) {
+    try {
+      const intentResult = await routeQueryIntent(filters.query);
+      queryIntent = intentResult.intent;
+      if (dictionaryBoost === undefined) {
+        dictionaryBoost = intentResult.dictionary_boost;
+      }
+    } catch {
+      // Ignore intent routing failure
+    }
+  }
+
+  // Step 2: Fetch candidate pool (unbiased BM25 if reranking)
+  const candidateLimit = opts.candidate_limit ?? (opts.rerank ? Math.max(filters.limit ?? 30, 30) : (filters.limit ?? 1000));
+  let hits: FileRecordWithRank[];
+  if (opts.rerank) {
+    hits = search({ ...filters, limit: candidateLimit, raw_bm25_order: true });
+  } else {
+    hits = search({ ...filters, limit: filters.limit ?? 1000 });
+  }
+
+  // Step 3: Neural reranking pipeline (only when enabled and hits exist)
+  let rankedCandidates: Array<RerankCandidate | ScoredCandidate> = hits.map((h) => ({
+    id: h.id,
+    title: h.title,
+    path: h.path,
+    content: "",
+    content_class: h.content_class ?? null,
+    project_id: h.project_id ?? null,
+    bm25_rank: h.rank,
+  }));
+  const contentMap = new Map<number, string>();
+
+  if (opts.rerank && hits.length > 0) {
+    // Read content for candidates so cross-encoder can evaluate passages
+    const candidatesWithContent: RerankCandidate[] = [];
+    for (const h of hits) {
+      let content = "";
+      try {
+        const file = readFile(h.id);
+        content = file.content;
+        contentMap.set(h.id, file.content);
+      } catch {
+        // Ignored
+      }
+      candidatesWithContent.push({
+        id: h.id,
+        title: h.title,
+        path: h.path,
+        content,
+        content_class: h.content_class ?? null,
+        project_id: h.project_id ?? null,
+        bm25_rank: h.rank,
+      });
+    }
+
+    if (hits.length > 1) {
+      // Run cross-encoder reranking
+      const scored = await rerankCandidates(filters.query, candidatesWithContent, {
+        model: opts.model,
+        timeout_ms: opts.timeout_ms,
+        candidate_limit: candidateLimit,
+        dictionary_boost: dictionaryBoost,
+      });
+
+      if (scored && scored.length > 0) {
+        // Apply soft content-class arbitration
+        const arbitrated = arbitrateCandidates(scored, {
+          dictionary_boost: dictionaryBoost,
+        });
+
+        // Prune low-relevance candidates
+        const pruned = pruneLowRelevanceCandidates(arbitrated, opts.relevance_floor ?? 0.15);
+        const prunedIds = new Set(pruned.map((p) => p.id));
+
+        for (const c of arbitrated) {
+          if (!prunedIds.has(c.id)) {
+            const content = contentMap.get(c.id) ?? "";
+            const est = estimateTokensFromString(content);
+            skipped.push({
+              id: c.id,
+              path: c.path,
+              est_tokens: est,
+              rerank_score: c.final_score,
+              reason: "below_relevance_threshold",
+            });
+          }
+        }
+        rankedCandidates = pruned;
+      } else {
+        rankedCandidates = candidatesWithContent;
+      }
+    } else {
+      rankedCandidates = candidatesWithContent;
+    }
+  }
+
+  // Step 4: Sufficiency check (if enabled and candidates available)
+  let sufficiencyVerdict: { satisfied: boolean; confidence: number } | undefined;
+  let sufficiencyWarning: string | undefined;
+
+  if (opts.rerank && opts.check_sufficiency !== false && rankedCandidates.length > 0) {
+    try {
+      const excerpts = rankedCandidates.slice(0, 3).map((c) => {
+        const text = contentMap.get(c.id) ?? c.content ?? "";
+        return `${c.title}\n${text.slice(0, 500)}`;
+      });
+      sufficiencyVerdict = await evaluateSufficiency(filters.query, excerpts);
+      if (!sufficiencyVerdict.satisfied) {
+        sufficiencyWarning = "Context may be insufficient or tangential";
+      }
+    } catch {
+      // Ignore sufficiency evaluation error
+    }
+  }
+
+  // Step 5: Greedy token packing from ranked candidates
+  const included: BundleIncludedItem[] = [];
   const docs: DocFields[] = [];
   let total_est_tokens = 0;
-  let stopped = false;
 
-  for (const hit of hits) {
-    if (stopped) {
-      // Avoid reading the file just to estimate; use file size as a proxy
-      // (~4 bytes/token, the same heuristic as estimateTokensFromString).
-      let est_tokens = 0;
+  for (const candidate of rankedCandidates) {
+    let content = contentMap.get(candidate.id);
+    if (content === undefined) {
       try {
-        est_tokens = Math.max(1, Math.ceil(statSync(hit.path).size / 4));
-      } catch {}
+        const file = readFile(candidate.id);
+        content = file.content;
+        contentMap.set(candidate.id, content);
+      } catch {
+        continue;
+      }
+    }
+
+    const est = estimateTokensFromString(content);
+
+    if (total_est_tokens + est > max_tokens) {
       skipped.push({
-        id: hit.id,
-        path: hit.path,
-        est_tokens,
+        id: candidate.id,
+        path: candidate.path,
+        est_tokens: est,
+        rerank_score: "final_score" in candidate ? candidate.final_score : undefined,
         reason: "would_exceed_budget",
       });
       continue;
     }
 
-    const file = readFile(hit.id);
-    const est = estimateTokensFromString(file.content);
-
-    if (total_est_tokens + est > max_tokens) {
-      skipped.push({ id: hit.id, path: hit.path, est_tokens: est, reason: "would_exceed_budget" });
-      stopped = true;
-      continue;
-    }
-
     docs.push({
-      id: hit.id,
-      path: hit.path,
-      project: getProjectName(hit.project_id),
-      tags: getTagNames(hit.id),
-      content: file.content,
+      id: candidate.id,
+      path: candidate.path,
+      project: getProjectName(candidate.project_id ?? null),
+      tags: getTagNames(candidate.id),
+      content,
     });
-    included.push({ id: hit.id, path: hit.path, est_tokens: est });
+    included.push({
+      id: candidate.id,
+      path: candidate.path,
+      est_tokens: est,
+      rerank_score: "final_score" in candidate ? candidate.final_score : undefined,
+    });
     total_est_tokens += est;
   }
 
@@ -161,6 +309,15 @@ export async function bundleSearch(
 
   return {
     bundle,
-    meta: { query: filters.query, format, total_est_tokens, included, skipped },
+    meta: {
+      query: filters.query,
+      format,
+      total_est_tokens,
+      intent: queryIntent,
+      sufficiency: sufficiencyVerdict,
+      warning: sufficiencyWarning,
+      included,
+      skipped,
+    },
   };
 }

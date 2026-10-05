@@ -72,16 +72,16 @@ test("resolves id / ids / file_id args to on-disk paths in touched", async () =>
     initCapture({ projectSlug: "demo", baseDir: testDir, agent: "claude-code", sid: "abc" });
     const ok = async () => ({ content: [{ type: "text", text: "{}" }] });
 
-    await wrapHandler("files.update", ok)({ id: a, content: "x" });
+    await wrapHandler("files_update", ok)({ id: a, content: "x" });
     assert.deepStrictEqual(lastEvent(testDir).touched, ["/kb/a.md"]);
 
-    await wrapHandler("files.delete", async (args) => {
+    await wrapHandler("files_delete", async (args) => {
       db.prepare(`DELETE FROM files WHERE id IN (${args.ids.join(",")})`).run();
       return ok();
     })({ ids: [b, c] });
     assert.deepStrictEqual(lastEvent(testDir).touched.sort(), ["/kb/b.md", "/kb/c.md"]);
 
-    await wrapHandler("files.get_history", ok)({ file_id: a });
+    await wrapHandler("files_get_history", ok)({ file_id: a });
     assert.deepStrictEqual(lastEvent(testDir).touched, ["/kb/a.md"]);
   } finally {
     shutdownCapture();
@@ -90,11 +90,11 @@ test("resolves id / ids / file_id args to on-disk paths in touched", async () =>
   }
 });
 
-test("records created[].path from a files.create result in touched", async () => {
+test("records created[].path from a files_create result in touched", async () => {
   const testDir = mkdtempSync(join(tmpdir(), "kontexta-cap-test-"));
   try {
     initCapture({ projectSlug: "demo", baseDir: testDir, agent: "claude-code", sid: "abc" });
-    const wrapped = wrapHandler("files.create", async () => ({
+    const wrapped = wrapHandler("files_create", async () => ({
       content: [{ type: "text", text: JSON.stringify({ created_count: 2, created: [{ id: 1, path: "/kb/new1.md" }, { id: 2, path: "/kb/new2.mmd" }], errors: [] }) }],
     }));
     await wrapped({ files: [{ title: "new1", content: "x", destination: "knowledge", kind: "note" }, { title: "new2", content: "y", destination: "knowledge", format: "mmd" }] });
@@ -111,7 +111,7 @@ test("leaves touched empty when the id is unknown", async () => {
     setDataDir(testDir);
     createDatabase(join(testDir, "kontexta.db"));
     initCapture({ projectSlug: "demo", baseDir: testDir, agent: "claude-code", sid: "abc" });
-    const wrapped = wrapHandler("files.update", async () => ({ content: [{ type: "text", text: "{}" }] }));
+    const wrapped = wrapHandler("files_update", async () => ({ content: [{ type: "text", text: "{}" }] }));
     await wrapped({ id: 999999, content: "x" });
     assert.deepStrictEqual(lastEvent(testDir).touched, []);
   } finally {
@@ -142,7 +142,7 @@ test("stamps source:'mcp' on tool_call, error and voluntary events", async () =>
     initCapture({ projectSlug: "demo", baseDir: testDir, agent: "claude-code", sid: "abc" });
     await wrapHandler("search", async () => ({ content: [{ type: "text", text: "ok" }] }))({ query: "x" });
     assert.strictEqual(lastEvent(testDir).source, "mcp");
-    await assert.rejects(wrapHandler("files.update", async () => { throw new Error("boom"); })({ id: 1 }));
+    await assert.rejects(wrapHandler("files_update", async () => { throw new Error("boom"); })({ id: 1 }));
     assert.strictEqual(lastEvent(testDir).source, "mcp");
     appendVoluntaryEvent({ ts: new Date().toISOString(), agent: "claude-code", sid: "abc", event: "agent_note", summary: "n" });
     assert.strictEqual(lastEvent(testDir).source, "mcp");

@@ -1,0 +1,30 @@
+{
+  "name": "kontexta-reranker-model",
+  "version": "1.0.0",
+  "description": "Bundled ONNX weights for Kontexta's search reranker (Xenova/ms-marco-MiniLM-L-6-v2), so no model download is needed at runtime",
+  "type": "module",
+  "license": "Apache-2.0",
+  "author": "safiyu",
+  "private": false,
+  "publishConfig": {
+    "access": "public"
+  },
+  "homepage": "https://github.com/safiyu/kontexta#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/safiyu/kontexta.git",
+    "directory": "packages/reranker-model"
+  },
+  "main": "index.js",
+  "types": "index.d.ts",
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "models",
+    "README.md"
+  ],
+  "scripts": {
+    "fetch-weights": "node scripts/fetch-weights.mjs",
+    "prepack": "node scripts/fetch-weights.mjs"
+  }
+}

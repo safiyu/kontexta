@@ -28,7 +28,7 @@ export function backlogErrorPayload(status: {
       status.backlog_oldest_age_hours
         ? ` (oldest: ${status.backlog_oldest_age_hours.toFixed(1)}h ago)`
         : ""
-    }. Call journal.distill before search/read, or pass journal_bypass: true to override.`,
-    next_action: "journal.distill",
+    }. Call journal_distill before search/read, or pass journal_bypass: true to override.`,
+    next_action: "journal_distill",
   };
 }

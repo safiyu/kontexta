@@ -28,6 +28,7 @@ export default defineConfig({
     "simple-git",
     "undici",
     "yaml",
+    "@huggingface/transformers",
   ],
   // Migration .sql files live under packages/core/src/db/migrations/ in
   // the source tree but `runMigrations()` in the bundled output reads
@@ -53,6 +54,10 @@ export default defineConfig({
     mkdirSync(rulesDstDir, { recursive: true });
     copyFileSync(rulesSrc, join(rulesDstDir, "rules-block.md"));
     console.log(`[tsup] copied rules-block.md → ${rulesDstDir}/rules-block.md`);
+
+    const rulesRefSrc = resolve(__dirname, "../../packages/core/src/agent-rules/rules-reference.md");
+    copyFileSync(rulesRefSrc, join(rulesDstDir, "rules-reference.md"));
+    console.log(`[tsup] copied rules-reference.md → ${rulesDstDir}/rules-reference.md`);
 
     const emitSrc = resolve(__dirname, "../../packages/core/src/hooks/emit.mjs");
     const emitDstDir = resolve(__dirname, "dist/hooks");

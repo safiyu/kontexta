@@ -8,7 +8,7 @@ const agent = (over: Record<string, unknown> = {}) => ({
   mcp_config_path: "/h/.gemini/settings.json", mcp_approval_supported: true, mcp_notes: [], ...over,
 }) as any;
 const state = (over: Record<string, unknown> = {}) => ({
-  install_mode: "npm", destructive_tools: ["files.delete", "folders.delete"], mcp_docker_commands: {}, ...over,
+  install_mode: "npm", destructive_tools: ["files_delete", "folders_delete"], mcp_docker_commands: {}, ...over,
 }) as any;
 const ok = (over: Record<string, unknown> = {}): any => ({ ok: true, status: 200, outcome: { ok: true, changed: true, approval: "prompt", notes: [], ...over } });
 
@@ -35,8 +35,8 @@ describe("McpControls", () => {
     mcpAction.mockClear();
     fireEvent.change(select, { target: { value: "all" } });
     fireEvent.click(screen.getByRole("button", { name: "Connect MCP for Gemini CLI" }));
-    expect(await screen.findByText(/files\.delete/)).toBeTruthy();
-    expect(screen.getByText(/folders\.delete/)).toBeTruthy();
+    expect(await screen.findByText(/files_delete/)).toBeTruthy();
+    expect(screen.getByText(/folders_delete/)).toBeTruthy();
     expect(mcpAction).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(mcpAction).not.toHaveBeenCalled();

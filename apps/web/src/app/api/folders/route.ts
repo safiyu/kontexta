@@ -123,12 +123,12 @@ export async function DELETE(req: NextRequest) {
     const { deleteFolder } = await import("kxta-core");
 
     if (projectIdNum === null) {
-      // Refuse deleting a bare bucket name: would wipe the whole bucket and orphan DB rows.
-      const KB_BUCKETS = new Set(["journal", "knowledge", "mermaid", "html"]);
-      const topSegment = folderName.split(/[/\\]/).filter(Boolean)[0];
-      if (topSegment && KB_BUCKETS.has(topSegment) && folderName.split(/[/\\]/).filter(Boolean).length === 1) {
+      // Refuse deleting root knowledge folders: would wipe fixed buckets or the whole KB.
+      const segments = folderName.split(/[/\\]/).filter(Boolean);
+      if (segments.length <= 1) {
+        const name = segments[0] || folderName;
         return NextResponse.json(
-          { error: `Cannot delete the '${topSegment}' bucket. It's part of the fixed knowledge base layout. Delete subfolders inside it instead.` },
+          { error: `Cannot delete root knowledge folder '${name}'. It's part of the fixed knowledge base layout. Delete subfolders inside it instead.` },
           { status: 400 }
         );
       }

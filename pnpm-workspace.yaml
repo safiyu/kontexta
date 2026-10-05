@@ -2,6 +2,10 @@ packages:
   - "packages/*"
   - "apps/*"
 
+# Resolve kontexta-reranker-model (a plain ^semver dep so plain `npm publish` works) from the workspace locally.
+linkWorkspacePackages: true
+
 onlyBuiltDependencies:
   - better-sqlite3
   - re2
+  - onnxruntime-node

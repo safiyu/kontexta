@@ -53,8 +53,8 @@ describe("MCP orchestrator", () => {
   it("safe excludes destructive tools", () => {
     installMcp(["cline"], { ...base(), approval: "safe" });
     const allow: string[] = JSON.parse(readFileSync(join(home, ".cline", "mcp_settings.json"), "utf8")).mcpServers.kxta.alwaysAllow;
-    expect(allow).toContain("files.read");
-    expect(allow).not.toContain("files.delete");
+    expect(allow).toContain("files_read");
+    expect(allow).not.toContain("files_delete");
     expect(allow.length).toBe(KXTA_TOOLS.filter((t) => !t.destructive).length);
   });
 

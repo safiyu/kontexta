@@ -15,8 +15,8 @@ const MCP_BIN = path.resolve(import.meta.dirname, "../dist/index.js");
 const OUT = path.resolve(import.meta.dirname, "../../web/src/lib/mcp-tools.json");
 // Static tool list the MCP installer uses for its approval levels; no timestamp so it only changes when the tool set does.
 const TOOLS_OUT = path.resolve(import.meta.dirname, "../../../packages/core/src/mcp-install/tools.generated.ts");
-const SENSITIVE = new Set(["admin.commit_backup"]);
-const isDestructive = (t) => /DESTRUCTIVE/.test(t.description ?? "") || /\.delete(_|$)/.test(t.name) || t.name === "files.restore" || SENSITIVE.has(t.name);
+const SENSITIVE = new Set(["admin_commit_backup"]);
+const isDestructive = (t) => /DESTRUCTIVE/.test(t.description ?? "") || /(^|[_/])delete(_|$)/.test(t.name) || t.name === "files_restore" || SENSITIVE.has(t.name);
 
 if (!existsSync(MCP_BIN)) {
   console.error(`MCP not built. Run: pnpm --filter kontexta-mcp build`);

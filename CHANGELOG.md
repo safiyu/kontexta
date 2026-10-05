@@ -1,5 +1,38 @@
 # Changelog
 
+## 6.0.0 — Smart Search & Journal Improvements (2026-10-05)
+
+### Added
+
+- **Smarter search ranking:** Search matches are now automatically re-ordered using a built-in local AI model to surface the most relevant notes and documents first.
+- **Context sufficiency checks:** The search system can now verify if the retrieved results provide enough information to answer your request.
+
+- **Reranker model bundled:** the search reranker weights now ship in the `kontexta-reranker-model` npm package (a dependency of `kontexta` and `kontexta-mcp`) and in the Docker image, so nothing is downloaded from Hugging Face at runtime. Previously a corporate proxy blocking the HF CDN silently disabled reranking on every search.
+
+### Changed
+
+- **Compact agent rules stub and `KONTEXTA.md` reference:** the block injected into `CLAUDE.md` / `GEMINI.md` / `AGENTS.md` / `.cursor` / `.clinerules` is now a ~37-line stub that links to `KONTEXTA.md`, written at the project root with the full rules, tool routing matrix, KI workflow and content classes. Per-turn token cost drops from about 190 lines to 37. (Ported from the unreleased 5.2.1, which a force-push had dropped.)
+- **Strict KB folder structure in the rules:** agents are told to use `html/`, `mermaid/`, `journal/`, `knowledge/dictionary/` and `knowledge/notes/`, and never to write context artifacts into the project repo.
+- **`admin_get_profile` in the core constraints** of the stub, for reading the user's role, preferences and goals.
+- **Better journal organization:** Distilled activity journals now categorize tasks more cleanly and detect when you shift to a different topic of work.
+
+### Fixed
+
+- **`system1.cache_dir` ignored:** the configured model cache folder was resolved against the working directory in the wrong order.
+- **Topic-pivot detection:** confidence is no longer inverted when the model says "no pivot"; domain keywords match on word boundaries (so "decision" no longer counts as CI); project filtering matches whole path segments and handles Windows paths.
+- **Event triage:** read-only commands like `cat build.log` are graded as noise.
+- **Decision engine:** the timeout timer is cleared after each call; sufficiency checks no longer send the excerpts twice.
+- **Model cache:** falls back to `os.homedir()` when `HOME` is unset.
+- **Docker image and web bundle ship `rules-reference.md`:** without it `KONTEXTA.md` would silently never be written inside the container.
+- **Search results too large for agents:** `files_search` with `include_bodies` now defaults to a 12,000-token budget (was 50,000), which fit under typical MCP client output limits. The agent rules now tell agents to search without bodies first and read the top hit.
+- **Protected root folders:** Fixed an issue where top-level knowledge base folders could be accidentally deleted from the web dashboard.
+
+### Breaking
+
+- **MCP tool names renamed from dot-notation to underscore-notation.** All 58 tools now use `_` instead of `.` (e.g. `files.search` → `files_search`, `calendar.events.list` → `calendar_events_list`). Dotted names are gone from the server; calling one returns tool-not-found. Rationale: many agent clients and LLM function-calling APIs reject `.` in tool names.
+- **Journal pattern classifiers** keep dotted (5.0.0-5.x) and pre-5.0.0 names in `packages/core/src/journal/patterns/tool-classes.ts` so historical journal entries still classify.
+- **`rulesVersion` 3.1.0 → 3.2.0:** existing projects re-onboard via `admin_onboard_agent` so the agent rules block (CLAUDE.md / AGENTS.md / GEMINI.md / .clinerules) is rewritten with the new names.
+
 ## 5.2.0 — MCP installer, Antigravity & Hermes hooks, journals in the KB (2026-09-30)
 
 ### Added

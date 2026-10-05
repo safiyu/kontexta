@@ -60,10 +60,10 @@ test("no enabled agents → no hooks block anywhere", async () => {
   const f = fixture(); const s = startServer(f.env);
   try {
     await s.init();
-    const reg = await s.call("projects.register", { name: "demo", path: f.proj });
+    const reg = await s.call("projects_register", { name: "demo", path: f.proj });
     assert.equal(reg.isError, undefined);
     assert.equal("hooks" in json(reg), false);
-    const ctx = await s.call("admin.refresh_session_context");
+    const ctx = await s.call("admin_refresh_session_context");
     assert.ok(!ctx.content[0].text.includes("🪝"));
   } finally { s.stop(); f.cleanup(); }
 });
@@ -74,15 +74,15 @@ test("enabled agent → register carries alerts + PROMPT; onboard hooks:true ins
   const s = startServer(f.env);
   try {
     await s.init();
-    const reg = await s.call("projects.register", { name: "demo", path: f.proj });
+    const reg = await s.call("projects_register", { name: "demo", path: f.proj });
     const body = json(reg);
     assert.equal(body.hooks.install_mode, "npm");
     assert.deepEqual(body.hooks.alerts.map((a) => a.agent), ["claude-code"]);
     assert.ok(reg.content.some((c) => c.text.includes("PROMPT:") && c.text.includes("Claude Code")));
-    const before = await s.call("admin.refresh_session_context");
+    const before = await s.call("admin_refresh_session_context");
     assert.ok(before.content[0].text.includes("🪝") && before.content[0].text.includes("Claude Code"));
 
-    const done = await s.call("admin.onboard_agent", { project_id: body.project.id, confirm: true, target_agent: "claude-code", hooks: true });
+    const done = await s.call("admin_onboard_agent", { project_id: body.project.id, confirm: true, target_agent: "claude-code", hooks: true });
     assert.equal(done.isError, undefined, done.content[0].text);
     const out = json(done);
     assert.equal(out.hooks_install.outcome.ok, true);
@@ -90,7 +90,7 @@ test("enabled agent → register carries alerts + PROMPT; onboard hooks:true ins
     assert.ok(existsSync(join(f.home, ".claude", "settings.json")));
     assert.ok(existsSync(join(f.proj, "CLAUDE.md")));
 
-    const after = await s.call("admin.refresh_session_context");
+    const after = await s.call("admin_refresh_session_context");
     assert.ok(!after.content[0].text.includes("🪝"));
   } finally { s.stop(); f.cleanup(); }
 });
@@ -101,9 +101,9 @@ test("docker mode → onboard hooks:true returns the host command and writes not
   const s = startServer(f.env);
   try {
     await s.init();
-    const reg = json(await s.call("projects.register", { name: "demo", path: f.proj }));
+    const reg = json(await s.call("projects_register", { name: "demo", path: f.proj }));
     assert.match(reg.hooks.alerts[0].docker_command, /--agent gemini/);
-    const done = json(await s.call("admin.onboard_agent", { project_id: reg.project.id, confirm: true, target_agent: "gemini", hooks: true }));
+    const done = json(await s.call("admin_onboard_agent", { project_id: reg.project.id, confirm: true, target_agent: "gemini", hooks: true }));
     assert.match(done.hooks_install.docker_command, /--no-db/);
     assert.equal(done.hooks_install.outcome, undefined);
     assert.ok(!existsSync(join(f.home, ".gemini")));
@@ -114,8 +114,8 @@ test("hooks:true without target_agent errors before writing anything", async () 
   const f = fixture(); const s = startServer(f.env);
   try {
     await s.init();
-    const reg = json(await s.call("projects.register", { name: "demo", path: f.proj }));
-    const r = await s.call("admin.onboard_agent", { project_id: reg.project.id, confirm: true, hooks: true });
+    const reg = json(await s.call("projects_register", { name: "demo", path: f.proj }));
+    const r = await s.call("admin_onboard_agent", { project_id: reg.project.id, confirm: true, hooks: true });
     assert.equal(r.isError, true);
     assert.match(r.content[0].text, /target_agent is required/);
     assert.ok(!existsSync(join(f.proj, "CLAUDE.md")));
@@ -126,8 +126,8 @@ test("hooks:true for an agent with no hook API returns a note instead of failing
   const f = fixture(); const s = startServer(f.env);
   try {
     await s.init();
-    const reg = json(await s.call("projects.register", { name: "demo", path: f.proj }));
-    const r = await s.call("admin.onboard_agent", { project_id: reg.project.id, confirm: true, target_agent: "aider", hooks: true });
+    const reg = json(await s.call("projects_register", { name: "demo", path: f.proj }));
+    const r = await s.call("admin_onboard_agent", { project_id: reg.project.id, confirm: true, target_agent: "aider", hooks: true });
     assert.equal(r.isError, undefined, r.content[0].text);
     assert.match(json(r).hooks_install.note, /MCP capture only/);
     assert.equal(json(r).hooks_install.enabled, true);

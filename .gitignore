@@ -50,3 +50,6 @@ Thumbs.db
 # AI tools
 .aider.chat.history.md
 .aider.input.history
+
+# Model cache (auto-downloaded, do not commit)
+.cache/
