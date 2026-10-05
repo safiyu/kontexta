@@ -471,6 +471,9 @@ importers:
       jsdom:
         specifier: ^29.1.1
         version: 29.1.1(@noble/hashes@1.8.0)
+      kontexta-reranker-model:
+        specifier: ^1.0.0
+        version: link:../reranker-model
       simple-git:
         specifier: ^3.27.0
         version: 3.36.0
