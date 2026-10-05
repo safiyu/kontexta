@@ -48,5 +48,6 @@ jobs:
             echo "$NAME@$VER already on npm; nothing to do"
             exit 0
           fi
-          npm publish ./packages/reranker-model --access public --provenance
-          echo "Published $NAME@$VER"
+          # npm@latest: a stage-only token yields a staged version that must then be promoted on npmjs.com.
+          npx -y npm@latest publish ./packages/reranker-model --access public --provenance
+          echo "Published (or staged) $NAME@$VER"
