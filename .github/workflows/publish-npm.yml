@@ -78,12 +78,24 @@ jobs:
       - name: Fetch reranker weights
         run: pnpm -C packages/reranker-model run fetch-weights
 
+      # Uses NPM_TOKEN when set (scoped to this step only): a brand-new package cannot be
+      # created through trusted publishing. Once a trusted publisher is configured for
+      # kontexta-reranker-model on npmjs.com the secret can be removed and OIDC takes over.
       - name: Publish kontexta-reranker-model to npm (skipped when this version already exists)
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           NAME=$(node -p "require('./packages/reranker-model/package.json').name")
           VER=$(node -p "require('./packages/reranker-model/package.json').version")
           if npm view "$NAME@$VER" version >/dev/null 2>&1; then
             echo "$NAME@$VER already on npm; skipping"
+            exit 0
+          fi
+          if [ -n "$NPM_TOKEN" ]; then
+            RC=$(mktemp)
+            echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > "$RC"
+            NPM_CONFIG_USERCONFIG="$RC" npx -y npm@latest publish ./packages/reranker-model --access public --provenance
+            rm -f "$RC"
           else
             npx -y npm@latest publish ./packages/reranker-model --access public --provenance
           fi
