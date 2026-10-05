@@ -19,7 +19,7 @@ import type {
 } from "./types.js";
 
 /** Default model identifier for reranking. */
-const DEFAULT_MODEL = "Xenova/ms-marco-MiniLM-L-6-v2";
+export const DEFAULT_MODEL = "Xenova/ms-marco-MiniLM-L-6-v2";
 
 /** Default hard timeout per reranking invocation (ms). */
 const DEFAULT_TIMEOUT_MS = 300;

@@ -27,6 +27,9 @@ export {
   _resetCacheDir,
 } from "./cache-manager.js";
 
+// Model prefetch
+export { ensureModelCached } from "./prefetch.js";
+
 // Runtime singleton
 export {
   inferenceRuntime,

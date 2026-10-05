@@ -157,7 +157,7 @@ function applySystem1Config(): void {
   }
   const cacheDir = cfg.system1?.cache_dir;
   if (cacheDir) {
-    setModelCacheDirOverride(resolve(cacheDir, process.cwd()));
+    setModelCacheDirOverride(resolve(process.cwd(), cacheDir));
   }
 }
 

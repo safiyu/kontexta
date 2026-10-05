@@ -234,12 +234,17 @@ class DecisionEngine {
     promise: Promise<T>,
     timeoutMs: number,
   ): Promise<T | undefined> {
-    return Promise.race([
-      promise,
-      new Promise<undefined>((_resolve, reject) => {
-        setTimeout(() => reject(new Error("Decision timeout")), timeoutMs);
-      }),
-    ]);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      return await Promise.race([
+        promise,
+        new Promise<undefined>((_resolve, reject) => {
+          timer = setTimeout(() => reject(new Error("Decision timeout")), timeoutMs);
+        }),
+      ]);
+    } finally {
+      clearTimeout(timer);
+    }
   }
 }
 

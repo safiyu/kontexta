@@ -7,12 +7,19 @@
 - **Smarter search ranking:** Search matches are now automatically re-ordered using a built-in local AI model to surface the most relevant notes and documents first.
 - **Context sufficiency checks:** The search system can now verify if the retrieved results provide enough information to answer your request.
 
+- **Reranker model ready at startup:** `kontexta start` downloads the search reranker model on first run (3-minute cap) before serving. Skip with `KONTEXTA_NO_MODELS=1` or `search.rerank.enabled: false`; a failed download falls back to BM25 order.
+
 ### Changed
 
 - **Better journal organization:** Distilled activity journals now categorize tasks more cleanly and detect when you shift to a different topic of work.
 
 ### Fixed
 
+- **`system1.cache_dir` ignored:** the configured model cache folder was resolved against the working directory in the wrong order.
+- **Topic-pivot detection:** confidence is no longer inverted when the model says "no pivot"; domain keywords match on word boundaries (so "decision" no longer counts as CI); project filtering matches whole path segments and handles Windows paths.
+- **Event triage:** read-only commands like `cat build.log` are graded as noise.
+- **Decision engine:** the timeout timer is cleared after each call; sufficiency checks no longer send the excerpts twice.
+- **Model cache:** falls back to `os.homedir()` when `HOME` is unset.
 - **Protected root folders:** Fixed an issue where top-level knowledge base folders could be accidentally deleted from the web dashboard.
 
 ### Breaking

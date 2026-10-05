@@ -38,11 +38,8 @@ export async function evaluateSufficiency(
     // Concatenate query with excerpts
     const concatenatedExcerpts = topExcerpts.join("\n\n---\n\n");
 
-    // Construct the prompt for the decision engine
-    const prompt = `Does this retrieved context adequately address the query? ${query} | Excerpts: ${concatenatedExcerpts}`;
-
     // Use decision engine to evaluate
-    const verdict = await decisionEngine.evaluateVerdict(concatenatedExcerpts, prompt);
+    const verdict = await decisionEngine.evaluateVerdict(concatenatedExcerpts, `Does this retrieved context adequately address the query? ${query}`);
 
     return {
       satisfied: verdict.verdict,

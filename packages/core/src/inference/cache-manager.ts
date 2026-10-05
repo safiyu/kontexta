@@ -9,6 +9,7 @@
  */
 
 import { existsSync, mkdirSync, readdirSync, rmSync } from "node:fs";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import { getDataDir } from "../util/paths.js";
 
@@ -68,7 +69,7 @@ function resolveCacheDir(): string {
   }
 
   // Priority 4: ~/.cache/kontexta/models
-  const home = process.env.HOME || process.env.USERPROFILE || "";
+  const home = process.env.HOME || process.env.USERPROFILE || homedir();
   _cacheDir = join(home, ".cache", "kontexta", "models");
   mkdirSync(_cacheDir, { recursive: true });
   return _cacheDir;

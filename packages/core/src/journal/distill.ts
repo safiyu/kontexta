@@ -214,7 +214,7 @@ function readRawEvents(
           // itself "default"), check project affinity.
           if (isMergedDefaultDir && dir === defaultDir) {
             const matchesProject = (ev.args?.project_id === opts.projectId) ||
-                                 (ev.touched?.some(p => p.startsWith(opts.projectSlug)));
+                                 (ev.touched?.some(p => { const n = p.replace(/\\/g, "/"); return n === opts.projectSlug || n.startsWith(`${opts.projectSlug}/`) || n.includes(`/${opts.projectSlug}/`); }));
             if (!matchesProject) continue;
           }
           all.push(ev);

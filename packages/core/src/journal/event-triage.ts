@@ -108,18 +108,18 @@ function heuristicGrading(signal: string): TriageResult {
     return { score: 2.0, grade: 2 };
   }
 
+  // Grade 0: Noise (read-only commands, matched on the command itself so filenames/args don't hijack)
+  if (
+    /command:\s*(git\s+status|ls|pwd|echo|whoami|date|cat|head|tail|grep|find|du|df)\b/i.test(lower)
+  ) {
+    return { score: 0.0, grade: 0 };
+  }
+
   // Grade 1: Routine operations
   if (
     /file\s*edit|create|save|write|update\s*config|dependency|lint|format|build|compile|test\s*pass|test\s*ok|check/i.test(lower)
   ) {
     return { score: 1.0, grade: 1 };
-  }
-
-  // Grade 0: Noise
-  if (
-    /git\s*status|ls\b|pwd|echo|whoami|date|ls\s*-la|cat\s|head\s|tail\s|grep\s|find\b|du\s|df\b/i.test(lower)
-  ) {
-    return { score: 0.0, grade: 0 };
   }
 
   // Default: low-signal but not pure noise

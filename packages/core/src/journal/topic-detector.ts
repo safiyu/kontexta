@@ -163,7 +163,9 @@ export async function detectTopicPivot(
         };
       }
 
-      return { isPivot: false, confidence: 1 - verdict.confidence, suggestedNewSlug: null };
+      // Model said no pivot: its confidence applies directly; keyword veto of a yes inverts it.
+      const confidence = verdict.verdict ? 1 - verdict.confidence : verdict.confidence;
+      return { isPivot: false, confidence, suggestedNewSlug: null };
     } catch {
       // Fall back to heuristic keyword checking
     }
@@ -235,6 +237,11 @@ const DOMAIN_GROUPS: Record<string, string[]> = {
   cache: ["cache", "redis", "queue", "message", "worker", "celery"],
 };
 
+// Prefix match on word start; short keywords (ci, cd, ui, api...) need a full-word match.
+function hasKeyword(text: string, kw: string): boolean {
+  return new RegExp(`\\b${kw}${kw.length <= 3 ? "\\b" : ""}`).test(text);
+}
+
 /**
  * Heuristic fallback for topic pivot detection.
  * Uses keyword matching on common topic boundaries.
@@ -264,7 +271,7 @@ function heuristicTopicPivot(
   // domains NOT already active in the context
   const activeDomains = new Set<string>();
   for (const [domain, keywords] of Object.entries(DOMAIN_GROUPS)) {
-    if (keywords.some((kw) => contextText.includes(kw))) {
+    if (keywords.some((kw) => hasKeyword(contextText, kw))) {
       activeDomains.add(domain);
     }
   }
@@ -274,7 +281,7 @@ function heuristicTopicPivot(
   for (const [domain, keywords] of Object.entries(DOMAIN_GROUPS)) {
     if (activeDomains.has(domain)) continue; // Skip already-active domains
     // Check if next event introduces keywords from a new domain
-    const newKeywordsInEvent = keywords.filter((kw) => nextLower.includes(kw));
+    const newKeywordsInEvent = keywords.filter((kw) => hasKeyword(nextLower, kw));
     if (newKeywordsInEvent.length >= 1) {
       // 1 new keyword from a new domain counts as a shift indicator
       newDomainCount++;
@@ -297,7 +304,7 @@ function heuristicTopicPivot(
 
   // Check if the event also contains keywords from an active domain
   const hasActiveDomainKeywords = [...activeDomains].some(
-    (domain) => DOMAIN_GROUPS[domain].some((kw) => nextLower.includes(kw))
+    (domain) => DOMAIN_GROUPS[domain].some((kw) => hasKeyword(nextLower, kw))
   );
 
   // A pivot is likely when:

@@ -57,7 +57,7 @@ export function arbitrateCandidates(
     // Get the class prior
     const contentClass = c.content_class ?? "default";
     const basePrior =
-      contentClass in CLASS_PRIORS
+      Object.hasOwn(CLASS_PRIORS, contentClass)
         ? CLASS_PRIORS[contentClass as keyof typeof CLASS_PRIORS]
         : CLASS_PRIORS.default;
 
