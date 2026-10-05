@@ -15,7 +15,7 @@
 
 ### Notes
 
-- The 6.0.0 notes said journals "detect when you shift to a different topic" and that search "can verify if the retrieved results provide enough information". The first was not active until this release. The second still returns a fixed verdict.
+- The 6.0.0 notes were corrected: topic-shift detection was not active in 6.0.0 (it arrives here), and the search sufficiency verdict is a placeholder.
 - Pivots are detected between typed prompts, so a session of pure tool calls is never split. The model is English-trained, and the threshold was tuned on one user's journals.
 - Task categories remain keyword-based.
 
@@ -24,7 +24,7 @@
 ### Added
 
 - **Smarter search ranking:** Search matches are now automatically re-ordered using a built-in local AI model to surface the most relevant notes and documents first.
-- **Context sufficiency checks:** The search system can now verify if the retrieved results provide enough information to answer your request.
+- **Sufficiency verdict (placeholder):** `files_search` with `include_bodies` now returns a `sufficiency` field. The verdict is not model-based yet and always reports satisfied.
 
 - **Reranker model bundled:** the search reranker weights now ship in the `kontexta-reranker-model` npm package (a dependency of `kontexta` and `kontexta-mcp`) and in the Docker image, so nothing is downloaded from Hugging Face at runtime. Previously a corporate proxy blocking the HF CDN silently disabled reranking on every search.
 
@@ -33,7 +33,7 @@
 - **Compact agent rules stub and `KONTEXTA.md` reference:** the block injected into `CLAUDE.md` / `GEMINI.md` / `AGENTS.md` / `.cursor` / `.clinerules` is now a ~37-line stub that links to `KONTEXTA.md`, written at the project root with the full rules, tool routing matrix, KI workflow and content classes. Per-turn token cost drops from about 190 lines to 37. (Ported from the unreleased 5.2.1, which a force-push had dropped.)
 - **Strict KB folder structure in the rules:** agents are told to use `html/`, `mermaid/`, `journal/`, `knowledge/dictionary/` and `knowledge/notes/`, and never to write context artifacts into the project repo.
 - **`admin_get_profile` in the core constraints** of the stub, for reading the user's role, preferences and goals.
-- **Better journal organization:** Distilled activity journals now categorize tasks more cleanly and detect when you shift to a different topic of work.
+- **Task categories in journals:** Distilled journal tasks now carry a category (debugging, refactoring, infra, feature work, research, docs), assigned by keyword matching.
 
 ### Fixed
 
