@@ -40,6 +40,13 @@ jobs:
       - name: Build
         run: pnpm build
 
+      # Packed here so the smoke tests install our own build of the model package
+      # instead of whatever is (or is not yet) on the registry.
+      - name: Pack reranker model
+        run: |
+          pnpm -C packages/reranker-model run fetch-weights
+          cd packages/reranker-model && npm pack
+
       - name: Pack CLI bundle
         id: pack
         run: |
@@ -54,15 +61,18 @@ jobs:
           npm pack
           mkdir -p /tmp/mcp-smoke && cd /tmp/mcp-smoke
           npm init -y >/dev/null
+          npm install $GITHUB_WORKSPACE/packages/reranker-model/kontexta-reranker-model-*.tgz
           npm install $GITHUB_WORKSPACE/apps/mcp/kontexta-mcp-*.tgz
           printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"ci","version":"1"}}}' \
             | ./node_modules/.bin/kontexta-mcp | head -c 2000 | grep -q '"capabilities"'
 
-      - name: Upload tarball
+      - name: Upload tarballs
         uses: actions/upload-artifact@v4
         with:
           name: kontexta-tarball
-          path: packages/cli/kontexta-*.tgz
+          path: |
+            packages/cli/kontexta-*.tgz
+            packages/reranker-model/kontexta-reranker-model-*.tgz
 
   smoke:
     needs: build
@@ -77,15 +87,21 @@ jobs:
         with:
           node-version: "22"
 
-      - name: Download tarball
+      - name: Download tarballs
         uses: actions/download-artifact@v4
         with:
           name: kontexta-tarball
-          path: .
+          path: tarballs
 
-      - name: Install globally
+      # A local prefix (not -g) so npm satisfies kontexta's kontexta-reranker-model
+      # dependency from the sibling tarball; global installs never dedupe that way.
+      - name: Install from tarballs
         shell: bash
-        run: npm install -g ./kontexta-*.tgz
+        run: |
+          mkdir smoke && cd smoke && npm init -y >/dev/null
+          npm install ../tarballs/packages/reranker-model/kontexta-reranker-model-*.tgz
+          npm install ../tarballs/packages/cli/kontexta-[0-9]*.tgz
+          echo "$(pwd -W 2>/dev/null || pwd)/node_modules/.bin" >> "$GITHUB_PATH"
 
       - name: doctor
         shell: bash
