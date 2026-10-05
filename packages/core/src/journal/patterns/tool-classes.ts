@@ -1,11 +1,24 @@
 // Single source of truth for classifying MCP tool calls in journal pattern
 // detectors. Kept in sync with apps/mcp/src/index.ts + calendar-tools.ts +
-// scripts/build-smithery-bundle.mjs. Current (5.0.0+), pre-5.0.0 dotted, and
-// legacy snake_case names are all listed so historical journal entries
-// recorded under any prior naming scheme still classify.
+// scripts/build-smithery-bundle.mjs. Current underscore (6.0.0+), dotted
+// (5.0.0-5.x), pre-5.0.0 dotted, and legacy snake_case names are all listed
+// so historical journal entries recorded under any prior naming scheme
+// still classify.
 
 export const READ_ONLY_TOOL_NAMES = new Set<string>([
-  // dot-notation (current, 5.0.0+)
+  // underscore (current, 6.0.0+)
+  "admin_get_profile", "admin_overview", "admin_refresh_session_context",
+  "calendar_entities_list", "calendar_events_conflicts", "calendar_events_list", "calendar_export_ics",
+  "files_describe", "files_diff_against_disk", "files_find_related",
+  "files_get_diff", "files_get_history", "files_list",
+  "files_read", "files_read_outline", "files_regex_search", "files_search",
+  "folders_list",
+  "hands_list",
+  "journal_status",
+  "projects_list", "projects_map",
+  "resources_export_report", "resources_list_reports",
+  "tags_list", "tags_suggest",
+  // dot-notation (5.0.0-5.x — kept for historical journal entries)
   "admin.get_profile", "admin.overview", "admin.refresh_session_context",
   "calendar.entities.list", "calendar.events.conflicts", "calendar.events.list", "calendar.export_ics",
   "files.describe", "files.diff_against_disk", "files.find_related",
@@ -35,7 +48,19 @@ export const READ_ONLY_TOOL_NAMES = new Set<string>([
 ]);
 
 const WRITE_TOOL_NAMES = new Set<string>([
-  // dot-notation (current, 5.0.0+)
+  // underscore (current, 6.0.0+)
+  "admin_commit_backup", "admin_onboard_agent", "admin_transfer_agent_context",
+  "calendar_entities_add", "calendar_entities_delete", "calendar_entities_link", "calendar_entities_update",
+  "calendar_events_add", "calendar_events_delete", "calendar_events_update",
+  "files_create", "files_delete", "files_move",
+  "files_restore", "files_update",
+  "folders_create", "folders_delete",
+  "hands_confirm", "hands_reload",
+  "journal_commit_upgrades", "journal_distill", "journal_housekeep", "journal_write",
+  "projects_refresh_index", "projects_register",
+  "resources_add_report", "resources_clip_url", "resources_delete_report",
+  "tags_add", "tags_remove", "tags_search", "tags_set_favorite",
+  // dot-notation (5.0.0-5.x — kept for historical journal entries)
   "admin.commit_backup", "admin.onboard_agent", "admin.transfer_agent_context",
   "calendar.entities.add", "calendar.entities.delete", "calendar.entities.link", "calendar.entities.update",
   "calendar.events.add", "calendar.events.delete", "calendar.events.update",

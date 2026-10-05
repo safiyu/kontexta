@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
   ensureDbInitialized();
   const projects = listProjects();
   const augmented = projects.map((p) => {
-    // Mirrors the MCP server's projects.list handler (apps/mcp/src/index.ts)
+    // Mirrors the MCP server's projects_list handler (apps/mcp/src/index.ts)
     // so the dashboard and any connected agent agree on onboarding status.
     const contextFiles = p.path ? detectAgentContextFiles(p.path) : [];
     const statuses = p.path ? checkAgentRulesStatus(p.path, contextFiles) : [];

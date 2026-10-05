@@ -111,7 +111,7 @@ describe("FirstRunWizard", () => {
   });
 
   it("step 2 also offers to connect MCP for agents that support it", async () => {
-    state.destructive_tools = ["files.delete"]; state.mcp_docker_commands = {};
+    state.destructive_tools = ["files_delete"]; state.mcp_docker_commands = {};
     state.agents = state.agents.map((a: any) => a.id === "gemini" ? { ...a, mcp_supported: true, mcp_installed: false, mcp_approval: "prompt", mcp_approval_supported: true } : a);
     renderWizard();
     fireEvent.click(await screen.findByLabelText("Gemini CLI"));

@@ -5,7 +5,7 @@ import { getCurrentProjectSlug } from "./journal-capture.js";
 
 export function registerJournalTools(server: any): void {
   server.tool(
-    "journal.distill",
+    "journal_distill",
     "Run the distillation pipeline: read raw events since the high-water mark, group by topic, write mechanical markdown entries, advance high-water. Idempotent. Auto-provisions a project row for orphan slugs (e.g. `default`) that have no registered project yet.",
     {
       project_slug: z.string().optional().describe("Project slug to distill. Defaults to the current active project."),
@@ -30,7 +30,7 @@ export function registerJournalTools(server: any): void {
   );
 
   server.tool(
-    "journal.status",
+    "journal_status",
     "Report the journal backlog and high-water mark for a project.",
     { project_slug: z.string().optional().describe("Project slug to check. Defaults to the current active project.") },
     async ({ project_slug }: { project_slug?: string }) => {

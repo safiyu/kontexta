@@ -7,7 +7,7 @@ Kontexta's journal records what happens through its own MCP tools. Hooks add the
 1. You enable an agent (dashboard → Settings → Agents, the first-run wizard, or `kontexta hooks enable <agent>`). Every agent starts **disabled**; nothing is installed for an agent you haven't enabled.
 2. Kontexta writes hook entries into that agent's user-level config and stages a dependency-free script at `<data dir>/hooks/emit.mjs`.
 3. On each prompt, reply and shell command the agent runs `node emit.mjs --agent <id>`; the script appends one JSON line to `<data dir>/knowledge/journal/<project>/raw/<date>.jsonl`. It prints nothing and always exits 0, so it can never block a turn.
-4. `journal.distill` renders a **Conversation** and a **Shell** section per task; `files.search` finds them. Work with no branch is filed as `task-<HHMM>-<topic>.md`; the time is UTC, like every other timestamp in the journal.
+4. `journal_distill` renders a **Conversation** and a **Shell** section per task; `files_search` finds them. Work with no branch is filed as `task-<HHMM>-<topic>.md`; the time is UTC, like every other timestamp in the journal.
 
 The project is resolved from the agent's working directory via `<data dir>/hooks/projects.json`; the git branch is read from `.git/HEAD` so entries bucket by branch even without the MCP server running.
 
@@ -74,7 +74,7 @@ Disabling an agent stops alerts and hides it from the configure section but leav
 - **First-run wizard** (`/?setup=1` after you set the security key): pick your agents → hooks are installed for them (Docker shows the host command instead) → profile → onboard an agent.
 - **Configure → AGENTS** tab: a switch per agent. Turning one on installs its hooks immediately (outside Docker); turning it off keeps the config in place. *Uninstall* removes only kontexta's entries. The MCP SERVER CONFIG tab lists only enabled agents (plus Generic JSON).
 - **Banner:** shown when an enabled agent has no hooks (or none has reported an event for over a week). It links to the AGENTS tab and can be dismissed for the session.
-- **From an agent:** `projects.register`, `admin.onboard_agent` and the session welcome mention hooks when an enabled agent needs them. After you agree, `admin.onboard_agent({ project_id, confirm: true, target_agent: "<id>", hooks: true })` enables that agent and installs its hooks (Docker installs get the host command back).
+- **From an agent:** `projects_register`, `admin_onboard_agent` and the session welcome mention hooks when an enabled agent needs them. After you agree, `admin_onboard_agent({ project_id, confirm: true, target_agent: "<id>", hooks: true })` enables that agent and installs its hooks (Docker installs get the host command back).
 
 ## Environment variables
 

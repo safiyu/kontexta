@@ -87,7 +87,7 @@ export function wrapHandler<TArgs extends Record<string, unknown>, TResult exten
     delete cleanArgs.journal_bypass;
 
     const start = Date.now();
-    // Resolve ids before the handler runs: files.delete removes the rows we'd otherwise look up.
+    // Resolve ids before the handler runs: files_delete removes the rows we'd otherwise look up.
     const touchedBefore = extractTouched(cleanArgs);
     let result: TResult;
     try {
@@ -146,7 +146,7 @@ export function wrapHandler<TArgs extends Record<string, unknown>, TResult exten
                 backlog_events: status.backlog_events,
                 backlog_oldest_age_hours: status.backlog_oldest_age_hours,
                 high_water: status.high_water,
-                suggested_action: "journal.distill",
+                suggested_action: "journal_distill",
                 mode: "lenient",
               },
             };
@@ -225,7 +225,7 @@ function extractTouched(args: Record<string, unknown>): string[] {
   return [...out];
 }
 
-// files.create is the one tool whose paths only exist after it runs; they come back as created[].path.
+// files_create is the one tool whose paths only exist after it runs; they come back as created[].path.
 function touchedFromResult(result: { content?: any }): string[] {
   const text = result?.content?.[0]?.text;
   if (typeof text !== "string" || !text.startsWith("{")) return [];

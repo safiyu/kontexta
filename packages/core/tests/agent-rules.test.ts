@@ -22,12 +22,12 @@ describe("agent-rules constants", () => {
       "Batch reads",
       "Address `journal.suggested_action`",
       'Relay `hooks` prompts once per session',
-      'Use `journal.write({kind: "note"',
-      'Use `journal.write({kind: "intent"',
+      'Use `journal_write({kind: "note"',
+      'Use `journal_write({kind: "intent"',
       "Confirm Hands tokens within 60 seconds",
       "Save specs to a canonical location",
       "Tag new KB files",
-      '`admin.overview({mode: "whats_new"})` early',
+      '`admin_overview({mode: "whats_new"})` early',
     ]) {
       expect(RULES_BLOCK_BODY).toContain(phrase);
     }
@@ -351,7 +351,7 @@ describe("rules-block.md structural integrity", () => {
     expect(rowsChecked, "should find at least one routing row").toBeGreaterThan(40);
   });
 
-  it("tool names in column 1 are unique and dot-notation", () => {
+  it("tool names in column 1 are unique and underscore-notation", () => {
     const toolRowRe = /^\|\s*`([a-z][a-z0-9_.]*)`\s*\|/;
     const seen = new Set<string>();
     for (const line of raw.split("\n")) {
@@ -359,7 +359,8 @@ describe("rules-block.md structural integrity", () => {
       if (!m) continue;
       const name = m[1];
       expect(name).toMatch(/^[a-z][a-z0-9_.]*$/);
-      expect(name).toContain(".");
+      expect(name).toContain("_");
+      expect(name).not.toContain(".", `tool name should use underscore-notation since 6.0.0: ${name}`);
       expect(seen.has(name), `duplicate tool row: ${name}`).toBe(false);
       seen.add(name);
     }

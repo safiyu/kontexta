@@ -51,7 +51,7 @@ test("envelope IS injected once backlog_events crosses the event threshold", asy
     seedRawEvents(testDir, "demo", 51, 0.1); // 51 events, still recent
     const body = await callWrapped();
     assert.ok(body.journal, "expected a journal envelope");
-    assert.equal(body.journal.suggested_action, "journal.distill");
+    assert.equal(body.journal.suggested_action, "journal_distill");
   } finally {
     shutdownCapture();
     rmSync(testDir, { recursive: true, force: true });

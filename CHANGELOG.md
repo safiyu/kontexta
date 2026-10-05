@@ -1,5 +1,26 @@
 # Changelog
 
+## 6.0.0 — Smart Search & Journal Improvements (2026-10-05)
+
+### Added
+
+- **Smarter search ranking:** Search matches are now automatically re-ordered using a built-in local AI model to surface the most relevant notes and documents first.
+- **Context sufficiency checks:** The search system can now verify if the retrieved results provide enough information to answer your request.
+
+### Changed
+
+- **Better journal organization:** Distilled activity journals now categorize tasks more cleanly and detect when you shift to a different topic of work.
+
+### Fixed
+
+- **Protected root folders:** Fixed an issue where top-level knowledge base folders could be accidentally deleted from the web dashboard.
+
+### Breaking
+
+- **MCP tool names renamed from dot-notation to underscore-notation.** All 58 tools now use `_` instead of `.` (e.g. `files.search` → `files_search`, `calendar.events.list` → `calendar_events_list`). Dotted names are gone from the server; calling one returns tool-not-found. Rationale: many agent clients and LLM function-calling APIs reject `.` in tool names.
+- **Journal pattern classifiers** keep dotted (5.0.0-5.x) and pre-5.0.0 names in `packages/core/src/journal/patterns/tool-classes.ts` so historical journal entries still classify.
+- **`rulesVersion` 3.1.0 → 3.2.0:** existing projects re-onboard via `admin_onboard_agent` so the agent rules block (CLAUDE.md / AGENTS.md / GEMINI.md / .clinerules) is rewritten with the new names.
+
 ## 5.2.0 — MCP installer, Antigravity & Hermes hooks, journals in the KB (2026-09-30)
 
 ### Added

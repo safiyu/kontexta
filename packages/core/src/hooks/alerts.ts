@@ -30,11 +30,11 @@ export function buildHooksBlock(o: { installMode: InstallMode; version: string; 
     if (o.installMode === "docker") {
       lines.push(`Kontexta can capture your conversation and shell commands for ${names}. The container cannot edit files on your machine, so run the docker command from the dashboard's Configure → AGENTS tab (or hooks.alerts[].docker_command) on the host.`);
     } else {
-      // admin.onboard_agent only accepts agents that have a rules-file scaffold; the rest must use the CLI.
+      // admin_onboard_agent only accepts agents that have a rules-file scaffold; the rest must use the CLI.
       const viaTool = missing.filter((a) => agentMeta(a.agent)?.onboardable);
       const cliOnly = missing.filter((a) => !agentMeta(a.agent)?.onboardable);
       const install = viaTool.length > 0
-        ? `After the user agrees, call admin.onboard_agent with hooks:true, confirm:true and target_agent set to one of (${viaTool.map((a) => a.agent).join(" | ")}), or run \`kontexta hooks install --agent <id>\`.`
+        ? `After the user agrees, call admin_onboard_agent with hooks:true, confirm:true and target_agent set to one of (${viaTool.map((a) => a.agent).join(" | ")}), or run \`kontexta hooks install --agent <id>\`.`
         : "After the user agrees, run `kontexta hooks install --agent <id>`.";
       const cli = cliOnly.length > 0
         ? ` For ${cliOnly.map((a) => a.name).join(", ")}, run ${cliOnly.map((a) => `\`kontexta hooks install --agent ${a.agent}\``).join(" / ")} (onboarding does not cover ${cliOnly.length > 1 ? "them" : "it"}).`

@@ -82,7 +82,7 @@ async function run() {
     });
 
     // 2. Seed files for search
-    await call("files.create", {
+    await call("files_create", {
       files: [
         {
           title: "auth-spec",
@@ -103,16 +103,16 @@ async function run() {
 
     console.log("  ✓ Seed files created");
 
-    // 3. Test files.search with rerank
-    const searchRes = await call("files.search", {
+    // 3. Test files_search with rerank
+    const searchRes = await call("files_search", {
       query: "oauth token",
       rerank: true,
     });
     assert(searchRes.matches && searchRes.matches.length >= 1, "Expected search matches");
-    console.log(`  ✓ files.search with rerank returned ${searchRes.matches.length} matches`);
+    console.log(`  ✓ files_search with rerank returned ${searchRes.matches.length} matches`);
 
-    // 4. Test files.search with include_bodies and check_sufficiency
-    const bundleRes = await call("files.search", {
+    // 4. Test files_search with include_bodies and check_sufficiency
+    const bundleRes = await call("files_search", {
       query: "oauth token",
       include_bodies: true,
       check_sufficiency: true,
@@ -121,18 +121,18 @@ async function run() {
     assert(bundleRes.meta, "Expected meta in bundle result");
     assert(bundleRes.meta.included.length >= 1, "Expected included items");
     assert(bundleRes.meta.sufficiency !== undefined, "Expected sufficiency verdict in meta");
-    console.log(`  ✓ files.search with include_bodies and check_sufficiency evaluated (satisfied: ${bundleRes.meta.sufficiency.satisfied})`);
+    console.log(`  ✓ files_search with include_bodies and check_sufficiency evaluated (satisfied: ${bundleRes.meta.sufficiency.satisfied})`);
 
-    // 5. Test admin.overview reports system1 status
-    const overviewRes = await call("admin.overview", {
+    // 5. Test admin_overview reports system1 status
+    const overviewRes = await call("admin_overview", {
       mode: "stats",
       project_id: null,
     });
-    assert(overviewRes.system1, "Expected system1 in admin.overview");
+    assert(overviewRes.system1, "Expected system1 in admin_overview");
     assert.strictEqual(overviewRes.system1.ready, true, "Expected system1.ready === true");
     assert(typeof overviewRes.system1.device === "string", "Expected system1.device string");
     assert(Array.isArray(overviewRes.system1.loaded_models), "Expected loaded_models array");
-    console.log(`  ✓ admin.overview reported system1 status (device: ${overviewRes.system1.device})`);
+    console.log(`  ✓ admin_overview reported system1 status (device: ${overviewRes.system1.device})`);
 
     console.log("\n[test] All rerank search tests passed successfully!");
   } finally {

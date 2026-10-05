@@ -125,7 +125,7 @@ read:
   - .aider/kontexta.md`,
     notes: [
       "Aider integration is file-based because Aider lacks native MCP client support.",
-      "Use 'admin.onboard_agent' with 'target_agent: aider' to scaffold the rules file.",
+      "Use 'admin_onboard_agent' with 'target_agent: aider' to scaffold the rules file.",
     ],
   };
 }

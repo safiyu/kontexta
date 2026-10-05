@@ -139,15 +139,15 @@ const COMMIT_FILES = ["modules/sltdecode/src/decode_api/service.py", "modules/sl
 function realShapedDay(): RawEvent[] {
   const base = { agent: "unknown", sid: SID } as const;
   return [
-    { ...base, ts: "2026-09-28T07:37:22.819Z", event: "tool_call", tool: "files.create", args: { files: [{ title: "poc-architecture", content: "<truncated:2290B>", destination: "knowledge", format: "mmd" }] }, touched: [], status: "ok", ms: 195 },
+    { ...base, ts: "2026-09-28T07:37:22.819Z", event: "tool_call", tool: "files_create", args: { files: [{ title: "poc-architecture", content: "<truncated:2290B>", destination: "knowledge", format: "mmd" }] }, touched: [], status: "ok", ms: 195 },
     { ...base, ts: "2026-09-28T07:37:33.482Z", event: "git_context", branch: "fix/STRY0869745-cdc-bootstrap-wedge", head: "c0d4fff", project: "default" },
     { ...base, ts: "2026-09-28T07:37:33.482Z", event: "git_commit", sha: COMMIT_SHA, msg: COMMIT_MSG, files_changed: COMMIT_FILES, project: "default" },
-    { ...base, ts: "2026-09-28T07:37:40.791Z", event: "tool_call", tool: "files.update", args: { id: 1519, content: "<truncated:2288B>" }, touched: [], status: "ok", ms: 171 },
-    { ...base, ts: "2026-09-28T11:30:44.141Z", event: "tool_call", tool: "files.update", args: { id: 1515, content: "<truncated:6243B>", section: "2. Verified facts" }, touched: [], status: "ok", ms: 269 },
+    { ...base, ts: "2026-09-28T07:37:40.791Z", event: "tool_call", tool: "files_update", args: { id: 1519, content: "<truncated:2288B>" }, touched: [], status: "ok", ms: 171 },
+    { ...base, ts: "2026-09-28T11:30:44.141Z", event: "tool_call", tool: "files_update", args: { id: 1515, content: "<truncated:6243B>", section: "2. Verified facts" }, touched: [], status: "ok", ms: 269 },
     { ...base, ts: "2026-09-28T11:54:27.729Z", event: "agent_note", summary: NOTE_1, tags: ["rca", "cdc"] },
-    { ...base, ts: "2026-09-28T12:07:03.070Z", event: "tool_call", tool: "files.create", args: { files: [{ title: "impl-plan", content: "<truncated:9000B>", destination: "knowledge", kind: "dictionary" }] }, touched: [], status: "ok", ms: 210 },
+    { ...base, ts: "2026-09-28T12:07:03.070Z", event: "tool_call", tool: "files_create", args: { files: [{ title: "impl-plan", content: "<truncated:9000B>", destination: "knowledge", kind: "dictionary" }] }, touched: [], status: "ok", ms: 210 },
     { ...base, ts: "2026-09-28T12:07:23.650Z", event: "agent_note", summary: NOTE_2 },
-    { ...base, ts: "2026-09-28T12:38:33.633Z", event: "tool_call", tool: "files.search", args: { query: "bootstrap" }, touched: [], status: "ok", ms: 40 },
+    { ...base, ts: "2026-09-28T12:38:33.633Z", event: "tool_call", tool: "files_search", args: { query: "bootstrap" }, touched: [], status: "ok", ms: 40 },
   ];
 }
 
@@ -247,7 +247,7 @@ describe("distillJournal — hook verification side-effect", () => {
     writeFileSync(join(dir, "2026-09-29.jsonl"), [
       JSON.stringify({ ts: "2026-09-29T09:00:00.000Z", agent: "gemini", sid: "gemini:g1", event: "user_prompt", source: "hook", cwd: "/tmp", text: "hi" }),
       JSON.stringify({ ts: "2026-09-29T09:01:00.000Z", agent: "gemini", sid: "gemini:g1", event: "shell", source: "hook", cwd: "/tmp", command: "ls" }),
-      JSON.stringify({ ts: "2026-09-29T09:02:00.000Z", agent: "unknown", sid: "x", event: "tool_call", tool: "files.search", source: "mcp" }),
+      JSON.stringify({ ts: "2026-09-29T09:02:00.000Z", agent: "unknown", sid: "x", event: "tool_call", tool: "files_search", source: "mcp" }),
     ].join("\n") + "\n");
     await distillJournal({ projectSlug: "default", projectId: ensureProjectRowForSlug("default"), dataDir, maxEvents: 500, ticketRegex: /[A-Z]+-\d+/, openTaskWindowDays: 90, inFlightWindowSeconds: 0, now: new Date("2026-09-29T10:00:00Z"), cooldownSeconds: 0 });
     const g = listAgents().find((r) => r.id === "gemini")!;
@@ -279,7 +279,7 @@ describe("distillJournal — task continuity across runs", () => {
 
   const batch1 = () => [
     { ...base, ts: "2026-09-28T10:00:00.000Z", event: "git_context", branch: "fix/ABC-123-thing", head: "aaa" },
-    { ...base, ts: "2026-09-28T10:01:00.000Z", event: "tool_call", tool: "files.update", args: {}, touched: ["/kb/a.md"], status: "ok", ms: 5 },
+    { ...base, ts: "2026-09-28T10:01:00.000Z", event: "tool_call", tool: "files_update", args: {}, touched: ["/kb/a.md"], status: "ok", ms: 5 },
     { ...base, ts: "2026-09-28T10:02:00.000Z", event: "git_commit", sha: "1111111111111111111111111111111111111111", msg: "[ABC-123] first change", files_changed: ["src/a.py"] },
   ];
 
@@ -290,7 +290,7 @@ describe("distillJournal — task continuity across runs", () => {
 
     append([
       { ...base, ts: "2026-09-28T11:00:00.000Z", event: "agent_note", summary: "second batch note" },
-      { ...base, ts: "2026-09-28T11:01:00.000Z", event: "tool_call", tool: "files.update", args: {}, touched: ["/kb/b.md"], status: "ok", ms: 5 },
+      { ...base, ts: "2026-09-28T11:01:00.000Z", event: "tool_call", tool: "files_update", args: {}, touched: ["/kb/b.md"], status: "ok", ms: 5 },
     ]);
     await run("2026-09-28T12:00:00Z");
 

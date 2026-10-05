@@ -62,5 +62,5 @@
     "unzipper": "^0.12.3",
     "vitest": "^3.0.0"
   },
-  "rulesVersion": "3.1.0"
+  "rulesVersion": "3.2.0"
 }

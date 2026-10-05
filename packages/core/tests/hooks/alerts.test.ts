@@ -77,7 +77,7 @@ describe("buildHooksBlock", () => {
     expect(b.alerts[0]).toMatchObject({ name: "Claude Code", installed: false, verified_at: null });
     expect(b.alerts[0].docker_command).toBeUndefined();
     expect(b.prompt).toContain("Claude Code");
-    expect(b.prompt).toContain("admin.onboard_agent");
+    expect(b.prompt).toContain("admin_onboard_agent");
     expect(b.prompt).toContain("hooks:true");
   });
 
@@ -86,7 +86,7 @@ describe("buildHooksBlock", () => {
     const b = buildHooksBlock({ installMode: "docker", version: "5.0.0", hostDataDir: "/srv/kx" });
     expect(b.alerts[0].docker_command).toContain("--agent codex");
     expect(b.prompt).toContain("docker");
-    expect(b.prompt).not.toContain("admin.onboard_agent");
+    expect(b.prompt).not.toContain("admin_onboard_agent");
   });
 
   it("installed-but-silent agents get a distinct 'no events' message", () => {
@@ -98,7 +98,7 @@ describe("buildHooksBlock", () => {
     expect(b.prompt).toContain("kontexta hooks status");
   });
 
-  it("only offers admin.onboard_agent for agents the tool accepts; the rest get the CLI command", () => {
+  it("only offers admin_onboard_agent for agents the tool accepts; the rest get the CLI command", () => {
     setEnabled("claude-code", true);
     setEnabled("windsurf", true);
     const b = buildHooksBlock({ installMode: "npm", version: "5.0.0" });
@@ -108,10 +108,10 @@ describe("buildHooksBlock", () => {
     expect(b.prompt).toContain("kontexta hooks install --agent windsurf");
   });
 
-  it("when no missing agent is onboardable, does not mention admin.onboard_agent at all", () => {
+  it("when no missing agent is onboardable, does not mention admin_onboard_agent at all", () => {
     setEnabled("opencode", true);
     const b = buildHooksBlock({ installMode: "npm", version: "5.0.0" });
-    expect(b.prompt).not.toContain("admin.onboard_agent");
+    expect(b.prompt).not.toContain("admin_onboard_agent");
     expect(b.prompt).toContain("kontexta hooks install --agent opencode");
   });
 });

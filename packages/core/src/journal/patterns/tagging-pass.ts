@@ -2,6 +2,8 @@ import type { PatternDetector } from "./index.js";
 
 const TAG_TOOLS = new Set([
   "add_tags", "remove_tags", "tag_search_results",
+  "tags_add", "tags_remove", "tags_search",
+  // dot-notation (5.0.0-5.x — kept for historical journal entries)
   "tags.add", "tags.remove", "tags.search"
 ]);
 
@@ -16,6 +18,9 @@ export const taggingPassDetector: PatternDetector = {
       (e) =>
         (e.tool ?? "").startsWith("update_") ||
         (e.tool ?? "").startsWith("create_") ||
+        (e.tool ?? "").startsWith("files_update") ||
+        (e.tool ?? "").startsWith("files_create") ||
+        // dot-notation (5.0.0-5.x — kept for historical journal entries)
         (e.tool ?? "").startsWith("files.update") ||
         (e.tool ?? "").startsWith("files.create")
     );

@@ -377,7 +377,7 @@ test("stamps source:'mcp' on tool_call, error and voluntary events", async () =>
     initCapture({ projectSlug: "demo", baseDir: testDir, agent: "claude-code", sid: "abc" });
     await wrapHandler("search", async () => ({ content: [{ type: "text", text: "ok" }] }))({ query: "x" });
     assert.strictEqual(lastEvent(testDir).source, "mcp");
-    await assert.rejects(wrapHandler("files.update", async () => { throw new Error("boom"); })({ id: 1 }));
+    await assert.rejects(wrapHandler("files_update", async () => { throw new Error("boom"); })({ id: 1 }));
     assert.strictEqual(lastEvent(testDir).source, "mcp");
     appendVoluntaryEvent({ ts: new Date().toISOString(), agent: "claude-code", sid: "abc", event: "agent_note", summary: "n" });
     assert.strictEqual(lastEvent(testDir).source, "mcp");
@@ -2620,7 +2620,7 @@ describe("distillJournal — hook verification side-effect", () => {
     writeFileSync(join(dir, "2026-09-29.jsonl"), [
       JSON.stringify({ ts: "2026-09-29T09:00:00.000Z", agent: "gemini", sid: "gemini:g1", event: "user_prompt", source: "hook", cwd: "/tmp", text: "hi" }),
       JSON.stringify({ ts: "2026-09-29T09:01:00.000Z", agent: "gemini", sid: "gemini:g1", event: "shell", source: "hook", cwd: "/tmp", command: "ls" }),
-      JSON.stringify({ ts: "2026-09-29T09:02:00.000Z", agent: "unknown", sid: "x", event: "tool_call", tool: "files.search", source: "mcp" }),
+      JSON.stringify({ ts: "2026-09-29T09:02:00.000Z", agent: "unknown", sid: "x", event: "tool_call", tool: "files_search", source: "mcp" }),
     ].join("\n") + "\n");
     await distillJournal({ projectSlug: "default", projectId: ensureProjectRowForSlug("default"), dataDir, maxEvents: 500, ticketRegex: /[A-Z]+-\d+/, openTaskWindowDays: 90, inFlightWindowSeconds: 0, now: new Date("2026-09-29T10:00:00Z"), cooldownSeconds: 0 });
     const g = listAgents().find((r) => r.id === "gemini")!;
@@ -3233,7 +3233,7 @@ Kontexta's journal records what happens through its own MCP tools. Hooks add the
 1. You enable an agent (dashboard → Settings → Agents, the first-run wizard, or `kontexta hooks enable <agent>`). Every agent starts **disabled**; nothing is installed for an agent you haven't enabled.
 2. Kontexta writes hook entries into that agent's user-level config and stages a dependency-free script at `<data dir>/hooks/emit.mjs`.
 3. On each prompt, reply and shell command the agent runs `node emit.mjs --agent <id>`; the script appends one JSON line to `<data dir>/knowledge/journal/<project>/raw/<date>.jsonl`. It prints nothing and always exits 0, so it can never block a turn.
-4. `journal.distill` renders a **Conversation** and a **Shell** section per task; `files.search` finds them.
+4. `journal_distill` renders a **Conversation** and a **Shell** section per task; `files_search` finds them.
 
 The project is resolved from the agent's working directory via `<data dir>/hooks/projects.json`; the git branch is read from `.git/HEAD` so entries bucket by branch even without the MCP server running.
 
@@ -3324,10 +3324,10 @@ git commit -m "docs: agent hooks capability matrix and install paths"
 
 ## Deviations from the spec (deliberate)
 
-- State pruning (`hooks/state/*.json`, 30 days) runs from `reconcile()` and dashboard startup rather than from `journal.housekeep`, so it happens on every install type without touching the housekeep config surface.
+- State pruning (`hooks/state/*.json`, 30 days) runs from `reconcile()` and dashboard startup rather than from `journal_housekeep`, so it happens on every install type without touching the housekeep config surface.
 - The emitter's garbage/oversized-stdin test asserts < 1000 ms instead of the spec's 250 ms budget to avoid CI flakes; the normal-path budget is still checked informally via the parallel test.
 - The version bump to 5.1.0 and the CHANGELOG entry happen at release time with the existing `version:sync` script, not in this plan.
 
 ## Part B (separate plan, after this ships)
 
-Web UI (first-run wizard rework, Settings → Agents page, banner, configure-section filter, `/api/agents*` routes), MCP surfaces (`hooks` block + prompt in `projects.register` / `admin.onboard_agent` / `admin.refresh_session_context`, `admin.onboard_agent({hooks:true})`), and the rules-block clause + `rulesVersion` bump. Spec §8–§9.
+Web UI (first-run wizard rework, Settings → Agents page, banner, configure-section filter, `/api/agents*` routes), MCP surfaces (`hooks` block + prompt in `projects_register` / `admin_onboard_agent` / `admin_refresh_session_context`, `admin_onboard_agent({hooks:true})`), and the rules-block clause + `rulesVersion` bump. Spec §8–§9.

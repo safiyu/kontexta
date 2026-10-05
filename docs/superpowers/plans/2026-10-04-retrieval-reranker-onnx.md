@@ -26,7 +26,7 @@ We resolve this through a **two-tier local model topology**:
                    ┌─────────────────────────────┴─────────────────────────────┐
                    ▼                                                           ▼
      [Interactive Search Pipeline]                               [Background Journal Pipeline]
-     (files.search, bundleSearch)                                (distillJournal, Topic Detection)
+     (files_search, bundleSearch)                                (distillJournal, Topic Detection)
      Interactive Budget: < 180ms total CPU                       Cooldown Budget: 500ms - 2s CPU
                    │                                                           │
    ┌───────────────┴───────────────┐                           ┌───────────────┴───────────────┐
@@ -183,7 +183,7 @@ Distillation runs **in the background on a 60-second cooldown lock**, providing 
    - **Grade 1 (Routine):** Minor file edits, successful dependency checks.
    - **Grade 2 (Context Shift):** Branch change, environment variable update, new dependency.
    - **Grade 3 (High Signal):** Test failures, error stack traces, incident notes.
-   - **Grade 4 (Critical Pivot):** Architectural decisions, abandonments (`journal.write({ kind: "note" })`), major refactors.
+   - **Grade 4 (Critical Pivot):** Architectural decisions, abandonments (`journal_write({ kind: "note" })`), major refactors.
 2. **Semantic Task Boundary & Topic Pivot Detection (`noul` head):**
    - When an agent is working in a long session, mechanical grouping defaults to session affinity, merging unrelated debugging tasks into one task file.
    - When a new prompt or intent arrives, the Decision Engine evaluates:
@@ -617,7 +617,7 @@ export interface ScoreRating {
 ### Phase 5: MCP Tool Surface, Configuration & End-to-End Validation
 
 #### Task 15: MCP Tool Surface & `kontexta.json` Configuration (`apps/mcp/src/index.ts`)
-**Goal:** Expose reranking, intent routing, and sufficiency verdict parameters in `files.search` and configure all settings via `kontexta.json`.
+**Goal:** Expose reranking, intent routing, and sufficiency verdict parameters in `files_search` and configure all settings via `kontexta.json`.
 
 **Files:**
 - Modify: `apps/mcp/src/index.ts`
@@ -658,13 +658,13 @@ export interface ScoreRating {
 }
 ```
 
-- [ ] **Step 1: Update `files.search` tool parameter schema** in `apps/mcp/src/index.ts`:
+- [ ] **Step 1: Update `files_search` tool parameter schema** in `apps/mcp/src/index.ts`:
   - `rerank?: boolean` (defaults to true if model cached/available).
   - `check_sufficiency?: boolean` (defaults to true when `include_bodies: true`).
 - [ ] **Step 2: Update tool execution handler**:
   - Pass options to `bundleSearch`.
   - Report `meta.intent`, `meta.sufficiency`, and per-hit `rerank_score`.
-- [ ] **Step 3: Update `admin.overview` tool** to report System 1 engine status (`ready`, `device`, `loaded_models`).
+- [ ] **Step 3: Update `admin_overview` tool** to report System 1 engine status (`ready`, `device`, `loaded_models`).
 - [ ] **Step 4: Write smoke test in `apps/mcp/tests/rerank-search.test.mjs`**.
 - [ ] **Step 5: Run MCP build and smoke test**:
   ```bash

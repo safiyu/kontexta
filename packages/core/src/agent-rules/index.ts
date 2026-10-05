@@ -31,7 +31,7 @@ export const SESSION_START_HOOK_SNIPPET = JSON.stringify({
           {
             type: "command",
             command:
-              "echo 'kontexta: journal.distill recommended at session start' && true",
+              "echo 'kontexta: journal_distill recommended at session start' && true",
           },
         ],
       },
@@ -48,7 +48,7 @@ export const STOP_HOOK_SNIPPET = JSON.stringify({
           {
             type: "command",
             command:
-              "echo 'kontexta: end-of-session journal.distill recommended' && true",
+              "echo 'kontexta: end-of-session journal_distill recommended' && true",
           },
         ],
       },

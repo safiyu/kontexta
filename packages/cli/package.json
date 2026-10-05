@@ -91,5 +91,5 @@
     "typescript": "^5.7.0",
     "vitest": "^2.1.0"
   },
-  "rulesVersion": "3.1.0"
+  "rulesVersion": "3.2.0"
 }

@@ -18,6 +18,6 @@ Spec: docs/superpowers/specs/2026-09-30-mcp-installer-design.md. Executed native
 2. **Entry builder** `buildServerEntry` (docker/npm/source, env rules, absolute commands for GUI agents).
 3. **Installers** under `packages/core/src/mcp-install/installers/`: JSON family (claude-desktop, cursor, cline, gemini + approval rules), claude-code (shell-out, injectable runner, `~/.claude/settings.json` allow rules), continue (own YAML file), hermes (yaml doc, always sets env).
 4. **Orchestrator** `installMcp/uninstallMcp/mcpStatus/reconcileMcp` + alerts + exports.
-5. **MCP/CLI surface**: `connect-cli.ts` (bundle entry), `kontexta connect` dispatch, Docker entrypoint, `hooks` block MCP alerts, `admin.onboard_agent` `mcp:true`.
+5. **MCP/CLI surface**: `connect-cli.ts` (bundle entry), `kontexta connect` dispatch, Docker entrypoint, `hooks` block MCP alerts, `admin_onboard_agent` `mcp:true`.
 6. **Web**: `/api/agents` fields, `/api/agents/[id]/mcp`, Agents panel (install/uninstall + approval picker with destructive disclosure), wizard step, banner.
 7. **Docs + verify**: docs/MCP.md, HOOKS.md cross-link, full suites, typecheck, packed-bundle end-to-end.

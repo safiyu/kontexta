@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { MCP_INSTALLERS } from "../../src/mcp-install/installers/index.js";
 import type { McpCtx, Runner } from "../../src/mcp-install/types.js";
 
-const TOOLS = [{ name: "files.read", destructive: false }, { name: "files.delete", destructive: true }, { name: "tags.list", destructive: false }];
+const TOOLS = [{ name: "files_read", destructive: false }, { name: "files_delete", destructive: true }, { name: "tags_list", destructive: false }];
 const ENTRY = { command: "npx", args: ["-y", "kontexta-mcp"] };
 
 describe("claude-code MCP installer", () => {

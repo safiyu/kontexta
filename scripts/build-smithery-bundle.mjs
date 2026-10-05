@@ -30,46 +30,46 @@ const rawTools = JSON.parse(readFileSync(mcpToolsPath, "utf8")).tools;
 
 // Per-tool annotations. The previous string-heuristic classifier had two
 // unfixable failure modes: (a) it mislabeled destructive tools whose names
-// happen to contain a read-only substring (tags.search is bulk-tag mutation
+// happen to contain a read-only substring (tags_search is bulk-tag mutation
 // but matched `.search`), and (b) it silently missed tools whose namespace
-// didn't align with any heuristic branch (admin.refresh_session_context,
-// projects.map, journal.status, files.bundle_search). Keep this table as
+// didn't align with any heuristic branch (admin_refresh_session_context,
+// projects_map, journal_status, files_bundle_search). Keep this table as
 // the source of truth; a tool that lands here without a classification
 // throws in enrichedTools below so the mismatch can't ship.
 const READ_ONLY_TOOLS = new Set([
-  "admin.get_profile", "admin.overview", "admin.refresh_session_context",
-  "calendar.entities.list", "calendar.events.conflicts", "calendar.events.list", "calendar.export_ics",
-  "files.describe", "files.diff_against_disk", "files.find_related",
-  "files.get_diff", "files.get_history", "files.list",
-  "files.read", "files.read_outline", "files.regex_search", "files.search",
-  "folders.list",
-  "hands.list",
-  "journal.status",
-  "projects.list", "projects.map",
-  "resources.export_report", "resources.list_reports",
-  "tags.list", "tags.suggest",
+  "admin_get_profile", "admin_overview", "admin_refresh_session_context",
+  "calendar_entities_list", "calendar_events_conflicts", "calendar_events_list", "calendar_export_ics",
+  "files_describe", "files_diff_against_disk", "files_find_related",
+  "files_get_diff", "files_get_history", "files_list",
+  "files_read", "files_read_outline", "files_regex_search", "files_search",
+  "folders_list",
+  "hands_list",
+  "journal_status",
+  "projects_list", "projects_map",
+  "resources_export_report", "resources_list_reports",
+  "tags_list", "tags_suggest",
 ]);
 
 const DESTRUCTIVE_TOOLS = new Set([
-  "calendar.entities.delete", "calendar.events.delete",
-  "files.delete", "files.restore",
-  "folders.delete",
-  "journal.housekeep",
-  "resources.delete_report",
-  "tags.remove",
+  "calendar_entities_delete", "calendar_events_delete",
+  "files_delete", "files_restore",
+  "folders_delete",
+  "journal_housekeep",
+  "resources_delete_report",
+  "tags_remove",
 ]);
 
 const NEUTRAL_TOOLS = new Set([
-  "admin.commit_backup", "admin.onboard_agent", "admin.transfer_agent_context",
-  "calendar.entities.add", "calendar.entities.link", "calendar.entities.update",
-  "calendar.events.add", "calendar.events.update",
-  "files.create", "files.move", "files.update",
-  "folders.create",
-  "hands.confirm", "hands.reload",
-  "journal.commit_upgrades", "journal.distill", "journal.write",
-  "projects.refresh_index", "projects.register",
-  "resources.add_report", "resources.clip_url",
-  "tags.add", "tags.search", "tags.set_favorite",
+  "admin_commit_backup", "admin_onboard_agent", "admin_transfer_agent_context",
+  "calendar_entities_add", "calendar_entities_link", "calendar_entities_update",
+  "calendar_events_add", "calendar_events_update",
+  "files_create", "files_move", "files_update",
+  "folders_create",
+  "hands_confirm", "hands_reload",
+  "journal_commit_upgrades", "journal_distill", "journal_write",
+  "projects_refresh_index", "projects_register",
+  "resources_add_report", "resources_clip_url",
+  "tags_add", "tags_search", "tags_set_favorite",
 ]);
 
 function classifyAnnotations(name) {
