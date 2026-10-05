@@ -98,9 +98,12 @@ jobs:
       - name: Install from tarballs
         shell: bash
         run: |
+          MODEL=$(find tarballs -name 'kontexta-reranker-model-*.tgz' | head -1)
+          CLI=$(find tarballs -name 'kontexta-[0-9]*.tgz' | head -1)
+          echo "model=$MODEL cli=$CLI"; test -n "$MODEL" && test -n "$CLI"
           mkdir smoke && cd smoke && npm init -y >/dev/null
-          npm install ../tarballs/packages/reranker-model/kontexta-reranker-model-*.tgz
-          npm install ../tarballs/packages/cli/kontexta-[0-9]*.tgz
+          npm install "../$MODEL"
+          npm install "../$CLI"
           echo "$(pwd -W 2>/dev/null || pwd)/node_modules/.bin" >> "$GITHUB_PATH"
 
       - name: doctor
