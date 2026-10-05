@@ -7,6 +7,11 @@ name: Publish kontexta-reranker-model
 
 on:
   workflow_dispatch:
+    inputs:
+      ref:
+        description: Branch, tag or SHA that contains packages/reranker-model
+        required: false
+        default: develop
 
 permissions:
   contents: read
@@ -19,6 +24,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || 'develop' }}
 
       - name: Setup Node 22
         uses: actions/setup-node@v4
