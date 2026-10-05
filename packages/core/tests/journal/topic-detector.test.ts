@@ -2,7 +2,6 @@
 import { describe, it, expect } from "vitest";
 import {
   classifyTaskCategory,
-  detectTopicPivot,
   groupEventsIntoTasks,
   extractTicketId,
 } from "../../src/journal/topic-detector.js";
@@ -92,55 +91,6 @@ describe("classifyTaskCategory", () => {
     const result = await classifyTaskCategory(events);
     // "git status" doesn't match any specific category, falls through to feature_dev
     expect(result).toBe("feature_dev");
-  });
-});
-
-describe("detectTopicPivot", () => {
-  it("detects pivot when new event is in a completely different domain", async () => {
-    const context = {
-      title: "auth-refactor",
-      recentFiles: ["src/auth/login.ts", "src/auth/token.ts"],
-      lastFewEvents: "refactoring authentication module, changing token format",
-    };
-    const event = { type: "user_prompt", content: "implement a new payment processing endpoint" };
-    const result = await detectTopicPivot(context, event);
-    expect(result.isPivot).toBe(true);
-    expect(result.confidence).toBeGreaterThan(0.5);
-  });
-
-  it("does not detect pivot when event is in the same domain", async () => {
-    const context = {
-      title: "auth-refactor",
-      recentFiles: ["src/auth/login.ts", "src/auth/token.ts"],
-      lastFewEvents: "refactoring authentication module, changing token format",
-    };
-    const event = { type: "user_prompt", content: "add rate limiting to the login endpoint" };
-    const result = await detectTopicPivot(context, event);
-    expect(result.isPivot).toBe(false);
-  });
-
-  it("handles empty context", async () => {
-    const context = {
-      title: "",
-      recentFiles: [],
-      lastFewEvents: "",
-    };
-    const event = { type: "user_prompt", content: "hello world" };
-    const result = await detectTopicPivot(context, event);
-    // With empty context, heuristic returns low confidence (no file shift, no domain keywords)
-    expect(result.confidence).toBeDefined();
-  });
-
-  it("provides suggestedNewSlug for detected pivots", async () => {
-    const context = {
-      title: "auth-refactor",
-      recentFiles: ["src/auth/login.ts"],
-      lastFewEvents: "refactoring auth",
-    };
-    const event = { type: "user_prompt", content: "implement payment processing with stripe" };
-    const result = await detectTopicPivot(context, event);
-    expect(result.isPivot).toBe(true);
-    expect(result.suggestedNewSlug).not.toBeNull();
   });
 });
 

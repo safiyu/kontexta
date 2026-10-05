@@ -116,6 +116,7 @@ interface KontextaConfig {
         event_triage?: boolean;
         topic_pivot_detection?: boolean;
         task_categorization?: boolean;
+        pivot_threshold?: number;
       };
     };
   };

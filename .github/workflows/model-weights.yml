@@ -1,0 +1,38 @@
+name: Model weights
+
+# Fetches and verifies the pinned model files on every change to the model package,
+# and keeps the packed tarball as a short-lived artifact (also the way to get the
+# weights onto a machine whose proxy blocks the Hugging Face CDN).
+
+on:
+  push:
+    paths:
+      - 'packages/reranker-model/**'
+      - '.github/workflows/model-weights.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  weights:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Fetch and verify weights
+        run: node packages/reranker-model/scripts/fetch-weights.mjs
+
+      - name: Pack
+        run: cd packages/reranker-model && npm pack
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: reranker-model-tarball
+          path: packages/reranker-model/kontexta-reranker-model-*.tgz
+          retention-days: 3

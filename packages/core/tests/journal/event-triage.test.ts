@@ -1,189 +1,105 @@
-// packages/core/tests/journal/event-triage.test.ts
 import { describe, it, expect } from "vitest";
-import { triageEvent } from "../../src/journal/event-triage.js";
-import type { TriageResult } from "../../src/journal/event-triage.js";
+import { gradeShellCommand, gradeEvent, commandVerbs, isHumanPrompt } from "../../src/journal/event-triage.js";
 
-describe("triageEvent", () => {
-  it("grades noise-level events (grade 0) for git status commands", async () => {
-    const result = await triageEvent({ type: "shell", command: "git status" });
-    expect(result.grade).toBe(0);
-    expect(result.score).toBe(0);
+const grade = (cmd: string) => gradeShellCommand(cmd).grade;
+
+describe("gradeShellCommand: reads are noise", () => {
+  it.each([
+    ["ls -la /tmp"],
+    ["cat lib/x.ts; grep -n foo bar.ts"],
+    ["git status --short && git log --oneline -3"],
+    ["cd /a/b && ls"],
+    ["sed -n 1,20p file"],
+    ["echo hi > /dev/null"],
+    ["ls 2>&1 | head"],
+    ["git branch"],
+    ["git tag"],
+    ["git tag --contains abc123"],
+    ["gh pr view 12 --json state"],
+    ["gh run list --workflow ci"],
+    ["gh api repos/o/r"],
+    ["kubectl get pods"],
+    ["terraform plan"],
+  ])("%s is grade 0", (cmd) => expect(grade(cmd)).toBe(0));
+
+  it("treats navigation alone as noise", () => expect(gradeShellCommand("cd /somewhere")).toMatchObject({ grade: 0 }));
+});
+
+describe("gradeShellCommand: text inside heredocs, quotes and PR bodies does not count", () => {
+  it("a heredoc that writes a file is a write even if its body says 'assert fail error'", () => {
+    expect(grade("cat >> tests/x.test.ts <<'EOF'\ndescribe('assert fail error', () => {})\nEOF")).toBe(2);
+  });
+  it("an inline script that only prints is routine, however alarming the words", () => {
+    expect(grade("python3 - <<'EOF'\nprint('assert fail error crash')\nEOF")).toBe(1);
+  });
+  it("an inline script that writes files is a state change", () => {
+    expect(grade("python3 - <<'EOF'\np='a.css'\nopen(p,'w').write('x')\nEOF")).toBe(2);
+    expect(grade("cd /x\npython3 -c \"open('f','w').write('x')\"")).toBe(2);
+  });
+  it("a PR whose body talks about refactoring and deprecation is a PR, not a critical pivot", () => {
+    expect(grade("gh pr create --title t --body \"$(cat <<'EOF'\nrefactor entire module, architecture decision, deprecate\nEOF\n)\"")).toBe(3);
+  });
+  it("a commit message does not change the grade", () => {
+    expect(grade('git commit -m "fix: handle error; assert crash"')).toBe(3);
+  });
+  it("an unterminated heredoc (hook truncation) hides its body instead of leaking it", () => {
+    expect(grade("cp a b; python3 - <<'EOF'\nopen('f','w').write('x')\ngcloud run services update svc --image x")).toBe(2);
+  });
+});
+
+describe("gradeShellCommand: state changes and milestones", () => {
+  it.each([
+    ["npm test", 1], ["pnpm build", 1], ["tsc --noEmit", 1], ["curl -s https://x.dev", 1], ["some-unknown-tool --flag", 1],
+    ["npm install zod", 2], ["pnpm add -D vitest", 2], ["git add -A", 2], ["git checkout -b feat/x", 2], ["git branch -D old", 2],
+    ["git reset HEAD file.ts", 2], ["sed -i '' 's/a/b/' file", 2], ["echo hi > out.txt", 2], ["mv a b", 2], ["rm -rf dist", 2], ["mkdir -p x", 2], ["export FOO=bar", 2],
+    ["git commit -m wip", 3], ["git push origin develop", 3], ["git reset --hard origin/develop", 3], ["git tag -d old", 3],
+    ["gh api repos/o/r/pulls/44 -X PATCH -f title=x", 3],
+    ["git push --force origin main", 4], ["git tag 6.1.0", 4], ["gh pr merge 44 --squash", 4], ["npm publish --access public", 4],
+    ["docker push img:tag", 4], ["kubectl apply -f x.yaml", 4], ["terraform apply", 4],
+  ])("%s is grade %i", (cmd, want) => expect(grade(cmd)).toBe(want));
+
+  it("takes the highest grade across a compound command", () => {
+    expect(grade("cd repo && ls && git push origin main")).toBe(3);
+  });
+});
+
+describe("commandVerbs", () => {
+  it("lists the verbs of a pipeline, skipping navigation", () => {
+    expect(commandVerbs("cd /x && grep foo a | head -3")).toEqual(["grep", "head"]);
+  });
+});
+
+describe("gradeEvent", () => {
+  it("grades by event kind", () => {
+    expect(gradeEvent({ event: "error" }).grade).toBe(3);
+    expect(gradeEvent({ event: "git_commit" }).grade).toBe(3);
+    expect(gradeEvent({ event: "agent_note" }).grade).toBe(3);
+    expect(gradeEvent({ event: "user_intent" }).grade).toBe(4);
+    expect(gradeEvent({ event: "agent_reply" }).grade).toBe(1);
+    expect(gradeEvent({ event: "agent_question" }).grade).toBe(2);
   });
 
-  it("grades noise-level events (grade 0) for ls commands", async () => {
-    const result = await triageEvent({ type: "shell", command: "ls" });
-    expect(result.grade).toBe(0);
-    expect(result.score).toBe(0);
+  it("grades MCP tool calls by what the tool does", () => {
+    expect(gradeEvent({ event: "tool_call", tool: "files_search" }).grade).toBe(0);
+    expect(gradeEvent({ event: "tool_call", tool: "files_update" }).grade).toBe(2);
+    expect(gradeEvent({ event: "tool_call", tool: "files_read", status: "error" }).grade).toBe(3);
   });
 
-  it("grades noise-level events (grade 0) for pwd command", async () => {
-    const result = await triageEvent({ type: "shell", command: "pwd" });
-    expect(result.grade).toBe(0);
-    expect(result.score).toBe(0);
+  it("grades a typed prompt above a system message posing as one", () => {
+    expect(gradeEvent({ event: "user_prompt", text: "please do the thing now" }).grade).toBe(2);
+    expect(gradeEvent({ event: "user_prompt", text: "<task-notification> done" }).grade).toBe(1);
   });
 
-  it("grades noise-level events (grade 0) for ls -la command", async () => {
-    const result = await triageEvent({ type: "shell", command: "ls -la" });
-    expect(result.grade).toBe(0);
-    expect(result.score).toBe(0);
+  it("handles a shell event with no command", () => {
+    expect(gradeEvent({ event: "shell" }).grade).toBe(1);
   });
+});
 
-  it("grades noise-level events (grade 0) for echo command", async () => {
-    const result = await triageEvent({ type: "shell", command: "echo hello" });
-    expect(result.grade).toBe(0);
-    expect(result.score).toBe(0);
-  });
-
-  it("grades routine events (grade 1) for file edits", async () => {
-    const result = await triageEvent({ type: "tool_call", content: "file edit on config.ts" });
-    expect(result.grade).toBe(1);
-    expect(result.score).toBe(1);
-  });
-
-  it("grades routine events (grade 1) for build/compile commands", async () => {
-    const result = await triageEvent({ type: "shell", command: "npm run build" });
-    expect(result.grade).toBe(1);
-    expect(result.score).toBe(1);
-  });
-
-  it("grades routine events (grade 1) for lint commands", async () => {
-    const result = await triageEvent({ type: "shell", command: "npm run lint" });
-    expect(result.grade).toBe(1);
-    expect(result.score).toBe(1);
-  });
-
-  it("grades routine events (grade 1) for dependency operations", async () => {
-    const result = await triageEvent({ type: "shell", command: "npm install express" });
-    // npm install matches the grade 2 dependency-install pattern (context shift)
-    expect(result.grade).toBe(2);
-    expect(result.score).toBe(2);
-  });
-
-  it("grades context shifts (grade 2) for branch changes", async () => {
-    const result = await triageEvent({ type: "shell", command: "git checkout main" });
-    expect(result.grade).toBe(2);
-    expect(result.score).toBe(2);
-  });
-
-  it("grades context shifts (grade 2) for environment updates", async () => {
-    const result = await triageEvent({ type: "shell", command: "export ENV=production" });
-    expect(result.grade).toBe(2);
-    expect(result.score).toBe(2);
-  });
-
-  it("grades context shifts (grade 2) for config changes", async () => {
-    const result = await triageEvent({ type: "shell", command: "config update database_url" });
-    expect(result.grade).toBe(2);
-    expect(result.score).toBe(2);
-  });
-
-  it("grades context shifts (grade 2) for dependency installs", async () => {
-    const result = await triageEvent({ type: "shell", command: "yarn add lodash" });
-    expect(result.grade).toBe(2);
-    expect(result.score).toBe(2);
-  });
-
-  it("grades context shifts (grade 2) for venv/poetry operations", async () => {
-    const result = await triageEvent({ type: "shell", command: "poetry add requests" });
-    expect(result.grade).toBe(2);
-    expect(result.score).toBe(2);
-  });
-
-  it("grades high signal events (grade 3) for errors", async () => {
-    const result = await triageEvent({ type: "error", content: "TypeError: Cannot read property of undefined" });
-    expect(result.grade).toBe(3);
-    expect(result.score).toBe(3);
-  });
-
-  it("grades high signal events (grade 3) for exceptions", async () => {
-    const result = await triageEvent({ type: "error", content: "UnhandledPromiseRejectionWarning" });
-    expect(result.grade).toBe(3);
-    expect(result.score).toBe(3);
-  });
-
-  it("grades high signal events (grade 3) for test failures", async () => {
-    const result = await triageEvent({ type: "tool_call", content: "test failed: assertionError in auth test" });
-    expect(result.grade).toBe(3);
-    expect(result.score).toBe(3);
-  });
-
-  it("grades high signal events (grade 3) for stack traces", async () => {
-    const result = await triageEvent({ type: "error", content: "stack trace at line 42" });
-    expect(result.grade).toBe(3);
-    expect(result.score).toBe(3);
-  });
-
-  it("grades high signal events (grade 3) for panics and crashes", async () => {
-    const result = await triageEvent({ type: "error", content: "panic: runtime error" });
-    expect(result.grade).toBe(3);
-    expect(result.score).toBe(3);
-  });
-
-  it("grades high signal events (grade 3) for assert failures", async () => {
-    const result = await triageEvent({ type: "tool_call", content: "assert failed: expected true but got false" });
-    expect(result.grade).toBe(3);
-    expect(result.score).toBe(3);
-  });
-
-  it("grades critical pivots (grade 4) for abandonment", async () => {
-    const result = await triageEvent({ type: "agent_note", content: "abandoning this approach entirely" });
-    expect(result.grade).toBe(4);
-    expect(result.score).toBe(4);
-  });
-
-  it("grades critical pivots (grade 4) for rearchitect decisions", async () => {
-    const result = await triageEvent({ type: "agent_note", content: "deciding to rearchitect the module" });
-    expect(result.grade).toBe(4);
-    expect(result.score).toBe(4);
-  });
-
-  it("grades critical pivots (grade 4) for migration plans", async () => {
-    const result = await triageEvent({ type: "agent_note", content: "creating a migration plan for the database" });
-    expect(result.grade).toBe(4);
-    expect(result.score).toBe(4);
-  });
-
-  it("grades critical pivots (grade 4) for deprecation decisions", async () => {
-    const result = await triageEvent({ type: "agent_note", content: "deprecating the entire legacy API" });
-    expect(result.grade).toBe(4);
-    expect(result.score).toBe(4);
-  });
-
-  it("returns default grade for unrecognized events", async () => {
-    const result = await triageEvent({ type: "unknown", content: "something vague" });
-    // Should fall to default grade 1 (low-signal)
-    expect(result.grade).toBe(1);
-    expect(result.score).toBe(0.5);
-  });
-
-  it("handles empty event gracefully", async () => {
-    const result = await triageEvent({});
-    // Should return default
-    expect(result.grade).toBe(1);
-    expect(result.score).toBe(0.5);
-  });
-
-  it("handles only command field", async () => {
-    const result = await triageEvent({ command: "grep pattern file.txt" });
-    expect(result.grade).toBe(0);
-    expect(result.score).toBe(0);
-  });
-
-  it("handles only content field", async () => {
-    const result = await triageEvent({ content: "this is an error message" });
-    expect(result.grade).toBe(3);
-    expect(result.score).toBe(3);
-  });
-
-  it("priority ordering: error detection beats context shift detection", async () => {
-    const result = await triageEvent({ type: "error", content: "error in branch checkout" });
-    // Should be grade 3 (error) not grade 2 (context shift)
-    expect(result.grade).toBe(3);
-  });
-
-  it("critical pivot detection beats error detection", async () => {
-    const result = await triageEvent({ type: "agent_note", content: "error detected, abandoning approach entirely" });
-    // Should be grade 4 (critical) since abandon matches before error
-    expect(result.grade).toBe(4);
+describe("isHumanPrompt", () => {
+  it("rejects agent and system messages, accepts typed text", () => {
+    expect(isHumanPrompt("<agent-message from=\"x\"> hi")).toBe(false);
+    expect(isHumanPrompt("<system-reminder>x</system-reminder>")).toBe(false);
+    expect(isHumanPrompt("fix the login bug")).toBe(true);
+    expect(isHumanPrompt(undefined)).toBe(false);
   });
 });

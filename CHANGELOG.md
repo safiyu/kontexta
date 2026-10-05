@@ -1,11 +1,30 @@
 # Changelog
 
+## 6.1.0 - Journal topic-shift detection and event triage (2026-10-05)
+
+### Added
+
+- **Topic-shift detection in journals.** A typed prompt that is semantically far from the previous two prompts in the same session now starts a new task, so one long session no longer becomes one giant journal entry. It uses a small on-device sentence-embedding model (`all-MiniLM-L6-v2`, int8), bundled in `kontexta-reranker-model` 1.1.0, with no network call. The last prompts per session are remembered between distill runs, so a shift on a batch boundary is still caught. Measured on 109 hand-labelled prompt pairs from real journals: precision 0.63, recall 0.77, cross-validated F1 about 0.7 (the keyword rules it replaces scored 0.23). Tune sensitivity with `journal.distillation.decision_engine.pivot_threshold` (default 0.16; lower splits less).
+- **Event triage by what a command does.** Shell commands are graded 0 to 4 from their parsed structure (read-only, changes files, commit or push, release or deploy), ignoring heredoc bodies, quoted strings and PR text. Read-only commands are listed as one `read-only, not listed` line in journal entries instead of one line each (44% of shell events in a real journal).
+- **The `decision_engine` switches now work.** `enabled`, `event_triage`, `topic_pivot_detection` and `task_categorization` under `journal.distillation.decision_engine` were declared in 6.0.0 but never read. They are read from `kontexta.json` now.
+
+### Changed
+
+- **Removed the keyword-based pivot detector and text-matching triage grader added in 6.0.0.** Neither was connected to the distiller. On real journals the grader marked 11% of events "high signal", mostly wrongly, because it matched words inside heredocs and PR bodies.
+- `kontexta-reranker-model` 1.1.0 carries both models; a workflow now verifies the pinned weights on CI whenever the package changes.
+
+### Notes
+
+- The 6.0.0 notes were corrected: topic-shift detection was not active in 6.0.0 (it arrives here), and the search sufficiency verdict is a placeholder.
+- Pivots are detected between typed prompts, so a session of pure tool calls is never split. The model is English-trained, and the threshold was tuned on one user's journals.
+- Task categories remain keyword-based.
+
 ## 6.0.0 — Smart Search & Journal Improvements (2026-10-05)
 
 ### Added
 
 - **Smarter search ranking:** Search matches are now automatically re-ordered using a built-in local AI model to surface the most relevant notes and documents first.
-- **Context sufficiency checks:** The search system can now verify if the retrieved results provide enough information to answer your request.
+- **Sufficiency verdict (placeholder):** `files_search` with `include_bodies` now returns a `sufficiency` field. The verdict is not model-based yet and always reports satisfied.
 
 - **Reranker model bundled:** the search reranker weights now ship in the `kontexta-reranker-model` npm package (a dependency of `kontexta` and `kontexta-mcp`) and in the Docker image, so nothing is downloaded from Hugging Face at runtime. Previously a corporate proxy blocking the HF CDN silently disabled reranking on every search.
 
@@ -14,7 +33,7 @@
 - **Compact agent rules stub and `KONTEXTA.md` reference:** the block injected into `CLAUDE.md` / `GEMINI.md` / `AGENTS.md` / `.cursor` / `.clinerules` is now a ~37-line stub that links to `KONTEXTA.md`, written at the project root with the full rules, tool routing matrix, KI workflow and content classes. Per-turn token cost drops from about 190 lines to 37. (Ported from the unreleased 5.2.1, which a force-push had dropped.)
 - **Strict KB folder structure in the rules:** agents are told to use `html/`, `mermaid/`, `journal/`, `knowledge/dictionary/` and `knowledge/notes/`, and never to write context artifacts into the project repo.
 - **`admin_get_profile` in the core constraints** of the stub, for reading the user's role, preferences and goals.
-- **Better journal organization:** Distilled activity journals now categorize tasks more cleanly and detect when you shift to a different topic of work.
+- **Task categories in journals:** Distilled journal tasks now carry a category (debugging, refactoring, infra, feature work, research, docs), assigned by keyword matching.
 
 ### Fixed
 

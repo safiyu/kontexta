@@ -16,6 +16,8 @@ export interface ModelRuntimeConfig {
   subfolder?: string;
   /** Target execution device. Default: "auto". */
   device?: ExecutionDevice;
+  /** ONNX weight precision for feature-extraction models; "q8" loads onnx/model_quantized.onnx. Default: the repo's full-precision model.onnx. */
+  dtype?: "fp32" | "q8";
   /** Hard timeout in ms for a single inference call. Default: 300. */
   timeoutMs?: number;
   /**

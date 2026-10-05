@@ -9,6 +9,9 @@ import { upsertJournalMeta, openTasksForProject, gitRefsForFiles } from "./repos
 import { getDatabase } from "../db/index.js";
 import type { ExtraPatternDef } from "./patterns/extra-loader.js";
 import { acquireCooldown, releaseCooldown } from "./cooldown.js";
+import { splitBucketsOnPivots } from "./pivot.js";
+import { readJournalIntelligence, type JournalIntelligence } from "./intelligence-config.js";
+import type { EmbedFn } from "../inference/embeddings.js";
 import { markVerified } from "../hooks/registry.js";
 
 export interface DistillJournalOpts {
@@ -24,6 +27,10 @@ export interface DistillJournalOpts {
   cooldownSeconds?: number;
   /** Reprocess this fixed window of raw events instead of continuing from the high-water mark; the mark is neither read nor written. */
   range?: { since: string; until: string };
+  /** Overrides journal.distillation.decision_engine from kontexta.json. */
+  intelligence?: JournalIntelligence;
+  /** Embedding function for topic-pivot detection; tests inject a fake. */
+  embed?: EmbedFn;
 }
 
 const REL_BASE = ["knowledge", "journal"]; // joined under dataDir
@@ -81,7 +88,22 @@ export async function distillJournal(opts: DistillJournalOpts): Promise<DistillR
 
     // 2. GROUP
     const openTasks = loadOpenTasks(opts);
-    const { buckets, sessions } = groupEvents(events, openTasks, opts.ticketRegex, { initialBranch: hw?.last_branch ?? null, initialSessions: hw?.session_tasks });
+    const grouped = groupEvents(events, openTasks, opts.ticketRegex, { initialBranch: hw?.last_branch ?? null, initialSessions: hw?.session_tasks });
+    const intel = opts.intelligence ?? readJournalIntelligence(opts.dataDir);
+    const warnings: string[] = [];
+    let buckets = grouped.buckets;
+    let sessions = grouped.sessions;
+    let promptSeeds = hw?.session_prompts;
+    if (intel.topicPivotDetection) {
+      const split = await splitBucketsOnPivots(buckets, { embed: opts.embed, threshold: intel.pivotThreshold, seeds: opts.range ? undefined : hw?.session_prompts });
+      if (split) {
+        buckets = split.buckets;
+        sessions = { ...sessions, ...split.sessions };
+        promptSeeds = mergeKeepingRecent(hw?.session_prompts, split.seeds);
+      } else {
+        warnings.push("topic pivot detection skipped: embedding model unavailable");
+      }
+    }
 
     // 3. RENDER + 4. INDEX
     const tasksTouched: string[] = [];
@@ -94,12 +116,13 @@ export async function distillJournal(opts: DistillJournalOpts): Promise<DistillR
       const filename = `task-${bucket.task_slug}.md`;
       const filePath = join(dir, filename);
 
-      let fm: JournalFrontmatter = await buildFrontmatter(bucket, opts.projectSlug);
+      let fm: JournalFrontmatter = await buildFrontmatter(bucket, opts.projectSlug, intel.taskCategorization);
       const entry = renderMechanicalEntry({
         task_slug: bucket.task_slug,
         events: bucket.events,
         now: lastEvent.ts,
         extraPatterns: opts.extraPatterns,
+        collapseNoise: intel.eventTriage,
       });
 
       if (existsSync(filePath)) {
@@ -145,6 +168,7 @@ export async function distillJournal(opts: DistillJournalOpts): Promise<DistillR
         events_processed: (hw?.events_processed ?? 0) + events.length,
         last_branch: lastBranchOf(events, hw?.last_branch ?? null),
         session_tasks: mergeSessionTasks(hw?.session_tasks, sessions),
+        ...(promptSeeds ? { session_prompts: promptSeeds } : {}),
       });
     }
 
@@ -153,7 +177,7 @@ export async function distillJournal(opts: DistillJournalOpts): Promise<DistillR
       tasks_touched: tasksTouched,
       tasks_created: tasksCreated,
       high_water_advanced_to: opts.range ? "" : newHw,
-      warnings: [],
+      warnings,
     };
   } finally {
     releaseCooldown(cooldownBase, opts.projectSlug, lockToken);
@@ -230,6 +254,13 @@ function readRawEvents(
 
 // Most recently used sessions win the cap, so a long-running install doesn't grow this map forever.
 const MAX_REMEMBERED_SESSIONS = 200;
+// Fresh sessions go last so the cap drops the least recently active ones.
+function mergeKeepingRecent(prior: Record<string, string[]> | undefined, fresh: Record<string, string[]>): Record<string, string[]> {
+  const merged = { ...(prior ?? {}) };
+  for (const [sid, prompts] of Object.entries(fresh)) { delete merged[sid]; merged[sid] = prompts; }
+  return Object.fromEntries(Object.entries(merged).slice(-MAX_REMEMBERED_SESSIONS));
+}
+
 function mergeSessionTasks(prior: Record<string, string> | undefined, fresh: Record<string, string>): Record<string, string> {
   const kept = Object.entries(prior ?? {}).filter(([sid]) => !(sid in fresh));
   return Object.fromEntries([...kept, ...Object.entries(fresh)].slice(-MAX_REMEMBERED_SESSIONS));
@@ -262,6 +293,7 @@ function loadOpenTasks(opts: DistillJournalOpts): JournalFrontmatter[] {
 async function buildFrontmatter(
   bucket: { task_slug: string; events: RawEvent[]; is_new: boolean; branches?: string[] },
   projectSlug: string,
+  categorize: boolean,
 ): Promise<JournalFrontmatter> {
   const events = bucket.events;
   const touched = touchedFilesOf(events);
@@ -279,7 +311,7 @@ async function buildFrontmatter(
   // Classify task category (async, may fall back to heuristic)
   let category: string | undefined;
   try {
-    category = await classifyTaskCategory(events);
+    if (categorize) category = await classifyTaskCategory(events);
   } catch {
     // Best-effort: skip category if classification fails
   }

@@ -1,6 +1,7 @@
 // packages/core/src/journal/renderer.ts
 import type { RawEvent } from "./types.js";
 import { runPatterns } from "./patterns/index.js";
+import { gradeEvent, commandVerbs } from "./event-triage.js";
 import type { ExtraPatternDef } from "./patterns/extra-loader.js";
 
 export interface RenderInput {
@@ -8,6 +9,8 @@ export interface RenderInput {
   events: RawEvent[];
   now: string; // ISO ts of the entry header
   extraPatterns?: ExtraPatternDef[];
+  /** List read-only shell commands as a one-line tally instead of one line each. */
+  collapseNoise?: boolean;
 }
 
 export function touchedFilesOf(events: RawEvent[]): string[] {
@@ -24,7 +27,7 @@ function fmtText(e: RawEvent): string {
 }
 
 // Conversation, shell, notes, commits and the tool tally are the raw evidence; they render regardless of pattern match so distillation never loses what was said or run.
-function renderEvidence(events: RawEvent[]): string[] {
+function renderEvidence(events: RawEvent[], collapseNoise: boolean): string[] {
   const lines: string[] = [];
   const conv = events.filter((e) => e.event === "user_prompt" || e.event === "agent_reply" || e.event === "agent_question");
   if (conv.length > 0) {
@@ -37,10 +40,18 @@ function renderEvidence(events: RawEvent[]): string[] {
     lines.push(``);
   }
   const shell = new Map<string, number>();
-  for (const e of events) if (e.event === "shell" && e.command) shell.set(e.command, (shell.get(e.command) ?? 0) + 1);
-  if (shell.size > 0) {
+  const quiet = new Map<string, number>();
+  for (const e of events) {
+    if (e.event !== "shell" || !e.command) continue;
+    if (collapseNoise && gradeEvent(e).grade === 0) {
+      const verbs = commandVerbs(e.command);
+      for (const v of verbs.length > 0 ? verbs : ["cd"]) quiet.set(v, (quiet.get(v) ?? 0) + 1);
+    } else shell.set(e.command, (shell.get(e.command) ?? 0) + 1);
+  }
+  if (shell.size > 0 || quiet.size > 0) {
     lines.push(`**Shell:**`);
     for (const [cmd, n] of shell) lines.push(n > 1 ? `- \`${cmd}\` × ${n}` : `- \`${cmd}\``);
+    if (quiet.size > 0) lines.push(`- read-only, not listed: ${[...quiet].sort((a, b) => b[1] - a[1]).map(([v, n]) => `${v} × ${n}`).join(", ")}`);
     lines.push(``);
   }
   const notes =events.filter((e) => (e.event === "agent_note" || e.event === "user_intent") && e.summary);
@@ -75,7 +86,7 @@ export function renderMechanicalEntry(input: RenderInput): string {
   const allTags = patterns.flatMap((p) => p.tags);
   const convTag = events.some((e) => e.event === "user_prompt") ? ["conversation"] : [];
   const dedupedTags = [...new Set([...allTags, ...noteTags, ...convTag, "mechanical"])];
-  const evidence = renderEvidence(events);
+  const evidence = renderEvidence(events, input.collapseNoise ?? false);
 
   if (patterns.length === 0) {
     return [
