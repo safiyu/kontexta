@@ -12,6 +12,8 @@ export {
   findRelated, getTagsForFiles, findBacklinks, type RelatedFileRecord, type TagWithCount, type BacklinkRecord,
 } from "./metadata/index.js";
 export { getSetting, setSetting, deleteSetting } from "./metadata/settings.js";
+export { formatGid, parseGid, isLocalGid, type GidParts } from "./identity/gid.js";
+export { getMachineId, getMachineLabel, setMachineLabel, recordClientConnected, listClients, type ClientRecord } from "./identity/machine.js";
 export { commitFile, commitDelete, getHistory, getDiff, restoreVersion } from "./git/index.js";
 export { withLock, track, inFlightCount, isShuttingDown, setShuttingDown, awaitDrain } from "./util/safety.js";
 export { computeContentClass, type ComputeContentClassArgs } from "./content-class/index.js";

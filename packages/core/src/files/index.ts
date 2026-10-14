@@ -7,6 +7,8 @@ import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync, unlinkSync, renameSync, mkdirSync, readdirSync, statSync, lstatSync, existsSync, rmSync } from "node:fs";
 import { join, dirname, resolve, sep, isAbsolute, basename, relative } from "node:path";
 import { getDatabase } from "../db/index.js";
+import { formatGid } from "../identity/gid.js";
+import { getMachineId } from "../identity/machine.js";
 import { commitFile, commitDelete } from "../git/index.js";
 import { assertPathInside, escapeLike, withLock, fileLockKey } from "../util/safety.js";
 import { profileRelPath, repairProfile } from "../profile/index.js";
@@ -251,6 +253,9 @@ export async function createFile(opts: CreateFileOptions): Promise<FileRecordWit
   const linkTagStmt = db.prepare("INSERT OR IGNORE INTO file_tags (file_id, tag_id) VALUES (?, ?)");
   const deleteFtsStmt = db.prepare("DELETE FROM fts_index WHERE rowid = ?");
   const ftsStmt = db.prepare("INSERT INTO fts_index (rowid, title, content) VALUES (?, ?, ?)");
+  // gid depends on the auto-generated integer PK, so it is stamped via UPDATE
+  // inside the same transaction (matching the migration-013 backfill convention).
+  const setGidStmt = db.prepare("UPDATE files SET gid = ? WHERE id = ?");
 
   // Snapshot for rollback — upsert may overwrite an existing row.
   const priorRow = db
@@ -266,6 +271,11 @@ export async function createFile(opts: CreateFileOptions): Promise<FileRecordWit
       const row = getIdByPathStmt.get(filePath) as { id: number } | undefined;
       if (!row) throw new Error(`createFile: row missing after upsert for ${filePath}`);
       const id = row.id;
+
+      // Assign the global id now that the integer PK is known. Done in-
+      // transaction so the row is never committed with a NULL gid; also
+      // corrects a watcher stub row that this upsert just absorbed.
+      setGidStmt.run(formatGid(id, getMachineId()), id);
 
       if (tags.length > 0) {
         for (const tagName of tags) {

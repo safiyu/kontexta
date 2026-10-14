@@ -2,6 +2,8 @@ import chokidar, { type FSWatcher } from "chokidar";
 import { getDatabase } from "../db/index.js";
 import { isIndexedFile, stripIndexedExt } from "../util/extensions.js";
 import { withLock, fileLockKey } from "../util/safety.js";
+import { formatGid } from "../identity/gid.js";
+import { getMachineId } from "../identity/machine.js";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
@@ -170,6 +172,14 @@ function handleWatcherAdd(filePath: string, knowledgeDirs: string[]): void {
         // a crash mid-transaction) would otherwise UNIQUE-fail the insert.
         ftsDel.run(result.lastInsertRowid);
         ftsStmt.run(result.lastInsertRowid, title, content);
+        // A genuine insert (OR IGNORE reports changes > 0 only on a fresh row)
+        // gets a local gid = <id>@<machine_id>, matching the migration-013
+        // backfill and the other on-insert write routines.
+        const newId = Number(result.lastInsertRowid);
+        db.prepare("UPDATE files SET gid = ? WHERE id = ?").run(
+          formatGid(newId, getMachineId()),
+          newId,
+        );
       }
     })();
   } catch (e: any) {

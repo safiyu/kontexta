@@ -204,3 +204,10 @@ The matrix below is grouped by intent. For each tool: when to reach for it, the 
 | `projects_register` | Register a new project root with kontexta | Already registered | `projects_list` |
 | `admin_onboard_agent` | Write/update the rules block in CLAUDE.md / AGENTS.md / etc. | Editing regular project content | `files_update` |
 | `admin_transfer_agent_context` | Copy CLAUDE.md / AGENTS.md / `.cursor/rules/*.mdc` etc. from the project repo into Kontexta's KB. Originals are NEVER deleted by this tool. | User wants files to stay in the repo (default) | `projects_register` (which keeps files in place) |
+
+### Admin
+
+| Tool | When | Not when | Use instead |
+|---|---|---|---|
+| `admin_set_machine_label` | Set this machine's human-readable label (`settings.machine_label`), used to name conflict copies as `<filename> (from <label>).ext`. Empty string clears it. Does NOT change the stable `machine_id`. | Reading which machines are connected | `admin_list_clients` |
+| `admin_list_clients` | List every machine that has ever connected to this vault (the sync group), most-recently-seen first, with `is_local` flag. | Setting the local machine's label | `admin_set_machine_label` |

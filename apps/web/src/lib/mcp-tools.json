@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-14T16:03:11.780Z",
+  "generatedAt": "2026-10-14T22:07:45.720Z",
   "tools": [
     {
       "name": "admin_refresh_session_context",
@@ -1321,6 +1321,40 @@
     {
       "name": "admin_get_profile",
       "description": "Return the user profile stored in the Knowledge Base. The profile helps AI agents understand the user's context, role, preferences, and goals. Read-only; no side effects, auth, or rate limits. Returns existence status, full content, list of missing required sections, and a hint for new users. Use at session start to understand who you're working with.",
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {}
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "admin_set_machine_label",
+      "description": "Set this machine's human-readable label (settings.machine_label). The label is how OTHER machines name conflict copies created from this one ('<filename> (from <label>).ext'), so pick something short and distinctive per machine (e.g. the machine's name or the user's workstation). Pass an empty string to clear it. Affects only conflict-copy naming; it does NOT change the stable machine_id that GIDs are keyed on. Returns the previous and new label.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string",
+            "maxLength": 100,
+            "description": "The new label for this machine. Max 100 chars. Empty string clears the label."
+          }
+        },
+        "required": [
+          "label"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "admin_list_clients",
+      "description": "List every machine that has ever connected to this vault (the sync group), most-recently-seen first. Each entry has machine_id, hostname, first_seen_at, last_seen_at, and is_local (true for the machine this MCP server runs on). Read-only; no side effects, auth, or rate limits. Use to see which machines are part of the sync group or to check that a new machine registered on startup.",
       "inputSchema": {
         "$schema": "http://json-schema.org/draft-07/schema#",
         "type": "object",

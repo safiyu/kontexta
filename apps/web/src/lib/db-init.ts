@@ -1,4 +1,5 @@
-import { getDataDir, ensureDataDir, getDatabase, resetDataDirCache, syncAgentRows, stageEmitter, syncProjectsSidecar, pruneHookState } from "kxta-core";
+import { getDataDir, ensureDataDir, getDatabase, resetDataDirCache, syncAgentRows, stageEmitter, syncProjectsSidecar, pruneHookState, recordClientConnected } from "kxta-core";
+import os from "node:os";
 
 export let DATA_DIR = getDataDir();
 
@@ -32,6 +33,15 @@ export function ensureDbInitialized() {
 
   if (!globalThis.__kontextaDb) {
     getDatabase(); // Auto-initializes using core's unified path resolution
+  }
+
+  // Register this machine in the clients registry (Phase 2 identity).
+  // Idempotent upsert keyed on machine_id; non-fatal — the dashboard must
+  // boot even if the registry write fails (e.g. mid-migration).
+  try {
+    recordClientConnected(os.hostname());
+  } catch (e) {
+    console.warn("[identity] recordClientConnected failed:", e);
   }
 
   ensureHooksStaged();

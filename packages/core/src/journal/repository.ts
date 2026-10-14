@@ -1,4 +1,6 @@
 import { getDatabase } from "../db/index.js";
+import { formatGid } from "../identity/gid.js";
+import { getMachineId } from "../identity/machine.js";
 
 export interface UpsertJournalMetaInput {
   file_id: number;
@@ -55,6 +57,16 @@ export function upsertJournalMeta(input: UpsertJournalMetaInput): void {
       JSON.stringify(input.touched_files),
       JSON.stringify(input.raw_sources),
     );
+    // The upsert cannot report insert-vs-update, so stamp the gid only when the
+    // row's gid is still NULL (a fresh row). Keyed on file_id (this table's PK),
+    // matching the migration-013 backfill. An existing row already carries a
+    // gid (backfill or an earlier upsert) and is left untouched.
+    const gidRow = db
+      .prepare(`SELECT gid FROM journal_meta WHERE file_id = ?`)
+      .get(input.file_id) as { gid: string | null } | undefined;
+    if (gidRow && gidRow.gid === null) {
+      db.prepare(`UPDATE journal_meta SET gid = ? WHERE file_id = ?`).run(formatGid(input.file_id, getMachineId()), input.file_id);
+    }
     clearTouches.run(input.file_id);
     for (const t of input.touched_files) insertTouch.run(input.file_id, t);
     clearRefs.run(input.file_id);

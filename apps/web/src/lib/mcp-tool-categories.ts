@@ -7,7 +7,8 @@ export type ToolCategory =
   | "Versioning"
   | "Discovery"
   | "Calendar"
-  | "Hands";
+  | "Hands"
+  | "Admin";
 
 export const CATEGORY_ORDER: ToolCategory[] = [
   "Read",
@@ -19,6 +20,7 @@ export const CATEGORY_ORDER: ToolCategory[] = [
   "Discovery",
   "Calendar",
   "Hands",
+  "Admin",
 ];
 
 export const TOOL_CATEGORIES: Record<string, ToolCategory> = {
@@ -87,4 +89,7 @@ export const TOOL_CATEGORIES: Record<string, ToolCategory> = {
   "hands_list": "Hands",
   "hands_reload": "Hands",
   "hands_confirm": "Hands",
+  // Admin
+  "admin_set_machine_label": "Admin",
+  "admin_list_clients": "Admin",
 };

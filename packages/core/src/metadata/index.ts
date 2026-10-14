@@ -13,6 +13,8 @@ import { computeHash } from "../files/index.js";
 import { isIndexedFile, stripIndexedExt } from "../util/extensions.js";
 import { getDataDir } from "../util/paths.js";
 import { syncProjectsSidecarIfStaged } from "../hooks/stage.js";
+import { formatGid } from "../identity/gid.js";
+import { getMachineId } from "../identity/machine.js";
 
 export interface FileRecordWithRank extends FileRecord {
   rank: number;
@@ -82,12 +84,21 @@ export function addTags(fileId: number, tagNames: string[]): void {
   const insertTagStmt = db.prepare("INSERT OR IGNORE INTO tags (name) VALUES (?)");
   const getTagStmt = db.prepare("SELECT id FROM tags WHERE name = ?");
   const linkTagStmt = db.prepare("INSERT OR IGNORE INTO file_tags (file_id, tag_id) VALUES (?, ?)");
+  // gid depends on the auto-generated integer PK, so it is stamped via UPDATE
+  // inside the same transaction (matching the migration-013 backfill convention).
+  const setTagGidStmt = db.prepare("UPDATE tags SET gid = ? WHERE id = ?");
 
   db.transaction(() => {
     for (const tagName of tagNames) {
-      insertTagStmt.run(tagName);
+      const inserted = insertTagStmt.run(tagName);
       const tag = getTagStmt.get(tagName) as { id: number } | undefined;
       if (!tag) continue;
+      // Assign the global id now that the integer PK is known. Only on a fresh
+      // insert: INSERT OR IGNORE reports 0 changes for a pre-existing tag, whose
+      // gid the migration-013 backfill (or an earlier insert) already set.
+      if (inserted.changes > 0) {
+        setTagGidStmt.run(formatGid(tag.id, getMachineId()), tag.id);
+      }
       linkTagStmt.run(fileId, tag.id);
     }
   })();
@@ -226,9 +237,21 @@ export function registerProject(
     INSERT OR IGNORE INTO projects (name, slug, path, description, remote_url)
     VALUES (?, ?, ?, ?, ?)
   `);
+  // gid depends on the auto-generated integer PK, so it is stamped via UPDATE
+  // inside the same transaction (matching the migration-013 backfill convention).
+  const setGidStmt = db.prepare("UPDATE projects SET gid = ? WHERE id = ?");
 
   const absolutePath = resolve(path);
-  const result = insertStmt.run(name, slug, absolutePath, description || null, remoteUrl || null);
+  const result = db.transaction(() => {
+    const r = insertStmt.run(name, slug, absolutePath, description || null, remoteUrl || null);
+    if (r.changes > 0) {
+      // Assign the global id now that the integer PK is known. Done in-
+      // transaction so the row is never committed with a NULL gid.
+      const id = Number(r.lastInsertRowid);
+      setGidStmt.run(formatGid(id, getMachineId()), id);
+    }
+    return r;
+  })();
 
   let projectId: number;
 

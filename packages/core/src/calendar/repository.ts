@@ -1,6 +1,8 @@
 import { getDatabase } from "../db/index.js";
 import type { CalendarEntity, CalendarLink, CalendarEvent } from "./types.js";
 import { parseInstant, assertValidTimezone, assertRange } from "./validate.js";
+import { formatGid } from "../identity/gid.js";
+import { getMachineId } from "../identity/machine.js";
 
 interface RawEntityRow {
   id: number;
@@ -50,14 +52,21 @@ export function createEntity(input: CreateEntityInput, now: Date = new Date()): 
   if (existing) throw new Error(`A calendar entity named ${JSON.stringify(name)} already exists`);
 
   const ts = now.toISOString();
-  const result = db
-    .prepare(
-      `INSERT INTO calendar_entities (name, kind, notes, timezone, active, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    )
-    .run(name, input.kind ?? null, input.notes ?? null, input.timezone ?? null, input.active === false ? 0 : 1, ts, ts);
+  const id = db.transaction(() => {
+    const result = db
+      .prepare(
+        `INSERT INTO calendar_entities (name, kind, notes, timezone, active, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(name, input.kind ?? null, input.notes ?? null, input.timezone ?? null, input.active === false ? 0 : 1, ts, ts);
+    // gid depends on the auto-generated integer PK, so it is stamped via UPDATE
+    // inside the same transaction (matching the migration-013 backfill convention).
+    const newId = Number(result.lastInsertRowid);
+    db.prepare("UPDATE calendar_entities SET gid = ? WHERE id = ?").run(formatGid(newId, getMachineId()), newId);
+    return newId;
+  })();
 
-  return mapEntity(requireEntity(Number(result.lastInsertRowid)));
+  return mapEntity(requireEntity(id));
 }
 
 export interface UpdateEntityPatch {
@@ -179,16 +188,26 @@ export function linkEntities(
 
   const db = getDatabase();
   const ts = now.toISOString();
-  db.prepare(
-    `INSERT INTO calendar_links (from_entity_id, to_entity_id, label, created_at)
-     VALUES (?, ?, ?, ?)
-     ON CONFLICT(from_entity_id, to_entity_id) DO UPDATE SET label = excluded.label`,
-  ).run(from_entity_id, to_entity_id, label, ts);
+  db.transaction(() => {
+    db.prepare(
+      `INSERT INTO calendar_links (from_entity_id, to_entity_id, label, created_at)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT(from_entity_id, to_entity_id) DO UPDATE SET label = excluded.label`,
+    ).run(from_entity_id, to_entity_id, label, ts);
+    // The upsert cannot report insert-vs-update, so stamp the gid only when the
+    // row's gid is still NULL (a fresh row). An existing row already carries a
+    // gid (migration-013 backfill or an earlier insert) and is left untouched.
+    const row = db
+      .prepare(`SELECT id, gid FROM calendar_links WHERE from_entity_id = ? AND to_entity_id = ?`)
+      .get(from_entity_id, to_entity_id) as { id: number; gid: string | null } | undefined;
+    if (row && row.gid === null) {
+      db.prepare("UPDATE calendar_links SET gid = ? WHERE id = ?").run(formatGid(row.id, getMachineId()), row.id);
+    }
+  })();
 
-  const row = db
+  return db
     .prepare(`SELECT * FROM calendar_links WHERE from_entity_id = ? AND to_entity_id = ?`)
     .get(from_entity_id, to_entity_id) as CalendarLink;
-  return row;
 }
 
 export function unlinkEntities(from_entity_id: number, to_entity_id: number): boolean {
@@ -241,26 +260,33 @@ export function createEvent(input: CreateEventInput, now: Date = new Date()): Ca
 
   const db = getDatabase();
   const ts = now.toISOString();
-  const result = db
-    .prepare(
-      `INSERT INTO calendar_events
-         (entity_id, type, title, notes, starts_at, ends_at, original_timezone, source, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    )
-    .run(
-      input.entity_id,
-      type,
-      title,
-      input.notes ?? null,
-      starts_at,
-      ends_at,
-      input.original_timezone ?? null,
-      input.source ?? null,
-      ts,
-      ts,
-    );
+  const id = db.transaction(() => {
+    const result = db
+      .prepare(
+        `INSERT INTO calendar_events
+           (entity_id, type, title, notes, starts_at, ends_at, original_timezone, source, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        input.entity_id,
+        type,
+        title,
+        input.notes ?? null,
+        starts_at,
+        ends_at,
+        input.original_timezone ?? null,
+        input.source ?? null,
+        ts,
+        ts,
+      );
+    // gid depends on the auto-generated integer PK, so it is stamped via UPDATE
+    // inside the same transaction (matching the migration-013 backfill convention).
+    const newId = Number(result.lastInsertRowid);
+    db.prepare("UPDATE calendar_events SET gid = ? WHERE id = ?").run(formatGid(newId, getMachineId()), newId);
+    return newId;
+  })();
 
-  return getEvent(Number(result.lastInsertRowid))!;
+  return getEvent(id)!;
 }
 
 export interface UpdateEventPatch {

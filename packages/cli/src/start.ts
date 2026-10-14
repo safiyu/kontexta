@@ -92,6 +92,14 @@ export async function runStart(): Promise<never> {
   process.on('SIGINT', () => forward('SIGTERM'));
   child.on('exit', (code) => { exited = true; process.exit(code ?? 0); });
 
+  // Client registry (Phase 2 identity): this launcher is a thin spawner with
+  // no kxta-core dependency — core is shipped separately in the bundle and
+  // must not be imported here, or tsup would fold all of core (better-sqlite3,
+  // onnxruntime, …) into dist/index.js and break `npm publish`. So this
+  // process does NOT open the DB. The spawned web server does: waitHealth()
+  // below polls /api/health, whose handler calls ensureDbInitialized(), which
+  // runs recordClientConnected(os.hostname()). The `start` path is therefore
+  // registered transitively via the health probe.
   try {
     await waitHealth(port);
   } catch (e: any) {

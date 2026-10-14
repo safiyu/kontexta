@@ -60,6 +60,11 @@ import {
   setInferenceDevice,
   setModelCacheDirOverride,
   rerankEngine,
+  recordClientConnected,
+  setMachineLabel,
+  getMachineLabel,
+  listClients,
+  getMachineId,
 } from "kxta-core";
 import RE2Class from "./re2-compat.js";
 import type RE2 from "re2";
@@ -2855,8 +2860,91 @@ server.tool(
   }
 );
 
+server.tool(
+  "admin_set_machine_label",
+  "Set this machine's human-readable label (settings.machine_label). The label is how OTHER machines name conflict copies created from this one ('<filename> (from <label>).ext'), so pick something short and distinctive per machine (e.g. the machine's name or the user's workstation). Pass an empty string to clear it. Affects only conflict-copy naming; it does NOT change the stable machine_id that GIDs are keyed on. Returns the previous and new label.",
+  {
+    label: z.string().max(100).describe("The new label for this machine. Max 100 chars. Empty string clears the label."),
+  },
+  async ({ label }) => {
+    try {
+      const previous = getMachineLabel();
+      setMachineLabel(label);
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(
+              {
+                ok: true,
+                machine_id: getMachineId(),
+                previous_label: previous,
+                label,
+              },
+              null,
+              2,
+            ),
+          },
+        ],
+      };
+    } catch (e) {
+      return {
+        isError: true,
+        content: [{ type: "text", text: JSON.stringify({ error: (e as Error).message }, null, 2) }],
+      };
+    }
+  }
+);
+
+server.tool(
+  "admin_list_clients",
+  "List every machine that has ever connected to this vault (the sync group), most-recently-seen first. Each entry has machine_id, hostname, first_seen_at, last_seen_at, and is_local (true for the machine this MCP server runs on). Read-only; no side effects, auth, or rate limits. Use to see which machines are part of the sync group or to check that a new machine registered on startup.",
+  {},
+  async () => {
+    try {
+      const machineId = getMachineId();
+      const clients = listClients().map((c) => ({
+        ...c,
+        is_local: c.machine_id === machineId,
+      }));
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(
+              {
+                machine_id: machineId,
+                machine_label: getMachineLabel(),
+                count: clients.length,
+                clients,
+              },
+              null,
+              2,
+            ),
+          },
+        ],
+      };
+    } catch (e) {
+      return {
+        isError: true,
+        content: [{ type: "text", text: JSON.stringify({ error: (e as Error).message }, null, 2) }],
+      };
+    }
+  }
+);
+
 async function main() {
   const transport = new StdioServerTransport();
+  // Register this machine in the clients registry (Phase 2 identity). The DB
+  // is normally already open from the module-load profile instructions, but
+  // getDatabase() is called defensively to be certain. Non-fatal: a registry
+  // failure must not prevent the MCP server from starting.
+  try {
+    getDatabase();
+    recordClientConnected(os.hostname());
+  } catch (e) {
+    console.warn("[identity] recordClientConnected failed:", e);
+  }
   {
     const projects = listProjects()
       .filter((p: any) => p.path && existsSync(p.path))
