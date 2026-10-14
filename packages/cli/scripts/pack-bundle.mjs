@@ -63,6 +63,19 @@ for (const s of sources) {
 rmSync(bundle, { recursive: true, force: true });
 mkdirSync(bundle, { recursive: true });
 
+// Copy the agent-skill payload from the repo root into the CLI package so
+// `kontexta skill install` (resolveSkillSource) can find it inside the
+// published tarball. Dev checkouts still resolve to <repoRoot>/skills/.
+const skillSrc = resolve(repoRoot, 'skills', 'kontexta');
+const skillDest = resolve(cliRoot, 'skills', 'kontexta');
+rmSync(resolve(cliRoot, 'skills'), { recursive: true, force: true });
+if (!existsSync(skillSrc)) {
+  console.error(`pack-bundle: missing ${skillSrc} (the agent skill folder).`);
+  process.exit(1);
+}
+cpSync(skillSrc, skillDest, { recursive: true, filter: (src) => !src.split(sep).includes('__pycache__') });
+console.log(`  copied  ${skillSrc} -> ${skillDest}`);
+
 for (const s of sources) {
   cpSync(s.from, s.to, { recursive: true, filter: s.filter });
   console.log(`  copied  ${s.from} -> ${s.to}`);

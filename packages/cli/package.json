@@ -25,6 +25,7 @@
   "files": [
     "dist",
     "bundle",
+    "skills",
     "README.md",
     "LICENSE"
   ],
