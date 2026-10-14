@@ -11,6 +11,7 @@ Usage:
                                      Manage coding-agent hooks that feed the journal
   kontexta connect <status|install|uninstall|approval|reconcile>
                                      Register the kxta MCP server in your coding agents
+  kontexta skill install [--project] Install the kxta agent-skill bridge for clients that block MCP
   kontexta --version                 Print version
   kontexta --help                    Print this help
 `;
@@ -47,6 +48,10 @@ Usage:
   if (arg === 'connect') {
     const { runConnect } = await import('./connect.js');
     process.exit(await runConnect(process.argv.slice(3)));
+  }
+  if (arg === 'skill') {
+    const { runSkill } = await import('./skill.js');
+    process.exit(await runSkill(process.argv.slice(3)));
   }
   if (arg === 'start') {
     const { runStart } = await import('./start.js');
