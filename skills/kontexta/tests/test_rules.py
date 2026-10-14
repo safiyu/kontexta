@@ -26,6 +26,12 @@ class RulesBlock(unittest.TestCase):
         self.assertTrue(kxta.RULES_END_RE.search(b))
         self.assertIn(kxta.FLAVOR_TAG, b)
 
+    def test_block_records_refresh_command_and_core_rules(self):
+        b = kxta.render_rules_block("3.2.0", TOOLS, "python .claude/skills/kontexta/scripts/kxta.py")
+        self.assertIn("<!-- kontexta:refresh python .claude/skills/kontexta/scripts/kxta.py rules --write -->", b)
+        self.assertIn("admin_refresh_session_context", b)
+        self.assertIn("KONTEXTA.md", b)
+
     def test_short_desc_cuts_at_sentence_not_mid_word(self):
         self.assertEqual(kxta.short_desc("Full-text search. More detail here."), "Full-text search.")
         long = "word " * 80

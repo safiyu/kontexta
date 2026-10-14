@@ -42,7 +42,7 @@ Teach the agent how to call every kxta tool through the bridge by writing the `r
 python3 ~/.claude/skills/kontexta/scripts/kxta.py rules --write
 ```
 
-The block starts with one line showing the bridge-prefix command, followed by the full tool list (names + one-line descriptions). It is deliberately lighter than `admin_onboard_agent`'s block, which encodes workflow rules written for native MCP tool names like `mcp__kxta__search`.
+The block holds the bridge-prefix command, the core workflow rules adapted for the bridge (session start, KB writes, search before reading, Hands timing, journal notes), a pointer to `KONTEXTA.md` for the full routing matrix, and the tool list (names + one-line descriptions). It also records its own refresh command, so rules-version nudges quote the right path for project installs and `python` on Windows. With `--project` installs the recorded path is relative to the project root, so the committed block works for teammates.
 
 It is fenced with the same `kontexta:rules` version marker as the server's block, so it stays managed:
 

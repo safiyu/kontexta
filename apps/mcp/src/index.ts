@@ -47,7 +47,7 @@ import {
   syncAgentRules,
   checkAgentRulesStatus,
   RULE_BLOCK_VERSION,
-  SKILL_BRIDGE_REFRESH_COMMAND,
+  skillBridgeRefreshCommands,
   gracefulShutdown,
   startDistillEngine,
   writeResource,
@@ -184,6 +184,7 @@ function getAgentRulesWarning(projectId?: number | null): string | null {
     const outdatedProjects: string[] = [];
     // Skill-bridge blocks (written by `kxta.py rules --write`) are refreshed by re-running that command, not admin_onboard_agent.
     const outdatedSkillProjects: string[] = [];
+    const skillRefreshCommands = new Set<string>();
     for (const p of projects) {
       if (!p || !p.path || !existsSync(p.path)) continue;
       const contextFiles = detectAgentContextFiles(p.path);
@@ -195,6 +196,7 @@ function getAgentRulesWarning(projectId?: number | null): string | null {
       if (stale.length === 0) continue;
       if (stale.every((s) => s.flavor === "skill-bridge")) {
         outdatedSkillProjects.push(p.name);
+        for (const cmd of skillBridgeRefreshCommands(stale)) skillRefreshCommands.add(cmd);
       } else {
         outdatedProjects.push(p.name);
       }
@@ -221,7 +223,8 @@ function getAgentRulesWarning(projectId?: number | null): string | null {
       sentences.push("Run admin_onboard_agent to fix.");
     }
     if (outdatedSkillProjects.length > 0) {
-      sentences.push(`For skill-bridge blocks, run \`${SKILL_BRIDGE_REFRESH_COMMAND}\` from the project root.`);
+      const cmds = [...skillRefreshCommands].map((c) => `\`${c}\``).join(" or ");
+      sentences.push(`For skill-bridge blocks, run ${cmds} from the project root.`);
     }
     return sentences.join(" ");
   } catch (e) {
@@ -1503,7 +1506,7 @@ ERROR CONDITIONS: Returns isError=true if path is missing or unresolvable. Scan 
             `Your project's agent instructions file is out of date: it still references kontexta workflow rules from an older release. ` +
             `Files needing an update: ${versions}. Latest rules version is v${RULE_BLOCK_VERSION}. ` +
             (outdated.every((s) => s.flavor === "skill-bridge")
-              ? `These hold the skill-bridge rules block: re-run \`${SKILL_BRIDGE_REFRESH_COMMAND}\` from the project root to refresh it in-place, or run admin_onboard_agent to switch to the full MCP rules block.`
+              ? `These hold the skill-bridge rules block: re-run ${skillBridgeRefreshCommands(outdated).map((c) => `\`${c}\``).join(" or ")} from the project root to refresh it in-place, or run admin_onboard_agent to switch to the full MCP rules block.`
               : `Run admin_onboard_agent to refresh the kontexta rules block in-place (your existing project content is preserved).`);
         } else {
           recommendationReason =
