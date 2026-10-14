@@ -21,7 +21,6 @@ import {
   refreshIndex,
   listTags,
   listProjects,
-  syncGlobalVault,
   bundleSearch,
   estimateTokensFromBuffer,
   clipUrl,
@@ -1780,30 +1779,6 @@ IDEMPOTENT: re-running with the same files copies nothing if the content is unch
 
       return {
         content: [{ type: "text", text: JSON.stringify({ transferred, skipped, next_action }, null, 2) }],
-      };
-    } catch (e: any) {
-      return {
-        isError: true,
-        content: [{ type: "text", text: JSON.stringify({ error: e?.message ?? String(e) }, null, 2) }],
-      };
-    }
-  }
-);
-
-server.tool(
-  "admin_commit_backup",
-  "SIDE-EFFECTFUL: TOUCHES THE NETWORK. Sync the global vault — the data directory's own git repo — against its configured global remote and `git push` to `origin`. This is project-independent: it pushes every KB commit made since the last sync (file creates/edits/deletes) in one shot, so it covers the whole knowledge base regardless of which project the writes landed in. AUTH: relies on the local user's git credentials (SSH agent, credential helper, etc.); there is no in-server auth. Kontexta does not rate-limit, but the remote may. Idempotent in steady state: if there is no configured remote or nothing new, it is a no-op. Throws if the remote URL is invalid or if pull/push fails (network, auth, conflict). Returns `{success}`. Use after a batch of KB writes to get changes off-machine.",
-  {},
-  async () => {
-    try {
-      await syncGlobalVault(dataDir);
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify({ success: true }, null, 2),
-          },
-        ],
       };
     } catch (e: any) {
       return {

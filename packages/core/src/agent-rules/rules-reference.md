@@ -162,7 +162,6 @@ The matrix below is grouped by intent. For each tool: when to reach for it, the 
 | `files_restore` | Roll back a KB file to an earlier revision | Want to use raw `git` | |
 | `files_diff_against_disk` | Find drift after raw filesystem edits | Normal search staleness | `projects_refresh_index` |
 | `projects_refresh_index` | Rescan after out-of-band changes | Normal in-app edits | |
-| `admin_commit_backup` | Push KB changes to remote git | Local-only work | |
 
 ### Discover
 

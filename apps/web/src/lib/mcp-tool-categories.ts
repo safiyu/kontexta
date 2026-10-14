@@ -66,7 +66,6 @@ export const TOOL_CATEGORIES: Record<string, ToolCategory> = {
   "files_get_history": "Versioning",
   "files_get_diff": "Versioning",
   "files_restore": "Versioning",
-  "admin_commit_backup": "Versioning",
   // Discovery
   "admin_overview": "Discovery",
   "projects_map": "Discovery",

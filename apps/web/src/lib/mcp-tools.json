@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-14T11:58:00.617Z",
+  "generatedAt": "2026-10-14T16:03:11.780Z",
   "tools": [
     {
       "name": "admin_refresh_session_context",
@@ -781,18 +781,6 @@
         ],
         "additionalProperties": false,
         "$schema": "http://json-schema.org/draft-07/schema#"
-      },
-      "execution": {
-        "taskSupport": "forbidden"
-      }
-    },
-    {
-      "name": "admin_commit_backup",
-      "description": "SIDE-EFFECTFUL: TOUCHES THE NETWORK. Sync the global vault — the data directory's own git repo — against its configured global remote and `git push` to `origin`. This is project-independent: it pushes every KB commit made since the last sync (file creates/edits/deletes) in one shot, so it covers the whole knowledge base regardless of which project the writes landed in. AUTH: relies on the local user's git credentials (SSH agent, credential helper, etc.); there is no in-server auth. Kontexta does not rate-limit, but the remote may. Idempotent in steady state: if there is no configured remote or nothing new, it is a no-op. Throws if the remote URL is invalid or if pull/push fails (network, auth, conflict). Returns `{success}`. Use after a batch of KB writes to get changes off-machine.",
-      "inputSchema": {
-        "$schema": "http://json-schema.org/draft-07/schema#",
-        "type": "object",
-        "properties": {}
       },
       "execution": {
         "taskSupport": "forbidden"

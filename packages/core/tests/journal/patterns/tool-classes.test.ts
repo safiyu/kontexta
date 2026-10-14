@@ -24,7 +24,7 @@ describe("tool-classes: underscore (6.0.0+) names", () => {
     "tags_list", "tags_suggest",
   ];
   const writes = [
-    "admin_commit_backup", "admin_onboard_agent", "admin_transfer_agent_context",
+    "admin_onboard_agent", "admin_transfer_agent_context",
     "calendar_entities_add", "calendar_entities_delete", "calendar_entities_link", "calendar_entities_update",
     "calendar_events_add", "calendar_events_delete", "calendar_events_update",
     "files_create", "files_delete", "files_move",
@@ -67,7 +67,7 @@ describe("tool-classes: dotted (5.0.0-5.x) names still classify", () => {
     "tags.list", "tags.suggest",
   ];
   const writes = [
-    "admin.commit_backup", "admin.onboard_agent", "admin.transfer_agent_context",
+    "admin.onboard_agent", "admin.transfer_agent_context",
     "calendar.entities.add", "calendar.entities.delete", "calendar.entities.link", "calendar.entities.update",
     "calendar.events.add", "calendar.events.delete", "calendar.events.update",
     "files.create", "files.delete", "files.move",
