@@ -64,8 +64,11 @@ export function createFileWatcher(
   const watcher: any = chokidar.watch(watchPaths, {
     // Skip the same set discoverFiles skips, plus build-output / cache /
     // virtualenv directories that commonly contain throw-away .md/.mmd files,
-    // plus any legacy backups/ tree (per-project backups are gone, but ignore
-    // one defensively in case a stale copy lingers on disk). The previous
+    // plus any legacy backups/ tree — historical note: the (now-removed)
+    // per-project backup mechanism wrote <dataDir>/backups/<slug> subtrees;
+    // that mechanism no longer exists, so we keep ignoring backups/
+    // defensively so a stale copy that lingers on disk isn't adopted as KB.
+    // The previous
     // regex excluded ANY dot-prefixed segment, which silently dropped all
     // changes under .claude/, .github/, .cursor/ — exactly where
     // AI-context lives. Also ignore the tmp files produced by

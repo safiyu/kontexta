@@ -316,8 +316,6 @@ export function unregisterProject(projectId: number, dataDir?: string): void {
 
   try { syncProjectsSidecarIfStaged(getDataDir()); } catch { /* sidecar is best-effort; hooks fall back to slug "default" */ }
 
-  // Outside the txn: remove any legacy per-project backup subtree so a
-  // re-register can't resurrect ghost files. Best-effort; log on fail.
   if (dataDir && project?.slug) {
     const backupSubtree = join(dataDir, "backups", project.slug);
     try {

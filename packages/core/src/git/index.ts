@@ -15,11 +15,6 @@ import { withLock } from "../util/safety.js";
 /** Git tree paths always use forward slashes, regardless of host OS. */
 const toGitPath = (p: string): string => p.split(sep).join("/");
 
-// Strip `user:pass@` from URLs in git stderr before logging or returning.
-function redactCredentials(s: string): string {
-  return s.replace(/([a-z][a-z0-9+.-]*:\/\/)([^:@\/\s]+:[^@\/\s]+)@/gi, "$1***:***@");
-}
-
 // Strip env that would let git spawn an editor/pager/credential helper —
 // any of those would hang a server-side request. Also strips vars that could
 // redirect git operations (SSH commands, exec paths, external diffs).
@@ -57,47 +52,6 @@ function gitFor(dir: string): SimpleGit {
   // GIT_CONFIG_GLOBAL pointing to /dev/null (Linux) or NUL (Windows) — the
   // paths we use in buildGitEnv() to isolate git from inaccessible runner configs.
   return simpleGit(dir, { unsafe: { allowUnsafeConfigPaths: true } }).env(buildGitEnv() as any);
-}
-
-// Make sure the local repo's HEAD is on `main` before pushing to `origin main`.
-// Historically this code did `git branch -M main` unconditionally, which
-// force-renamed (and clobbered) whatever branch the user happened to be on.
-// New behavior: rename only the legacy default `master`; for any other branch
-// name, leave it alone so we don't destroy a deliberate checkout.
-async function ensureOnMain(git: SimpleGit): Promise<void> {
-  let current: string;
-  try {
-    current = (await git.raw(["symbolic-ref", "--short", "HEAD"])).trim();
-  } catch {
-    return;
-  }
-  if (current === "main" || current === "") return;
-  if (current === "master") {
-    await git.branch(["-m", "master", "main"]);
-    return;
-  }
-  throw new Error(
-    `Refusing to push: local HEAD is on '${current}', not 'main'. ` +
-    `Switch to 'main' (git checkout main) before syncing, or rename the branch yourself.`
-  );
-}
-
-/** Validate a git remote URL. Allows https://, ssh://, git://, scp-form (user@host:path).
- *
- * Rejects http:// — vault backups containing KB content shouldn't transit cleartext
- * (especially if the URL embeds credentials). Use https:// or ssh:// instead.
- */
-export function isValidGitRemoteUrl(url: string): boolean {
-  if (typeof url !== "string" || url.length === 0 || url.length > 2048) return false;
-  if (/[\s\x00-\x1f]/.test(url)) return false;
-  if (/^(file|ext):/i.test(url)) return false;
-  if (/^[A-Za-z0-9_.+-]+@[A-Za-z0-9.-]+:[^\s]+$/.test(url)) return true; // scp-form
-  try {
-    const u = new URL(url);
-    return u.protocol === "https:" || u.protocol === "ssh:" || u.protocol === "git:";
-  } catch {
-    return false;
-  }
 }
 
 /**
@@ -151,7 +105,7 @@ export async function commitFile(
  *
  * Symmetric with `commitFile` — without this, deleteFile() unlinks the file
  * from disk but git still has it in HEAD. Any subsequent operation that
- * touches the working tree (a `git pull` from syncGlobalVault, a manual
+ * touches the working tree (a manual
  * `git restore`, a stash pop) resurrects the file, and the watcher's `add`
  * handler then re-indexes it as a new row, making it look like delete
  * silently "came back".
@@ -348,137 +302,3 @@ export async function restoreVersion(
     return contentForFts;
   });
 }
-
-/**
- * Sync the global "vault" — dataDir's own git repo — against the configured
- * global remote. Picks up KB file commits that commitFile() made during
- * creates/edits and pushes them upstream.
- */
-export async function syncGlobalVault(
-  dataDir: string,
-  onStage?: (stage: SyncStage) => void
-): Promise<void> {
-  return await withLock(`git:${resolve(dataDir)}`, async () => {
-    const stage = (s: SyncStage) => { try { onStage?.(s); } catch {} };
-    stage("preparing");
-
-    const git = gitFor(dataDir);
-    try {
-      await git.status();
-    } catch {
-      await git.init();
-      await git.addConfig("user.email", "kontexta@local");
-      await git.addConfig("user.name", "Kontexta");
-      await git.addConfig("commit.gpgsign", "false");
-      await git.addConfig("tag.gpgsign", "false");
-    }
-
-    const globalRemoteUrl = await getGlobalRemote(dataDir);
-    if (!globalRemoteUrl) {
-      stage("done");
-      return; // nothing to sync against
-    }
-    if (!isValidGitRemoteUrl(globalRemoteUrl)) {
-      throw new Error("Configured global remote URL is not a valid git remote");
-    }
-
-    // Make sure HEAD exists; an empty repo can't push.
-    try { await git.raw(["rev-parse", "HEAD"]); }
-    catch { await git.commit("Initial commit", ["--allow-empty"], { "--no-gpg-sign": null }); }
-
-    // Pull → merge → push.
-    let pullSucceeded = false;
-    stage("pulling remote");
-    try {
-      await git.pull("origin", "main", { "--rebase": "false" });
-      pullSucceeded = true;
-      stage("merging remote");
-    } catch (e) {
-      const msg = redactCredentials(String((e as any)?.message ?? e));
-      console.warn("syncGlobalVault: pull failed; aborting any in-progress merge", msg);
-      try { await git.raw(["merge", "--abort"]); } catch {}
-      try { await git.raw(["rebase", "--abort"]); } catch {}
-      throw new Error(`Sync failed during pull: ${msg}`);
-    }
-
-    if (pullSucceeded) {
-      stage("pushing");
-      try {
-        await ensureOnMain(git);
-        await git.push("origin", "main");
-      } catch (error: any) {
-        const msg = redactCredentials(String(error?.message ?? error));
-        console.error("syncGlobalVault: push failed:", msg);
-        throw new Error(`Push failed: ${msg}`);
-      }
-    }
-    stage("done");
-  });
-}
-
-export async function getGlobalRemote(dataDir: string): Promise<string | null> {
-  try {
-    const git = gitFor(dataDir);
-    const remotes = await git.getRemotes(true);
-    const origin = remotes.find((r) => r.name === "origin");
-    return origin?.refs.fetch || null;
-  } catch (error) {
-    return null;
-  }
-}
-
-export async function setGlobalRemote(dataDir: string, url: string): Promise<void> {
-  if (url && !isValidGitRemoteUrl(url)) {
-    throw new Error("Invalid remote URL: must be https://, ssh://, git://, or user@host:path");
-  }
-  // Take the same lock syncGlobalVault uses — otherwise we can swap origin
-  // between a sync's pull and push and end up pushing to the wrong remote.
-  await withLock(`git:${resolve(dataDir)}`, async () => {
-    const git = gitFor(dataDir);
-    try {
-      await git.status();
-    } catch (error) {
-      await git.init();
-      await git.addConfig("user.email", "kontexta@local");
-      await git.addConfig("user.name", "Kontexta");
-      await git.addConfig("commit.gpgsign", "false");
-      await git.addConfig("tag.gpgsign", "false");
-    }
-
-    // Snapshot origin so we can restore it if addRemote fails partway
-    // through — otherwise the user is left with no remote configured.
-    let previousOriginUrl: string | null = null;
-    try {
-      const remotes = await git.getRemotes(true);
-      previousOriginUrl = remotes.find((r) => r.name === "origin")?.refs.fetch || null;
-    } catch {}
-
-    let removed = false;
-    try {
-      await git.removeRemote("origin");
-      removed = true;
-    } catch {}
-
-    if (url) {
-      try {
-        await git.addRemote("origin", url);
-      } catch (e: any) {
-        if (removed && previousOriginUrl) {
-          try { await git.addRemote("origin", previousOriginUrl); } catch {}
-        }
-        throw new Error(redactCredentials(String(e?.message ?? e)));
-      }
-    }
-  });
-}
-
-/**
- * Optional per-stage progress callback. Producers (API routes) wire this to
- * a WS broadcast so the UI can show what git is currently doing.
- */
-export type SyncStage =
-  | "preparing"
-  | "pulling remote"
-  | "merging remote"
-  | "pushing"
-  | "done";
