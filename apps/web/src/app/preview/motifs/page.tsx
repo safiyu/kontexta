@@ -20,7 +20,7 @@ export default function MotifsPreviewPage() {
       <Section title="MCP pipeline connectors">
         <MCPPipelineRow label="kxta.search" result="42 hits" status="active" />
         <MCPPipelineRow label="kxta.read_files" result="8 files" status="active" />
-        <MCPPipelineRow label="kxta.commit_backup" result="idle" status="idle" />
+        <MCPPipelineRow label="kxta.files_move" result="idle" status="idle" />
       </Section>
 
       <Section title="Journal stream indicator">
@@ -29,7 +29,7 @@ export default function MotifsPreviewPage() {
             { id: "1", timestamp: "14:02", text: "hands.run('test') · ok", live: true },
             { id: "2", timestamp: "13:58", text: "update_file_section · README.md" },
             { id: "3", timestamp: "13:51", text: 'search · "rebrand"' },
-            { id: "4", timestamp: "13:40", text: "commit_backup · ↑3" },
+            { id: "4", timestamp: "13:40", text: "files_create · ↑3" },
           ]}
         />
       </Section>
