@@ -36,15 +36,20 @@ Running kontexta from source or Docker? Point `KXTA_SERVER` at it, e.g. `KXTA_SE
 
 ## Pair it with the project rules
 
-Teach the agent how to call every kxta tool through the bridge by appending the `rules` snippet to your project's `CLAUDE.md`:
+Teach the agent how to call every kxta tool through the bridge by writing the `rules` block into your project's `CLAUDE.md` (run from the project root):
 
 ```bash
-python3 ~/.claude/skills/kontexta/scripts/kxta.py rules >> CLAUDE.md
+python3 ~/.claude/skills/kontexta/scripts/kxta.py rules --write
 ```
 
-The snippet starts with one line showing the bridge-prefix command, followed by the full tool list (names + one-line descriptions). It is deliberately lighter than `admin_onboard_agent`'s block, which encodes workflow rules written for native MCP tool names like `mcp__kxta__search`.
+The block starts with one line showing the bridge-prefix command, followed by the full tool list (names + one-line descriptions). It is deliberately lighter than `admin_onboard_agent`'s block, which encodes workflow rules written for native MCP tool names like `mcp__kxta__search`.
 
-If you also want the full MCP workflow rules (search-before-read, journal conventions, etc.), run `admin_onboard_agent` separately.
+It is fenced with the same `kontexta:rules` version marker as the server's block, so it stays managed:
+
+- Re-running `rules --write` replaces the block in place (your own content above and below is untouched) and reports `created`, `updated` or `unchanged`. It never duplicates the block.
+- When kontexta ships a new rules version, the session context and `projects_register` flag the file as outdated. For this block the fix is to re-run `rules --write`; `admin_onboard_agent` is not needed.
+- Running `admin_onboard_agent` on the same file switches it to the full MCP rules block when the version differs. Both work through the bridge, so pick one per file.
+- Other target file: `rules --write AGENTS.md`. Without `--write`, the block is printed to stdout.
 
 ## Commands
 
@@ -52,7 +57,7 @@ If you also want the full MCP workflow rules (search-before-read, journal conven
 |---|---|
 | `context` | Session context (the MCP `instructions` block: profile, events, nudges) |
 | `list` | Tool names with short descriptions |
-| `rules` | Markdown snippet to paste or redirect into `CLAUDE.md`: one-line bridge-prefix instruction + the full tool list. Lighter than `admin_onboard_agent`'s block, which assumes native MCP |
+| `rules [--write [file]]` | Versioned markdown block: one-line bridge-prefix instruction + the full tool list. Prints it, or with `--write` inserts/replaces it in `file` (default `CLAUDE.md`). Lighter than `admin_onboard_agent`'s block, which assumes native MCP |
 | `schema <tool>` | Full input schema for one tool |
 | `call <tool> '<json>'` | Invoke one tool (`-` reads the JSON from stdin) |
 | `batch` | JSONL in (`{"tool", "args"}`), JSONL out (`{"tool", "isError", "text"}`) |

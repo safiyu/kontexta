@@ -11,7 +11,7 @@ Use this when the kxta MCP tools are not loaded natively in the session (e.g. MC
 K=~/.claude/skills/kontexta/scripts/kxta.py
 python3 $K context                      # session context (= MCP instructions: profile, events, nudges)
 python3 $K list                         # tool names + short descriptions
-python3 $K rules                        # markdown snippet to append to CLAUDE.md (bridge prefix + tool list)
+python3 $K rules --write                # insert/refresh the versioned bridge block in CLAUDE.md
 python3 $K schema <tool>                # full input schema for one tool
 python3 $K call <tool> '<json-args>'    # invoke one tool
 python3 $K batch                        # many calls in one process (JSONL on stdin)

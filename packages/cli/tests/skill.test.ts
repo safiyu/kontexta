@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { execSync } from 'node:child_process';
-import { mkdtempSync, existsSync, rmSync, readFileSync } from 'node:fs';
+import { mkdtempSync, existsSync, rmSync, readFileSync, writeFileSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -65,6 +65,43 @@ describe('kontexta skill install', () => {
       expect(existsSync(join(fakeCwd, '.claude', 'skills', 'kontexta', 'scripts', 'kxta.py'))).toBe(true);
     } finally {
       rmSync(fakeCwd, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects unknown flags instead of silently installing user-wide', () => {
+    const fakeHome = mkdtempSync(join(tmpdir(), 'kxta-skill-home-'));
+    try {
+      let threw = false;
+      try {
+        execSync('node dist/index.js skill install --projet', {
+          cwd: pkgRoot,
+          env: { ...process.env, HOME: fakeHome, USERPROFILE: fakeHome },
+          stdio: 'pipe',
+        });
+      } catch (e: any) {
+        threw = true;
+        expect(e.stderr.toString()).toMatch(/Unknown option: --projet/);
+      }
+      expect(threw).toBe(true);
+      expect(existsSync(join(fakeHome, '.claude'))).toBe(false);
+    } finally {
+      rmSync(fakeHome, { recursive: true, force: true });
+    }
+  });
+
+  it('--force replaces an existing install and leaves no staging dir behind', () => {
+    const fakeHome = mkdtempSync(join(tmpdir(), 'kxta-skill-home-'));
+    try {
+      const env = { ...process.env, HOME: fakeHome, USERPROFILE: fakeHome };
+      runSkill('install', env);
+      const marker = join(fakeHome, '.claude', 'skills', 'kontexta', 'stale.txt');
+      writeFileSync(marker, 'old');
+      const out = runSkill('install --force', env);
+      expect(out).toMatch(/new Claude Code session/);
+      expect(existsSync(marker)).toBe(false);
+      expect(readdirSync(join(fakeHome, '.claude', 'skills'))).toEqual(['kontexta']);
+    } finally {
+      rmSync(fakeHome, { recursive: true, force: true });
     }
   });
 });

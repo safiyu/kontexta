@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, cpSync, chmodSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, cpSync, chmodSync, rmSync, renameSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homedir } from 'node:os';
@@ -13,6 +13,8 @@ Options:
               committed with the code. Default is user-wide under ~/.claude/skills.
   --force     Overwrite an existing install.
 `;
+
+const INSTALL_FLAGS = new Set(['--project', '--force']);
 
 export function resolveSkillSource(): string {
   const here = dirname(fileURLToPath(import.meta.url));
@@ -39,6 +41,11 @@ export async function runSkill(argv: string[]): Promise<number> {
   }
 
   const flags = argv.slice(1);
+  const unknown = flags.filter((f) => !INSTALL_FLAGS.has(f));
+  if (unknown.length > 0) {
+    process.stderr.write(`Unknown option${unknown.length > 1 ? 's' : ''}: ${unknown.join(', ')}\n${HELP}`);
+    return 1;
+  }
   const project = flags.includes('--project');
   const force = flags.includes('--force');
 
@@ -48,26 +55,33 @@ export async function runSkill(argv: string[]): Promise<number> {
     : resolve(homedir(), '.claude', 'skills');
   const dest = join(baseDir, 'kontexta');
 
-  if (existsSync(dest)) {
-    if (!force) {
-      process.stderr.write(
-        `Skill already installed at ${dest}. Re-run with --force to overwrite.\n`,
-      );
-      return 1;
-    }
-    rmSync(dest, { recursive: true, force: true });
+  if (existsSync(dest) && !force) {
+    process.stderr.write(
+      `Skill already installed at ${dest}. Re-run with --force to overwrite.\n`,
+    );
+    return 1;
   }
 
+  // Copy beside the target first so a failed copy never costs the existing install.
   mkdirSync(baseDir, { recursive: true });
-  cpSync(src, dest, { recursive: true });
+  const staging = join(baseDir, `.kontexta.tmp-${process.pid}`);
+  try {
+    cpSync(src, staging, { recursive: true, filter: (p) => !/(^|[\\/])__pycache__([\\/]|$)/.test(p) });
+    rmSync(dest, { recursive: true, force: true });
+    renameSync(staging, dest);
+  } finally {
+    rmSync(staging, { recursive: true, force: true });
+  }
 
-  // Best-effort: make the Python entry executable on POSIX so users can run it directly if they prefer.
   const script = join(dest, 'scripts', 'kxta.py');
   if (existsSync(script)) {
     try { chmodSync(script, 0o755); } catch { /* ignore on Windows / read-only FS */ }
   }
 
+  const py = process.platform === 'win32' ? 'python' : 'python3';
   process.stdout.write(`Installed kontexta skill → ${dest}\n`);
-  process.stdout.write(`Smoke test:\n  python3 ${script} call projects_list '{}'\n`);
+  process.stdout.write('Start a new Claude Code session so the skill is picked up.\n');
+  process.stdout.write(`Smoke test:\n  ${py} ${script} call projects_list '{}'\n`);
+  process.stdout.write(`Teach the agent the bridge (run in your project root):\n  ${py} ${script} rules --write\n`);
   return 0;
 }

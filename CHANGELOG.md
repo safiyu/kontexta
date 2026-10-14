@@ -1,5 +1,17 @@
 # Changelog
 
+## 6.1.1 - Agent skill for clients that block MCP (2026-10-14)
+
+### Added
+
+- **`skills/kontexta` agent skill.** A dependency-free Python bridge (`kxta.py`) that exposes every kxta tool through the agent's shell, for managed installs where user-added MCP servers are blocked. One background daemon per project keeps the server alive between calls and listens on a loopback TCP port guarded by a per-daemon token, so it runs on macOS, Linux and Windows.
+- **`kontexta skill install [--project] [--force]`.** Installs the skill into `~/.claude/skills` (or `.claude/skills` with `--project`). The skill ships inside the published `kontexta` package. Unknown flags are rejected, and `--force` copies to a staging folder first so a failed copy cannot remove a working install.
+- **`kxta.py rules [--write [file]]`.** Writes a light, versioned block (bridge-prefix line plus the tool list) into `CLAUDE.md`. It uses the same `kontexta:rules` marker as the server's block, so it is replaced in place on re-run and never duplicated.
+
+### Changed
+
+- **Rules-version nudges understand the skill block.** A skill-bridge block that predates the current `rulesVersion` is reported as outdated like any other, but the session context and `projects_register` now tell you to re-run `kxta.py rules --write` instead of `admin_onboard_agent`. `checkAgentRulesStatus` reports a `flavor` field for these blocks.
+
 ## 6.1.0 - Journal topic-shift detection and event triage (2026-10-05)
 
 ### Added

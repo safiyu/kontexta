@@ -4,6 +4,7 @@ import hashlib
 import hmac
 import json
 import os
+import re
 import secrets
 import shlex
 import shutil
@@ -267,6 +268,90 @@ class Session:
         return resp
 
 
+# Same fence the server's rules block uses, so the staleness check and nudges cover this block too.
+RULES_BEGIN_RE = re.compile(r"<!--\s*BEGIN\s+kontexta:rules\s+v(\d+\.\d+\.\d+)\s*-->")
+RULES_END_RE = re.compile(r"<!--\s*END\s+kontexta:rules(?:\s+v\d+\.\d+\.\d+)?\s*-->")
+FLAVOR_TAG = "<!-- kontexta:flavor skill-bridge -->"
+
+
+def short_desc(desc, limit=140):
+    text = " ".join((desc or "").split())
+    m = re.search(r"[.!?](?:\s|$)", text)
+    if m and m.end() <= limit:
+        return text[:m.end()].strip()
+    if len(text) <= limit:
+        return text
+    return text[:limit].rsplit(" ", 1)[0].rstrip(",;:(") + "..."
+
+
+def bridge_command():
+    script = os.path.abspath(__file__)
+    home = os.path.expanduser("~")
+    if script.startswith(home + os.sep):
+        script = "~" + script[len(home):].replace(os.sep, "/")
+    return f"{'python' if IS_WINDOWS else 'python3'} {script}"
+
+
+def render_rules_block(version, tools, cmd):
+    lines = [
+        f"<!-- BEGIN kontexta:rules v{version} -->",
+        FLAVOR_TAG,
+        "## kxta tools (via skill bridge)",
+        "",
+        "To call any tool below, run:",
+        f"`{cmd} call <tool> '<json-args>'`",
+        "",
+        f"Inspect inputs with `{cmd} schema <tool>`.",
+        "",
+        "Tools:",
+    ]
+    lines += [f"- `{t['name']}` · {short_desc(t.get('description'), 120)}" for t in tools]
+    lines += ["", f"<!-- END kontexta:rules v{version} -->"]
+    return "\n".join(lines) + "\n"
+
+
+def apply_rules_block(content, block):
+    """Insert or replace the fenced block. Returns (action, new_content); action is created, updated or unchanged."""
+    begins = list(RULES_BEGIN_RE.finditer(content))
+    if not begins:
+        sep = "" if not content or content.endswith("\n\n") else "\n" if content.endswith("\n") else "\n\n"
+        return "created", content + sep + block
+    if len(begins) > 1:
+        raise RuntimeError("duplicate kontexta rules marker found; fix the file by hand")
+    begin = begins[0]
+    end = RULES_END_RE.search(content, begin.end())
+    if not end:
+        raise RuntimeError("kontexta rules marker is malformed (BEGIN with no matching END)")
+    if content[begin.start():end.end()] == block.rstrip("\n"):
+        return "unchanged", content
+    return "updated", content[:begin.start()] + block.rstrip("\n") + content[end.end():]
+
+
+def rules_version(sess):
+    projects = json.loads(result_text(sess.ask({"op": "call", "tool": "projects_list", "args": {}})["result"]))
+    for p in projects:
+        v = (p.get("agent_rules") or {}).get("latest_version")
+        if v:
+            return v
+    raise RuntimeError("could not read the rules version from the server (projects_list returned no projects)")
+
+
+def write_rules(path, block):
+    if os.path.islink(path):
+        raise RuntimeError(f"refusing to write through symlink: {path}")
+    content = ""
+    if os.path.exists(path):
+        with open(path, encoding="utf-8", newline="") as f:
+            content = f.read()
+    action, new = apply_rules_block(content, block)
+    if action != "unchanged":
+        tmp = f"{path}.tmp.{os.getpid()}"
+        with open(tmp, "w", encoding="utf-8", newline="") as f:
+            f.write(new)
+        os.replace(tmp, path)
+    return action
+
+
 def result_text(result):
     out = []
     for item in result.get("content", []):
@@ -284,7 +369,7 @@ def main():
         serve(args[1])
         return
     if not args or args[0] in ("-h", "--help"):
-        print("usage: kxta.py context | list | rules | schema <tool> | call <tool> [json-args | -] | batch | stop")
+        print("usage: kxta.py context | list | rules [--write [file]] | schema <tool> | call <tool> [json-args | -] | batch | stop")
         return
     cwd = os.environ.get("KXTA_CWD", os.getcwd())
     cmd = args[0]
@@ -311,23 +396,18 @@ def main():
                 desc = " ".join((t.get("description") or "").split())
                 print(f"{t['name']}: {desc[:140]}")
         elif cmd == "rules":
-            # Emit a minimal markdown snippet to paste or redirect into CLAUDE.md so the agent
-            # knows how to call every kxta tool through this bridge. Lighter than the full
-            # admin_onboard_agent block (which assumes native mcp__kxta__* tool names).
-            script = os.path.abspath(__file__)
-            home = os.path.expanduser("~")
-            display = "~" + script[len(home):] if script.startswith(home + os.sep) else script
-            print("## kxta tools (via skill bridge)")
-            print()
-            print("To call any tool below, run:")
-            print(f"`python3 {display} call <tool> '<json-args>'`")
-            print()
-            print(f"Inspect inputs with `python3 {display} schema <tool>`.")
-            print()
-            print("Tools:")
-            for t in sess.ask({"op": "tools"})["tools"]:
-                desc = " ".join((t.get("description") or "").split())
-                print(f"- `{t['name']}` · {desc[:120]}")
+            # Versioned, minimal CLAUDE.md block (bridge prefix + tool list); lighter than admin_onboard_agent's.
+            opts = args[1:]
+            write = "--write" in opts
+            rest = [a for a in opts if a != "--write"]
+            if any(a.startswith("-") for a in rest) or len(rest) > 1 or (rest and not write):
+                sys.exit("usage: kxta.py rules [--write [file]]  (default file: CLAUDE.md in the current directory)")
+            block = render_rules_block(rules_version(sess), sess.ask({"op": "tools"})["tools"], bridge_command())
+            if not write:
+                sys.stdout.write(block)
+            else:
+                path = os.path.join(cwd, rest[0] if rest else "CLAUDE.md")
+                print(f"{os.path.relpath(path, cwd)}: {write_rules(path, block)}")
         elif cmd == "schema":
             tools = {t["name"]: t for t in sess.ask({"op": "tools"})["tools"]}
             tool = tools.get(args[1]) if len(args) > 1 else None

@@ -540,8 +540,14 @@ export interface RuleStatus {
   path: string;
   version: string | null;
   upToDate: boolean;
+  /** "skill-bridge" = the light block written by `kxta.py rules --write`; refreshed by re-running that, not admin_onboard_agent. */
+  flavor?: "skill-bridge";
   error?: "malformed" | "duplicate" | "unreadable";
 }
+
+export const SKILL_BRIDGE_REFRESH_COMMAND = "python3 ~/.claude/skills/kontexta/scripts/kxta.py rules --write";
+
+const SKILL_BRIDGE_FLAVOR_RE = /<!--\s*kontexta:flavor\s+skill-bridge\s*-->/;
 
 export function checkAgentRulesStatus(projectPath: string, files: string[]): RuleStatus[] {
   const out: RuleStatus[] = [];
@@ -558,10 +564,12 @@ export function checkAgentRulesStatus(projectPath: string, files: string[]): Rul
       if (!parsed) {
         out.push({ path: rel, version: null, upToDate: false });
       } else if (parsed.kind === "ok") {
+        const isSkillBridge = SKILL_BRIDGE_FLAVOR_RE.test(content.slice(parsed.beginAt, parsed.endAt));
         out.push({
           path: rel,
           version: parsed.version,
           upToDate: parsed.version === RULE_BLOCK_VERSION,
+          ...(isSkillBridge ? { flavor: "skill-bridge" as const } : {}),
         });
       } else {
         out.push({
