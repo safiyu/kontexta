@@ -21,7 +21,7 @@ import {
   refreshIndex,
   listTags,
   listProjects,
-  syncBackup,
+  syncGlobalVault,
   bundleSearch,
   estimateTokensFromBuffer,
   clipUrl,
@@ -1393,7 +1393,7 @@ server.tool(
 
 server.tool(
   "projects_list",
-  "List every registered project with id, name, absolute path, and a derived `has_hands` flag (true when the path exists on disk AND contains a `kontexta.json`). Read-only; no side effects, auth, or rate limits. Use to find the project_id to pass to scoped tools (`files_search`, `files_list`, `admin_commit_backup`, `projects_refresh_index`, etc.). To register a new project use `projects_register`; to inspect its Hands tools use `hands_list`.",
+  "List every registered project with id, name, absolute path, and a derived `has_hands` flag (true when the path exists on disk AND contains a `kontexta.json`). Read-only; no side effects, auth, or rate limits. Use to find the project_id to pass to scoped tools (`files_search`, `files_list`, `projects_refresh_index`, etc.). To register a new project use `projects_register`; to inspect its Hands tools use `hands_list`.",
   {},
   async () => {
     const result = listProjects();
@@ -1792,26 +1792,16 @@ IDEMPOTENT: re-running with the same files copies nothing if the content is unch
 
 server.tool(
   "admin_commit_backup",
-  "SIDE-EFFECTFUL: TOUCHES THE NETWORK. Sync the project's KB data into its git backup directory, create a commit, and `git push` to `origin`. AUTH: relies on the local user's git credentials (SSH agent, credential helper, etc.), there is no in-server auth. Kontexta does not rate-limit, but the remote may. Idempotent in steady state: a no-op commit is skipped, but the push still runs. Throws if the project has no configured backup repo or if push fails (network, auth, conflict). Returns `{success, copied_files_count, copied_paths}`. Use after a batch of KB writes to get changes off-machine.",
-  {
-    project_id: z.number().describe("Project ID"),
-  },
-  async ({ project_id }) => {
+  "SIDE-EFFECTFUL: TOUCHES THE NETWORK. Sync the global vault — the data directory's own git repo — against its configured global remote and `git push` to `origin`. This is project-independent: it pushes every KB commit made since the last sync (file creates/edits/deletes) in one shot, so it covers the whole knowledge base regardless of which project the writes landed in. AUTH: relies on the local user's git credentials (SSH agent, credential helper, etc.); there is no in-server auth. Kontexta does not rate-limit, but the remote may. Idempotent in steady state: if there is no configured remote or nothing new, it is a no-op. Throws if the remote URL is invalid or if pull/push fails (network, auth, conflict). Returns `{success}`. Use after a batch of KB writes to get changes off-machine.",
+  {},
+  async () => {
     try {
-      const copiedPaths = await syncBackup(project_id, dataDir);
+      await syncGlobalVault(dataDir);
       return {
         content: [
           {
             type: "text",
-            text: JSON.stringify(
-              {
-                success: true,
-                copied_files_count: copiedPaths.length,
-                copied_paths: copiedPaths,
-              },
-              null,
-              2
-            ),
+            text: JSON.stringify({ success: true }, null, 2),
           },
         ],
       };

@@ -53,3 +53,4 @@ Thumbs.db
 
 # Model cache (auto-downloaded, do not commit)
 .cache/
+Xenova/

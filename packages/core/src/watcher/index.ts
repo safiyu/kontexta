@@ -64,8 +64,9 @@ export function createFileWatcher(
   const watcher: any = chokidar.watch(watchPaths, {
     // Skip the same set discoverFiles skips, plus build-output / cache /
     // virtualenv directories that commonly contain throw-away .md/.mmd files,
-    // plus the backup tree owned by syncBackup. The previous regex
-    // excluded ANY dot-prefixed segment, which silently dropped all
+    // plus any legacy backups/ tree (per-project backups are gone, but ignore
+    // one defensively in case a stale copy lingers on disk). The previous
+    // regex excluded ANY dot-prefixed segment, which silently dropped all
     // changes under .claude/, .github/, .cursor/ — exactly where
     // AI-context lives. Also ignore the tmp files produced by
     // restoreVersion (`<file>.kontexta-restore-<pid>-<ts>`) so the

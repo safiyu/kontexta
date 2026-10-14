@@ -8,13 +8,14 @@ import { join } from "node:path";
 import { execSync } from "node:child_process";
 import { platform } from "node:os";
 import simpleGit, { SimpleGit } from "simple-git";
-import { createDatabase, closeDatabase, getDatabase } from "../src/db/index.js";
+import { createDatabase, closeDatabase } from "../src/db/index.js";
 import {
   commitFile,
   getHistory,
   getDiff,
   restoreVersion,
-  syncBackup,
+  syncGlobalVault,
+  isValidGitRemoteUrl,
 } from "../src/git/index.js";
 
 import { tmpdir } from "node:os";
@@ -178,60 +179,67 @@ describe("Git Operations", () => {
     expect(content).toBe("Original content");
   });
 
-  test("syncBackup copies reference files to backup directory and commits", async () => {
-    const db = getDatabase();
+  test("syncGlobalVault is a no-op when no remote is configured", async () => {
+    // Ensure the repo has a commit so HEAD exists.
+    const filePath = join(TEST_DATA_DIR, "knowledge", "vault.md");
+    writeFileSync(filePath, "Vault content", "utf8");
+    await commitFile(TEST_DATA_DIR, filePath, "Add vault file");
 
-    // Create external project directory
-    mkdirSync(EXTERNAL_PROJECT_DIR, { recursive: true });
+    // No origin configured → syncGlobalVault must return without touching
+    // the network and without throwing.
+    const stages: string[] = [];
+    await syncGlobalVault(TEST_DATA_DIR, (s) => stages.push(s));
+    expect(stages[stages.length - 1]).toBe("done");
+  });
 
-    // Create a test file in external directory
-    const externalFilePath = join(EXTERNAL_PROJECT_DIR, "test-file.md");
-    writeFileSync(externalFilePath, "External file content", "utf8");
+  test("syncGlobalVault rejects an invalid (local) remote URL before any network step", async () => {
+    // A commit so HEAD exists, then point origin at a local path — valid git,
+    // but isValidGitRemoteUrl rejects it (only https/ssh/git/scp-form allowed).
+    const filePath = join(TEST_DATA_DIR, "knowledge", "vault.md");
+    writeFileSync(filePath, "Vault content", "utf8");
+    await commitFile(TEST_DATA_DIR, filePath, "Add vault file");
 
-    // Register project in database
-    db.prepare(
-      "INSERT INTO projects (name, slug, description, path) VALUES (?, ?, ?, ?)"
-    ).run("Test Project", "test-project", "A test project", EXTERNAL_PROJECT_DIR);
-
-    const project = db
-      .prepare("SELECT id FROM projects WHERE slug = ?")
-      .get("test-project") as { id: number };
-
-    // Insert a reference file record
-    db.prepare(
-      "INSERT INTO files (path, title, project_id, storage_type, source_path) VALUES (?, ?, ?, ?, ?)"
-    ).run(
-      externalFilePath,
-      "Test File",
-      project.id,
-      "reference",
-      externalFilePath
-    );
-
-    // Call syncBackup
-    const copiedPaths = await syncBackup(project.id, TEST_DATA_DIR);
-
-    // Verify backup file was created
-    expect(copiedPaths).toHaveLength(1);
-
-    const backupPath = join(
-      TEST_DATA_DIR,
-      "backups",
-      "test-project",
-      "test-file.md"
-    );
-    expect(copiedPaths[0]).toBe(backupPath);
-    expect(existsSync(backupPath)).toBe(true);
-
-    // Verify backup file content
-    const backupContent = readFileSync(backupPath, "utf8");
-    expect(backupContent).toBe("External file content");
-
-    // Verify git commit was made
     const git: SimpleGit = simpleGit(TEST_DATA_DIR, { unsafe: { allowUnsafeConfigPaths: true } });
-    const log = await git.log();
+    await git.addRemote("origin", join(TEST_DATA_DIR, "remote.git"));
 
-    expect(log.latest?.message).toBe("Sync local changes for project: Test Project");
-    expect(log.total).toBe(1);
+    const stages: string[] = [];
+    await expect(
+      syncGlobalVault(TEST_DATA_DIR, (s) => stages.push(s))
+    ).rejects.toThrow("not a valid git remote");
+
+    // It failed at validation, before reaching pull.
+    expect(stages).not.toContain("pulling remote");
+  });
+
+  test("syncGlobalVault passes a valid remote URL through validation and fails at pull", async () => {
+    // Same setup, but with a syntactically-valid https remote that is
+    // unreachable. Reaching the pull error (instead of the validation error)
+    // proves validation passed first.
+    const filePath = join(TEST_DATA_DIR, "knowledge", "vault.md");
+    writeFileSync(filePath, "Vault content", "utf8");
+    await commitFile(TEST_DATA_DIR, filePath, "Add vault file");
+
+    const git: SimpleGit = simpleGit(TEST_DATA_DIR, { unsafe: { allowUnsafeConfigPaths: true } });
+    await git.addRemote("origin", "https://github.com/kontexta/definitely-not-a-real-repo.git");
+
+    const stages: string[] = [];
+    await expect(
+      syncGlobalVault(TEST_DATA_DIR, (s) => stages.push(s))
+    ).rejects.toThrow("Sync failed during pull");
+
+    // Validation was satisfied — we actually attempted the network pull.
+    expect(stages).toContain("pulling remote");
+    expect(stages).not.toContain("not a valid git remote");
+  });
+
+  test("isValidGitRemoteUrl only accepts https/ssh/git/scp-form URLs", () => {
+    expect(isValidGitRemoteUrl("https://github.com/acme/kb.git")).toBe(true);
+    expect(isValidGitRemoteUrl("ssh://git@github.com/acme/kb.git")).toBe(true);
+    expect(isValidGitRemoteUrl("git@github.com:acme/kb.git")).toBe(true);
+    expect(isValidGitRemoteUrl("git://github.com/acme/kb.git")).toBe(true);
+    expect(isValidGitRemoteUrl("http://github.com/acme/kb.git")).toBe(false); // cleartext
+    expect(isValidGitRemoteUrl("/tmp/local/remote.git")).toBe(false); // local path
+    expect(isValidGitRemoteUrl("file:///tmp/remote.git")).toBe(false);
+    expect(isValidGitRemoteUrl("")).toBe(false);
   });
 });

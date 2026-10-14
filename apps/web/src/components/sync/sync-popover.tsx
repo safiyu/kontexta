@@ -17,9 +17,6 @@ interface SyncPopoverProps {
   globalRemoteUrl: string | null;
   onSyncAll: () => Promise<void>;
   onUpdateRemote: (url: string) => Promise<void>;
-  /** When provided, shows a "Sync <ProjectName>" action above "Sync all". */
-  selectedProjectName?: string | null;
-  onSyncProject?: () => Promise<void>;
 }
 
 export function SyncPopover({
@@ -29,8 +26,6 @@ export function SyncPopover({
   globalRemoteUrl,
   onSyncAll,
   onUpdateRemote,
-  selectedProjectName,
-  onSyncProject,
 }: SyncPopoverProps) {
   const [view, setView] = useState<"log" | "config">("log");
   const [urlInput, setUrlInput] = useState(globalRemoteUrl || "");
@@ -98,37 +93,18 @@ export function SyncPopover({
                   <span style={{ color: e.result === "ok" ? "var(--success)" : "var(--danger)" }}>●</span>
                   <span className="text-[var(--text-secondary)]">{new Date(e.at).toLocaleTimeString()}</span>
                   <span className="text-[var(--text-primary)] truncate">
-                    {e.projectId === null ? "all projects" : `project #${e.projectId}`}
+                    {e.projectId === null ? "Knowledge Base" : `project #${e.projectId}`}
                     {e.message ? ` - ${e.message}` : ""}
                   </span>
                 </div>
               ))
-            )}
-            {selectedProjectName && onSyncProject && (
-              <button
-                disabled={busy}
-                onClick={async () => {
-                  setBusy(true);
-                  setErr(null);
-                  try {
-                    await onSyncProject();
-                  } catch (e: any) {
-                    setErr(e?.message || "Sync failed");
-                  } finally {
-                    setBusy(false);
-                  }
-                }}
-                className="w-full mt-2 px-3 py-1.5 bg-[var(--accent)] text-black font-bold text-[12px] rounded-md disabled:opacity-50 truncate"
-              >
-                {busy ? "Syncing..." : `Sync ${selectedProjectName}`}
-              </button>
             )}
             <button
               disabled={busy}
               onClick={handleSyncAll}
               className="w-full mt-2 px-3 py-1.5 bg-[var(--bg-tertiary)] text-[var(--text-primary)] font-bold text-[12px] rounded-md hover:bg-[var(--border)] disabled:opacity-50"
             >
-              {busy ? "Syncing..." : "Sync all projects"}
+              {busy ? "Syncing..." : "Sync Knowledge Base"}
             </button>
             {err && <p className="text-[var(--danger)] text-[12px]">{err}</p>}
           </div>

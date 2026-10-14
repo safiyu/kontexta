@@ -25,8 +25,6 @@ interface TopBarProps {
   syncLog: SyncLogEntry[];
   onSyncAll: () => Promise<void>;
   onUpdateRemote: (url: string) => Promise<void>;
-  selectedProjectName?: string | null;
-  onSyncProject?: () => Promise<void>;
 }
 
 export function TopBar({
@@ -39,8 +37,6 @@ export function TopBar({
   syncLog,
   onSyncAll,
   onUpdateRemote,
-  selectedProjectName,
-  onSyncProject,
 }: TopBarProps) {
   const router = useRouter();
   const { theme, setTheme } = useTheme();
@@ -247,8 +243,6 @@ export function TopBar({
         globalRemoteUrl={globalRemoteUrl}
         onSyncAll={onSyncAll}
         onUpdateRemote={onUpdateRemote}
-        selectedProjectName={selectedProjectName ?? null}
-        onSyncProject={onSyncProject}
       />
     </header>
   );

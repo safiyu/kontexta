@@ -295,19 +295,6 @@ export default function HomePage() {
     setSelectedFileId(null);
   };
 
-  const handleSync = async () => {
-    if (!selectedProjectId) return;
-    const response = await fetch(`/api/projects/${selectedProjectId}/sync`, {
-      method: "POST",
-    });
-    if (response.ok) {
-      refreshFiles();
-    } else {
-      const data = await response.json();
-      throw new Error(data.error || "Sync failed");
-    }
-  };
-
   const handleRefresh = async () => {
     setIsRefreshing(true);
     try {
@@ -334,7 +321,7 @@ export default function HomePage() {
 
   const handleSyncAll = async () => {
     const response = await fetch("/api/git/sync-all", { method: "POST" });
-    if (response.ok || response.status === 207) {
+    if (response.ok) {
       refreshFiles();
     } else {
       const data = await response.json();
@@ -621,8 +608,6 @@ export default function HomePage() {
         syncLog={sync.log}
         onSyncAll={handleSyncAll}
         onUpdateRemote={handleUpdateGlobalRemote}
-        selectedProjectName={selectedSection === "projects" ? selectedProject?.name ?? null : null}
-        onSyncProject={selectedSection === "projects" && selectedProjectId ? handleSync : undefined}
       />
       <Breadcrumb segments={breadcrumbSegments} />
       {discardDialog}
@@ -670,7 +655,6 @@ export default function HomePage() {
             selectedSection={selectedSection}
             basePath={selectedSection === "projects" ? projectBasePath : knowledgeBasePath}
             loading={filesLoading || projectsLoading}
-            onSync={handleSync}
             onUnregisterProject={() => setUnregisterConfirmOpen(true)}
             onDeleteFolder={handleDeleteFolder}
             projects={projects}
