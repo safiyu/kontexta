@@ -26,8 +26,6 @@ import { useWebSocket } from "@/hooks/use-websocket";
 import { isRootKnowledgeFolder } from "@/lib/kb-layout";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { Breadcrumb, type BreadcrumbSegment } from "@/components/layout/breadcrumb";
-import { StatusBar } from "@/components/layout/status-bar";
-import { useSyncStatus } from "@/hooks/use-sync-status";
 import { IconRail } from "@/components/layout/icon-rail";
 
 type SortBy = "name" | "updated_at" | "created_at";
@@ -78,23 +76,6 @@ export default function HomePage() {
     if (storedSection) setSelectedSection(storedSection);
     if (storedProjectId) setSelectedProjectId(Number(storedProjectId));
   }, []);
-
-  const [globalRemoteUrl, setGlobalRemoteUrl] = useState<string | null>(null);
-  const sync = useSyncStatus(globalRemoteUrl);
-
-  const fetchGlobalRemote = useCallback(async () => {
-    try {
-      const res = await fetch("/api/git/remote");
-      if (res.ok) {
-        const data = await res.json();
-        setGlobalRemoteUrl(data.remote_url);
-      }
-    } catch (e) {}
-  }, []);
-
-  useEffect(() => {
-    fetchGlobalRemote();
-  }, [fetchGlobalRemote]);
 
   const { projects, loading: projectsLoading, refresh: refreshProjects } = useProjects();
 
@@ -316,34 +297,6 @@ export default function HomePage() {
       toast.error(`Failed to refresh: ${error?.message ?? "Network error"}`);
     } finally {
       setIsRefreshing(false);
-    }
-  };
-
-  const handleSyncAll = async () => {
-    const response = await fetch("/api/git/sync-all", { method: "POST" });
-    if (response.ok) {
-      refreshFiles();
-    } else {
-      const data = await response.json();
-      throw new Error(data.error || "Sync All failed");
-    }
-  };
-
-  const handleUpdateGlobalRemote = async (url: string) => {
-    try {
-      const response = await fetch("/api/git/remote", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ remote_url: url }),
-      });
-      if (response.ok) {
-        setGlobalRemoteUrl(url);
-      } else {
-        throw new Error("Failed to update global remote");
-      }
-    } catch (error) {
-      console.error("Failed to update remote URL:", error);
-      throw error;
     }
   };
 
@@ -604,10 +557,6 @@ export default function HomePage() {
         onConfigure={() => setDocsOpen(true)}
         onPublish={() => { setPublishMode("publish"); setPublishOpen(true); }}
         onViewPublished={() => window.open('/api/publish/html', '_blank')}
-        globalRemoteUrl={globalRemoteUrl}
-        syncLog={sync.log}
-        onSyncAll={handleSyncAll}
-        onUpdateRemote={handleUpdateGlobalRemote}
       />
       <Breadcrumb segments={breadcrumbSegments} />
       {discardDialog}
@@ -667,14 +616,6 @@ export default function HomePage() {
         }
         right={<ContentPane fileId={selectedFileId} onDelete={handleDeleteFile} onChanged={refreshAllFiles} onDirtyChange={setDirty} onNavigateToFile={(id) => handleSelectFile(id)} />}
       />
-      <StatusBar
-        globalRemoteUrl={globalRemoteUrl}
-        status={sync.status}
-        lastDoneAt={sync.lastDoneAt}
-        stage={sync.stage}
-        onOpenConfigure={() => setDocsOpen(true)}
-      />
-
       <SearchDialog
         open={searchOpen}
         onClose={() => setSearchOpen(false)}

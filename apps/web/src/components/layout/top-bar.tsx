@@ -6,7 +6,6 @@ import { Sun, Moon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { AnimatedLogo } from "./animated-logo";
-import { SyncPopover, type SyncLogEntry } from "@/components/sync/sync-popover";
 import { DropdownMenu } from "@/components/ui/dropdown-menu";
 import pkg from "../../../package.json";
 
@@ -20,11 +19,6 @@ interface TopBarProps {
   onConfigure: () => void;
   onPublish: () => void;
   onViewPublished: () => void;
-  // Sync controls (lifted from former StatusBar)
-  globalRemoteUrl: string | null;
-  syncLog: SyncLogEntry[];
-  onSyncAll: () => Promise<void>;
-  onUpdateRemote: (url: string) => Promise<void>;
 }
 
 export function TopBar({
@@ -33,16 +27,11 @@ export function TopBar({
   onConfigure,
   onPublish,
   onViewPublished,
-  globalRemoteUrl,
-  syncLog,
-  onSyncAll,
-  onUpdateRemote,
 }: TopBarProps) {
   const router = useRouter();
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   const [isMac, setIsMac] = useState(false);
-  const [syncOpen, setSyncOpen] = useState(false);
   const [reindexing, setReindexing] = useState(false);
 
   const handleReindex = async () => {
@@ -120,15 +109,6 @@ export function TopBar({
           title="Open Calendar"
         >
           Calendar
-        </button>
-
-        <button
-          onClick={() => setSyncOpen((o) => !o)}
-          className="btn btn-sm sm:btn-md !font-mono font-bold uppercase tracking-wider text-[var(--accent)] bp-toolbar-btn whitespace-nowrap shrink-0"
-          aria-label="Sync menu"
-          title="Open sync menu"
-        >
-          Sync&nbsp;▾
         </button>
 
         <button
@@ -235,15 +215,6 @@ export function TopBar({
           </button>
         )}
       </div>
-
-      <SyncPopover
-        open={syncOpen}
-        onClose={() => setSyncOpen(false)}
-        log={syncLog}
-        globalRemoteUrl={globalRemoteUrl}
-        onSyncAll={onSyncAll}
-        onUpdateRemote={onUpdateRemote}
-      />
     </header>
   );
 }
