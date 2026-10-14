@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased
+
+### Removed
+
+- **Git remote sync is gone.** The legacy mechanism that pushed/pulled the whole knowledge-base vault to a configured Git remote has been decommissioned. It performed repo-level working-tree merges, which produced merge conflicts inside the SQLite database file, broke fine-grained relationship mapping (tags, calendar entities, journal metadata), required per-remote credentials, and ran a second, competing conflict regime alongside the app's own. Removing it isolates Git strictly to **local** history tracking.
+  - **Core:** `syncGlobalVault`, `getGlobalRemote`, `setGlobalRemote`, and the `SyncStage` type (plus their now-dead helpers) are removed from `kxta-core` and no longer exported.
+  - **Dashboard:** the Sync popover, the sync status bar, the `useSyncStatus` hook, the sync event bus, and the `broadcastSync` WebSocket event are removed, along with the `/api/git/sync-all`, `/api/git/remote`, and per-project `/api/projects/[id]/sync` routes and the `remote_url` field on projects.
+  - **MCP tool removed:** `admin_commit_backup` is no longer registered; calling it returns tool-not-found.
+
+### Retained
+
+- **Local Git history & rollback stay intact.** `commitFile`, `commitDelete`, `getHistory`, `getDiff`, and `restoreVersion` (and the dashboard's history/restore UI built on them) are unchanged — the local Git repo is now used purely for local commit history, point-in-time diffs, and version rollbacks, with no remote attached.
+
+### Notes
+
+- This is a breaking change for anyone who relied on pushing the vault to a Git remote. Multi-device sync is being replaced by a new asynchronous, operation-based local-first storage module (machine identity + global IDs, an operation outbox, short-polling sync against a dedicated storage server, and a Conflict Manager). See the storage-module plan for details.
+
 ## 6.1.0 - Journal topic-shift detection and event triage (2026-10-05)
 
 ### Added

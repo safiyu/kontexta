@@ -67,7 +67,7 @@ Only user-level config is touched (never a project repo), only the `kxta` entry 
 
 Not yet automated: Antigravity (use the INSTALL tab snippet). Paths and formats come from each agent's documentation or a working config, and have not been exercised against the running agents; the `codex mcp add` argument syntax is from memory of the Codex CLI, so check `codex mcp list` after the first install.
 
-**Tool approval.** By default the agent asks before each kxta tool call. `--approval safe` allows every tool except the destructive ones (the delete tools, `files_restore`, `admin_commit_backup`); `--approval all` allows every tool, including those, and per-project hands tools that run scripts. The dashboard asks you to confirm `all` and lists exactly what it covers. Agents with "app UI only" keep asking: approve there. The kxta tools themselves never write into a project repo.
+**Tool approval.** By default the agent asks before each kxta tool call. `--approval safe` allows every tool except the destructive ones (the delete tools, `files_restore`); `--approval all` allows every tool, including those, and per-project hands tools that run scripts. The dashboard asks you to confirm `all` and lists exactly what it covers. Agents with "app UI only" keep asking: approve there. The kxta tools themselves never write into a project repo.
 
 **Docker.** The container cannot edit files on your machine, so the dashboard shows a one-liner to run on the host (`docker run … connect install --home /host --host-data-dir … --no-db --agent <id>`).
 
@@ -285,7 +285,6 @@ The MCP server exposes 58 tools designed for agents that care about context-wind
 | Tool | What it does | Example prompt |
 | :--- | :--- | :--- |
 | `files_get_history`, `files_get_diff`, `files_restore` | Per-file git log, unified diff between commits, restore to any commit. | "Diff the auth note between this week and last." |
-| `admin_commit_backup` | Sync the knowledge base (global vault) to the configured remote and push. Project-independent: pushes all KB commits made since the last sync. | "Back up my knowledge base." |
 | `files_diff_against_disk` | Reports drift between disk content and the FTS index (after external edits / sync merges). Returns `in_sync` / `diverged` / `disk_unreadable` / `no_index_row`. | "Did anything change on disk that I missed?" |
 | `projects_refresh_index` | Re-scan the KB (or one project) and reconcile the FTS index — picks up new files, refreshes drifted hashes, prunes vanished rows. The MCP server has no file watcher (the web app does), so this is the explicit fix-up after editor / sync writes. | "Refresh the KB index." |
 

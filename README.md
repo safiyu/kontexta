@@ -208,7 +208,7 @@ What's deliberately deferred and what triggers will pull it forward lives in [`d
 ## Features Breakdown
 
 ### Brain
-- Global vault with two-way git sync.
+- Global vault: local-first knowledge store with git-backed history and version rollbacks.
 - 58 MCP tools tuned for context economy.
 - Batch operations (up to 500 files/call), grep, and regex support.
 - Web clipping with auth-wall detection.
