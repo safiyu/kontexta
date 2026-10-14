@@ -272,6 +272,17 @@ class Session:
 RULES_BEGIN_RE = re.compile(r"<!--\s*BEGIN\s+kontexta:rules\s+v(\d+\.\d+\.\d+)\s*-->")
 RULES_END_RE = re.compile(r"<!--\s*END\s+kontexta:rules(?:\s+v\d+\.\d+\.\d+)?\s*-->")
 FLAVOR_TAG = "<!-- kontexta:flavor skill-bridge -->"
+# Bridge-adapted copy of the core constraints in packages/core/src/agent-rules/rules-block.md; keep the two in step.
+CORE_RULES = [
+    "**Session start:** call `admin_refresh_session_context` on turn 1 and print a 1-3 line greeting (date, profile, conflicts). Skip if the first message is a task.",
+    "**All KB writes go through kxta** (`files_create` / `files_update` / `journal_write`). Never edit KB files with raw filesystem tools, and never write context artifacts (diagrams, specs, notes, `.mmd`) into the project repo: use `files_create` with `destination: \"knowledge\"`.",
+    "**Search before reading:** `files_search` (no bodies first) or `files_regex_search`, then `files_read` the top hit. Batch reads with `files_read` `ids`; don't loop single reads.",
+    "**Act on `journal.suggested_action`** in tool responses before the next call, or pass `journal_acknowledge: true` to dismiss.",
+    "**Tag new KB files** at creation (`tags` on `files_create`, or `tags_add`). Diagrams are `.mmd` via `files_create` with `format: \"mmd\"`.",
+    "**Confirm Hands tokens within 60 seconds** with `hands_confirm`; don't run `stop` in between.",
+    "**Log decisions** with `journal_write` `kind: \"note\"` and **topic pivots** with `kind: \"intent\"`.",
+    "**Destructive or side-effectful tools** (`files_delete`, `folders_delete`, `files_restore`, `admin_commit_backup`, `hands_confirm`, ...) need the user's confirmation first.",
+]
 
 
 def short_desc(desc, limit=140):
@@ -284,10 +295,14 @@ def short_desc(desc, limit=140):
     return text[:limit].rsplit(" ", 1)[0].rstrip(",;:(") + "..."
 
 
-def bridge_command():
+def bridge_command(cwd=None):
     script = os.path.abspath(__file__)
     home = os.path.expanduser("~")
-    if script.startswith(home + os.sep):
+    root = os.path.abspath(cwd) if cwd else None
+    # Project installs (.claude/skills under the project) stay relative so the committed block works for teammates.
+    if root and script.startswith(root + os.sep):
+        script = os.path.relpath(script, root).replace(os.sep, "/")
+    elif script.startswith(home + os.sep):
         script = "~" + script[len(home):].replace(os.sep, "/")
     return f"{'python' if IS_WINDOWS else 'python3'} {script}"
 
@@ -296,12 +311,21 @@ def render_rules_block(version, tools, cmd):
     lines = [
         f"<!-- BEGIN kontexta:rules v{version} -->",
         FLAVOR_TAG,
+        # The server quotes this in rules-version nudges, so it matches this install's path and python.
+        f"<!-- kontexta:refresh {cmd} rules --write -->",
         "## kxta tools (via skill bridge)",
         "",
         "To call any tool below, run:",
         f"`{cmd} call <tool> '<json-args>'`",
         "",
         f"Inspect inputs with `{cmd} schema <tool>`.",
+        "",
+        "Core rules:",
+    ]
+    lines += [f"- {r}" for r in CORE_RULES]
+    lines += [
+        "",
+        "Full workflow rules and the tool routing matrix: [KONTEXTA.md](./KONTEXTA.md) when present; read it before KB-heavy work.",
         "",
         "Tools:",
     ]
@@ -402,7 +426,7 @@ def main():
             rest = [a for a in opts if a != "--write"]
             if any(a.startswith("-") for a in rest) or len(rest) > 1 or (rest and not write):
                 sys.exit("usage: kxta.py rules [--write [file]]  (default file: CLAUDE.md in the current directory)")
-            block = render_rules_block(rules_version(sess), sess.ask({"op": "tools"})["tools"], bridge_command())
+            block = render_rules_block(rules_version(sess), sess.ask({"op": "tools"})["tools"], bridge_command(cwd))
             if not write:
                 sys.stdout.write(block)
             else:

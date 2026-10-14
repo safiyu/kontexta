@@ -1,5 +1,14 @@
 # Changelog
 
+## 6.1.2 - Skill-bridge rules carry the workflow rules and their own refresh command (2026-10-14)
+
+### Changed
+
+- **Rules version 3.3.0.** Existing rules blocks are reported as outdated; refresh them with `admin_onboard_agent`, or `kxta.py rules --write` for skill-bridge blocks.
+- **The skill-bridge block now includes the core workflow rules.** `kxta.py rules --write` adds the session-start greeting, KB-write, search-before-read, Hands-timing and journal rules (adapted for the bridge) and links to `KONTEXTA.md`, so agents on the bridge follow the same workflow as native MCP agents instead of only seeing a tool list.
+- **Refresh nudges quote the right command.** The block records the command that wrote it (`<!-- kontexta:refresh ... -->`), and the session context and `projects_register` quote it instead of a fixed user-wide `python3` path. Project installs (`--project`) and Windows (`python`) now get a command that works. `checkAgentRulesStatus` reports it as `refreshCommand`; older blocks fall back to the previous default.
+- Project installs record the script path relative to the project root, so a committed block works for everyone on the team.
+
 ## 6.1.1 - Agent skill for clients that block MCP (2026-10-14)
 
 ### Added

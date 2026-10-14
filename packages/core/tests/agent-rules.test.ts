@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { RULE_BLOCK_VERSION, RULES_BLOCK_BODY, RULES_REFERENCE_BODY, KONTEXTA_MD, SCAFFOLDS, detectAgentContextFiles, parseMarker, injectOrUpdate, syncAgentRules, checkAgentRulesStatus } from "../src/agent-rules/index.js";
+import { RULE_BLOCK_VERSION, RULES_BLOCK_BODY, RULES_REFERENCE_BODY, KONTEXTA_MD, SCAFFOLDS, detectAgentContextFiles, parseMarker, injectOrUpdate, syncAgentRules, checkAgentRulesStatus, skillBridgeRefreshCommands, SKILL_BRIDGE_REFRESH_COMMAND } from "../src/agent-rules/index.js";
 import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, rmSync, readFileSync, existsSync, readdirSync as readdirSyncForTest } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
@@ -461,5 +461,24 @@ describe("checkAgentRulesStatus skill-bridge flavor", () => {
     writeFileSync(join(dir, "CLAUDE.md"), RULES_BLOCK_BODY);
     const [s] = checkAgentRulesStatus(dir, ["CLAUDE.md"]);
     expect(s.flavor).toBeUndefined();
+    expect(s.refreshCommand).toBeUndefined();
+  });
+
+  it("reads the refresh command recorded in the block", () => {
+    const cmd = "python .claude/skills/kontexta/scripts/kxta.py rules --write";
+    writeFileSync(
+      join(dir, "CLAUDE.md"),
+      skillBlock("0.0.1").replace("-->\n## kxta", `-->\n<!-- kontexta:refresh ${cmd} -->\n## kxta`),
+    );
+    const statuses = checkAgentRulesStatus(dir, ["CLAUDE.md"]);
+    expect(statuses[0].refreshCommand).toBe(cmd);
+    expect(skillBridgeRefreshCommands(statuses)).toEqual([cmd]);
+  });
+
+  it("falls back to the default refresh command for older blocks", () => {
+    writeFileSync(join(dir, "CLAUDE.md"), skillBlock("0.0.1"));
+    const statuses = checkAgentRulesStatus(dir, ["CLAUDE.md"]);
+    expect(statuses[0].refreshCommand).toBe(SKILL_BRIDGE_REFRESH_COMMAND);
+    expect(skillBridgeRefreshCommands(statuses)).toEqual([SKILL_BRIDGE_REFRESH_COMMAND]);
   });
 });

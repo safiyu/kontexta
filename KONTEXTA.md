@@ -1,4 +1,4 @@
-# Kontexta Rules Reference v3.2.0
+# Kontexta Rules Reference v3.3.0
 
 This project is registered with kontexta. Honor these rules to keep the index, history, and journal coherent — and to avoid burning tokens on workflows kontexta already solves. Tools live under the `kxta` MCP server.
 

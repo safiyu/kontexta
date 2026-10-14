@@ -2,7 +2,7 @@
 
 Kontexta - AI knowledge base and project context management system
 
-<!-- BEGIN kontexta:rules v3.2.0 -->
+<!-- BEGIN kontexta:rules v3.3.0 -->
 ## Working with kontexta
 
 This project uses kontexta for context, knowledge, and journal management. Tools live under the `kxta` MCP server.
@@ -28,4 +28,4 @@ All context artifacts must strictly follow this folder hierarchy inside the Know
 Never write context or diagram files directly into the project repository.
 
 **Full rules, tool routing matrix, and workflow guidance:** See [KONTEXTA.md](./KONTEXTA.md).
-<!-- END kontexta:rules v3.2.0 -->
+<!-- END kontexta:rules v3.3.0 -->
