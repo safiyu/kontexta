@@ -16,6 +16,9 @@ import { sanitizeHtml } from "../reports/sanitize.js";
 import { isIndexedFile } from "../util/extensions.js";
 import { validateKnowledgeWrite } from "./layout.js";
 import { computeContentClass } from "../content-class/index.js";
+import { enqueueOp } from "../storage/outbox.js";
+import { inRemoteApply } from "../storage/apply.js";
+import type { Op } from "../storage/op.js";
 import type { FileRecord, Destination, FileFilters, StorageType } from "../types.js";
 
 /**
@@ -148,6 +151,23 @@ export function slugify(name: string): string {
 }
 
 /**
+ * Append a file-mutation op to the outbox — UNLESS we are applying a remote op.
+ *
+ * Echo suppression, layer 1 (spec 1.4): when a remote op is being applied
+ * locally, `applyRemoteOp` runs inside the `applyScope` remote-apply scope. In
+ * that case the write routine must persist to DB + disk but NOT enqueue an
+ * outbound op (or the change would echo back to the server and loop). On the
+ * normal local-write path `inRemoteApply()` is false and the op is appended.
+ *
+ * Callers invoke this INSIDE their write transaction so the op commits or rolls
+ * back atomically with the write (spec 1.3).
+ */
+function enqueueFileOp(op: Op): void {
+  if (inRemoteApply()) return;
+  enqueueOp(getDatabase(), op);
+}
+
+/**
  * Create a new file
  */
 export async function createFile(opts: CreateFileOptions): Promise<FileRecordWithContent> {
@@ -275,7 +295,8 @@ export async function createFile(opts: CreateFileOptions): Promise<FileRecordWit
       // Assign the global id now that the integer PK is known. Done in-
       // transaction so the row is never committed with a NULL gid; also
       // corrects a watcher stub row that this upsert just absorbed.
-      setGidStmt.run(formatGid(id, getMachineId()), id);
+      const gid = formatGid(id, getMachineId());
+      setGidStmt.run(gid, id);
 
       if (tags.length > 0) {
         for (const tagName of tags) {
@@ -289,6 +310,27 @@ export async function createFile(opts: CreateFileOptions): Promise<FileRecordWit
       // Replace FTS in case the watcher inserted first.
       deleteFtsStmt.run(id);
       ftsStmt.run(id, title, content);
+
+      // Enqueue the outbound op atomically with the write (spec 1.3). No-op
+      // while applying a remote op (echo suppression, spec 1.4). base_version
+      // is null for a create (no prior version to base against, spec 1.3).
+      enqueueFileOp({
+        gid,
+        kind: "file.create",
+        origin: getMachineId(),
+        base_version: null,
+        payload: {
+          path: filePath,
+          title,
+          project_id: projectId || null,
+          storage_type: storageType,
+          content_class: contentClass,
+          source_path: sourcePath || null,
+          content,
+          content_hash: contentHash,
+        },
+        created_at: Date.now(),
+      });
       return id;
     })();
   } catch (dbError) {
@@ -397,11 +439,31 @@ export async function updateFile(id: number, content: string, dataDir: string): 
   const deleteFtsStmt = db.prepare("DELETE FROM fts_index WHERE rowid = ?");
   const insertFtsStmt = db.prepare("INSERT INTO fts_index (rowid, title, content) VALUES (?, ?, ?)");
 
+  // Read the record's gid (not recomputed): a locally-edited REMOTE file keeps
+  // its remote origin in the gid, so the outbound op must carry that identity.
+  const gid = fileRecord.gid ?? formatGid(fileRecord.id, getMachineId());
+
   try {
     db.transaction(() => {
       updateStmt.run(contentHash, id);
       deleteFtsStmt.run(id);
       insertFtsStmt.run(id, fileRecord.title, content);
+
+      // Enqueue the outbound op atomically with the write (spec 1.3); no-op
+      // while applying a remote op (echo suppression, spec 1.4).
+      enqueueFileOp({
+        gid,
+        kind: "file.update",
+        origin: getMachineId(),
+        base_version: 0,
+        payload: {
+          path: fileRecord.path,
+          title: fileRecord.title,
+          content,
+          content_hash: contentHash,
+        },
+        created_at: Date.now(),
+      });
     })();
   } catch (dbError) {
     if (preExistingContent !== null) {
@@ -447,8 +509,8 @@ export async function updateFile(id: number, content: string, dataDir: string): 
 export async function deleteFile(id: number, dataDir?: string): Promise<void> {
   const db = getDatabase();
 
-  const file = db.prepare("SELECT path, project_id FROM files WHERE id = ?").get(id) as
-    | { path: string; project_id: number | null }
+  const file = db.prepare("SELECT path, project_id, gid FROM files WHERE id = ?").get(id) as
+    | { path: string; project_id: number | null; gid: string | null }
     | undefined;
 
   if (!file) {
@@ -481,7 +543,20 @@ export async function deleteFile(id: number, dataDir?: string): Promise<void> {
   // CASCADE handles file_tags + favorites via the files row deletion.
   const deleteFtsStmt = db.prepare("DELETE FROM fts_index WHERE rowid = ?");
   const deleteStmt = db.prepare("DELETE FROM files WHERE id = ?");
+  // Read the record's gid (not recomputed) so a REMOTE file's deletion carries
+  // the correct identity. Fall back to the local gid if the row pre-dates 013.
+  const gid = file.gid ?? formatGid(id, getMachineId());
   db.transaction(() => {
+    // Enqueue the outbound op atomically with the write (spec 1.3); no-op
+    // while applying a remote op (echo suppression, spec 1.4).
+    enqueueFileOp({
+      gid,
+      kind: "file.delete",
+      origin: getMachineId(),
+      base_version: 0,
+      payload: { path: file.path },
+      created_at: Date.now(),
+    });
     deleteFtsStmt.run(id);
     deleteStmt.run(id);
   })();
@@ -723,12 +798,35 @@ export function moveFile(id: number, newPath: string, dataDir?: string): FileRec
   // hosted the file.)
   // Only touch content_class when dataDir is known — otherwise preserve the existing value rather than silently wiping it to null.
   try {
+    // Read the record's gid (not recomputed) so a REMOTE file's move carries
+    // the correct identity. Fall back to the local gid if the row pre-dates 013.
+    const gid = fileRecord.gid ?? formatGid(id, getMachineId());
+    let newContentClass: string | null = null;
     if (dataDir) {
-      const newContentClass = computeContentClass({ storageType: fileRecord.storage_type, path: newPath, dataDir });
-      db.prepare("UPDATE files SET path = ?, content_class = ?, updated_at = datetime('now') WHERE id = ?").run(newPath, newContentClass, id);
-    } else {
-      db.prepare("UPDATE files SET path = ?, updated_at = datetime('now') WHERE id = ?").run(newPath, id);
+      newContentClass = computeContentClass({ storageType: fileRecord.storage_type, path: newPath, dataDir });
     }
+    // Enqueue the op atomically with the path UPDATE (spec 1.3): if the UPDATE
+    // throws, the op rolls back too and the catch below reverts the disk rename.
+    // No-op while applying a remote op (echo suppression, spec 1.4).
+    db.transaction(() => {
+      if (dataDir) {
+        db.prepare("UPDATE files SET path = ?, content_class = ?, updated_at = datetime('now') WHERE id = ?").run(newPath, newContentClass, id);
+      } else {
+        db.prepare("UPDATE files SET path = ?, updated_at = datetime('now') WHERE id = ?").run(newPath, id);
+      }
+      enqueueFileOp({
+        gid,
+        kind: "file.move",
+        origin: getMachineId(),
+        base_version: 0,
+        payload: {
+          from: oldPath,
+          to: newPath,
+          ...(newContentClass !== null ? { content_class: newContentClass } : {}),
+        },
+        created_at: Date.now(),
+      });
+    })();
   } catch (e) {
     try { renameSync(newPath, oldPath); } catch (rollbackErr) {
       throw new Error(

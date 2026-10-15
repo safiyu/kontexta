@@ -1,6 +1,42 @@
 import { getDatabase } from "../db/index.js";
 import { formatGid } from "../identity/gid.js";
 import { getMachineId } from "../identity/machine.js";
+import { enqueueOp } from "../storage/outbox.js";
+import { inRemoteApply } from "../storage/apply.js";
+import type { Op } from "../storage/op.js";
+
+/**
+ * Append a journal-mutation op to the outbox — UNLESS we are applying a remote
+ * op.
+ *
+ * Echo suppression, layer 1 (spec 1.4): when a remote op is being applied
+ * locally, `applyRemoteOp` runs inside the `applyScope` remote-apply scope. In
+ * that case the write routine must persist to DB but NOT enqueue an outbound
+ * op (or the change would echo back to the server and loop). On the normal
+ * local-write path `inRemoteApply()` is false and the op is appended.
+ *
+ * Callers invoke this INSIDE their write transaction so the op commits or rolls
+ * back atomically with the write (spec 1.3). Mirrors the files module's
+ * `enqueueFileOp` (M54) and the metadata module's `enqueueMetadataOp` (M55).
+ */
+function enqueueJournalOp(op: Op): void {
+  if (inRemoteApply()) return;
+  enqueueOp(getDatabase(), op);
+}
+
+/**
+ * The global id of the `journal_meta` row for `fileId` — read from the row, not
+ * recomputed (so a locally-updated REMOTE journal keeps its remote origin in the
+ * gid). `journal_meta` is keyed on `file_id` (its PK), so the gid is
+ * `<file_id>@<machine_id>`; falls back to the local gid if the row pre-dates
+ * migration 013 (no gid stamped).
+ */
+function journalGid(fileId: number): string {
+  const row = getDatabase()
+    .prepare(`SELECT gid FROM journal_meta WHERE file_id = ?`)
+    .get(fileId) as { gid: string | null } | undefined;
+  return row?.gid ?? formatGid(fileId, getMachineId());
+}
 
 export interface UpsertJournalMetaInput {
   file_id: number;
@@ -46,6 +82,14 @@ export function upsertJournalMeta(input: UpsertJournalMetaInput): void {
   const clearRefs = db.prepare(`DELETE FROM journal_git_refs WHERE file_id = ?`);
   const insertRef = db.prepare(`INSERT OR IGNORE INTO journal_git_refs (file_id, ref_type, ref_value) VALUES (?, ?, ?)`);
 
+  // Capture the pre-upsert presence so we can tell a FRESH record (pre is undefined →
+  // base_version null, no prior version) from an update (existing record →
+  // base_version 0) once the upsert has run.
+  const pre = db
+    .prepare(`SELECT gid FROM journal_meta WHERE file_id = ?`)
+    .get(input.file_id) as { gid: string | null } | undefined;
+  const isCreate = !pre;
+
   db.transaction(() => {
     upsert.run(
       input.file_id,
@@ -71,6 +115,28 @@ export function upsertJournalMeta(input: UpsertJournalMetaInput): void {
     for (const t of input.touched_files) insertTouch.run(input.file_id, t);
     clearRefs.run(input.file_id);
     for (const r of input.git_refs) insertRef.run(input.file_id, r.ref_type, r.ref_value);
+
+    // Enqueue the upsert atomically with the write (spec 1.3); no-op while
+    // applying a remote op (echo suppression, spec 1.4). base_version is null
+    // for a fresh journal record and 0 when updating an existing one.
+    enqueueJournalOp({
+      gid: journalGid(input.file_id),
+      kind: "journal.meta.upsert",
+      origin: getMachineId(),
+      base_version: isCreate ? null : 0,
+      payload: {
+        file_id: input.file_id,
+        project_id: input.project_id,
+        task_slug: input.task_slug,
+        status_latest: input.status_latest ?? null,
+        started_at: input.started_at,
+        last_active_at: input.last_active_at,
+        touched_files: input.touched_files,
+        raw_sources: input.raw_sources,
+        git_refs: input.git_refs,
+      },
+      created_at: Date.now(),
+    });
   })();
 }
 
@@ -129,9 +195,40 @@ export function journalRefsByValue(
 }
 
 export function markUpgradeApplied(file_id: number, status_latest: string | null): void {
-  getDatabase()
-    .prepare(`UPDATE journal_meta SET status_latest = ? WHERE file_id = ?`)
-    .run(status_latest, file_id);
+  const db = getDatabase();
+  const pre = db
+    .prepare(`SELECT gid FROM journal_meta WHERE file_id = ?`)
+    .get(file_id) as { gid: string | null } | undefined;
+  if (!pre) return;
+
+  db.transaction(() => {
+    db.prepare(`UPDATE journal_meta SET status_latest = ? WHERE file_id = ?`)
+      .run(status_latest, file_id);
+
+    const full = journalMetaForFile(file_id);
+    if (!full) return;
+    const refsMap = gitRefsForFiles([file_id]);
+    const refs = (refsMap.get(file_id) ?? []) as Array<{ ref_type: "branch" | "commit" | "ticket"; ref_value: string }>;
+
+    enqueueJournalOp({
+      gid: journalGid(file_id),
+      kind: "journal.meta.upsert",
+      origin: getMachineId(),
+      base_version: 0,
+      payload: {
+        file_id: full.file_id,
+        project_id: full.project_id,
+        task_slug: full.task_slug,
+        status_latest: full.status_latest,
+        started_at: full.started_at,
+        last_active_at: full.last_active_at,
+        touched_files: full.touched_files,
+        raw_sources: full.raw_sources,
+        git_refs: refs,
+      },
+      created_at: Date.now(),
+    });
+  })();
 }
 
 export function gitRefsForFiles(fileIds: number[]): Map<number, Array<{ ref_type: string; ref_value: string }>> {
