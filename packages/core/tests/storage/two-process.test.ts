@@ -264,7 +264,15 @@ describe("Two-process concurrency and advisory locking (M60)", () => {
       const gid3 = "203@mach-alpha";
       const gid4 = "204@mach-alpha";
 
-      // Worker 1 operations: creates file 1 & 2, updates file 3 & 4
+      // Worker 1 operations: creates file 1 & 2, updates file 3 & 4, then sets
+      // favorites. The favorite.set ops MUST live in the same worker as (and
+      // after) their file.create: the per-gid advisory lock serializes ops within
+      // a gid but CANNOT order two different workers' ops on the same gid. If a
+      // favorite.set landed in the other worker and ran before its create
+      // committed, applyFavoriteSet would find no file and silently no-op,
+      // flipping this test's outcome on scheduling. In the real system a single
+      // client applies seq-ordered ops sequentially, so a create always precedes
+      // any favorite.set for the same gid — this mirrors that guarantee.
       const worker1Ops: Op[] = [
         {
           gid: gid1,
@@ -306,9 +314,28 @@ describe("Two-process concurrency and advisory locking (M60)", () => {
           payload: { path: file4Path, content: "# Shared File 4 (w1 create)" },
           created_at: Date.now(),
         },
+        {
+          gid: gid2,
+          kind: "favorite.set",
+          origin: "mach-remote",
+          base_version: 2,
+          payload: { favorite: true },
+          created_at: Date.now() + 6,
+        },
+        {
+          gid: gid4,
+          kind: "favorite.set",
+          origin: "mach-remote",
+          base_version: 1,
+          payload: { favorite: true },
+          created_at: Date.now() + 5,
+        },
       ];
 
-      // Worker 2 operations: overlapping GIDs applied concurrently!
+      // Worker 2 operations: overlapping GIDs applied concurrently! These are
+      // self-healing ops (file.update / tag.add) that require their target file
+      // to exist, so they block on the per-gid advisory lock until worker 1 has
+      // created the file — exercising genuine cross-worker lock contention.
       const worker2Ops: Op[] = [
         {
           gid: gid2,
@@ -333,22 +360,6 @@ describe("Two-process concurrency and advisory locking (M60)", () => {
           base_version: 1,
           payload: { path: file3Path, content: "# Shared File 3 (w2 update)" },
           created_at: Date.now() + 4,
-        },
-        {
-          gid: gid4,
-          kind: "favorite.set",
-          origin: "mach-remote",
-          base_version: 1,
-          payload: { favorite: true },
-          created_at: Date.now() + 5,
-        },
-        {
-          gid: gid2,
-          kind: "favorite.set",
-          origin: "mach-remote",
-          base_version: 2,
-          payload: { favorite: true },
-          created_at: Date.now() + 6,
         },
       ];
 

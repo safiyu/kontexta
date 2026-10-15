@@ -11,6 +11,8 @@ Usage:
                                      Manage coding-agent hooks that feed the journal
   kontexta connect <status|install|uninstall|approval|reconcile>
                                      Register the kxta MCP server in your coding agents
+  kontexta endpoint <connect|status|disconnect|push|pull>
+                                      Manage this machine's storage-server sync connection
   kontexta --version                 Print version
   kontexta --help                    Print this help
 `;
@@ -47,6 +49,10 @@ Usage:
   if (arg === 'connect') {
     const { runConnect } = await import('./connect.js');
     process.exit(await runConnect(process.argv.slice(3)));
+  }
+  if (arg === 'endpoint') {
+    const { runEndpoint } = await import('./endpoint.js');
+    process.exit(await runEndpoint(process.argv.slice(3)));
   }
   if (arg === 'start') {
     const { runStart } = await import('./start.js');

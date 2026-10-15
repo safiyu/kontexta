@@ -108,7 +108,7 @@ Kontexta doesn't try to replace your favorite agent or memory library — it sit
 | **Retrieval model** | Whole file dumped into context | Whole file / vendor-managed | Vector + graph (semantic) | Temporal knowledge graph (semantic) | Deterministic FTS5 + regex; surgical section reads |
 | **Token accounting** | None | None | None exposed to agent | None exposed to agent | Every response carries `est_tokens` / `size_bytes` |
 | **Command execution** | N/A | Vendor-defined tools | N/A (memory only) | N/A (memory only) | Sandboxed `Hands` with per-command contracts and approval tokens |
-| **Storage** | Repo file (clutters PRs) | Vendor cloud | Self-host or hosted, vector DB | Self-host or hosted | Local SQLite, git-synced markdown vault |
+| **Storage** | Repo file (clutters PRs) | Vendor cloud | Self-host or hosted, vector DB | Self-host or hosted | Local SQLite + markdown vault, with optional multi-machine cloud op-log sync |
 | **Best at** | Static project conventions | Zero-config personal memory | Semantic recall inside one app | Long-running conversational memory | Multi-agent handoff + governed local execution |
 
 **Honest tradeoffs:**
@@ -154,6 +154,77 @@ npx -y @smithery/cli install safiyu/kontexta --client claude
 ### Alternative: Docker
 
 For containerized deployments, see [`docs/INSTALL.md#docker-hub-compose`](docs/INSTALL.md#docker-hub-compose).
+
+---
+
+## Sync Across Machines (Optional)
+
+Kontexta is local-first: each machine's vault (SQLite + markdown + local git history) is the source of truth for that machine. If you run Kontexta on more than one machine — a laptop and a workstation, two agents on two boxes — you can point them at a shared **storage server** that keeps an authoritative, append-only op log. Machines exchange fine-grained operations (file create / update / delete / move, tags, favorites, projects, calendar, journal) over short polling, so a decision made on one machine appears on the others without ever merging whole repositories or database files.
+
+Sync is **optional**. A machine that has never run `kontexta endpoint connect` simply does not sync. (The legacy Git-remote sync has been removed; this op-log backend is the replacement.)
+
+### Run the storage server (Docker)
+
+The storage server is a plain, stateless short-polling HTTP service — no persistent connections, one SQLite file, one published port (`23010`). It is deliberately shaped for serverless hosting (Cloud Run et al.): each poll is a short request that returns fast and drops its socket, so it stays inside free-tier request quotas instead of billing a constantly-warm vCPU.
+
+Build and start it from the repo root:
+
+```bash
+docker compose -f docker-compose.storage.yml up -d --build
+```
+
+The server is ready once its health check passes: `http://127.0.0.1:23010/health`.
+
+**Configuration (environment variables):**
+
+| Variable | Default | Purpose |
+| :--- | :--- | :--- |
+| `HOST_PORT` | `23010` | Host port published for the storage server. |
+| `KXTA_STORAGE_PEPPER` | *(empty)* | HMAC pepper bound into client-token hashes. **Required for any real deployment** — see below. |
+| `KXTA_STORAGE_DB` | `/data/kontexta-storage.db` | Path to the SQLite op log (inside the container). |
+
+> [!IMPORTANT]
+> Set `KXTA_STORAGE_PEPPER` for anything beyond local experimentation. Without it the server runs on a public default pepper, which makes every stored token hash guessable if the database file is ever exposed. Use a long random secret:
+>
+> ```bash
+> HOST_PORT=80 KXTA_STORAGE_PEPPER="$(openssl rand -hex 32)" \
+>   docker compose -f docker-compose.storage.yml up -d
+> ```
+
+**Data & persistence.** The op log and the registered-clients table live in the named volume `kontexta-storage-data` (mounted at `/data`), so they survive container recreation and re-runs of `compose up`. To wipe all sync history:
+
+```bash
+docker compose -f docker-compose.storage.yml down -v
+```
+
+**Serverless / non-Docker.** The server is also just `node dist/server.js` with the same env vars (`PORT`, `HOSTNAME`, `KXTA_STORAGE_DB`, `KXTA_STORAGE_PEPPER`) — the Dockerfile is a convenience, not a requirement. Point a reverse proxy (nginx, Caddy, Cloudflare Tunnel, Cloud Run) at it and put TLS in front, as you would for any endpoint that issues credentials.
+
+### Connect a machine (`kontexta endpoint`)
+
+A machine registers itself once to receive a one-time sync token, then ships and polls its outbox against the server. It is all driven by the `kontexta endpoint` CLI:
+
+```bash
+# Connect — self-registers and stores the one-time token locally:
+kontexta endpoint connect http://127.0.0.1:23010
+
+# Show the connection, poll cadence, outbox depth, and sync cursor:
+kontexta endpoint status
+
+# Ship the local outbox to the server:
+kontexta endpoint push
+
+# Poll + apply remote ops since the cursor:
+kontexta endpoint pull
+
+# Stop syncing — clears the stored endpoint + token (the loop goes dormant):
+kontexta endpoint disconnect
+```
+
+Add `--json` to any subcommand for machine-readable output. Pass a known token positionally (`kontexta endpoint connect <url> <token>`) to skip self-registration, and use `--data-dir <dir>` / `--timeout <ms>` to target a specific vault or bound a request.
+
+**How the cadence works.** A connected machine short-polls instead of holding a connection open: **15 s** while active (user / agent activity), **60 s** while idle, and **exponential backoff up to 5 minutes** on failure. You can also drive sync on demand with `push` / `pull` (e.g. from a cron job) rather than running a resident poller.
+
+**Ordering & conflicts.** The server assigns each op a monotonic `seq` — the single source of ordering authority. Client clocks are never trusted for ordering (only for display), so a machine with a skewed clock cannot silently clobber another. When two machines update the same record while offline, the server flags the second write as a **conflict** and preserves both versions; the receiving machine writes a conflict copy next to the canonical file (`<name> (from <machine label>).<ext>`) and surfaces it for interactive resolution instead of overwriting it.
 
 ---
 

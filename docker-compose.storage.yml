@@ -1,0 +1,65 @@
+# docker-compose.storage.yml
+#
+# Runs kontexta-storage-server — the authoritative op-log backend for
+# Kontexta's local-first sync (spec 1.6). It is a plain, stateless
+# short-polling HTTP service: no persistent connections, one SQLite file,
+# one published port.
+#
+# Build and run:
+#
+#   docker compose -f docker-compose.storage.yml up -d --build
+#
+# Then point a machine at it:
+#
+#   kontexta endpoint connect http://127.0.0.1:23010
+#
+# Data (the authoritative op log + registered clients) persists in the named
+# volume `kontexta-storage-data`. Delete it to reset the sync history.
+#
+# Environment variables (override as needed):
+#   HOST_PORT    — Host port for the storage server (default: 23010).
+#   KXTA_STORAGE_PEPPER — HMAC pepper bound into client token hashes.
+#                         REQUIRED for any real deployment: without it the
+#                         server runs on a public default pepper and every
+#                         token hash is guessable. Set a long random secret,
+#                         e.g. `openssl rand -hex 32`.
+#
+# Examples:
+#   # Default (localhost dev) — fine for trying the roundtrip tests locally:
+#     docker compose -f docker-compose.storage.yml up -d
+#
+#   # Real deployment on port 80 behind TLS:
+#     HOST_PORT=80 KXTA_STORAGE_PEPPER="$(openssl rand -hex 32)" \
+#       docker compose -f docker-compose.storage.yml up -d
+
+services:
+  storage:
+    build:
+      context: .
+      dockerfile: packages/storage-server/Dockerfile
+    image: kontexta-storage-server:local
+    container_name: kontexta-storage
+    ports:
+      - "${HOST_PORT:-23010}:23010"
+    volumes:
+      # The SQLite op log + clients table. Named volume so it survives
+      # container recreation and `compose up` re-runs.
+      - kontexta-storage-data:/data
+    environment:
+      - NODE_ENV=production
+      - HOSTNAME=0.0.0.0
+      - PORT=23010
+      - KXTA_STORAGE_DB=/data/kontexta-storage.db
+      # Empty by default: the server warns on startup that it is using the
+      # default pepper. Set this for anything beyond local experimentation.
+      - KXTA_STORAGE_PEPPER=${KXTA_STORAGE_PEPPER:-}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://127.0.0.1:23010/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))\""]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  kontexta-storage-data:
