@@ -211,3 +211,12 @@ The matrix below is grouped by intent. For each tool: when to reach for it, the 
 |---|---|---|---|
 | `admin_set_machine_label` | Set this machine's human-readable label (`settings.machine_label`), used to name conflict copies as `<filename> (from <label>).ext`. Empty string clears it. Does NOT change the stable `machine_id`. | Reading which machines are connected | `admin_list_clients` |
 | `admin_list_clients` | List every machine that has ever connected to this vault (the sync group), most-recently-seen first, with `is_local` flag. | Setting the local machine's label | `admin_set_machine_label` |
+
+### Conflicts
+
+| Tool | When | Not when | Use instead |
+|---|---|---|---|
+| `conflicts_list` | Enumerate sync conflicts in the registry (status: unresolved, resolved, or all) | Need full diff and content for one conflict | `conflicts_get` |
+| `conflicts_get` | Inspect a specific conflict's local/remote content and diff by `gid` | Listing all conflicts | `conflicts_list` |
+| `conflicts_resolve` | Resolve a conflict using `keep-server`, `keep-mine`, `keep-both`, or `merged` | Only inspecting a conflict | `conflicts_get` |
+

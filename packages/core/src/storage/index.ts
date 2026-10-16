@@ -7,3 +7,4 @@ export * from "./outbox.js";
 export * from "./apply.js";
 export * from "./locks.js";
 export * from "./client.js";
+export * from "./conflicts.js";

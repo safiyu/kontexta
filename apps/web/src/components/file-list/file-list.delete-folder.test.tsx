@@ -15,6 +15,7 @@ function renderList(extra: Record<string, unknown> = {}) {
     selectedSection: "knowledge" as const,
     onRefresh: vi.fn(),
     onDeleteFolder: vi.fn(),
+    onNewFile: vi.fn(),
     ...extra,
   };
   render(<FileList {...props} />);
@@ -38,6 +39,7 @@ describe("FileList: folder deletion guard for root knowledge folders", () => {
           selectedSection="knowledge"
           onRefresh={vi.fn()}
           onDeleteFolder={vi.fn()}
+          onNewFile={vi.fn()}
         />
       );
       expect(screen.queryByText(/DELETE THIS FOLDER/i)).toBeNull();

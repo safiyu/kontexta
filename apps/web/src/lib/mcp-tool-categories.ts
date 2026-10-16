@@ -92,4 +92,7 @@ export const TOOL_CATEGORIES: Record<string, ToolCategory> = {
   // Admin
   "admin_set_machine_label": "Admin",
   "admin_list_clients": "Admin",
+  "conflicts_list": "Admin",
+  "conflicts_get": "Admin",
+  "conflicts_resolve": "Admin",
 };

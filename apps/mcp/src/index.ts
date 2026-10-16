@@ -65,6 +65,10 @@ import {
   getMachineLabel,
   listClients,
   getMachineId,
+  listConflicts,
+  getConflict,
+  resolveConflict,
+  countUnresolvedConflicts,
 } from "kxta-core";
 import RE2Class from "./re2-compat.js";
 import type RE2 from "re2";
@@ -2923,6 +2927,110 @@ server.tool(
             ),
           },
         ],
+      };
+    } catch (e) {
+      return {
+        isError: true,
+        content: [{ type: "text", text: JSON.stringify({ error: (e as Error).message }, null, 2) }],
+      };
+    }
+  }
+);
+
+server.tool(
+  "conflicts_list",
+  "List sync conflicts in the local conflict registry (Phase 5 Conflict Manager). A conflict is recorded when the storage server delivers an operation for a file that was modified locally since the last sync (base_version drift); the canonical file is preserved and the remote version is forked to a '<filename> (from <machine_label>).<ext>' copy. Defaults to unresolved conflicts, newest first. Pass status='all' to include resolved, status='resolved' for the resolved history, and `limit` to cap the page. Returns {conflicts, count, unresolved}: `count` is the length of the returned list, `unresolved` is the global unresolved total (use it to decide whether there is anything to act on). Each conflict carries gid, file_path, conflict_path, origin, origin_label, base_version, server_seq, local_content, remote_content, diff, additions, deletions, status, resolution, resolved_at, created_at. Read-only; no side effects, auth, or rate limits. To inspect a single conflict use conflicts_get; to fix one use conflicts_resolve.",
+  {
+    status: z
+      .enum(["unresolved", "resolved", "all"])
+      .optional()
+      .describe("Filter by resolution state. Defaults to 'unresolved'."),
+    limit: z
+      .number()
+      .int()
+      .positive()
+      .optional()
+      .describe("Optional page size. Positive integer; omit for no cap."),
+  },
+  async ({ status, limit }) => {
+    try {
+      const conflicts = listConflicts(undefined, { status, limit });
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(
+              {
+                conflicts,
+                count: conflicts.length,
+                unresolved: countUnresolvedConflicts(),
+              },
+              null,
+              2,
+            ),
+          },
+        ],
+      };
+    } catch (e) {
+      return {
+        isError: true,
+        content: [{ type: "text", text: JSON.stringify({ error: (e as Error).message }, null, 2) }],
+      };
+    }
+  }
+);
+
+server.tool(
+  "conflicts_get",
+  "Fetch one sync conflict by its global ID (gid), for the Conflict Manager. Returns the full ConflictRecord including both content snapshots (local_content, the canonical file as it is on THIS machine, and remote_content, the version that arrived from the other machine), the unified line diff, addition/deletion counts, and the conflict copy's on-disk path. If there is no unresolved conflict for the gid it returns the most recent resolved one; returns an error if no conflict exists at all. gid is '<local_id>@<machine_id>' as reported by conflicts_list. Read-only; no side effects, auth, or rate limits. After reviewing the diff, resolve with conflicts_resolve.",
+  {
+    gid: z.string().describe("Global ID of the conflict, e.g. '104@4f9e1a8b3c7d2e0f' (as returned by conflicts_list)."),
+  },
+  async ({ gid }) => {
+    try {
+      const conflict = getConflict(gid);
+      if (!conflict) {
+        return {
+          isError: true,
+          content: [{ type: "text", text: JSON.stringify({ error: `No conflict found for gid: ${gid}`, gid }, null, 2) }],
+        };
+      }
+      return {
+        content: [{ type: "text", text: JSON.stringify(conflict, null, 2) }],
+      };
+    } catch (e) {
+      return {
+        isError: true,
+        content: [{ type: "text", text: JSON.stringify({ error: (e as Error).message }, null, 2) }],
+      };
+    }
+  }
+);
+
+server.tool(
+  "conflicts_resolve",
+  "Resolve one sync conflict using one of 4 deterministic strategies (spec 1.7). `strategy`: 'keep-server' = accept the remote version, overwrite the canonical file, delete the conflict copy. 'keep-mine' = keep the local version, re-assert it to the server (version bump + outbox op), delete the conflict copy. 'keep-both' = keep the canonical file AND permanently retain the conflict copy as its own newly-tracked file (no outbox op is dropped; the copy is registered with a fresh gid). 'merged' = use your own `mergedContent` (REQUIRED for this strategy) as the new canonical content, push it, delete the conflict copy. Only acts on an UNRESOLVED conflict for the gid; if none exists it is an error. Returns {success, gid, strategy, resolvedAt, outboxOpId?, newFileGid?}. This is a write operation: it mutates the local file and may enqueue an outbound op for sync.",
+  {
+    gid: z.string().describe("Global ID of the conflict to resolve, e.g. '104@4f9e1a8b3c7d2e0f' (as returned by conflicts_list)."),
+    strategy: z
+      .enum(["keep-server", "keep-mine", "keep-both", "merged"])
+      .describe("Resolution strategy. See tool description for each behavior."),
+    mergedContent: z
+      .string()
+      .optional()
+      .describe("REQUIRED when strategy='merged': the full merged file content to write as the new canonical version. Ignored for all other strategies."),
+  },
+  async ({ gid, strategy, mergedContent }) => {
+    try {
+      if (strategy === "merged" && typeof mergedContent !== "string") {
+        return {
+          isError: true,
+          content: [{ type: "text", text: JSON.stringify({ error: "strategy='merged' requires mergedContent (the full merged file content)" }, null, 2) }],
+        };
+      }
+      const result = await resolveConflict(gid, { strategy, mergedContent });
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       };
     } catch (e) {
       return {

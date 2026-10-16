@@ -2,8 +2,9 @@
 
 import { useTheme } from "next-themes";
 import { useEffect, useState } from "react";
-import { Sun, Moon } from "lucide-react";
+import { Sun, Moon, AlertTriangle } from "lucide-react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { toast } from "sonner";
 import { AnimatedLogo } from "./animated-logo";
 import { DropdownMenu } from "@/components/ui/dropdown-menu";
@@ -19,6 +20,7 @@ interface TopBarProps {
   onConfigure: () => void;
   onPublish: () => void;
   onViewPublished: () => void;
+  unresolvedConflicts?: number;
 }
 
 export function TopBar({
@@ -27,12 +29,47 @@ export function TopBar({
   onConfigure,
   onPublish,
   onViewPublished,
+  unresolvedConflicts,
 }: TopBarProps) {
   const router = useRouter();
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   const [isMac, setIsMac] = useState(false);
   const [reindexing, setReindexing] = useState(false);
+  const [unresolvedCount, setUnresolvedCount] = useState<number>(unresolvedConflicts ?? 0);
+
+  useEffect(() => {
+    if (unresolvedConflicts !== undefined) {
+      setUnresolvedCount(unresolvedConflicts);
+      return;
+    }
+
+    let cancelled = false;
+    const fetchUnresolved = async () => {
+      try {
+        const res = await fetch("/api/conflicts?status=unresolved&limit=1", { cache: "no-store" });
+        if (res.ok) {
+          const data = await res.json();
+          if (!cancelled && typeof data?.unresolved === "number") {
+            setUnresolvedCount(data.unresolved);
+          }
+        }
+      } catch {
+        // Ignore network / abort errors
+      }
+    };
+
+    void fetchUnresolved();
+    const interval = setInterval(fetchUnresolved, 15_000);
+    const handleChanged = () => { void fetchUnresolved(); };
+    window.addEventListener("kontexta:conflicts-changed", handleChanged);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+      window.removeEventListener("kontexta:conflicts-changed", handleChanged);
+    };
+  }, [unresolvedConflicts]);
 
   const handleReindex = async () => {
     if (reindexing) return;
@@ -102,6 +139,28 @@ export function TopBar({
       </div>
 
       <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 flex-nowrap">
+        {unresolvedCount > 0 && (
+          <Link
+            href="/conflicts"
+            onClick={(e) => {
+              e.preventDefault();
+              try {
+                router.push("/conflicts");
+              } catch {}
+            }}
+            className="btn btn-sm sm:btn-md !font-mono font-bold uppercase tracking-wider text-amber-accent bg-amber-accent/10 hover:bg-amber-accent/20 border border-amber-accent/30 bp-toolbar-btn whitespace-nowrap shrink-0 inline-flex items-center gap-1.5 transition-all"
+            aria-label={`${unresolvedCount} unresolved conflict${unresolvedCount === 1 ? "" : "s"}`}
+            title={`${unresolvedCount} unresolved conflict${unresolvedCount === 1 ? "" : "s"}`}
+            data-testid="unresolved-conflicts-badge"
+          >
+            <AlertTriangle className="w-3.5 h-3.5 text-amber-accent shrink-0" aria-hidden />
+            <span>Conflicts</span>
+            <span className="px-1.5 py-0.5 text-[10px] rounded-full bg-amber-accent text-black font-extrabold leading-none">
+              {unresolvedCount}
+            </span>
+          </Link>
+        )}
+
         <button
           onClick={() => router.push("/calendar")}
           className="btn btn-sm sm:btn-md !font-mono font-bold uppercase tracking-wider text-[var(--accent)] bp-toolbar-btn whitespace-nowrap shrink-0"

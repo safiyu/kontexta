@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-15T21:41:11.824Z",
+  "generatedAt": "2026-10-16T08:04:58.405Z",
   "tools": [
     {
       "name": "admin_refresh_session_context",
@@ -1359,6 +1359,91 @@
         "$schema": "http://json-schema.org/draft-07/schema#",
         "type": "object",
         "properties": {}
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "conflicts_list",
+      "description": "List sync conflicts in the local conflict registry (Phase 5 Conflict Manager). A conflict is recorded when the storage server delivers an operation for a file that was modified locally since the last sync (base_version drift); the canonical file is preserved and the remote version is forked to a '<filename> (from <machine_label>).<ext>' copy. Defaults to unresolved conflicts, newest first. Pass status='all' to include resolved, status='resolved' for the resolved history, and `limit` to cap the page. Returns {conflicts, count, unresolved}: `count` is the length of the returned list, `unresolved` is the global unresolved total (use it to decide whether there is anything to act on). Each conflict carries gid, file_path, conflict_path, origin, origin_label, base_version, server_seq, local_content, remote_content, diff, additions, deletions, status, resolution, resolved_at, created_at. Read-only; no side effects, auth, or rate limits. To inspect a single conflict use conflicts_get; to fix one use conflicts_resolve.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "unresolved",
+              "resolved",
+              "all"
+            ],
+            "description": "Filter by resolution state. Defaults to 'unresolved'."
+          },
+          "limit": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "description": "Optional page size. Positive integer; omit for no cap."
+          }
+        },
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "conflicts_get",
+      "description": "Fetch one sync conflict by its global ID (gid), for the Conflict Manager. Returns the full ConflictRecord including both content snapshots (local_content, the canonical file as it is on THIS machine, and remote_content, the version that arrived from the other machine), the unified line diff, addition/deletion counts, and the conflict copy's on-disk path. If there is no unresolved conflict for the gid it returns the most recent resolved one; returns an error if no conflict exists at all. gid is '<local_id>@<machine_id>' as reported by conflicts_list. Read-only; no side effects, auth, or rate limits. After reviewing the diff, resolve with conflicts_resolve.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "gid": {
+            "type": "string",
+            "description": "Global ID of the conflict, e.g. '104@4f9e1a8b3c7d2e0f' (as returned by conflicts_list)."
+          }
+        },
+        "required": [
+          "gid"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "conflicts_resolve",
+      "description": "Resolve one sync conflict using one of 4 deterministic strategies (spec 1.7). `strategy`: 'keep-server' = accept the remote version, overwrite the canonical file, delete the conflict copy. 'keep-mine' = keep the local version, re-assert it to the server (version bump + outbox op), delete the conflict copy. 'keep-both' = keep the canonical file AND permanently retain the conflict copy as its own newly-tracked file (no outbox op is dropped; the copy is registered with a fresh gid). 'merged' = use your own `mergedContent` (REQUIRED for this strategy) as the new canonical content, push it, delete the conflict copy. Only acts on an UNRESOLVED conflict for the gid; if none exists it is an error. Returns {success, gid, strategy, resolvedAt, outboxOpId?, newFileGid?}. This is a write operation: it mutates the local file and may enqueue an outbound op for sync.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "gid": {
+            "type": "string",
+            "description": "Global ID of the conflict to resolve, e.g. '104@4f9e1a8b3c7d2e0f' (as returned by conflicts_list)."
+          },
+          "strategy": {
+            "type": "string",
+            "enum": [
+              "keep-server",
+              "keep-mine",
+              "keep-both",
+              "merged"
+            ],
+            "description": "Resolution strategy. See tool description for each behavior."
+          },
+          "mergedContent": {
+            "type": "string",
+            "description": "REQUIRED when strategy='merged': the full merged file content to write as the new canonical version. Ignored for all other strategies."
+          }
+        },
+        "required": [
+          "gid",
+          "strategy"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
       },
       "execution": {
         "taskSupport": "forbidden"
