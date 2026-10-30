@@ -857,19 +857,14 @@ describe("applyRemoteOp (M58)", () => {
       expect(existsSync(join(TEST_DATA_DIR, "..", "escaped.md"))).toBe(false);
     });
 
-    it("re-roots a legacy absolute origin path under the data dir via its /knowledge/ segment", async () => {
-      const gid = "1005@" + ORIGIN;
-      await applyRemoteOp(
-        op(gid, "file.create", {
-          path: "/Users/someone/.kontexta/knowledge/legacy/note.md",
-          title: "Legacy",
-          content: "# Legacy",
-        }),
-      );
-      const expected = join(TEST_DATA_DIR, "knowledge", "legacy", "note.md");
-      expect(readFileSync(expected, "utf8")).toBe("# Legacy");
-      const row = getDatabase().prepare("SELECT path FROM files WHERE gid = ?").get(gid) as { path: string };
-      expect(row.path).toBe(expected);
+    it("rejects an absolute path outside the data dir even if it contains /knowledge/", async () => {
+      await expect(
+        applyRemoteOp({
+          gid: "107@remote0123456789", kind: "file.create", origin: "remote0123456789", base_version: null,
+          payload: { path: "/Users/someone/.kontexta/knowledge/legacy/note.md", title: "n", content: "x", storage_type: "local" },
+          created_at: Date.now(),
+        } as Op),
+      ).rejects.toThrow(/outside the data directory/);
     });
 
     it("prefers rel_path over the origin's absolute path", async () => {

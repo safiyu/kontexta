@@ -18,6 +18,7 @@
  */
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdirSync, rmSync, mkdtempSync } from "node:fs";
+import { resetDataDirCache } from "../../src/util/paths.js";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createDatabase, closeDatabase, getDatabase } from "../../src/db/index.js";
@@ -68,6 +69,8 @@ describe("metadata write-routine outbox instrumentation (M55)", () => {
     rmSync(TEST_DATA_DIR, { recursive: true, force: true });
     mkdirSync(TEST_DATA_DIR, { recursive: true });
     mkdirSync(join(dataDir, "knowledge"), { recursive: true });
+    process.env.KONTEXTA_DATA_DIR = dataDir;
+    resetDataDirCache();
     createDatabase(dbPath);
   });
 

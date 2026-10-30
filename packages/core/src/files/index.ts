@@ -19,7 +19,7 @@ import { computeContentClass } from "../content-class/index.js";
 import { enqueueOp } from "../storage/outbox.js";
 import { inRemoteApply } from "../storage/apply.js";
 import type { Op } from "../storage/op.js";
-import { toRelPath } from "../storage/paths.js";
+import { toRelPath, isSyncablePath } from "../storage/paths.js";
 import { gidOfRow } from "../storage/gids.js";
 import type { FileRecord, Destination, FileFilters, StorageType } from "../types.js";
 
@@ -166,6 +166,9 @@ export function slugify(name: string): string {
  */
 function enqueueFileOp(op: Op): void {
   if (inRemoteApply()) return;
+  // Files outside the data dir (project repos) never sync.
+  const p = op.kind === "file.move" ? (op.payload as { from?: unknown }).from : (op.payload as { path?: unknown }).path;
+  if (typeof p === "string" && !isSyncablePath(p)) return;
   enqueueOp(getDatabase(), op);
 }
 

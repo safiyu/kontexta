@@ -39,6 +39,8 @@ import {
 import { pendingOps, pendingCount } from "../../src/storage/outbox.js";
 import { runInApplyScope, inRemoteApply } from "../../src/storage/apply.js";
 import { getMachineId } from "../../src/identity/machine.js";
+import { resetDataDirCache } from "../../src/util/paths.js";
+import { registerConflict } from "../../src/storage/conflicts.js";
 
 const TEST_DATA_DIR = mkdtempSync(join(tmpdir(), "kontexta-watcher-outbox-"));
 const TEST_DB_PATH = join(TEST_DATA_DIR, "test.db");
@@ -67,10 +69,14 @@ describe("watcher outbox instrumentation (M57)", () => {
     if (existsSync(TEST_DATA_DIR)) rmSync(TEST_DATA_DIR, { recursive: true, force: true });
     mkdirSync(TEST_DATA_DIR, { recursive: true });
     mkdirSync(join(TEST_DATA_DIR, "knowledge"), { recursive: true });
+    process.env.KONTEXTA_DATA_DIR = TEST_DATA_DIR;
+    resetDataDirCache();
     createDatabase(TEST_DB_PATH);
   });
 
   afterEach(() => {
+    delete process.env.KONTEXTA_DATA_DIR;
+    resetDataDirCache();
     closeDatabase();
     if (existsSync(TEST_DATA_DIR)) rmSync(TEST_DATA_DIR, { recursive: true, force: true });
   });
@@ -93,6 +99,43 @@ describe("watcher outbox instrumentation (M57)", () => {
     const row = rowByPath(filePath) as { gid: string } | undefined;
     expect(row).toBeDefined();
     expect(p.op.gid).toBe(row!.gid);
+  });
+
+  it("file.create carries rel_path and project_gid and no project_id", () => {
+    dropFile("portable.md", "x");
+    const [p] = pending();
+    const payload = p.op.payload as Record<string, unknown>;
+    expect(payload.rel_path).toBe("knowledge/portable.md");
+    expect("project_gid" in payload).toBe(true);
+    expect("project_id" in payload).toBe(false);
+  });
+
+  it("a conflict copy appearing or changing on disk enqueues no op and creates no files row", () => {
+    const canonical = dropFile("note.md", "mine");
+    const before = pendingCount(getDatabase());
+    const rec = registerConflict(
+      { gid: (rowByPath(canonical) as { gid: string }).gid, filePath: canonical, origin: "aaaabbbbccccdddd", originLabel: "laptop", remoteContent: "theirs" },
+      getDatabase(),
+    );
+    handleWatcherAdd(rec.conflict_path, KNOWLEDGE_DIRS);
+    writeFileSync(rec.conflict_path, "edited copy", "utf-8");
+    updateFileHash(rec.conflict_path, KNOWLEDGE_DIRS);
+    expect(pendingCount(getDatabase())).toBe(before);
+    expect(rowByPath(rec.conflict_path)).toBeUndefined();
+  });
+
+  it("a file outside the data dir (a project repo) enqueues no file op but still gets a files row", () => {
+    const repo = mkdtempSync(join(tmpdir(), "kxta-repo-"));
+    try {
+      getDatabase().prepare("INSERT INTO projects (name, slug, path) VALUES ('P', 'p', ?)").run(repo);
+      const filePath = join(repo, "spec.md");
+      writeFileSync(filePath, "repo file", "utf-8");
+      handleWatcherAdd(filePath, KNOWLEDGE_DIRS);
+      expect(rowByPath(filePath)).toBeDefined();
+      expect(pendingCount(getDatabase())).toBe(0);
+    } finally {
+      rmSync(repo, { recursive: true, force: true });
+    }
   });
 
   it("handleWatcherAdd enqueues only once (an already-present row is a no-op)", () => {

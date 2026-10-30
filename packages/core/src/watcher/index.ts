@@ -6,6 +6,9 @@ import { formatGid } from "../identity/gid.js";
 import { getMachineId } from "../identity/machine.js";
 import { enqueueOp } from "../storage/outbox.js";
 import { inRemoteApply } from "../storage/apply.js";
+import { isUnresolvedConflictCopy } from "../storage/conflicts.js";
+import { isSyncablePath, toRelPath } from "../storage/paths.js";
+import { gidOfRow } from "../storage/gids.js";
 import type { Op } from "../storage/op.js";
 import crypto from "node:crypto";
 import fs from "node:fs";
@@ -44,6 +47,9 @@ function isUnder(filePath: string, baseDir: string): boolean {
  */
 function enqueueWatcherOp(op: Op): void {
   if (inRemoteApply()) return;
+  // Files outside the data dir (project repos) never sync.
+  const p = (op.payload as { path?: unknown }).path;
+  if (op.kind.startsWith("file.") && typeof p === "string" && !isSyncablePath(p)) return;
   enqueueOp(getDatabase(), op);
 }
 
@@ -164,6 +170,7 @@ export function createFileWatcher(
 export function handleWatcherAdd(filePath: string, knowledgeDirs: string[]): void {
   try {
     const db = getDatabase();
+    if (isUnresolvedConflictCopy(db, filePath)) return;
     // Check if already in DB
     const existing = db.prepare("SELECT id FROM files WHERE path = ?").get(filePath);
     if (existing) return;
@@ -226,8 +233,9 @@ export function handleWatcherAdd(filePath: string, knowledgeDirs: string[]): voi
             base_version: null,
             payload: {
               path: filePath,
+              rel_path: toRelPath(filePath) ?? undefined,
               title,
-              project_id: projectId,
+              project_gid: gidOfRow("projects", projectId),
               storage_type: storageType,
               content_class: row.content_class ?? null,
               source_path: row.source_path ?? null,
@@ -268,7 +276,7 @@ export function handleWatcherUnlink(filePath: string): void {
           kind: "file.delete",
           origin: getMachineId(),
           base_version: 0,
-          payload: { path: filePath },
+          payload: { path: filePath, rel_path: toRelPath(filePath) ?? undefined },
           created_at: Date.now(),
         });
         deleteFtsStmt.run(file.id);
@@ -285,6 +293,7 @@ export function handleWatcherUnlink(filePath: string): void {
 export function updateFileHash(filePath: string, knowledgeDirs: string[] = []): void {
   try {
     const db = getDatabase();
+    if (isUnresolvedConflictCopy(db, filePath)) return;
     const content = fs.readFileSync(filePath, "utf-8");
     const hash = crypto.createHash("sha256").update(content).digest("hex");
     const file = db
@@ -321,6 +330,7 @@ export function updateFileHash(filePath: string, knowledgeDirs: string[] = []): 
           base_version: 0,
           payload: {
             path: filePath,
+            rel_path: toRelPath(filePath) ?? undefined,
             title: file.title,
             content,
             content_hash: hash,
