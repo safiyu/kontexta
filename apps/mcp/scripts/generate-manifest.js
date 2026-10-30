@@ -1,6 +1,6 @@
 // apps/mcp/scripts/generate-manifest.js
 import { spawn } from "node:child_process";
-import { writeFileSync, existsSync, mkdirSync } from "node:fs";
+import { writeFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 // Allow CI / Docker builds to skip this step. The manifest is used only by
@@ -80,7 +80,13 @@ child.stdout.on("data", (chunk) => {
       child.kill();
       process.exit(2);
     }
-    writeFileSync(OUT, JSON.stringify({ generatedAt: new Date().toISOString(), tools }, null, 2));
+    // Keep the old timestamp when the tools did not change: a rewritten timestamp alone invalidates the web build's cache.
+    let generatedAt = new Date().toISOString();
+    try {
+      const prev = JSON.parse(readFileSync(OUT, "utf8"));
+      if (JSON.stringify(prev.tools) === JSON.stringify(tools) && typeof prev.generatedAt === "string") generatedAt = prev.generatedAt;
+    } catch {}
+    writeFileSync(OUT, JSON.stringify({ generatedAt, tools }, null, 2));
     console.log(`Wrote ${tools.length} tools to ${OUT}`);
     mkdirSync(path.dirname(TOOLS_OUT), { recursive: true });
     const list = tools.map((t) => ({ name: t.name, destructive: isDestructive(t) })).sort((a, b) => a.name.localeCompare(b.name));
