@@ -53,9 +53,33 @@ export function ConflictsClient() {
     }
   }, [loading, selectedGid, conflicts]);
 
-  const selected: ConflictRecord | null = selectedGid
-    ? conflicts.find((c) => c.gid === selectedGid) ?? null
-    : null;
+  const [detail, setDetail] = useState<ConflictRecord | null>(null);
+
+  // The list omits diffs; load the full record (with diff) for the selected conflict.
+  useEffect(() => {
+    if (!selectedGid) {
+      setDetail(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/conflicts/${encodeURIComponent(selectedGid)}`, { cache: "no-store" });
+        if (!res.ok) return;
+        const data = (await res.json()) as ConflictRecord;
+        if (!cancelled) setDetail(data);
+      } catch {
+        // list row stays usable without a diff
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedGid, conflicts]);
+
+  const listed = selectedGid ? conflicts.find((c) => c.gid === selectedGid) ?? null : null;
+  const selected: ConflictRecord | null =
+    listed && detail && detail.gid === listed.gid && detail.id === listed.id ? detail : listed;
 
   const handleSelect = useCallback((c: ConflictRecord) => {
     setSelectedGid(c.gid);

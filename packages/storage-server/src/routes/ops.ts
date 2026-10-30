@@ -63,6 +63,7 @@
  * absorbs the wait).
  */
 
+import { createHash, timingSafeEqual } from "node:crypto";
 import { Hono } from "hono";
 import type Database from "better-sqlite3";
 import {
@@ -171,6 +172,8 @@ export interface StoredOp {
   client_seq: number | null;
   status: "accepted" | "conflict";
   received_at: number;
+  /** The gid's version right after this op (count of its ops with seq <= this seq). */
+  gid_version: number;
 }
 
 /** An op after server-side validation (see {@link validateIncomingOp}). */
@@ -195,11 +198,17 @@ export interface OpPostResult {
   status: "accepted" | "conflict";
   /** True when this (origin, client_seq) was already stored (retry). */
   duplicate: boolean;
+  /** The gid's version right after this op was stored. */
+  version: number;
 }
 
 interface OpsRouterOptions {
   /** The pepper bound into token hashes (override `DEFAULT_PEPPER`). */
   pepper?: string;
+  /** Shared secret a new machine must present at POST /clients. */
+  enrollSecret?: string;
+  /** Dev/test only: allow POST /clients with no enrollment secret configured. */
+  allowOpenEnrollment?: boolean;
   /** Default batch size for GET /ops (capped at {@link MAX_OPS_LIMIT}). */
   defaultLimit?: number;
 }
@@ -216,6 +225,8 @@ export function createOpsRouter(
   options: OpsRouterOptions = {},
 ): Hono {
   const pepper = options.pepper ?? DEFAULT_PEPPER;
+  const enrollSecret = options.enrollSecret ?? "";
+  const allowOpenEnrollment = options.allowOpenEnrollment === true;
   const defaultLimit = Math.min(options.defaultLimit ?? DEFAULT_OPS_LIMIT, MAX_OPS_LIMIT);
   const router = new Hono();
 
@@ -229,8 +240,13 @@ export function createOpsRouter(
     `SELECT seq, status FROM ops WHERE origin = ? AND client_seq = ?`,
   );
   const fetchSince = db.prepare(
-    `SELECT seq, gid, kind, origin, base_version, payload, created_at, client_seq, status, received_at
-     FROM ops WHERE seq > ? ORDER BY seq ASC LIMIT ?`,
+    `SELECT o.seq, o.gid, o.kind, o.origin, o.base_version, o.payload, o.created_at,
+            o.client_seq, o.status, o.received_at,
+            (SELECT COUNT(*) FROM ops p WHERE p.gid = o.gid AND p.seq <= o.seq) AS gid_version
+     FROM ops o WHERE o.seq > ? ORDER BY o.seq ASC LIMIT ?`,
+  );
+  const versionAtSeq = db.prepare(
+    `SELECT COUNT(*) AS n FROM ops WHERE gid = ? AND seq <= ?`,
   );
   const touchClient = db.prepare(
     `UPDATE clients SET last_seen_at = ? WHERE machine_id = ?`,
@@ -291,6 +307,27 @@ export function createOpsRouter(
       return c.json({ machine_id, registered: false, token: null });
     }
 
+    if (enrollSecret === "") {
+      if (!allowOpenEnrollment) {
+        return c.json(
+          {
+            error:
+              "enrollment is closed: set KXTA_STORAGE_ENROLL_SECRET on the server (or KXTA_STORAGE_ALLOW_OPEN_ENROLLMENT=1 for dev)",
+          },
+          403,
+        );
+      }
+    } else {
+      const presented =
+        c.req.header("x-enroll-secret") ??
+        (typeof (body as Record<string, unknown>).enroll_secret === "string"
+          ? ((body as Record<string, unknown>).enroll_secret as string)
+          : "");
+      if (!secretsEqual(presented, enrollSecret)) {
+        return c.json({ error: "invalid enrollment secret" }, 403);
+      }
+    }
+
     const token = generateClientToken();
     db.prepare(
       `INSERT INTO clients (machine_id, hostname, token_hash, first_seen_at, last_seen_at)
@@ -333,6 +370,7 @@ export function createOpsRouter(
       client_seq: number | null;
       status: "accepted" | "conflict";
       received_at: number;
+      gid_version: number;
     }>).map((r) => ({ ...r, payload: JSON.parse(r.payload) }));
     touchClient.run(Date.now(), machineId);
 
@@ -392,6 +430,9 @@ export function createOpsRouter(
       if (op === null) {
         return c.json({ error: `ops[${i}] is malformed`, index: i }, 400);
       }
+      if (op.origin !== machineId) {
+        return c.json({ error: `ops[${i}].origin does not match the authenticated machine`, index: i }, 403);
+      }
       validated.push(op);
     }
 
@@ -412,6 +453,7 @@ export function createOpsRouter(
               seq: existing.seq,
               status: existing.status === "conflict" ? "conflict" : "accepted",
               duplicate: true,
+              version: (versionAtSeq.get(op.gid, existing.seq) as { n: number }).n,
             });
             continue;
           }
@@ -449,6 +491,7 @@ export function createOpsRouter(
           seq: Number(info.lastInsertRowid),
           status,
           duplicate: false,
+          version: currentVersion + 1,
         });
       }
       touchClient.run(Date.now(), machineId);
@@ -459,6 +502,13 @@ export function createOpsRouter(
   });
 
   return router;
+}
+
+/** Constant-time string compare (hashes first so lengths always match). */
+function secretsEqual(a: string, b: string): boolean {
+  const ha = createHash("sha256").update(a, "utf8").digest();
+  const hb = createHash("sha256").update(b, "utf8").digest();
+  return timingSafeEqual(ha, hb);
 }
 
 /**

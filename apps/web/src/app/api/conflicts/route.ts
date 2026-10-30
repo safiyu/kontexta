@@ -14,8 +14,11 @@ import { ensureDbInitialized } from "@/lib/db-init";
  *   - limit:  positive integer, applied to the returned list
  *
  * Response:
+ *   GET /api/conflicts?count=1  ->  { count: number }  (cheap badge poll: no rows, no diffs)
+ *
  *   { conflicts: ConflictRecord[], count: number, unresolved: number }
- *     - conflicts: the filtered list (newest first), each with a computed diff
+ *     - conflicts: the filtered list (newest first), WITHOUT diff/additions/deletions
+ *       (fetch GET /api/conflicts/[gid] for the diff)
  *     - count: conflicts.length
  *     - unresolved: global unresolved total, for the top-bar indicator badge
  */
@@ -25,6 +28,14 @@ export async function GET(req: NextRequest) {
   ensureDbInitialized();
 
   const sp = req.nextUrl.searchParams;
+
+  if (sp.get("count") === "1") {
+    try {
+      return NextResponse.json({ count: countUnresolvedConflicts() });
+    } catch (error: any) {
+      return NextResponse.json({ error: error?.message ?? "Failed to count conflicts" }, { status: 500 });
+    }
+  }
 
   const statusRaw = sp.get("status");
   if (statusRaw !== null && statusRaw !== "unresolved" && statusRaw !== "resolved" && statusRaw !== "all") {

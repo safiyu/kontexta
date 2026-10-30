@@ -58,7 +58,7 @@ describe("TopBar unresolved conflict badge", () => {
   it("fetches unresolved count from /api/conflicts when prop is undefined", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ unresolved: 2, count: 2, conflicts: [] }),
+      json: async () => ({ count: 2 }),
     });
     vi.stubGlobal("fetch", fetchMock);
 
@@ -69,7 +69,7 @@ describe("TopBar unresolved conflict badge", () => {
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
-        expect.stringContaining("/api/conflicts?status=unresolved"),
+        expect.stringContaining("/api/conflicts?count=1"),
         expect.any(Object)
       );
     });
@@ -96,7 +96,7 @@ describe("TopBar unresolved conflict badge", () => {
     let unresolvedValue = 1;
     const fetchMock = vi.fn().mockImplementation(async () => ({
       ok: true,
-      json: async () => ({ unresolved: unresolvedValue, count: unresolvedValue, conflicts: [] }),
+      json: async () => ({ count: unresolvedValue }),
     }));
     vi.stubGlobal("fetch", fetchMock);
 

@@ -26,6 +26,8 @@ import {
   readEndpointConfig,
   pushOutbox,
   pullRemoteOps,
+  startSyncLoop,
+  stopSyncLoop,
   getSyncCursor,
   pendingCount,
 } from "kxta-core";
@@ -38,9 +40,14 @@ type Database = ReturnType<typeof getDatabase>;
 const USAGE = `kontexta endpoint: manage this machine's storage-server connection
 
 Usage:
-  kontexta endpoint connect <url> [token] [--hostname <label>] [--json]
+  kontexta endpoint connect <url> [token] [--hostname <label>] [--enroll-secret <s>] [--json]
       Verify a storage endpoint and persist the connection. With no token, the
-      machine self-registers (POST /clients) and stores the one-time token.
+      machine self-registers (POST /clients, needs the server's enrollment
+      secret via --enroll-secret or KXTA_STORAGE_ENROLL_SECRET) and stores the
+      one-time token.
+  kontexta endpoint run
+      Run the sync loop in the foreground until interrupted (headless machines;
+      the web app runs it automatically).
   kontexta endpoint status [--json]
       Show the connection, poll cadence, outbox depth, and sync cursor.
   kontexta endpoint disconnect [--json]
@@ -78,10 +85,14 @@ async function registerClient(
   machineId: string,
   host: string,
   timeoutMs?: number,
+  enrollSecret?: string,
 ): Promise<string | null> {
   const res = await fetch(`${baseUrl}/clients`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: {
+      "content-type": "application/json",
+      ...(enrollSecret ? { "x-enroll-secret": enrollSecret } : {}),
+    },
     body: JSON.stringify({ machine_id: machineId, hostname: host }),
     signal: timeoutMs ? AbortSignal.timeout(timeoutMs) : undefined,
   });
@@ -102,6 +113,7 @@ async function doConnect(
   host: string,
   timeoutMs: number | undefined,
   json: boolean,
+  enrollSecret?: string,
 ): Promise<number> {
   let resolved = token;
   let source = token ? "provided" : "stored";
@@ -109,7 +121,7 @@ async function doConnect(
   if (!resolved) {
     // No token passed: try to self-register (POST /clients).
     try {
-      const issued = await registerClient(url, getMachineId(), host, timeoutMs);
+      const issued = await registerClient(url, getMachineId(), host, timeoutMs, enrollSecret);
       if (issued) {
         resolved = issued;
         source = "registered";
@@ -207,10 +219,27 @@ async function doPull(db: Database, timeoutMs: number | undefined, json: boolean
   } else if (result.error) {
     print(`pull failed: ${result.error}`);
   } else {
-    print(`pulled ${result.polled} op(s), applied ${result.applied}${result.conflicts.length ? `, ${result.conflicts.length} conflict(s)` : ""}; cursor at seq ${result.cursor}`);
+    print(`pulled ${result.polled} op(s), applied ${result.applied}${result.skipped ? `, skipped ${result.skipped}` : ""}${result.conflicts.length ? `, ${result.conflicts.length} conflict(s)` : ""}; cursor at seq ${result.cursor}`);
   }
   for (const c of result.conflicts) print(`  conflict: ${c.gid} (${c.kind})`);
   return result.error ? 1 : 0;
+}
+
+/** The `run` action: keep the sync loop alive in the foreground until SIGINT/SIGTERM. */
+async function doRun(db: Database): Promise<number> {
+  startSyncLoop(db);
+  print(`sync loop running (${readEndpointConfig(db).connected ? "connected" : "not connected, dormant"}); Ctrl+C to stop`);
+  await new Promise<void>((resolve) => {
+    const keepAlive = setInterval(() => {}, 1 << 30);
+    const stop = (): void => {
+      clearInterval(keepAlive);
+      stopSyncLoop();
+      resolve();
+    };
+    process.once("SIGINT", stop);
+    process.once("SIGTERM", stop);
+  });
+  return 0;
 }
 
 export async function runEndpointCli(argv: string[], env: NodeJS.ProcessEnv = process.env): Promise<number> {
@@ -221,12 +250,13 @@ export async function runEndpointCli(argv: string[], env: NodeJS.ProcessEnv = pr
       json: { type: "boolean", default: false },
       token: { type: "string" },
       hostname: { type: "string" },
+      "enroll-secret": { type: "string" },
       "data-dir": { type: "string" },
       timeout: { type: "string" },
     },
   });
   const [cmd, url, tokenPos] = positionals;
-  if (!cmd || !["connect", "status", "disconnect", "push", "pull"].includes(cmd)) {
+  if (!cmd || !["connect", "status", "disconnect", "push", "pull", "run"].includes(cmd)) {
     process.stderr.write(USAGE);
     return 2;
   }
@@ -252,7 +282,7 @@ export async function runEndpointCli(argv: string[], env: NodeJS.ProcessEnv = pr
       case "connect": {
         const token = values.token ?? tokenPos ?? null;
         const host = values.hostname ?? hostname();
-        return await doConnect(db, url as string, token, host, timeoutMs, values.json);
+        return await doConnect(db, url as string, token, host, timeoutMs, values.json, values["enroll-secret"] ?? env.KXTA_STORAGE_ENROLL_SECRET);
       }
       case "status":
         return doStatus(db, values.json);
@@ -262,6 +292,8 @@ export async function runEndpointCli(argv: string[], env: NodeJS.ProcessEnv = pr
         return await doPush(db, timeoutMs, values.json);
       case "pull":
         return await doPull(db, timeoutMs, values.json);
+      case "run":
+        return await doRun(db);
     }
     return 2;
   } finally {

@@ -63,9 +63,11 @@ export function ConflictList({
                     <span className="px-1.5 py-0.5 rounded bg-[var(--bg-tertiary)] truncate max-w-[110px]">
                       {c.origin_label ?? c.origin}
                     </span>
-                    <span>
-                      {c.additions ?? 0}+/{c.deletions ?? 0}-
-                    </span>
+                    {c.additions !== undefined && (
+                      <span>
+                        {c.additions}+/{c.deletions ?? 0}-
+                      </span>
+                    )}
                     <span className="ml-auto shrink-0">{relTime(c.created_at)}</span>
                   </div>
                 </button>

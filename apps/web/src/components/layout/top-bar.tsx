@@ -47,11 +47,11 @@ export function TopBar({
     let cancelled = false;
     const fetchUnresolved = async () => {
       try {
-        const res = await fetch("/api/conflicts?status=unresolved&limit=1", { cache: "no-store" });
+        const res = await fetch("/api/conflicts?count=1", { cache: "no-store" });
         if (res.ok) {
           const data = await res.json();
-          if (!cancelled && typeof data?.unresolved === "number") {
-            setUnresolvedCount(data.unresolved);
+          if (!cancelled && typeof data?.count === "number") {
+            setUnresolvedCount(data.count);
           }
         }
       } catch {

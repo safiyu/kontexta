@@ -25,7 +25,8 @@
 
 import { AsyncLocalStorage } from "node:async_hooks";
 import { writeFileSync, mkdirSync, rmSync, existsSync, renameSync } from "node:fs";
-import { dirname, basename } from "node:path";
+import { getDataDir } from "../util/paths.js";
+import { dirname, basename, resolve } from "node:path";
 import { createHash } from "node:crypto";
 import type { Database } from "better-sqlite3";
 import { parseOp, type Op } from "./op.js";
@@ -44,7 +45,8 @@ import {
   deleteEvent,
 } from "../calendar/repository.js";
 import { upsertJournalMeta } from "../journal/repository.js";
-import { createFolder, deleteFolder } from "../files/index.js";
+import { resolveSyncPath } from "./paths.js";
+import { UnappliableOpError } from "./errors.js";
 
 /**
  * Options for {@link applyRemoteOp}.
@@ -105,6 +107,30 @@ export function inRemoteApply(): boolean {
 /** Compute SHA-256 hash of content string. */
 function computeHash(content: string): string {
   return createHash("sha256").update(content, "utf8").digest("hex");
+}
+
+/** Resolve a project's local id from its gid (null when absent or unset). */
+function localProjectId(db: Database, gid: unknown): number | null {
+  if (typeof gid !== "string" || gid === "") return null;
+  const row = db.prepare("SELECT id FROM projects WHERE gid = ?").get(gid) as { id: number } | undefined;
+  return row?.id ?? null;
+}
+
+/** Resolve an entity's local id from its gid, or throw so the pull skips the op. */
+function requireEntityId(db: Database, gid: unknown, what: string): number {
+  const row =
+    typeof gid === "string"
+      ? (db.prepare("SELECT id FROM calendar_entities WHERE gid = ?").get(gid) as { id: number } | undefined)
+      : undefined;
+  if (!row) throw new UnappliableOpError(`${what} references an entity this machine does not have`);
+  return row.id;
+}
+
+/** Resolve a file's local id from the op gid, or throw so the pull skips the op. */
+function requireFileId(db: Database, op: Op): number {
+  const row = db.prepare("SELECT id FROM files WHERE gid = ?").get(op.gid) as { id: number } | undefined;
+  if (!row) throw new UnappliableOpError(`${op.kind} for unknown file ${op.gid}`);
+  return row.id;
 }
 
 /**
@@ -206,7 +232,8 @@ async function applyFileCreate(op: Op, db: Database): Promise<void> {
   const payload = op.payload as {
     path?: string;
     title?: string;
-    project_id?: number | null;
+    rel_path?: string;
+    project_gid?: string | null;
     storage_type?: string;
     content_class?: string | null;
     source_path?: string | null;
@@ -215,10 +242,11 @@ async function applyFileCreate(op: Op, db: Database): Promise<void> {
     tags?: string[];
   };
 
-  const filePath = payload.path;
-  if (typeof filePath !== "string" || !filePath) {
+  if (typeof payload.path !== "string" || !payload.path) {
     throw new Error(`applyRemoteOp: file.create missing path in payload for gid ${op.gid}`);
   }
+  const filePath = resolveSyncPath(payload.path, payload.rel_path);
+  const projectId = localProjectId(db, payload.project_gid);
   const content = typeof payload.content === "string" ? payload.content : "";
   const contentHash = payload.content_hash ?? computeHash(content);
   const title = payload.title ?? basename(filePath);
@@ -251,7 +279,7 @@ async function applyFileCreate(op: Op, db: Database): Promise<void> {
         `).run(
           filePath,
           title,
-          payload.project_id ?? null,
+          projectId,
           storageType,
           contentClass,
           payload.source_path ?? null,
@@ -267,7 +295,7 @@ async function applyFileCreate(op: Op, db: Database): Promise<void> {
         `).run(
           filePath,
           title,
-          payload.project_id ?? null,
+          projectId,
           storageType,
           contentClass,
           payload.source_path ?? null,
@@ -309,18 +337,21 @@ async function applyFileCreate(op: Op, db: Database): Promise<void> {
 async function applyFileUpdate(op: Op, db: Database): Promise<void> {
   const payload = op.payload as {
     path?: string;
+    rel_path?: string;
     title?: string;
     content?: string;
     content_hash?: string;
   };
 
+  const payloadPath =
+    typeof payload.path === "string" && payload.path ? resolveSyncPath(payload.path, payload.rel_path) : null;
   const existing = db
     .prepare("SELECT id, path, title FROM files WHERE gid = ? OR (path = ? AND ? IS NOT NULL)")
-    .get(op.gid, payload.path ?? null, payload.path ?? null) as
+    .get(op.gid, payloadPath, payloadPath) as
     | { id: number; path: string; title: string }
     | undefined;
 
-  const targetPath = payload.path ?? existing?.path;
+  const targetPath = payloadPath ?? existing?.path;
   if (!targetPath) {
     throw new Error(
       `applyRemoteOp: cannot apply file.update without path or existing file for gid ${op.gid}`,
@@ -374,14 +405,16 @@ async function applyFileUpdate(op: Op, db: Database): Promise<void> {
 }
 
 async function applyFileDelete(op: Op, db: Database): Promise<void> {
-  const payload = op.payload as { path?: string };
+  const payload = op.payload as { path?: string; rel_path?: string };
+  const payloadPath =
+    typeof payload.path === "string" && payload.path ? resolveSyncPath(payload.path, payload.rel_path) : null;
   const existing = db
     .prepare("SELECT id, path FROM files WHERE gid = ? OR (path = ? AND ? IS NOT NULL)")
-    .get(op.gid, payload.path ?? null, payload.path ?? null) as
+    .get(op.gid, payloadPath, payloadPath) as
     | { id: number; path: string }
     | undefined;
 
-  const targetPath = payload.path ?? existing?.path;
+  const targetPath = payloadPath ?? (existing ? resolveSyncPath(existing.path, undefined) : null);
   if (existing) {
     await withLock(fileLockKey(existing.path), async () => {
       db.transaction(() => {
@@ -405,13 +438,15 @@ async function applyFileMove(op: Op, db: Database): Promise<void> {
   const payload = op.payload as {
     from?: string;
     to?: string;
+    rel_from?: string;
+    rel_to?: string;
     content_class?: string | null;
   };
   if (!payload.from || !payload.to) {
     throw new Error(`applyRemoteOp: file.move requires 'from' and 'to' paths for gid ${op.gid}`);
   }
-  const fromPath = payload.from;
-  const toPath = payload.to;
+  const fromPath = resolveSyncPath(payload.from, payload.rel_from);
+  const toPath = resolveSyncPath(payload.to, payload.rel_to);
 
   const existing = db
     .prepare("SELECT id, path FROM files WHERE gid = ? OR path = ?")
@@ -443,31 +478,25 @@ async function applyFileMove(op: Op, db: Database): Promise<void> {
 // ---------------------------------------------------------------------------
 
 async function applyFolderCreate(op: Op, _db: Database): Promise<void> {
-  const payload = op.payload as {
-    path?: string;
-    project_path?: string;
-    folder_name?: string;
-  };
-  if (payload.path) {
-    mkdirSync(payload.path, { recursive: true });
-  } else if (payload.project_path && payload.folder_name) {
-    createFolder(payload.project_path, payload.folder_name);
-  }
+  const payload = op.payload as { path?: string; rel_path?: string };
+  mkdirSync(resolveFolderPath(payload), { recursive: true });
 }
 
 async function applyFolderDelete(op: Op, _db: Database): Promise<void> {
-  const payload = op.payload as {
-    path?: string;
-    project_path?: string;
-    folder_name?: string;
-  };
-  if (payload.path) {
-    if (existsSync(payload.path)) {
-      rmSync(payload.path, { recursive: true, force: true });
-    }
-  } else if (payload.project_path && payload.folder_name) {
-    deleteFolder(payload.project_path, payload.folder_name);
+  const payload = op.payload as { path?: string; rel_path?: string };
+  const target = resolveFolderPath(payload);
+  if (existsSync(target)) {
+    rmSync(target, { recursive: true, force: true });
   }
+}
+
+/** Folder ops may only touch a strict subfolder of the data dir, never the data dir itself. */
+function resolveFolderPath(payload: { path?: string; rel_path?: string }): string {
+  const target = resolveSyncPath(payload.path, payload.rel_path);
+  if (target === resolve(getDataDir())) {
+    throw new UnappliableOpError("folder op targets the data directory itself");
+  }
+  return target;
 }
 
 // ---------------------------------------------------------------------------
@@ -475,23 +504,17 @@ async function applyFolderDelete(op: Op, _db: Database): Promise<void> {
 // ---------------------------------------------------------------------------
 
 async function applyTagAdd(op: Op, db: Database): Promise<void> {
-  const payload = op.payload as { file_id?: number; tags?: string[] };
-  const file = db
-    .prepare("SELECT id FROM files WHERE gid = ?")
-    .get(op.gid) as { id: number } | undefined;
-  const fileId = file?.id ?? payload.file_id;
-  if (fileId !== undefined && Array.isArray(payload.tags) && payload.tags.length > 0) {
+  const payload = op.payload as { tags?: string[] };
+  const fileId = requireFileId(db, op);
+  if (Array.isArray(payload.tags) && payload.tags.length > 0) {
     addTags(fileId, payload.tags);
   }
 }
 
 async function applyTagRemove(op: Op, db: Database): Promise<void> {
-  const payload = op.payload as { file_id?: number; tags?: string[] };
-  const file = db
-    .prepare("SELECT id FROM files WHERE gid = ?")
-    .get(op.gid) as { id: number } | undefined;
-  const fileId = file?.id ?? payload.file_id;
-  if (fileId !== undefined && Array.isArray(payload.tags) && payload.tags.length > 0) {
+  const payload = op.payload as { tags?: string[] };
+  const fileId = requireFileId(db, op);
+  if (Array.isArray(payload.tags) && payload.tags.length > 0) {
     const ph = payload.tags.map(() => "?").join(", ");
     const tagRows = db
       .prepare(`SELECT id FROM tags WHERE name IN (${ph})`)
@@ -506,12 +529,9 @@ async function applyTagRemove(op: Op, db: Database): Promise<void> {
 }
 
 async function applyFavoriteSet(op: Op, db: Database): Promise<void> {
-  const payload = op.payload as { file_id?: number; favorite?: boolean };
-  const file = db
-    .prepare("SELECT id FROM files WHERE gid = ?")
-    .get(op.gid) as { id: number } | undefined;
-  const fileId = file?.id ?? payload.file_id;
-  if (fileId !== undefined && typeof payload.favorite === "boolean") {
+  const payload = op.payload as { favorite?: boolean };
+  const fileId = requireFileId(db, op);
+  if (typeof payload.favorite === "boolean") {
     setFavorite(fileId, payload.favorite);
   }
 }
@@ -586,19 +606,15 @@ async function applyProjectRegister(op: Op, db: Database): Promise<void> {
 }
 
 async function applyProjectUnregister(op: Op, db: Database): Promise<void> {
-  const payload = op.payload as { project_id?: number; slug?: string | null };
+  const payload = op.payload as { slug?: string | null };
   const project = db
     .prepare("SELECT id FROM projects WHERE gid = ? OR (slug = ? AND ? IS NOT NULL)")
     .get(op.gid, payload.slug ?? null, payload.slug ?? null) as
     | { id: number }
     | undefined;
 
-  const projectId = project?.id ?? payload.project_id;
-  if (projectId) {
-    const existing = db.prepare("SELECT id FROM projects WHERE id = ?").get(projectId);
-    if (existing) {
-      unregisterProject(projectId);
-    }
+  if (project) {
+    unregisterProject(project.id);
   }
 }
 
@@ -648,7 +664,7 @@ async function applyCalendarEntityUpsert(op: Op, db: Database): Promise<void> {
 
 async function applyCalendarEventUpsert(op: Op, db: Database): Promise<void> {
   const payload = op.payload as {
-    entity_id: number;
+    entity_gid?: string;
     type: string;
     title: string;
     notes?: string | null;
@@ -668,9 +684,10 @@ async function applyCalendarEventUpsert(op: Op, db: Database): Promise<void> {
       deleteEvent(existing.id);
     }
   } else {
+    const entityId = requireEntityId(db, payload.entity_gid, "calendar.event.upsert");
     if (existing) {
       updateEvent(existing.id, {
-        entity_id: payload.entity_id,
+        entity_id: entityId,
         type: payload.type,
         title: payload.title,
         notes: payload.notes,
@@ -680,50 +697,40 @@ async function applyCalendarEventUpsert(op: Op, db: Database): Promise<void> {
         source: payload.source,
       });
     } else {
-      const entity = db
-        .prepare("SELECT id FROM calendar_entities WHERE id = ?")
-        .get(payload.entity_id);
-      if (entity) {
-        const created = createEvent({
-          entity_id: payload.entity_id,
-          type: payload.type,
-          title: payload.title,
-          notes: payload.notes,
-          starts_at: payload.starts_at,
-          ends_at: payload.ends_at,
-          original_timezone: payload.original_timezone,
-          source: payload.source,
-        });
-        db.prepare("UPDATE calendar_events SET gid = ? WHERE id = ?").run(op.gid, created.id);
-      }
+      const created = createEvent({
+        entity_id: entityId,
+        type: payload.type,
+        title: payload.title,
+        notes: payload.notes,
+        starts_at: payload.starts_at,
+        ends_at: payload.ends_at,
+        original_timezone: payload.original_timezone,
+        source: payload.source,
+      });
+      db.prepare("UPDATE calendar_events SET gid = ? WHERE id = ?").run(op.gid, created.id);
     }
   }
 }
 
 async function applyCalendarLinkUpsert(op: Op, db: Database): Promise<void> {
   const payload = op.payload as {
-    from_entity_id: number;
-    to_entity_id: number;
+    from_entity_gid?: string;
+    to_entity_gid?: string;
     label?: string | null;
     deleted?: boolean;
   };
 
   if (payload.deleted) {
-    unlinkEntities(payload.from_entity_id, payload.to_entity_id);
-  } else {
-    const fromExists = db
-      .prepare("SELECT 1 FROM calendar_entities WHERE id = ?")
-      .get(payload.from_entity_id);
-    const toExists = db
-      .prepare("SELECT 1 FROM calendar_entities WHERE id = ?")
-      .get(payload.to_entity_id);
-    if (fromExists && toExists) {
-      linkEntities(payload.from_entity_id, payload.to_entity_id, payload.label ?? undefined);
-      db.prepare(
-        "UPDATE calendar_links SET gid = ? WHERE from_entity_id = ? AND to_entity_id = ?",
-      ).run(op.gid, payload.from_entity_id, payload.to_entity_id);
-    }
+    const link = db
+      .prepare("SELECT from_entity_id, to_entity_id FROM calendar_links WHERE gid = ?")
+      .get(op.gid) as { from_entity_id: number; to_entity_id: number } | undefined;
+    if (link) unlinkEntities(link.from_entity_id, link.to_entity_id);
+    return;
   }
+  const fromId = requireEntityId(db, payload.from_entity_gid, "calendar.link.upsert");
+  const toId = requireEntityId(db, payload.to_entity_gid, "calendar.link.upsert");
+  linkEntities(fromId, toId, payload.label ?? undefined);
+  db.prepare("UPDATE calendar_links SET gid = ? WHERE from_entity_id = ? AND to_entity_id = ?").run(op.gid, fromId, toId);
 }
 
 // ---------------------------------------------------------------------------
@@ -732,8 +739,7 @@ async function applyCalendarLinkUpsert(op: Op, db: Database): Promise<void> {
 
 async function applyJournalMetaUpsert(op: Op, db: Database): Promise<void> {
   const payload = op.payload as {
-    file_id: number;
-    project_id?: number | null;
+    project_gid?: string | null;
     task_slug: string;
     status_latest?: string | null;
     started_at?: string | null;
@@ -744,20 +750,17 @@ async function applyJournalMetaUpsert(op: Op, db: Database): Promise<void> {
   };
 
   const file = db
-    .prepare("SELECT id, project_id FROM files WHERE gid = ? OR id = ?")
-    .get(op.gid, payload.file_id) as { id: number; project_id: number | null } | undefined;
-  const targetFileId = file ? file.id : payload.file_id;
+    .prepare("SELECT id, project_id FROM files WHERE gid = ?")
+    .get(op.gid) as { id: number; project_id: number | null } | undefined;
+  if (!file) throw new UnappliableOpError(`journal.meta.upsert for unknown file ${op.gid}`);
+  const targetFileId = file.id;
 
   const fileExists = db.prepare("SELECT 1 FROM files WHERE id = ?").get(targetFileId);
   if (fileExists) {
-    let projectId = payload.project_id ?? file?.project_id ?? undefined;
+    let projectId = localProjectId(db, payload.project_gid) ?? file.project_id ?? undefined;
     if (projectId !== undefined) {
       const proj = db.prepare("SELECT 1 FROM projects WHERE id = ?").get(projectId);
       if (!proj) projectId = undefined;
-    }
-    if (!projectId && file?.project_id) {
-      const proj = db.prepare("SELECT 1 FROM projects WHERE id = ?").get(file.project_id);
-      if (proj) projectId = file.project_id;
     }
     if (!projectId) {
       const anyProj = db.prepare("SELECT id FROM projects LIMIT 1").get() as

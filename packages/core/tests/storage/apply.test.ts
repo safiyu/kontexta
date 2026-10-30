@@ -17,6 +17,8 @@ import { tmpdir } from "node:os";
 import { createDatabase, closeDatabase, getDatabase } from "../../src/db/index.js";
 import { closeAllFileWatchers, createFileWatcher, type WatcherEvent } from "../../src/watcher/index.js";
 import { applyRemoteOp } from "../../src/storage/apply.js";
+import { UnappliableOpError } from "../../src/storage/errors.js";
+import { resetDataDirCache } from "../../src/util/paths.js";
 import { pendingCount, pendingOps } from "../../src/storage/outbox.js";
 import type { Op } from "../../src/storage/op.js";
 
@@ -24,7 +26,12 @@ const TEST_DATA_DIR = mkdtempSync(join(tmpdir(), "kontexta-apply-test-"));
 const TEST_DB_PATH = join(TEST_DATA_DIR, "test.db");
 
 describe("applyRemoteOp (M58)", () => {
+  let prevDataDir: string | undefined;
+
   beforeEach(() => {
+    prevDataDir = process.env.KONTEXTA_DATA_DIR;
+    process.env.KONTEXTA_DATA_DIR = TEST_DATA_DIR;
+    resetDataDirCache();
     if (existsSync(TEST_DATA_DIR)) rmSync(TEST_DATA_DIR, { recursive: true, force: true });
     mkdirSync(TEST_DATA_DIR, { recursive: true });
     mkdirSync(join(TEST_DATA_DIR, "knowledge"), { recursive: true });
@@ -37,6 +44,9 @@ describe("applyRemoteOp (M58)", () => {
     // initialized" noise and race the next beforeEach).
     await closeAllFileWatchers();
     closeDatabase();
+    if (prevDataDir === undefined) delete process.env.KONTEXTA_DATA_DIR;
+    else process.env.KONTEXTA_DATA_DIR = prevDataDir;
+    resetDataDirCache();
     if (existsSync(TEST_DATA_DIR)) rmSync(TEST_DATA_DIR, { recursive: true, force: true });
   });
 
@@ -374,7 +384,7 @@ describe("applyRemoteOp (M58)", () => {
         kind: "project.unregister",
         origin: "remote0123456789",
         base_version: 0,
-        payload: { project_id: project!.id, slug: "remote-project" },
+        payload: { slug: "remote-project" },
         created_at: Date.now() + 1000,
       });
 
@@ -470,12 +480,8 @@ describe("applyRemoteOp (M58)", () => {
       });
 
       const db = getDatabase();
-      const e1 = db.prepare("SELECT id FROM calendar_entities WHERE gid = ?").get(entity1Gid) as {
-        id: number;
-      };
-      const e2 = db.prepare("SELECT id FROM calendar_entities WHERE gid = ?").get(entity2Gid) as {
-        id: number;
-      };
+      expect(db.prepare("SELECT id FROM calendar_entities WHERE gid = ?").get(entity1Gid)).toBeDefined();
+      expect(db.prepare("SELECT id FROM calendar_entities WHERE gid = ?").get(entity2Gid)).toBeDefined();
 
       // Link entities
       const linkGid = "601@remote0123456789";
@@ -485,8 +491,8 @@ describe("applyRemoteOp (M58)", () => {
         origin: "remote0123456789",
         base_version: null,
         payload: {
-          from_entity_id: e1.id,
-          to_entity_id: e2.id,
+          from_entity_gid: entity1Gid,
+          to_entity_gid: entity2Gid,
           label: "collaborator",
           deleted: false,
         },
@@ -507,7 +513,7 @@ describe("applyRemoteOp (M58)", () => {
         origin: "remote0123456789",
         base_version: null,
         payload: {
-          entity_id: e1.id,
+          entity_gid: entity1Gid,
           type: "meeting",
           title: "Architecture Sync",
           starts_at: "2026-10-15T14:00:00Z",
@@ -530,8 +536,8 @@ describe("applyRemoteOp (M58)", () => {
         origin: "remote0123456789",
         base_version: 0,
         payload: {
-          from_entity_id: e1.id,
-          to_entity_id: e2.id,
+          from_entity_gid: entity1Gid,
+          to_entity_gid: entity2Gid,
           deleted: true,
         },
         created_at: Date.now() + 1000,
@@ -546,7 +552,7 @@ describe("applyRemoteOp (M58)", () => {
         origin: "remote0123456789",
         base_version: 0,
         payload: {
-          entity_id: e1.id,
+          entity_gid: entity1Gid,
           type: "meeting",
           title: "Architecture Sync",
           starts_at: "2026-10-15T14:00:00Z",
@@ -577,17 +583,13 @@ describe("applyRemoteOp (M58)", () => {
       });
 
       const db = getDatabase();
-      const file = db.prepare("SELECT id FROM files WHERE gid = ?").get(fileGid) as { id: number };
-
-      const journalGid = "901@remote0123456789";
+      const journalGid = fileGid;
       await applyRemoteOp({
         gid: journalGid,
         kind: "journal.meta.upsert",
         origin: "remote0123456789",
         base_version: null,
         payload: {
-          file_id: file.id,
-          project_id: 0,
           task_slug: "task-apply-test",
           status_latest: "done",
           started_at: "2026-10-15T10:00:00Z",
@@ -764,5 +766,168 @@ describe("applyRemoteOp (M58)", () => {
       },
       15000,
     );
+  });
+
+  describe("path safety and gid resolution", () => {
+    const ORIGIN = "remote0123456789";
+    let outsideDir: string;
+
+    beforeEach(() => {
+      outsideDir = mkdtempSync(join(tmpdir(), "kontexta-apply-outside-"));
+    });
+
+    afterEach(() => {
+      rmSync(outsideDir, { recursive: true, force: true });
+    });
+
+    const op = (gid: string, kind: Op["kind"], payload: unknown): Op => ({
+      gid,
+      kind,
+      origin: ORIGIN,
+      base_version: null,
+      payload,
+      created_at: Date.now(),
+    });
+
+    it("rejects an absolute path outside the data dir and writes nothing", async () => {
+      const target = join(outsideDir, "evil.md");
+      await expect(
+        applyRemoteOp(op("1001@" + ORIGIN, "file.create", { path: target, title: "Evil", content: "x" })),
+      ).rejects.toBeInstanceOf(UnappliableOpError);
+      expect(existsSync(target)).toBe(false);
+    });
+
+    it("file.delete and folder.delete aimed outside the data dir leave a sentinel intact", async () => {
+      const sentinel = join(outsideDir, "sentinel.txt");
+      writeFileSync(sentinel, "keep me", "utf8");
+
+      await expect(
+        applyRemoteOp(op("1002@" + ORIGIN, "file.delete", { path: sentinel })),
+      ).rejects.toBeInstanceOf(UnappliableOpError);
+      await expect(
+        applyRemoteOp(op("1003@" + ORIGIN, "folder.delete", { path: outsideDir })),
+      ).rejects.toBeInstanceOf(UnappliableOpError);
+
+      expect(readFileSync(sentinel, "utf8")).toBe("keep me");
+    });
+
+    it("rejects '../' traversal in rel_path", async () => {
+      await expect(
+        applyRemoteOp(
+          op("1004@" + ORIGIN, "file.create", {
+            path: "/origin/data/knowledge/x.md",
+            rel_path: "../escaped.md",
+            content: "x",
+          }),
+        ),
+      ).rejects.toBeInstanceOf(UnappliableOpError);
+      expect(existsSync(join(TEST_DATA_DIR, "..", "escaped.md"))).toBe(false);
+    });
+
+    it("re-roots a legacy absolute origin path under the data dir via its /knowledge/ segment", async () => {
+      const gid = "1005@" + ORIGIN;
+      await applyRemoteOp(
+        op(gid, "file.create", {
+          path: "/Users/someone/.kontexta/knowledge/legacy/note.md",
+          title: "Legacy",
+          content: "# Legacy",
+        }),
+      );
+      const expected = join(TEST_DATA_DIR, "knowledge", "legacy", "note.md");
+      expect(readFileSync(expected, "utf8")).toBe("# Legacy");
+      const row = getDatabase().prepare("SELECT path FROM files WHERE gid = ?").get(gid) as { path: string };
+      expect(row.path).toBe(expected);
+    });
+
+    it("prefers rel_path over the origin's absolute path", async () => {
+      const gid = "1006@" + ORIGIN;
+      await applyRemoteOp(
+        op(gid, "file.create", {
+          path: join(outsideDir, "ignored.md"),
+          rel_path: "knowledge/from-rel.md",
+          title: "Rel",
+          content: "# Rel",
+        }),
+      );
+      expect(readFileSync(join(TEST_DATA_DIR, "knowledge", "from-rel.md"), "utf8")).toBe("# Rel");
+      expect(existsSync(join(outsideDir, "ignored.md"))).toBe(false);
+    });
+
+    it("refuses folder.delete of the data dir itself", async () => {
+      await expect(
+        applyRemoteOp(op("1007@" + ORIGIN, "folder.delete", { path: TEST_DATA_DIR })),
+      ).rejects.toBeInstanceOf(UnappliableOpError);
+      await expect(
+        applyRemoteOp(op("1008@" + ORIGIN, "folder.delete", { path: "/x", rel_path: "." })),
+      ).rejects.toBeInstanceOf(UnappliableOpError);
+      expect(existsSync(join(TEST_DATA_DIR, "knowledge"))).toBe(true);
+    });
+
+    it("tag.add, favorite.set and journal.meta.upsert for an unknown gid throw and leave a same-id local file untouched", async () => {
+      const db = getDatabase();
+      const localPath = join(TEST_DATA_DIR, "knowledge", "local.md");
+      writeFileSync(localPath, "local", "utf8");
+      const info = db
+        .prepare("INSERT INTO files (path, title, storage_type, content_hash, gid) VALUES (?, 'Local', 'local', 'h', ?)")
+        .run(localPath, "9@localmachine0000");
+      const localId = Number(info.lastInsertRowid);
+      const unknownGid = `${localId}@${ORIGIN}`;
+
+      await expect(
+        applyRemoteOp(op(unknownGid, "tag.add", { file_id: localId, tags: ["leak"] })),
+      ).rejects.toBeInstanceOf(UnappliableOpError);
+      await expect(
+        applyRemoteOp(op(unknownGid, "favorite.set", { file_id: localId, favorite: true })),
+      ).rejects.toBeInstanceOf(UnappliableOpError);
+      await expect(
+        applyRemoteOp(
+          op(unknownGid, "journal.meta.upsert", {
+            file_id: localId,
+            task_slug: "t",
+            started_at: "2026-10-15T10:00:00Z",
+            last_active_at: "2026-10-15T11:00:00Z",
+          }),
+        ),
+      ).rejects.toBeInstanceOf(UnappliableOpError);
+
+      expect(db.prepare("SELECT 1 FROM file_tags WHERE file_id = ?").get(localId)).toBeUndefined();
+      expect(db.prepare("SELECT 1 FROM favorites WHERE file_id = ?").get(localId)).toBeUndefined();
+      expect(db.prepare("SELECT 1 FROM journal_meta WHERE file_id = ?").get(localId)).toBeUndefined();
+    });
+
+    it("calendar.event.upsert resolves its entity by entity_gid, not a numeric id", async () => {
+      const db = getDatabase();
+      const entityGid = "1101@" + ORIGIN;
+      await applyRemoteOp(op(entityGid, "calendar.entity.upsert", { name: "Gid Entity", deleted: false }));
+      const entity = db.prepare("SELECT id FROM calendar_entities WHERE gid = ?").get(entityGid) as { id: number };
+
+      const eventGid = "1102@" + ORIGIN;
+      await applyRemoteOp(
+        op(eventGid, "calendar.event.upsert", {
+          entity_gid: entityGid,
+          entity_id: entity.id + 1000,
+          type: "meeting",
+          title: "By Gid",
+          starts_at: "2026-10-15T14:00:00Z",
+          ends_at: "2026-10-15T15:00:00Z",
+          deleted: false,
+        }),
+      );
+      const ev = db.prepare("SELECT entity_id FROM calendar_events WHERE gid = ?").get(eventGid) as { entity_id: number };
+      expect(ev.entity_id).toBe(entity.id);
+
+      await expect(
+        applyRemoteOp(
+          op("1103@" + ORIGIN, "calendar.event.upsert", {
+            entity_gid: "9999@" + ORIGIN,
+            type: "meeting",
+            title: "Orphan",
+            starts_at: "2026-10-15T14:00:00Z",
+            ends_at: "2026-10-15T15:00:00Z",
+            deleted: false,
+          }),
+        ),
+      ).rejects.toBeInstanceOf(UnappliableOpError);
+    });
   });
 });

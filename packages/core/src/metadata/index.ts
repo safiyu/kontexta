@@ -152,7 +152,7 @@ export function addTags(fileId: number, tagNames: string[]): void {
         kind: "tag.add",
         origin: getMachineId(),
         base_version: 0,
-        payload: { file_id: fileId, tags: linkedTags },
+        payload: { tags: linkedTags },
         created_at: Date.now(),
       });
     }
@@ -191,7 +191,7 @@ export function removeTags(fileId: number, tagIds: number[]): void {
         kind: "tag.remove",
         origin: getMachineId(),
         base_version: 0,
-        payload: { file_id: fileId, tags: removedTags },
+        payload: { tags: removedTags },
         created_at: Date.now(),
       });
     }
@@ -221,7 +221,7 @@ export function setFavorite(fileId: number, favorite: boolean): void {
       kind: "favorite.set",
       origin: getMachineId(),
       base_version: 0,
-      payload: { file_id: fileId, favorite },
+      payload: { favorite },
       created_at: Date.now(),
     });
   })();

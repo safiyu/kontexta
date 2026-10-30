@@ -4,6 +4,7 @@ import { getMachineId } from "../identity/machine.js";
 import { enqueueOp } from "../storage/outbox.js";
 import { inRemoteApply } from "../storage/apply.js";
 import type { Op } from "../storage/op.js";
+import { gidOfRow } from "../storage/gids.js";
 
 /**
  * Append a journal-mutation op to the outbox — UNLESS we are applying a remote
@@ -125,8 +126,7 @@ export function upsertJournalMeta(input: UpsertJournalMetaInput): void {
       origin: getMachineId(),
       base_version: isCreate ? null : 0,
       payload: {
-        file_id: input.file_id,
-        project_id: input.project_id,
+        project_gid: gidOfRow("projects", input.project_id),
         task_slug: input.task_slug,
         status_latest: input.status_latest ?? null,
         started_at: input.started_at,
@@ -216,8 +216,7 @@ export function markUpgradeApplied(file_id: number, status_latest: string | null
       origin: getMachineId(),
       base_version: 0,
       payload: {
-        file_id: full.file_id,
-        project_id: full.project_id,
+        project_gid: gidOfRow("projects", full.project_id),
         task_slug: full.task_slug,
         status_latest: full.status_latest,
         started_at: full.started_at,

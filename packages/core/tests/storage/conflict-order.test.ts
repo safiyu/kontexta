@@ -47,6 +47,7 @@ import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
 import Database from "better-sqlite3";
+import { resetDataDirCache } from "../../src/util/paths.js";
 import type { Hono } from "hono";
 
 // Storage server in-process app factory
@@ -59,7 +60,7 @@ import {
   pullRemoteOps,
   getSyncCursor,
 } from "../../src/storage/client.js";
-import { enqueueOp, pendingCount, markAcked } from "../../src/storage/outbox.js";
+import { enqueueOp, pendingCount } from "../../src/storage/outbox.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -140,38 +141,6 @@ async function registerClientOnServer(
   return body.token;
 }
 
-/**
- * Record a seed create op as an `acked` outbox row in `db` (server seq 1).
- *
- * In production, the client that makes a change keeps that op in its own outbox
- * once it is acked; `pushOutbox` rewrites each outbound op's `base_version` from
- * the local per-gid high-water mark (count of acked ops for the gid). A machine
- * that only PULLED a remote create has no acked outbox row for it, so a divergent
- * update it later ships would carry `base_version: 0` and be (correctly) flagged
- * `conflict` by the server, because the gid is already at version 1.
- *
- * This helper stands in for "the client that authored the seed create knows the
- * canonical version is 1", which is what lets the OTHER client's divergent update
- * be the one that conflicts — the exact scenario under test.
- */
-function recordSeedCreateAcked(
-  db: Database.Database,
-  gid: string,
-  origin: string,
-  payload: unknown,
-  createdAt: number,
-): void {
-  const id = enqueueOp(db, {
-    gid,
-    kind: "file.create",
-    origin,
-    base_version: null,
-    payload,
-    created_at: createdAt,
-  });
-  markAcked(db, id, 1);
-}
-
 describe("Server-assigned sequence order wins over client clocks (M73)", () => {
   let testDir: string;
   let serverDb: Database.Database;
@@ -185,8 +154,11 @@ describe("Server-assigned sequence order wins over client clocks (M73)", () => {
 
   beforeEach(async () => {
     testDir = mkdtempSync(join(tmpdir(), "kxta-conflict-order-test-"));
+    process.env.KONTEXTA_DATA_DIR = testDir;
+    resetDataDirCache();
 
     serverDb = createServerDatabase();
+    process.env.KXTA_STORAGE_ALLOW_OPEN_ENROLLMENT = "1";
     serverApp = createApp(serverDb);
     fetchImpl = makeInProcessFetch(serverApp);
 
@@ -239,10 +211,6 @@ describe("Server-assigned sequence order wins over client clocks (M73)", () => {
     await pullRemoteOps(dbB, { fetchImpl });
     await pullRemoteOps(dbA, { fetchImpl });
 
-    // Give B (which only PULLED the create) the same version-1 knowledge its
-    // author has, so the offline-divergence scenario is genuine: the first
-    // arrival is accepted and the second conflicts, purely by arrival order.
-    recordSeedCreateAcked(dbB, gid, MACHINE_A, seedPayload, TRUE_NOW);
 
     // Both offline. Each edits the record with a DELIBERATELY skewed clock.
     // The clock order is the EXACT INVERSE of the arrival order below:
@@ -341,7 +309,6 @@ describe("Server-assigned sequence order wins over client clocks (M73)", () => {
     await pushOutbox(dbA, { fetchImpl });
     await pullRemoteOps(dbB, { fetchImpl });
     await pullRemoteOps(dbA, { fetchImpl });
-    recordSeedCreateAcked(dbB, gid, MACHINE_A, seedPayload, TRUE_NOW);
 
     // B (PAST clock) edits and pushes FIRST -> accepted, canonical version 2.
     enqueueOp(dbB, {
@@ -390,19 +357,17 @@ describe("Server-assigned sequence order wins over client clocks (M73)", () => {
     expect(rows[1]).toMatchObject({ seq: 2, origin: MACHINE_B, status: "accepted" }); // B first
     expect(rows[2]).toMatchObject({ seq: 3, origin: MACHINE_A, status: "conflict" }); // A second
 
-    // The receiver (B) pulls the authoritative log. Phase 4 APPLIES the
-    // conflict-flagged op (the log is the authoritative record and is never
-    // dropped), so B's canonical file takes A's content, and B is surfaced
-    // the conflict for the Phase 5 Conflict Manager. (The non-clobbering
-    // fork-copy + 4-way resolution is Phase 5, not this milestone.)
+    // The receiver (B) pulls the authoritative log. A's conflict-flagged op is
+    // NOT applied over B's canonical file: it is forked into a conflict copy.
     const pullB = await pullRemoteOps(dbB, { fetchImpl });
     expect(pullB.error).toBeNull();
     expect(pullB.conflicts).toHaveLength(1);
     expect(pullB.conflicts[0].gid).toBe(gid);
     expect(pullB.conflicts[0].origin).toBe(MACHINE_A);
-    // The conflict op was applied: the file now holds A's content (seq 3, the
-    // highest-arrived op), proving the log was applied in seq order.
-    expect(readFileSync(filePath, "utf-8")).toBe("Version A");
+    expect(readFileSync(filePath, "utf-8")).toBe("Base content"); // conflicting content never reaches the canonical file
+    expect(
+      dbB.prepare("SELECT remote_content, status FROM conflicts WHERE gid = ?").all(gid),
+    ).toEqual([{ remote_content: "Version A", status: "unresolved" }]);
     expect(pendingCount(dbB)).toBe(0); // echo suppression intact
   });
 
@@ -431,7 +396,6 @@ describe("Server-assigned sequence order wins over client clocks (M73)", () => {
     await pushOutbox(dbA, { fetchImpl });
     await pullRemoteOps(dbB, { fetchImpl });
     await pullRemoteOps(dbA, { fetchImpl });
-    recordSeedCreateAcked(dbB, gid, MACHINE_A, seedPayload, TRUE_NOW);
 
     // B (FUTURE clock this time) edits and pushes FIRST -> accepted, canonical.
     enqueueOp(dbB, {
@@ -479,20 +443,16 @@ describe("Server-assigned sequence order wins over client clocks (M73)", () => {
     expect(rows[1]).toMatchObject({ seq: 2, origin: MACHINE_B, status: "accepted" }); // B first
     expect(rows[2]).toMatchObject({ seq: 3, origin: MACHINE_A, status: "conflict" }); // A second
 
-    // The receiver (B) pulls the authoritative log: it APPLIES A's
-    // conflict-flagged op (the log is preserved, never dropped — Phase 4
-    // applies conflict ops, so the canonical file takes the conflicting
-    // content) and SURFACES it in `conflicts` for the Phase 5 Conflict
-    // Manager.
+    // The receiver (B) pulls the log: the conflict-flagged op forks a conflict copy instead of overwriting.
     const pullB = await pullRemoteOps(dbB, { fetchImpl });
     expect(pullB.error).toBeNull();
     expect(pullB.conflicts).toHaveLength(1);
     expect(pullB.conflicts[0].gid).toBe(gid);
     expect(pullB.conflicts[0].origin).toBe(MACHINE_A);
-    // The conflict op (seq 3, the highest-arrived) was applied: the file now
-    // holds A's content, proving the log is applied in seq order regardless
-    // of clock.
-    expect(readFileSync(filePath, "utf-8")).toBe("Version A");
+    expect(readFileSync(filePath, "utf-8")).toBe("Base content"); // conflicting content never reaches the canonical file
+    expect(
+      dbB.prepare("SELECT remote_content, status FROM conflicts WHERE gid = ?").all(gid),
+    ).toEqual([{ remote_content: "Version A", status: "unresolved" }]);
     expect(pendingCount(dbB)).toBe(0); // no echo op was enqueued
   });
 

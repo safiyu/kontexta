@@ -18,6 +18,9 @@
  *   HOSTNAME             bind address                    (default 0.0.0.0)
  *   KXTA_STORAGE_DB      SQLite file path                (default /data/kontexta-storage.db)
  *   KXTA_STORAGE_PEPPER  HMAC pepper for token hashes    (default DEFAULT_PEPPER)
+ *   KXTA_STORAGE_ENROLL_SECRET  secret a new machine presents at POST /clients
+ *   KXTA_STORAGE_ALLOW_OPEN_ENROLLMENT=1  dev only: enroll without a secret
+ *   KXTA_STORAGE_ALLOW_DEFAULT_PEPPER=1   allow the default pepper on a non-loopback bind
  *
  * The pepper is the one value a real deployment MUST override: token hashes
  * are bound to it, so a forgotten override means every client token on the
@@ -81,7 +84,14 @@ export function createApp(db: ReturnType<typeof openDatabase>): Hono {
   const app = new Hono();
   // The router is mounted at the root; its routes are absolute
   // (/health, /clients, /ops), so this is a plain mount, not a prefix.
-  app.route("/", createOpsRouter(db, { pepper: process.env.KXTA_STORAGE_PEPPER || DEFAULT_PEPPER }));
+  app.route(
+    "/",
+    createOpsRouter(db, {
+      pepper: process.env.KXTA_STORAGE_PEPPER || DEFAULT_PEPPER,
+      enrollSecret: process.env.KXTA_STORAGE_ENROLL_SECRET || "",
+      allowOpenEnrollment: process.env.KXTA_STORAGE_ALLOW_OPEN_ENROLLMENT === "1",
+    }),
+  );
 
   // The router declares no notFound/error handlers (it returns `router` with
   // only its four routes), so the top-level app owns both — a 404 for the
@@ -102,6 +112,25 @@ export function createApp(db: ReturnType<typeof openDatabase>): Hono {
   return app;
 }
 
+/** True for loopback bind addresses. */
+export function isLoopbackHost(host: string): boolean {
+  return host === "localhost" || host === "::1" || host === "[::1]" || /^127\./.test(host);
+}
+
+/** Startup guard: the default pepper is only tolerated on a loopback bind (or an explicit override). */
+export function defaultPepperRefusal(
+  usingDefaultPepper: boolean,
+  hostname: string,
+  env: NodeJS.ProcessEnv = process.env,
+): string | null {
+  if (!usingDefaultPepper || isLoopbackHost(hostname)) return null;
+  if (env.KXTA_STORAGE_ALLOW_DEFAULT_PEPPER === "1") return null;
+  return (
+    `refusing to listen on ${hostname} with the default token pepper: set KXTA_STORAGE_PEPPER ` +
+    "(or KXTA_STORAGE_ALLOW_DEFAULT_PEPPER=1 to override)"
+  );
+}
+
 /**
  * Open the database, build the app, and bind the HTTP listener.
  *
@@ -114,6 +143,12 @@ export function main(): void {
   const hostname = process.env.HOSTNAME || "0.0.0.0";
   const dbPath = process.env.KXTA_STORAGE_DB || DEFAULT_DB_PATH;
   const usingDefaultPepper = !process.env.KXTA_STORAGE_PEPPER;
+
+  const refusal = defaultPepperRefusal(usingDefaultPepper, hostname);
+  if (refusal) {
+    process.stderr.write(`storage-server: ${refusal}\n`);
+    process.exit(1);
+  }
 
   let db;
   try {

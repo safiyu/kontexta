@@ -28,6 +28,7 @@ import { formatGid } from "../identity/gid.js";
 import { getMachineId, getMachineLabel } from "../identity/machine.js";
 import { withLock, fileLockKey } from "../util/safety.js";
 import { enqueueOp } from "./outbox.js";
+import { toRelPath, resolveSyncPath } from "./paths.js";
 import type { Op } from "./op.js";
 
 // ---------------------------------------------------------------------------
@@ -197,71 +198,95 @@ interface DiffOp {
   line: string;
 }
 
-function myersDiff(a: string[], b: string[]): DiffOp[] {
+/** Edit-distance ceiling for the exact diff; past it the middle block is reported as replaced wholesale. */
+const MAX_EDIT_DISTANCE = 2000;
+
+function myersEdits(a: string[], b: string[]): DiffOp[] | null {
   const n = a.length;
   const m = b.length;
   const max = n + m;
   if (max === 0) return [];
+  const limit = Math.min(max, MAX_EDIT_DISTANCE);
+  const offset = limit + 1;
+  const v = new Int32Array(2 * limit + 3);
+  const trace: Int32Array[] = [];
 
-  const v: { [k: number]: number } = { 1: 0 };
-  const trace: Array<{ [k: number]: number }> = [];
-
-  let x = 0;
-  let y = 0;
-
-  loop: for (let d = 0; d <= max; d++) {
-    trace.push({ ...v });
+  let found = false;
+  loop: for (let d = 0; d <= limit; d++) {
+    // Only diagonals [-d, d] are read at step d, so that slice is all the backtrack needs.
+    trace.push(v.slice(offset - d - 1, offset + d + 2));
     for (let k = -d; k <= d; k += 2) {
-      if (k === -d || (k !== d && (v[k - 1] ?? 0) < (v[k + 1] ?? 0))) {
-        x = v[k + 1] ?? 0;
+      let x: number;
+      if (k === -d || (k !== d && v[offset + k - 1] < v[offset + k + 1])) {
+        x = v[offset + k + 1];
       } else {
-        x = (v[k - 1] ?? 0) + 1;
+        x = v[offset + k - 1] + 1;
       }
-      y = x - k;
+      let y = x - k;
       while (x < n && y < m && a[x] === b[y]) {
         x++;
         y++;
       }
-      v[k] = x;
+      v[offset + k] = x;
       if (x >= n && y >= m) {
+        found = true;
         break loop;
       }
     }
   }
+  if (!found) return null;
 
   const result: DiffOp[] = [];
-  x = n;
-  y = m;
-
+  let x = n;
+  let y = m;
   for (let d = trace.length - 1; d >= 0; d--) {
     const vPrev = trace[d];
+    const at = (k: number): number => vPrev[k + d + 1];
     const k = x - y;
-    let prevK: number;
-    if (k === -d || (k !== d && (vPrev[k - 1] ?? 0) < (vPrev[k + 1] ?? 0))) {
-      prevK = k + 1;
-    } else {
-      prevK = k - 1;
-    }
-    const prevX = vPrev[prevK] ?? 0;
-    const prevY = prevX - prevK;
+    const prevK = k === -d || (k !== d && at(k - 1) < at(k + 1)) ? k + 1 : k - 1;
+    const prevX = d === 0 ? 0 : at(prevK);
+    const prevY = d === 0 ? 0 : prevX - prevK;
 
     while (x > prevX && y > prevY) {
-      result.unshift({ type: "equal", line: a[x - 1] });
+      result.push({ type: "equal", line: a[x - 1] });
       x--;
       y--;
     }
     if (d > 0) {
       if (x === prevX) {
-        result.unshift({ type: "insert", line: b[y - 1] });
+        result.push({ type: "insert", line: b[y - 1] });
         y--;
       } else {
-        result.unshift({ type: "delete", line: a[x - 1] });
+        result.push({ type: "delete", line: a[x - 1] });
         x--;
       }
     }
   }
+  return result.reverse();
+}
 
-  return result;
+function myersDiff(a: string[], b: string[]): DiffOp[] {
+  let start = 0;
+  while (start < a.length && start < b.length && a[start] === b[start]) start++;
+  let endA = a.length;
+  let endB = b.length;
+  while (endA > start && endB > start && a[endA - 1] === b[endB - 1]) {
+    endA--;
+    endB--;
+  }
+  const midA = a.slice(start, endA);
+  const midB = b.slice(start, endB);
+  const mid =
+    myersEdits(midA, midB) ??
+    [
+      ...midA.map((line): DiffOp => ({ type: "delete", line })),
+      ...midB.map((line): DiffOp => ({ type: "insert", line })),
+    ];
+  return [
+    ...a.slice(0, start).map((line): DiffOp => ({ type: "equal", line })),
+    ...mid,
+    ...a.slice(endA).map((line): DiffOp => ({ type: "equal", line })),
+  ];
 }
 
 /**
@@ -477,14 +502,13 @@ export function forkConflictFromOp(
 
   const payload = op.payload as {
     path?: string;
+    rel_path?: string;
     content?: string;
     title?: string;
   };
 
-  const filePath = payload.path;
-  if (!filePath) {
-    throw new Error(`forkConflictFromOp: op for gid ${op.gid} missing payload.path`);
-  }
+  // Maps the origin machine's path onto this machine's data dir; throws UnappliableOpError when unsafe.
+  const filePath = resolveSyncPath(payload.path, payload.rel_path);
 
   const remoteContent = typeof payload.content === "string" ? payload.content : "";
 
@@ -520,10 +544,10 @@ export function forkConflictFromOp(
 // Conflict Queries
 // ---------------------------------------------------------------------------
 
-function rowToRecord(row: any): ConflictRecord {
+function rowToRecord(row: any, withDiff: boolean): ConflictRecord {
   const localContent = row.local_content ?? "";
   const remoteContent = row.remote_content ?? "";
-  const { diff, additions, deletions } = computeDiff(localContent, remoteContent);
+  const stats = withDiff ? computeDiff(localContent, remoteContent) : null;
 
   return {
     id: row.id,
@@ -536,9 +560,7 @@ function rowToRecord(row: any): ConflictRecord {
     server_seq: row.server_seq,
     local_content: localContent,
     remote_content: remoteContent,
-    diff,
-    additions,
-    deletions,
+    ...(stats ?? {}),
     status: row.status,
     resolution: row.resolution,
     resolved_at: row.resolved_at,
@@ -548,6 +570,7 @@ function rowToRecord(row: any): ConflictRecord {
 
 /**
  * List conflicts filtered by status. Defaults to unresolved conflicts.
+ * Records omit diff/additions/deletions (computed only by getConflict/getConflictById).
  */
 export function listConflicts(
   dbHandle?: Database.Database,
@@ -573,7 +596,7 @@ export function listConflicts(
   }
 
   const rows = db.prepare(query).all(...params) as any[];
-  return rows.map(rowToRecord);
+  return rows.map((r) => rowToRecord(r, false));
 }
 
 /**
@@ -596,7 +619,7 @@ export function getConflict(
     )
     .get(gid) as any;
 
-  return row ? rowToRecord(row) : null;
+  return row ? rowToRecord(row, true) : null;
 }
 
 /**
@@ -610,7 +633,7 @@ export function getConflictById(
   ensureConflictsTable(db);
 
   const row = db.prepare("SELECT * FROM conflicts WHERE id = ?").get(id) as any;
-  return row ? rowToRecord(row) : null;
+  return row ? rowToRecord(row, true) : null;
 }
 
 /**
@@ -717,13 +740,18 @@ export async function resolveConflict(
       }
 
       case "keep-mine": {
-        // Re-assert local state: write local content if missing, enqueue file.update op
-        if (!existsSync(conflict.file_path)) {
+        // Re-assert the CURRENT canonical file (the registration snapshot may be stale)
+        let mineContent: string = conflict.local_content;
+        if (existsSync(conflict.file_path)) {
+          try {
+            mineContent = readFileSync(conflict.file_path, "utf-8");
+          } catch {}
+        } else {
           mkdirSync(dirname(conflict.file_path), { recursive: true });
-          writeFileSync(conflict.file_path, conflict.local_content, "utf8");
+          writeFileSync(conflict.file_path, mineContent, "utf8");
         }
 
-        const hash = sha256(conflict.local_content);
+        const hash = sha256(mineContent);
 
         db.transaction(() => {
           db.prepare(`
@@ -742,7 +770,7 @@ export async function resolveConflict(
             db.prepare("INSERT INTO fts_index (rowid, title, content) VALUES (?, ?, ?)").run(
               file.id,
               file.title,
-              conflict.local_content
+              mineContent
             );
           }
 
@@ -754,8 +782,9 @@ export async function resolveConflict(
             base_version: conflict.base_version ?? 0,
             payload: {
               path: conflict.file_path,
+              rel_path: toRelPath(conflict.file_path) ?? undefined,
               title: file?.title ?? basename(conflict.file_path),
-              content: conflict.local_content,
+              content: mineContent,
               content_hash: hash,
             },
             created_at: now,
@@ -830,8 +859,14 @@ export async function resolveConflict(
               base_version: null,
               payload: {
                 path: conflict.conflict_path,
+                rel_path: toRelPath(conflict.conflict_path) ?? undefined,
                 title: copyTitle,
-                project_id: canonicalFile?.project_id ?? null,
+                project_gid:
+                  canonicalFile?.project_id == null
+                    ? null
+                    : ((db.prepare("SELECT gid FROM projects WHERE id = ?").get(canonicalFile.project_id) as
+                        | { gid: string | null }
+                        | undefined)?.gid ?? null),
                 storage_type: canonicalFile?.storage_type ?? "local",
                 content_class: canonicalFile?.content_class ?? null,
                 content: conflict.remote_content,
@@ -891,6 +926,7 @@ export async function resolveConflict(
             base_version: conflict.base_version ?? 0,
             payload: {
               path: conflict.file_path,
+              rel_path: toRelPath(conflict.file_path) ?? undefined,
               title: file?.title ?? basename(conflict.file_path),
               content: mergedText,
               content_hash: hash,

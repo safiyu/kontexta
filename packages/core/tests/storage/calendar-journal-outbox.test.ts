@@ -135,8 +135,8 @@ describe("calendar and journal write-routine outbox instrumentation (M56)", () =
       expect(op.gid).toBe(link.gid);
       expect(op.base_version).toBeNull();
       expect(op.payload).toEqual({
-        from_entity_id: a.id,
-        to_entity_id: b.id,
+        from_entity_gid: a.gid,
+        to_entity_gid: b.gid,
         label: "collaborates",
         deleted: false,
       });
@@ -153,8 +153,8 @@ describe("calendar and journal write-routine outbox instrumentation (M56)", () =
       const secondOp = ops[1].op;
       expect(secondOp.base_version).toBe(0);
       expect(secondOp.payload).toEqual({
-        from_entity_id: a.id,
-        to_entity_id: b.id,
+        from_entity_gid: a.gid,
+        to_entity_gid: b.gid,
         label: "partner",
         deleted: false,
       });
@@ -173,8 +173,8 @@ describe("calendar and journal write-routine outbox instrumentation (M56)", () =
       expect(unlinkOp.gid).toBe(link.gid);
       expect(unlinkOp.base_version).toBe(0);
       expect(unlinkOp.payload).toEqual({
-        from_entity_id: a.id,
-        to_entity_id: b.id,
+        from_entity_gid: a.gid,
+        to_entity_gid: b.gid,
         label: "works-with",
         deleted: true,
       });
@@ -210,7 +210,7 @@ describe("calendar and journal write-routine outbox instrumentation (M56)", () =
       expect(op.gid).toBe(event.gid);
       expect(op.base_version).toBeNull();
       expect(op.payload).toEqual({
-        entity_id: entity.id,
+        entity_gid: entity.gid,
         type: "meeting",
         title: "Sprint Planning",
         notes: "Discuss Q4 goals",
@@ -285,6 +285,7 @@ describe("calendar and journal write-routine outbox instrumentation (M56)", () =
         "test-project",
         "/tmp/project",
       );
+      db.prepare(`UPDATE projects SET gid = ? WHERE id = ?`).run(`${projectId}@${getMachineId()}`, projectId);
       db.prepare(
         `INSERT OR IGNORE INTO files (id, path, title, project_id, storage_type, content_hash)
          VALUES (?, ?, ?, ?, 'local', ?)`,
@@ -316,8 +317,7 @@ describe("calendar and journal write-routine outbox instrumentation (M56)", () =
       expect(op.origin).toBe(getMachineId());
       expect(op.base_version).toBeNull();
       expect(op.payload).toEqual({
-        file_id: 42,
-        project_id: 10,
+        project_gid: `10@${getMachineId()}`,
         task_slug: "task-1",
         status_latest: "in_progress",
         started_at: "2026-10-15T08:00:00.000Z",
@@ -359,7 +359,7 @@ describe("calendar and journal write-routine outbox instrumentation (M56)", () =
       const secondOp = ops[1].op;
       expect(secondOp.base_version).toBe(0);
       expect(secondOp.payload).toMatchObject({
-        file_id: 43,
+        project_gid: `10@${getMachineId()}`,
         status_latest: "done",
         touched_files: ["src/index.ts", "src/util.ts"],
       });
@@ -389,7 +389,7 @@ describe("calendar and journal write-routine outbox instrumentation (M56)", () =
       const upgradeOp = ops[1].op;
       expect(upgradeOp.base_version).toBe(0);
       expect(upgradeOp.payload).toMatchObject({
-        file_id: 44,
+        project_gid: `10@${getMachineId()}`,
         status_latest: "upgraded",
         git_refs: [{ ref_type: "commit", ref_value: "abc1234" }],
       });

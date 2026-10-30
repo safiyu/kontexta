@@ -27,10 +27,11 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, rmSync, existsSync } from "node:fs";
+import { mkdtempSync, rmSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createDatabase, closeDatabase } from "../../src/db/index.js";
+import { resetDataDirCache } from "../../src/util/paths.js";
 import { enqueueOp, markAcked, markSent } from "../../src/storage/outbox.js";
 import {
   ACTIVE_POLL_INTERVAL_DEFAULT_MS,
@@ -38,6 +39,7 @@ import {
   BACKOFF_INITIAL_MS,
   BACKOFF_MAX_MS,
   MAX_BATCH_SIZE,
+  MAX_APPLY_ATTEMPTS,
   backoffDelay,
   normalizeBaseUrl,
   readEndpointConfig,
@@ -127,6 +129,8 @@ describe("storage client (M68)", () => {
 
   beforeEach(() => {
     testDir = mkdtempSync(join(tmpdir(), "kontexta-client-test-"));
+    process.env.KONTEXTA_DATA_DIR = testDir;
+    resetDataDirCache();
     db = createDatabase(join(testDir, "test.db"));
     MID = machineIdOf(db);
     stopSyncLoop(); // paranoia: never carry a loop across tests
@@ -134,6 +138,8 @@ describe("storage client (M68)", () => {
 
   afterEach(() => {
     stopSyncLoop();
+    delete process.env.KONTEXTA_DATA_DIR;
+    resetDataDirCache();
     closeDatabase();
     if (existsSync(testDir)) rmSync(testDir, { recursive: true, force: true });
   });
@@ -626,7 +632,7 @@ describe("storage client (M68)", () => {
       kind: "file.update",
       origin: REMOTE_MID,
       base_version: 0,
-      payload: { path: join(testDir, `r${n}.md`), content: `remote-${n}` },
+      payload: { path: join(testDir, "knowledge", `r${n}.md`), content: `remote-${n}` },
       created_at: 1_700_000_000_500 + n,
       status: "accepted",
       ...over,
@@ -658,7 +664,7 @@ describe("storage client (M68)", () => {
 
       // Both remote files landed on disk + in the files table with their gids.
       for (const n of [1, 2]) {
-        const p = join(testDir, `r${n}.md`);
+        const p = join(testDir, "knowledge", `r${n}.md`);
         expect(existsSync(p)).toBe(true);
         const row = db.prepare("SELECT gid FROM files WHERE path = ?").get(p) as
           | { gid: string }
@@ -715,13 +721,13 @@ describe("storage client (M68)", () => {
       ]));
       const res = await pullRemoteOps(db, { fetchImpl: fetch });
       expect(res.error).toMatch(/refusing to advance past malformed op \(seq 2\)/);
-      // It applied the first op, but did NOT advance the cursor past seq 2
+      // It applied seq 1, keeps that progress, and stops before the malformed seq 2
       expect(res.applied).toBe(1);
-      expect(res.cursor).toBe(0);
-      expect(getSyncCursor(db)).toBe(0);
+      expect(res.cursor).toBe(1);
+      expect(getSyncCursor(db)).toBe(1);
     });
 
-    it("surfaces server-flagged conflicts in res.conflicts and applies the op", async () => {
+    it("surfaces server-flagged conflicts in res.conflicts and applies the op when no local file exists", async () => {
       setEndpoint(db);
       const conflictRow = remoteRow(1, 1, { status: "conflict" });
       const { fetch } = fakeFetch(serveGet([conflictRow]));
@@ -731,6 +737,78 @@ describe("storage client (M68)", () => {
       expect(res.cursor).toBe(1);
       expect(res.conflicts.length).toBe(1);
       expect(res.conflicts[0].gid).toBe(REMOTE_GID(1));
+    });
+
+    it("records gid_version from pulled rows and bases the next push on it", async () => {
+      setEndpoint(db);
+      const { fetch } = fakeFetch(serveGet([remoteRow(1, 7, { gid_version: 3 })]));
+      expect((await pullRemoteOps(db, { fetchImpl: fetch })).error).toBeNull();
+      expect(db.prepare("SELECT version FROM gid_versions WHERE gid = ?").get(REMOTE_GID(7))).toEqual({ version: 3 });
+
+      const id = enqueueOp(db, validOp(7, { gid: REMOTE_GID(7), kind: "file.update", base_version: 0 }));
+      const sent = fakeFetch((url, init) => {
+        const body = JSON.parse(init!.body as string) as Array<Record<string, unknown>>;
+        return { status: 200, body: { results: body.map((o) => ({ client_seq: o.client_seq, seq: 9, status: "accepted", duplicate: false, version: 4 })) } };
+      });
+      await pushOutbox(db, { fetchImpl: sent.fetch });
+      expect(JSON.parse(sent.calls[0].init!.body as string)[0].base_version).toBe(3);
+      expect(outboxRow(db, id).status).toBe("acked");
+      expect(db.prepare("SELECT version FROM gid_versions WHERE gid = ?").get(REMOTE_GID(7))).toEqual({ version: 4 });
+    });
+
+    it("skips an unappliable op (path outside the data dir), records it, and keeps applying later ops", async () => {
+      setEndpoint(db);
+      const evil = remoteRow(1, 1, { payload: { path: "/etc/kontexta-evil.md", content: "x" } });
+      const { fetch } = fakeFetch(serveGet([evil, remoteRow(2, 2)]));
+      const res = await pullRemoteOps(db, { fetchImpl: fetch });
+      expect(res.error).toBeNull();
+      expect(res.skipped).toBe(1);
+      expect(res.applied).toBe(1);
+      expect(res.cursor).toBe(2);
+      expect(getSyncCursor(db)).toBe(2);
+      expect(existsSync("/etc/kontexta-evil.md")).toBe(false);
+      const skipped = db.prepare("SELECT seq, skipped FROM sync_skipped_ops").all();
+      expect(skipped).toEqual([{ seq: 1, skipped: 1 }]);
+      expect(existsSync(join(testDir, "knowledge", "r2.md"))).toBe(true);
+    });
+
+    it("retries a transient apply failure, then skips it after MAX_APPLY_ATTEMPTS", async () => {
+      setEndpoint(db);
+      // A regular file where the knowledge dir should be makes the disk write throw a non-Unappliable error.
+      writeFileSync(join(testDir, "knowledge"), "not a dir");
+      const { fetch } = fakeFetch(serveGet([remoteRow(1, 1), remoteRow(2, 2)]));
+      for (let i = 1; i < MAX_APPLY_ATTEMPTS; i++) {
+        const res = await pullRemoteOps(db, { fetchImpl: fetch });
+        expect(res.error, `attempt ${i}`).toMatch(/failed to apply seq 1/);
+        expect(res.cursor).toBe(0);
+        expect(db.prepare("SELECT attempts, skipped FROM sync_skipped_ops WHERE seq = 1").get()).toEqual({ attempts: i, skipped: 0 });
+      }
+      const last = await pullRemoteOps(db, { fetchImpl: fetch });
+      expect(last.skipped).toBe(1); // seq 1 is given up on; seq 2 is now the one being retried
+      expect(last.error).toMatch(/failed to apply seq 2/);
+      expect(db.prepare("SELECT skipped FROM sync_skipped_ops WHERE seq = 1").get()).toEqual({ skipped: 1 });
+    });
+
+    it("forks a conflict copy for a conflict-flagged file.update and leaves the canonical file intact", async () => {
+      setEndpoint(db);
+      const canonical = join(testDir, "knowledge", "r1.md");
+      const first = fakeFetch(serveGet([remoteRow(1, 1)]));
+      await pullRemoteOps(db, { fetchImpl: first.fetch });
+      expect(readFileSync(canonical, "utf8")).toBe("remote-1");
+
+      const conflictOp = remoteRow(2, 1, {
+        origin: "bbbbbbbbbbbbbbbb",
+        status: "conflict",
+        payload: { path: canonical, content: "loser-content" },
+      });
+      const second = fakeFetch(serveGet([remoteRow(1, 1), conflictOp]));
+      const res = await pullRemoteOps(db, { fetchImpl: second.fetch });
+      expect(res.error).toBeNull();
+      expect(res.conflicts.length).toBe(1);
+      expect(readFileSync(canonical, "utf8")).toBe("remote-1");
+      const rows = db.prepare("SELECT gid, status, remote_content FROM conflicts").all() as Array<Record<string, unknown>>;
+      expect(rows).toEqual([{ gid: REMOTE_GID(1), status: "unresolved", remote_content: "loser-content" }]);
+      expect(res.cursor).toBe(2);
     });
 
     it("returns 'not connected' when endpoint credentials are not set", async () => {
@@ -768,7 +846,7 @@ describe("storage client (M68)", () => {
         kind: "file.update",
         origin: REMOTE_MID,
         base_version: 0,
-        payload: { path: join(testDir, "r10.md"), content: "remote-10" },
+        payload: { path: join(testDir, "knowledge", "r10.md"), content: "remote-10" },
         created_at: 1_700_000_000_100,
         status: "accepted",
       };

@@ -1,6 +1,6 @@
 {
   "name": "kontexta-storage-server",
-  "version": "6.1.0",
+  "version": "6.2.0",
   "description": "Authoritative op-log backend for Kontexta's local-first storage sync",
   "private": true,
   "type": "module",

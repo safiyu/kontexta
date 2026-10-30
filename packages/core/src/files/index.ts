@@ -19,6 +19,8 @@ import { computeContentClass } from "../content-class/index.js";
 import { enqueueOp } from "../storage/outbox.js";
 import { inRemoteApply } from "../storage/apply.js";
 import type { Op } from "../storage/op.js";
+import { toRelPath } from "../storage/paths.js";
+import { gidOfRow } from "../storage/gids.js";
 import type { FileRecord, Destination, FileFilters, StorageType } from "../types.js";
 
 /**
@@ -321,13 +323,15 @@ export async function createFile(opts: CreateFileOptions): Promise<FileRecordWit
         base_version: null,
         payload: {
           path: filePath,
+          rel_path: toRelPath(filePath) ?? undefined,
           title,
-          project_id: projectId || null,
+          project_gid: gidOfRow("projects", projectId || null),
           storage_type: storageType,
           content_class: contentClass,
           source_path: sourcePath || null,
           content,
           content_hash: contentHash,
+          tags,
         },
         created_at: Date.now(),
       });
@@ -458,6 +462,7 @@ export async function updateFile(id: number, content: string, dataDir: string): 
         base_version: 0,
         payload: {
           path: fileRecord.path,
+          rel_path: toRelPath(fileRecord.path) ?? undefined,
           title: fileRecord.title,
           content,
           content_hash: contentHash,
@@ -554,7 +559,7 @@ export async function deleteFile(id: number, dataDir?: string): Promise<void> {
       kind: "file.delete",
       origin: getMachineId(),
       base_version: 0,
-      payload: { path: file.path },
+      payload: { path: file.path, rel_path: toRelPath(file.path) ?? undefined },
       created_at: Date.now(),
     });
     deleteFtsStmt.run(id);
@@ -822,6 +827,8 @@ export function moveFile(id: number, newPath: string, dataDir?: string): FileRec
         payload: {
           from: oldPath,
           to: newPath,
+          rel_from: toRelPath(oldPath) ?? undefined,
+          rel_to: toRelPath(newPath) ?? undefined,
           ...(newContentClass !== null ? { content_class: newContentClass } : {}),
         },
         created_at: Date.now(),

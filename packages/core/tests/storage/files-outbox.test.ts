@@ -20,6 +20,7 @@ import { createFile, updateFile, deleteFile, moveFile } from "../../src/files/in
 import { pendingOps, pendingCount } from "../../src/storage/outbox.js";
 import { runInApplyScope, inRemoteApply } from "../../src/storage/apply.js";
 import { getMachineId } from "../../src/identity/machine.js";
+import { resetDataDirCache } from "../../src/util/paths.js";
 
 const TEST_DATA_DIR = mkdtempSync(join(tmpdir(), "kontexta-files-outbox-"));
 const TEST_DB_PATH = join(TEST_DATA_DIR, "test.db");
@@ -145,5 +146,62 @@ describe("files write-routine outbox instrumentation (M54)", () => {
       expect(pendingCount(getDatabase()), "remote update/move must not enqueue").toBe(1);
       expect(pending().every((o) => o.op.kind === "file.create"), "only the original create op remains").toBe(true);
     });
+  });
+});
+
+describe("portable file op payloads", () => {
+  const prevDir = process.env.KONTEXTA_DATA_DIR;
+
+  beforeEach(() => {
+    if (existsSync(TEST_DATA_DIR)) rmSync(TEST_DATA_DIR, { recursive: true, force: true });
+    mkdirSync(join(TEST_DATA_DIR, "knowledge"), { recursive: true });
+    createDatabase(TEST_DB_PATH);
+  });
+
+  afterEach(() => {
+    closeDatabase();
+    if (prevDir === undefined) delete process.env.KONTEXTA_DATA_DIR;
+    else process.env.KONTEXTA_DATA_DIR = prevDir;
+    resetDataDirCache();
+    if (existsSync(TEST_DATA_DIR)) rmSync(TEST_DATA_DIR, { recursive: true, force: true });
+  });
+
+  test("createFile carries creation tags in the file.create payload", async () => {
+    await createFile({
+      title: "Tagged",
+      content: "body",
+      destination: "knowledge",
+      folder: "knowledge",
+      dataDir: TEST_DATA_DIR,
+      tags: ["spec", "api"],
+    });
+
+    const create = pending().find((o) => o.op.kind === "file.create");
+    expect((create!.op.payload as { tags?: string[] }).tags).toEqual(["spec", "api"]);
+  });
+
+  test("rel_path is set (forward slashes) when the file is inside the data dir", async () => {
+    process.env.KONTEXTA_DATA_DIR = TEST_DATA_DIR;
+    resetDataDirCache();
+    const file = await makeFile("Inside", "body");
+
+    const create = pending().find((o) => o.op.kind === "file.create");
+    const rel = (create!.op.payload as { rel_path?: string }).rel_path;
+    expect(rel).toBe("knowledge/knowledge/inside.md");
+    expect(join(TEST_DATA_DIR, rel!)).toBe(file.path);
+  });
+
+  test("rel_path is absent when the file is outside the data dir", async () => {
+    const other = mkdtempSync(join(tmpdir(), "kontexta-other-data-"));
+    try {
+      process.env.KONTEXTA_DATA_DIR = other;
+      resetDataDirCache();
+      await makeFile("Outside", "body");
+
+      const create = pending().find((o) => o.op.kind === "file.create");
+      expect(create!.op.payload).not.toHaveProperty("rel_path");
+    } finally {
+      rmSync(other, { recursive: true, force: true });
+    }
   });
 });

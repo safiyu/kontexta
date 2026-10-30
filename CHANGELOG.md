@@ -1,6 +1,36 @@
 # Changelog
 
-## Unreleased
+## 6.2.0 - Storage module: multi-machine op-log sync (2026-10-30)
+
+### Added
+
+- **Multi-machine sync through a storage server.** Each machine keeps its own vault and exchanges fine-grained ops (files, tags, favorites, projects, calendar, journal) with a `kontexta-storage-server` over short polling. This covers machine identity and global ids, a local outbox, the storage server, the endpoint client and sync loop, and a Conflict Manager (`/conflicts`, top-bar badge, `conflicts_*` MCP tools). Sync is optional and off until `kontexta endpoint connect`.
+- **`kontexta endpoint run`** runs the sync loop in the foreground for machines without the web app. The web app starts the loop at boot and it stays dormant until a machine is connected.
+- **`--enroll-secret`** on `kontexta endpoint connect` (or `KXTA_STORAGE_ENROLL_SECRET`), needed to register a new machine.
+- **Server env vars:** `KXTA_STORAGE_ENROLL_SECRET`, `KXTA_STORAGE_ALLOW_OPEN_ENROLLMENT`, `KXTA_STORAGE_ALLOW_DEFAULT_PEPPER`, and `HOST_BIND` in `docker-compose.storage.yml`.
+- **Migration 016:** `gid_versions` (server version seen per record) and `sync_skipped_ops` (remote ops that could not be applied).
+
+### Fixed
+
+- **Conflicts now converge.** A machine's base version used to count only its own acked ops, so the first edit of any record that came from another machine was flagged as a conflict, and a resolution was flagged again. Each machine now tracks the server version it has seen per record. The server returns `version` on `POST /ops` and `gid_version` on `GET /ops`.
+- **Conflict copies are created.** Conflict-flagged remote file content used to overwrite the local file, so local edits were lost and the Conflict Manager stayed empty. It now writes a conflict copy and leaves the local file alone.
+- **Automatic sync actually runs.** Nothing started the sync loop before, so only manual `push` and `pull` worked.
+- **A failing remote op no longer blocks sync.** It is recorded in `sync_skipped_ops` and skipped (retried five times first, unless it can never apply). Malformed ops still stop the pull.
+- **Ops no longer use machine-local ids.** Tags, favorites, journal metadata, calendar events and links, and file project links are resolved by global id. Before, they could attach to an unrelated record that had the same local id on another machine. Tags set at file creation now replicate.
+- **Keep-mine, keep-both and merged use the file's current content,** not the content captured when the conflict was detected.
+- **Conflict list is cheap.** Diffs are only computed for a single conflict and are capped, and the top-bar badge polls a count-only endpoint.
+
+### Security
+
+- **Remote ops can no longer write outside the data directory.** File paths travel relative to the data directory and are resolved against each machine's own, and folder ops cannot target the data directory itself. Previously a peer's absolute path was written or deleted as is.
+- **Storage server registration needs an enrollment secret.** `POST /clients` was open and handed out a full-access token. New machines are refused unless `KXTA_STORAGE_ENROLL_SECRET` matches.
+- **`POST /ops` rejects ops whose `origin` is not the authenticated machine.**
+- **The server refuses to start on the default pepper** when bound to a non-loopback address, and the compose file now publishes the port on `127.0.0.1` by default.
+
+### Changed
+
+- Op payloads changed shape (`rel_path`, `project_gid`, `entity_gid` and similar replace absolute paths and local ids), so all machines and the server should be upgraded together.
+- `file.*` ops for files outside the data directory (project-repo files) are skipped on other machines. Only knowledge-base files sync.
 
 ### Removed
 

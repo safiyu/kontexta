@@ -16,4 +16,4 @@
  */
 
 /** Monotonic package version, surfaced on the `/health` endpoint. */
-export const VERSION = "6.1.0";
+export const VERSION = "6.2.0";

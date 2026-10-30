@@ -86,6 +86,22 @@ describe("conflicts API route (GET /api/conflicts)", () => {
     expect(bodyDefault.conflicts.find((c: any) => c.gid === rec.gid)).toBeUndefined();
   });
 
+  it("count=1 returns only the unresolved total, and list rows carry no diff", async () => {
+    ensureDbInitialized();
+    const fp = makeConflictFile("list-count.md", "local-n");
+    registerConflict({ gid: gidFor(9), filePath: fp, origin: "e".repeat(16), remoteContent: "remote-n" });
+
+    const res = await GET(new NextRequest("http://localhost/api/conflicts?count=1"));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(typeof body.count).toBe("number");
+    expect(body.count).toBeGreaterThanOrEqual(1);
+    expect(body.conflicts).toBeUndefined();
+
+    const list = await (await GET(new NextRequest("http://localhost/api/conflicts"))).json();
+    expect(list.conflicts[0].diff).toBeUndefined();
+  });
+
   it("rejects an invalid status with 400", async () => {
     ensureDbInitialized();
     const res = await GET(new NextRequest("http://localhost/api/conflicts?status=bogus"));

@@ -180,16 +180,24 @@ The server is ready once its health check passes: `http://127.0.0.1:23010/health
 | Variable | Default | Purpose |
 | :--- | :--- | :--- |
 | `HOST_PORT` | `23010` | Host port published for the storage server. |
-| `KXTA_STORAGE_PEPPER` | *(empty)* | HMAC pepper bound into client-token hashes. **Required for any real deployment** — see below. |
+| `HOST_BIND` | `127.0.0.1` | Host address the port is published on. Set `0.0.0.0` only behind TLS and a firewall. |
+| `KXTA_STORAGE_PEPPER` | *(empty)* | HMAC pepper bound into client-token hashes. **Required for any non-loopback deployment.** |
+| `KXTA_STORAGE_ENROLL_SECRET` | *(empty)* | Shared secret a machine must present to register. With no secret set, new machines cannot register. |
 | `KXTA_STORAGE_DB` | `/data/kontexta-storage.db` | Path to the SQLite op log (inside the container). |
+| `KXTA_STORAGE_ALLOW_OPEN_ENROLLMENT` | *(unset)* | Set to `1` to let any caller register (local experiments only). |
+| `KXTA_STORAGE_ALLOW_DEFAULT_PEPPER` | *(unset)* | Set to `1` to start on the public default pepper on a non-loopback host (not recommended). |
 
 > [!IMPORTANT]
-> Set `KXTA_STORAGE_PEPPER` for anything beyond local experimentation. Without it the server runs on a public default pepper, which makes every stored token hash guessable if the database file is ever exposed. Use a long random secret:
+> Set both `KXTA_STORAGE_PEPPER` and `KXTA_STORAGE_ENROLL_SECRET` for anything beyond local experimentation. The pepper protects stored token hashes if the database file leaks, and the server refuses to start on the default pepper when bound to a non-loopback address. The enrollment secret stops strangers from registering and reading the op log. Use long random secrets:
 >
 > ```bash
-> HOST_PORT=80 KXTA_STORAGE_PEPPER="$(openssl rand -hex 32)" \
+> HOST_PORT=80 HOST_BIND=0.0.0.0 \
+> KXTA_STORAGE_PEPPER="$(openssl rand -hex 32)" \
+> KXTA_STORAGE_ENROLL_SECRET="$(openssl rand -hex 32)" \
 >   docker compose -f docker-compose.storage.yml up -d
 > ```
+>
+> Every op is bound to the machine that sent it: the server rejects a batch whose `origin` differs from the authenticated machine.
 
 **Data & persistence.** The op log and the registered-clients table live in the named volume `kontexta-storage-data` (mounted at `/data`), so they survive container recreation and re-runs of `compose up`. To wipe all sync history:
 
@@ -197,15 +205,15 @@ The server is ready once its health check passes: `http://127.0.0.1:23010/health
 docker compose -f docker-compose.storage.yml down -v
 ```
 
-**Serverless / non-Docker.** The server is also just `node dist/server.js` with the same env vars (`PORT`, `HOSTNAME`, `KXTA_STORAGE_DB`, `KXTA_STORAGE_PEPPER`) — the Dockerfile is a convenience, not a requirement. Point a reverse proxy (nginx, Caddy, Cloudflare Tunnel, Cloud Run) at it and put TLS in front, as you would for any endpoint that issues credentials.
+**Serverless / non-Docker.** The server is also just `node dist/server.js` with the same env vars (`PORT`, `HOSTNAME`, `KXTA_STORAGE_DB`, `KXTA_STORAGE_PEPPER`, `KXTA_STORAGE_ENROLL_SECRET`) — the Dockerfile is a convenience, not a requirement. Point a reverse proxy (nginx, Caddy, Cloudflare Tunnel, Cloud Run) at it and put TLS in front, as you would for any endpoint that issues credentials.
 
 ### Connect a machine (`kontexta endpoint`)
 
 A machine registers itself once to receive a one-time sync token, then ships and polls its outbox against the server. It is all driven by the `kontexta endpoint` CLI:
 
 ```bash
-# Connect — self-registers and stores the one-time token locally:
-kontexta endpoint connect http://127.0.0.1:23010
+# Connect: self-registers (needs the enrollment secret) and stores the one-time token locally:
+kontexta endpoint connect http://127.0.0.1:23010 --enroll-secret "$KXTA_STORAGE_ENROLL_SECRET"
 
 # Show the connection, poll cadence, outbox depth, and sync cursor:
 kontexta endpoint status
@@ -216,15 +224,22 @@ kontexta endpoint push
 # Poll + apply remote ops since the cursor:
 kontexta endpoint pull
 
+# Run the sync loop in the foreground (headless machines; Ctrl+C to stop):
+kontexta endpoint run
+
 # Stop syncing — clears the stored endpoint + token (the loop goes dormant):
 kontexta endpoint disconnect
 ```
 
-Add `--json` to any subcommand for machine-readable output. Pass a known token positionally (`kontexta endpoint connect <url> <token>`) to skip self-registration, and use `--data-dir <dir>` / `--timeout <ms>` to target a specific vault or bound a request.
+Add `--json` to any subcommand for machine-readable output. The enrollment secret can also come from `KXTA_STORAGE_ENROLL_SECRET`. Pass a known token positionally (`kontexta endpoint connect <url> <token>`) to skip self-registration, and use `--data-dir <dir>` / `--timeout <ms>` to target a specific vault or bound a request.
 
-**How the cadence works.** A connected machine short-polls instead of holding a connection open: **15 s** while active (user / agent activity), **60 s** while idle, and **exponential backoff up to 5 minutes** on failure. You can also drive sync on demand with `push` / `pull` (e.g. from a cron job) rather than running a resident poller.
+**How the cadence works.** A connected machine short-polls instead of holding a connection open: **15 s** while active (user / agent activity), **60 s** while idle, and **exponential backoff up to 5 minutes** on failure. The Kontexta web app starts this loop automatically once a machine is connected; on a machine without the web app, run `kontexta endpoint run`. You can also drive sync on demand with `push` / `pull` (e.g. from a cron job).
 
-**Ordering & conflicts.** The server assigns each op a monotonic `seq` — the single source of ordering authority. Client clocks are never trusted for ordering (only for display), so a machine with a skewed clock cannot silently clobber another. When two machines update the same record while offline, the server flags the second write as a **conflict** and preserves both versions; the receiving machine writes a conflict copy next to the canonical file (`<name> (from <machine label>).<ext>`) and surfaces it for interactive resolution instead of overwriting it.
+**Ordering & conflicts.** The server assigns each op a monotonic `seq`, the single source of ordering authority. Client clocks are never trusted for ordering (only for display). Each machine tracks the server version it has seen per record and sends it as the op's base version, so an edit made on top of everything the machine has pulled is accepted. When a machine edits a record without having pulled another machine's newer change, the server flags the write as a **conflict** and keeps both versions. A machine that already has the file does not overwrite it: it writes a conflict copy next to the canonical file (`<name> (from <machine label>).<ext>`) and lists it in the Conflict Manager, where you pick keep server, keep mine, keep both, or a merged version. Resolving uses the file's current content, not the content at the time the conflict was detected.
+
+**Portable ops.** Ops never carry machine-local ids or absolute paths. Records are referenced by global id (`<id>@<machine>`), and file paths travel relative to the data directory and are resolved against each machine's own data directory. A remote op that points outside the data directory is refused.
+
+**Skipped ops.** An op that cannot be applied on a machine (an unsafe path, a record that machine does not have) is recorded in the local `sync_skipped_ops` table and skipped, so one bad op cannot block the rest of the log. Other apply errors are retried for a few polls before being skipped the same way. A malformed op still stops the pull so a client and server version mismatch is noticed rather than hidden.
 
 ---
 

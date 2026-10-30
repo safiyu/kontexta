@@ -39,6 +39,7 @@ import {
 } from "../src/routes/ops.js";
 import { DEFAULT_PEPPER, hashToken } from "../src/auth.js";
 import { VERSION } from "../src/index.js";
+import { defaultPepperRefusal, isLoopbackHost } from "../src/server.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const SCHEMA_SQL = readFileSync(join(here, "..", "src", "db", "schema.sql"), "utf-8");
@@ -63,7 +64,7 @@ let app: ReturnType<typeof createOpsRouter>;
 
 beforeEach(() => {
   db = freshDb();
-  app = createOpsRouter(db);
+  app = createOpsRouter(db, { allowOpenEnrollment: true });
 });
 
 // ---------------------------------------------------------------------------
@@ -304,7 +305,7 @@ describe("Bearer auth", () => {
   });
 
   it("binds tokens to the pepper — a DB + token are useless across deployments", async () => {
-    const other = createOpsRouter(db, { pepper: OTHER_PEPPER });
+    const other = createOpsRouter(db, { pepper: OTHER_PEPPER, allowOpenEnrollment: true });
 
     const aToken = await tokenFor(MACHINE_A); // registered under DEFAULT_PEPPER
     expect(
@@ -807,5 +808,147 @@ describe("validateIncomingOp", () => {
     expect(validateIncomingOp(null)).toBeNull();
     expect(validateIncomingOp([])).toBeNull();
     expect(validateIncomingOp("op")).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Enrollment secret
+// ---------------------------------------------------------------------------
+
+describe("POST /clients enrollment", () => {
+  const post = (r: ReturnType<typeof createOpsRouter>, body: unknown, headers: Record<string, string> = {}) =>
+    r.request("/clients", {
+      method: "POST",
+      headers: { "content-type": "application/json", ...headers },
+      body: JSON.stringify(body),
+    });
+
+  it("refuses new machines when no secret is configured and open mode is off", async () => {
+    const closed = createOpsRouter(db);
+    const res = await post(closed, { machine_id: MACHINE_A });
+    expect(res.status).toBe(403);
+    expect(opsCount()).toBe(0);
+    expect((db.prepare("SELECT COUNT(*) AS n FROM clients").get() as { n: number }).n).toBe(0);
+  });
+
+  it("requires the configured secret (header or body) and rejects a wrong one", async () => {
+    const r = createOpsRouter(db, { enrollSecret: "s3cret" });
+    expect((await post(r, { machine_id: MACHINE_A })).status).toBe(403);
+    expect((await post(r, { machine_id: MACHINE_A }, { "x-enroll-secret": "nope" })).status).toBe(403);
+    expect((await post(r, { machine_id: MACHINE_A }, { "x-enroll-secret": "s3cret" })).status).toBe(201);
+    expect((await post(r, { machine_id: MACHINE_B, enroll_secret: "s3cret" })).status).toBe(201);
+    expect((await post(r, { machine_id: "0123456789abcdef", enroll_secret: "bad" })).status).toBe(403);
+  });
+
+  it("a secret takes precedence over open mode", async () => {
+    const r = createOpsRouter(db, { enrollSecret: "s3cret", allowOpenEnrollment: true });
+    expect((await post(r, { machine_id: MACHINE_A })).status).toBe(403);
+  });
+
+  it("re-registration of a known machine needs no secret and returns no token", async () => {
+    await tokenFor(MACHINE_A);
+    const r = createOpsRouter(db, { enrollSecret: "s3cret" });
+    const res = await post(r, { machine_id: MACHINE_A });
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { token: unknown }).token).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Origin binding
+// ---------------------------------------------------------------------------
+
+describe("POST /ops origin binding", () => {
+  it("rejects the whole batch with 403 when any op origin is not the authenticated machine", async () => {
+    const a = await tokenFor(MACHINE_A);
+    await tokenFor(MACHINE_B);
+    const res = await postOps(a, [
+      makeOp({ gid: "1@x", client_seq: 1 }),
+      makeOp({ gid: "2@x", origin: MACHINE_B, client_seq: 1 }),
+    ]);
+    expect(res.status).toBe(403);
+    expect(opsCount()).toBe(0);
+  });
+
+  it("cannot pre-claim another machine's (origin, client_seq) slots", async () => {
+    const a = await tokenFor(MACHINE_A);
+    await postOps(a, [makeOp({ gid: "1@x", origin: MACHINE_B, client_seq: 1 })]);
+    expect(opsCount()).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// gid versions
+// ---------------------------------------------------------------------------
+
+describe("gid_version / version", () => {
+  it("POST results carry the gid version right after each op, in order", async () => {
+    const a = await tokenFor(MACHINE_A);
+    const res = await postOps(a, [
+      makeOp({ gid: "1@x", base_version: null, client_seq: 1 }),
+      makeOp({ gid: "2@x", base_version: null, client_seq: 2 }),
+      makeOp({ gid: "1@x", kind: "file.update", base_version: 1, client_seq: 3 }),
+    ]);
+    const { results } = (await res.json()) as { results: Array<{ version: number; status: string }> };
+    expect(results.map((r) => r.version)).toEqual([1, 1, 2]);
+    expect(results.every((r) => r.status === "accepted")).toBe(true);
+  });
+
+  it("a conflicting op still advances the version", async () => {
+    const a = await tokenFor(MACHINE_A);
+    await postOps(a, [makeOp({ gid: "1@x", base_version: null, client_seq: 1 })]);
+    const res = await postOps(a, [makeOp({ gid: "1@x", kind: "file.update", base_version: 0, client_seq: 2 })]);
+    const r = ((await res.json()) as { results: Array<{ version: number; status: string }> }).results[0];
+    expect(r.status).toBe("conflict");
+    expect(r.version).toBe(2);
+  });
+
+  it("a duplicate returns the version at the ORIGINAL seq, not the current count", async () => {
+    const a = await tokenFor(MACHINE_A);
+    await postOps(a, [makeOp({ gid: "1@x", base_version: null, client_seq: 1 })]);
+    await postOps(a, [makeOp({ gid: "1@x", kind: "file.update", base_version: 1, client_seq: 2 })]);
+    const res = await postOps(a, [makeOp({ gid: "1@x", base_version: null, client_seq: 1 })]);
+    const r = ((await res.json()) as { results: Array<{ version: number; duplicate: boolean }> }).results[0];
+    expect(r.duplicate).toBe(true);
+    expect(r.version).toBe(1);
+  });
+
+  it("GET /ops serves gid_version counted over ALL history, even when a page starts mid-history", async () => {
+    const a = await tokenFor(MACHINE_A);
+    const b = await tokenFor(MACHINE_B);
+    await postOps(a, [
+      makeOp({ gid: "1@x", base_version: null, client_seq: 1 }),
+      makeOp({ gid: "1@x", kind: "file.update", base_version: 1, client_seq: 2 }),
+      makeOp({ gid: "2@x", base_version: null, client_seq: 3 }),
+    ]);
+    await postOps(b, [makeOp({ gid: "1@x", kind: "file.update", origin: MACHINE_B, base_version: 2, client_seq: 1 })]);
+
+    const all = (await (await app.request("/ops?since=0&limit=10", { headers: { authorization: `Bearer ${a}` } })).json()) as {
+      ops: Array<{ seq: number; gid: string; gid_version: number }>;
+    };
+    expect(all.ops.map((o) => o.gid_version)).toEqual([1, 2, 1, 3]);
+
+    const page = (await (await app.request("/ops?since=2&limit=10", { headers: { authorization: `Bearer ${a}` } })).json()) as {
+      ops: Array<{ gid: string; gid_version: number }>;
+    };
+    expect(page.ops.map((o) => [o.gid, o.gid_version])).toEqual([["2@x", 1], ["1@x", 3]]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Startup guard
+// ---------------------------------------------------------------------------
+
+describe("default pepper startup guard", () => {
+  it("classifies loopback hosts", () => {
+    for (const h of ["127.0.0.1", "localhost", "::1", "127.1.2.3"]) expect(isLoopbackHost(h)).toBe(true);
+    for (const h of ["0.0.0.0", "10.0.0.5", "example.com"]) expect(isLoopbackHost(h)).toBe(false);
+  });
+
+  it("refuses the default pepper on a non-loopback bind unless overridden", () => {
+    expect(defaultPepperRefusal(true, "0.0.0.0", {})).toMatch(/KXTA_STORAGE_PEPPER/);
+    expect(defaultPepperRefusal(true, "0.0.0.0", { KXTA_STORAGE_ALLOW_DEFAULT_PEPPER: "1" })).toBeNull();
+    expect(defaultPepperRefusal(true, "127.0.0.1", {})).toBeNull();
+    expect(defaultPepperRefusal(false, "0.0.0.0", {})).toBeNull();
   });
 });

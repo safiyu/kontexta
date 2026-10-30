@@ -44,6 +44,7 @@ import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
 import Database from "better-sqlite3";
+import { resetDataDirCache } from "../../src/util/paths.js";
 import type { Hono } from "hono";
 
 // Storage server in-process router and app factory
@@ -61,6 +62,7 @@ import {
   stopSyncLoop,
 } from "../../src/storage/client.js";
 import { enqueueOp, pendingCount } from "../../src/storage/outbox.js";
+import { resolveConflict } from "../../src/storage/conflicts.js";
 import type { Op } from "../../src/storage/op.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -148,9 +150,12 @@ describe("Multi-client synchronization roundtrip (M72)", () => {
 
   beforeEach(async () => {
     testDir = mkdtempSync(join(tmpdir(), "kxta-roundtrip-test-"));
+    process.env.KONTEXTA_DATA_DIR = testDir;
+    resetDataDirCache();
 
     // 1. Initialize server
     serverDb = createServerDatabase();
+    process.env.KXTA_STORAGE_ALLOW_OPEN_ENROLLMENT = "1";
     serverApp = createApp(serverDb);
     fetchImpl = makeInProcessFetch(serverApp);
 
@@ -165,6 +170,8 @@ describe("Multi-client synchronization roundtrip (M72)", () => {
 
   afterEach(() => {
     stopSyncLoop();
+    delete process.env.KONTEXTA_DATA_DIR;
+    resetDataDirCache();
     try {
       dbA?.close();
     } catch {}
@@ -626,6 +633,88 @@ describe("Multi-client synchronization roundtrip (M72)", () => {
       expect(pullA.error).toBeNull();
       expect(pullA.conflicts).toHaveLength(1);
       expect(pullA.conflicts[0].gid).toBe(sharedGid);
+    });
+  });
+
+  describe("Per-gid version tracking and conflict convergence", () => {
+    const seedShared = async (gid: string, filePath: string): Promise<void> => {
+      await connectEndpoint(dbA, SERVER_BASE_URL, tokenA, { fetchImpl });
+      await connectEndpoint(dbB, SERVER_BASE_URL, tokenB, { fetchImpl });
+      mkdirSync(dirname(filePath), { recursive: true });
+      writeFileSync(filePath, "Base content");
+      dbA.prepare(
+        "INSERT INTO files (id, path, title, storage_type, content_hash, gid) VALUES (500, ?, 'Base', 'local', ?, ?)",
+      ).run(filePath, sha256("Base content"), gid);
+      enqueueOp(dbA, {
+        gid,
+        kind: "file.create",
+        origin: MACHINE_A,
+        base_version: null,
+        payload: { path: filePath, title: "Base", content: "Base content" },
+        created_at: 1_700_000_004_000,
+      });
+      await pushOutbox(dbA, { fetchImpl });
+      await pullRemoteOps(dbB, { fetchImpl });
+      await pullRemoteOps(dbA, { fetchImpl });
+    };
+    const update = (gid: string, origin: string, filePath: string, content: string): Op => ({
+      gid,
+      kind: "file.update",
+      origin,
+      base_version: 0,
+      payload: { path: filePath, title: "Base", content },
+      created_at: 1_700_000_004_100,
+    });
+
+    it("B's first edit of a gid created on A, after pulling, is based on A's version and is accepted", async () => {
+      const gid = `500@${MACHINE_A}`;
+      await seedShared(gid, join(testDir, "knowledge", "shared-v.md"));
+
+      enqueueOp(dbB, update(gid, MACHINE_B, join(testDir, "knowledge", "shared-v.md"), "B edit"));
+      const pushB = await pushOutbox(dbB, { fetchImpl });
+      expect(pushB.error).toBeNull();
+      expect(pushB.conflicts).toHaveLength(0);
+
+      const rows = serverDb
+        .prepare("SELECT origin, base_version, status FROM ops WHERE gid = ? ORDER BY seq ASC")
+        .all(gid) as Array<{ origin: string; base_version: number | null; status: string }>;
+      expect(rows[1]).toEqual({ origin: MACHINE_B, base_version: 1, status: "accepted" });
+    });
+
+    it("an edit based on a stale version is still flagged as a conflict", async () => {
+      const gid = `500@${MACHINE_A}`;
+      const filePath = join(testDir, "knowledge", "shared-v.md");
+      await seedShared(gid, filePath);
+
+      enqueueOp(dbA, update(gid, MACHINE_A, filePath, "A edit"));
+      await pushOutbox(dbA, { fetchImpl });
+      enqueueOp(dbB, update(gid, MACHINE_B, filePath, "B stale edit"));
+      const pushB = await pushOutbox(dbB, { fetchImpl });
+      expect(pushB.conflicts).toHaveLength(1);
+    });
+
+    it("keep-mine after a pulled conflict converges: the resolution op is accepted, not re-flagged", async () => {
+      const gid = `500@${MACHINE_A}`;
+      const filePath = join(testDir, "knowledge", "shared-v.md");
+      await seedShared(gid, filePath);
+
+      writeFileSync(filePath, "A edit");
+      enqueueOp(dbA, update(gid, MACHINE_A, filePath, "A edit"));
+      await pushOutbox(dbA, { fetchImpl });
+      enqueueOp(dbB, update(gid, MACHINE_B, filePath, "B stale edit"));
+      expect((await pushOutbox(dbB, { fetchImpl })).conflicts).toHaveLength(1);
+
+      const pullA = await pullRemoteOps(dbA, { fetchImpl });
+      expect(pullA.error).toBeNull();
+      expect(readFileSync(filePath, "utf-8")).toBe("A edit");
+      expect(dbA.prepare("SELECT COUNT(*) AS n FROM conflicts WHERE status = 'unresolved'").get()).toEqual({ n: 1 });
+
+      const res = await resolveConflict(gid, { strategy: "keep-mine" }, dbA);
+      expect(res.success).toBe(true);
+      const pushA = await pushOutbox(dbA, { fetchImpl });
+      expect(pushA.error).toBeNull();
+      expect(pushA.delivered).toBeGreaterThan(0);
+      expect(pushA.conflicts).toHaveLength(0);
     });
   });
 

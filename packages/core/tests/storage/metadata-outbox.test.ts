@@ -87,7 +87,7 @@ describe("metadata write-routine outbox instrumentation (M55)", () => {
     expect(op!.op.gid).toBe(file.gid, "the op is keyed by the FILE's gid");
     expect(op!.op.origin).toBe(getMachineId());
     expect(op!.op.base_version).toBe(0);
-    expect(op!.op.payload).toEqual({ file_id: file.id, tags: ["alpha", "beta"] });
+    expect(op!.op.payload).toEqual({ tags: ["alpha", "beta"] });
     // Exactly one op for this mutation (plus the prior create).
     expect(pendingCount(getDatabase())).toBe(2);
   });
@@ -110,7 +110,7 @@ describe("metadata write-routine outbox instrumentation (M55)", () => {
     expect(op).toBeDefined();
     expect(op!.op.gid).toBe(file.gid);
     // Carries the tag NAME (global identity), not the machine-local id.
-    expect(op!.op.payload).toEqual({ file_id: file.id, tags: ["alpha"] });
+    expect(op!.op.payload).toEqual({ tags: ["alpha"] });
   });
 
   it("removeTags of a tag not linked to the file enqueues no op", async () => {
@@ -131,7 +131,7 @@ describe("metadata write-routine outbox instrumentation (M55)", () => {
     const op = findOp("favorite.set");
     expect(op).toBeDefined();
     expect(op!.op.gid).toBe(file.gid);
-    expect(op!.op.payload).toEqual({ file_id: file.id, favorite: true });
+    expect(op!.op.payload).toEqual({ favorite: true });
     // The favorite row exists.
     const fav = getDatabase().prepare("SELECT 1 FROM favorites WHERE file_id = ?").get(file.id);
     expect(fav).toBeDefined();

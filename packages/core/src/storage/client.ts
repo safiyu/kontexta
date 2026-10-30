@@ -26,13 +26,10 @@
  *     * `client_seq` = the outbox id, so a retried batch after a lost ACK is a
  *       server-side no-op (the `(origin, client_seq)` partial unique index) that
  *       returns the ORIGINAL seq — delivery is at-least-once, effect exactly-once.
- *     * `base_version` is REWRITTEN at send time from the local per-gid
- *       high-water mark (count of acked ops for the gid, + same-batch
- *       predecessors) — spec 1.7's client protocol, documented in the server's
- *       routes/ops.ts. The Phase 3 write sites hardcode `0` as a "mutation"
- *       marker; the value the server actually compares is "the last version I
- *       acked for this gid". A true create (stored `null`) on a fresh gid stays
- *       `null` (the "no prior state" assertion).
+ *     * `base_version` is REWRITTEN at send time from `gid_versions`: the server
+ *       version of the gid this machine has seen (own acks + pulled ops), plus
+ *       same-batch predecessors. A true create (stored `null`) on a fresh gid
+ *       stays `null` (the "no prior state" assertion).
  *     * Orphaned `sent` rows (the process died mid-POST) are re-queued to
  *       `pending` at the start of every push; double-delivery is safe because of
  *       the dedup above — this is what makes crash recovery lossless.
@@ -40,15 +37,13 @@
  *   PULL — `pullRemoteOps` pages `GET /ops?since=<cursor>&limit=` until caught
  *   up, applies each row via {@link applyRemoteOp} (echo suppression + the
  *   cross-process sync lock live there), and advances `sync_cursor` to the
- *   highest seq fully applied. Own-origin ops (the server echoes our own log
- *   back) are skipped, not re-applied. Failure is CLOSED: a malformed or
- *   unappliable op stops the pull WITHOUT advancing the cursor past it, so the
- *   next tick retries the same seq rather than silently skipping history.
- *   Ops the server flagged `status: "conflict"` (spec 1.7) are still applied —
- *   the server log is the authoritative record — and surfaced in
- *   {@link PullResult.conflicts} / the loop state; the interactive fork +
- *   4-way resolution (keep-server / keep-mine / keep-both / merged) is the
- *   Phase 5 Conflict Manager's job (storage/conflicts.ts).
+ *   highest seq fully applied. Own-origin ops are skipped, not re-applied.
+ *   A malformed op fails CLOSED (the cursor never moves past it). An op that
+ *   cannot be applied here is recorded in `sync_skipped_ops` and skipped
+ *   (immediately when unappliable, after MAX_APPLY_ATTEMPTS ticks otherwise)
+ *   so one bad op cannot block every later one. Server-flagged conflicts on
+ *   file content fork a conflict copy (storage/conflicts.ts) instead of
+ *   overwriting the local file.
  *
  *   LOOP — `startSyncLoop` is the adaptive short-poller (spec 1.6): a process
  *   singleton that ticks push-then-pull, then sleeps the ACTIVE cadence (15 s,
@@ -70,6 +65,8 @@ import type { Database } from "better-sqlite3";
 import { parseOp, type Op } from "./op.js";
 import { markAcked, markFailed, markSent, pendingCount } from "./outbox.js";
 import { applyRemoteOp } from "./apply.js";
+import { UnappliableOpError } from "./errors.js";
+import { forkConflictFromOp } from "./conflicts.js";
 
 // ---------------------------------------------------------------------------
 // Tunables (spec 1.6)
@@ -89,6 +86,8 @@ export const BACKOFF_MAX_MS = 300_000;
  * successive ticks.
  */
 export const MAX_BATCH_SIZE = 1000;
+/** Apply failures (other than an explicitly unappliable op) are retried this many ticks, then the op is skipped and recorded. */
+export const MAX_APPLY_ATTEMPTS = 5;
 /** Floor for a sane poll interval; anything smaller is treated as malformed. */
 const MIN_POLL_INTERVAL_MS = 1_000;
 /** Default per-request timeout (short polls are cheap; a hung socket is a fault). */
@@ -374,6 +373,22 @@ export function backoffDelay(
   return Math.min(initialMs * 2 ** exp, maxMs);
 }
 
+/** The server version of `gid` this machine has seen (0 when unknown). */
+function knownGidVersion(db: Database, gid: string): number {
+  const row = db.prepare("SELECT version FROM gid_versions WHERE gid = ?").get(gid) as
+    | { version: number }
+    | undefined;
+  return row?.version ?? 0;
+}
+
+/** Record a server-reported gid version; monotonic. */
+function recordGidVersion(db: Database, gid: string, version: number): void {
+  db.prepare(
+    `INSERT INTO gid_versions (gid, version) VALUES (?, ?)
+     ON CONFLICT(gid) DO UPDATE SET version = MAX(version, excluded.version)`,
+  ).run(gid, version);
+}
+
 /**
  * Ship the due outbox ops to the server and reconcile their delivery state.
  *
@@ -437,26 +452,15 @@ export async function pushOutbox(db: Database, options: PushOptions = {}): Promi
     created_at: number;
   }>;
 
-  // base_version rewrite (spec 1.7 client protocol): the local high-water mark
-  // for the gid = the number of its ops already acked, plus any same-batch
-  // predecessors (shipped in local-seq order; the server applies them in that
-  // order, so each op is based on everything before it). A stored `null`
-  // (a true create) on a gid at version 0 stays `null` — the "no prior state"
-  // assertion the server expects for a first-time create.
-  const gidVersions = new Map<string, number>(
-    (
-      db
-        .prepare(
-          `SELECT gid, COUNT(*) AS n FROM outbox WHERE status = 'acked' GROUP BY gid`,
-        )
-        .all() as Array<{ gid: string; n: number }>
-    ).map((r) => [r.gid, r.n]),
-  );
+  // base_version rewrite (spec 1.7): the server version of the gid this machine
+  // has seen (own acks + pulled ops), plus same-batch predecessors (the server
+  // applies a batch in order, so each op is based on everything before it). A
+  // stored `null` (a true create) on a gid at version 0 stays `null`.
   const seenInBatch = new Map<string, number>();
   const wire = rows.map((r) => {
     const predecessors = seenInBatch.get(r.gid) ?? 0;
     seenInBatch.set(r.gid, predecessors + 1);
-    const base = (gidVersions.get(r.gid) ?? 0) + predecessors;
+    const base = knownGidVersion(db, r.gid) + predecessors;
     const baseVersion = base === 0 && r.base_version === null ? null : base;
     return {
       id: r.id,
@@ -515,15 +519,19 @@ export async function pushOutbox(db: Database, options: PushOptions = {}): Promi
     return { attempted: ids.length, delivered: 0, conflicts: [], error: msg };
   }
 
-  const byClientSeq = new Map<number, { seq: number; status: string }>();
+  const byClientSeq = new Map<number, { seq: number; status: string; version: number | null }>();
   for (const raw of results) {
-    const r = raw as { client_seq?: unknown; seq?: unknown; status?: unknown };
+    const r = raw as { client_seq?: unknown; seq?: unknown; status?: unknown; version?: unknown };
     if (
       typeof r.client_seq === "number" &&
       typeof r.seq === "number" &&
       typeof r.status === "string"
     ) {
-      byClientSeq.set(r.client_seq, { seq: r.seq, status: r.status });
+      byClientSeq.set(r.client_seq, {
+        seq: r.seq,
+        status: r.status,
+        version: typeof r.version === "number" && Number.isInteger(r.version) ? r.version : null,
+      });
     }
   }
 
@@ -549,6 +557,7 @@ export async function pushOutbox(db: Database, options: PushOptions = {}): Promi
       conflicts.push(w.op);
     }
     markAcked(db, w.id, r.seq);
+    recordGidVersion(db, w.op.gid, r.version ?? knownGidVersion(db, w.op.gid) + 1);
     delivered++;
   }
 
@@ -582,7 +591,9 @@ export interface PullResult {
   polled: number;
   /** Remote ops applied to the local store. */
   applied: number;
-  /** Conflict-flagged remote ops (applied, then surfaced — see module header). */
+  /** Remote ops recorded in `sync_skipped_ops` instead of applied. */
+  skipped: number;
+  /** Server-flagged conflicts among the remote ops (see module header). */
   conflicts: Op[];
   /** The cursor position after this pull (the highest seq fully applied). */
   cursor: number;
@@ -608,6 +619,32 @@ export function advanceSyncCursor(db: Database, seq: number): void {
   ).run(seq, Date.now());
 }
 
+/** Conflict-flagged content ops fork a conflict copy when this machine already has the file. */
+function forksCanonicalContent(db: Database, op: Op): boolean {
+  if (op.kind !== "file.create" && op.kind !== "file.update") return false;
+  return db.prepare("SELECT 1 FROM files WHERE gid = ?").get(op.gid) !== undefined;
+}
+
+function clearApplyFailure(db: Database, seq: number): void {
+  db.prepare("DELETE FROM sync_skipped_ops WHERE seq = ? AND skipped = 0").run(seq);
+}
+
+/** Record an apply failure; true when the op is now skipped (unappliable, or out of retries). */
+function recordApplyFailure(db: Database, seq: number, op: Op, err: unknown): boolean {
+  const unappliable = err instanceof UnappliableOpError;
+  const prior = db.prepare("SELECT attempts FROM sync_skipped_ops WHERE seq = ?").get(seq) as
+    | { attempts: number }
+    | undefined;
+  const attempts = (prior?.attempts ?? 0) + 1;
+  const skip = unappliable || attempts >= MAX_APPLY_ATTEMPTS;
+  db.prepare(
+    `INSERT INTO sync_skipped_ops (seq, gid, kind, origin, error, attempts, skipped, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(seq) DO UPDATE SET error = excluded.error, attempts = excluded.attempts, skipped = excluded.skipped`,
+  ).run(seq, op.gid, op.kind, op.origin, describeError(err), attempts, skip ? 1 : 0, Date.now());
+  return skip;
+}
+
 /**
  * Poll the server for ops since the cursor, apply each one, and advance the
  * cursor — paging until the stream is caught up.
@@ -627,6 +664,7 @@ export async function pullRemoteOps(db: Database, options: PullOptions = {}): Pr
     return {
       polled: 0,
       applied: 0,
+      skipped: 0,
       conflicts: [],
       cursor: getSyncCursor(db),
       error: "not connected",
@@ -642,6 +680,7 @@ export async function pullRemoteOps(db: Database, options: PullOptions = {}): Pr
   let cursor = getSyncCursor(db);
   let polled = 0;
   let applied = 0;
+  let skipped = 0;
   const conflicts: Op[] = [];
 
   for (;;) {
@@ -657,12 +696,13 @@ export async function pullRemoteOps(db: Database, options: PullOptions = {}): Pr
         },
       );
     } catch (err) {
-      return { polled, applied, conflicts, cursor, error: describeError(err) };
+      return { polled, applied, skipped, conflicts, cursor, error: describeError(err) };
     }
     if (res.status !== 200) {
       return {
         polled,
         applied,
+        skipped,
         conflicts,
         cursor,
         error: `HTTP ${res.status}${res.text ? `: ${res.text.slice(0, 200)}` : ""}`,
@@ -670,15 +710,28 @@ export async function pullRemoteOps(db: Database, options: PullOptions = {}): Pr
     }
     const body = res.body as { ops?: unknown; next?: unknown } | null;
     if (!body || !Array.isArray(body.ops)) {
-      return { polled, applied, conflicts, cursor, error: "malformed GET /ops response" };
+      return { polled, applied, skipped, conflicts, cursor, error: "malformed GET /ops response" };
     }
     const rows = body.ops as Array<Record<string, unknown>>;
 
+    // Highest seq handled so far in this page; kept on a mid-page failure so handled ops are not replayed.
+    let done = cursor;
+    const keepProgress = (): void => {
+      if (done > cursor) {
+        advanceSyncCursor(db, done);
+        cursor = done;
+      }
+    };
     for (const row of rows) {
       polled++;
+      const rowSeq = typeof row.seq === "number" ? row.seq : null;
+      if (typeof row.gid === "string" && typeof row.gid_version === "number") {
+        recordGidVersion(db, row.gid, row.gid_version);
+      }
       // Own-origin: this is OUR op echoed back from the authoritative log.
       // The local state IS the source for it — skip, do not re-apply.
       if (typeof row.origin === "string" && row.origin === machineId) {
+        if (rowSeq !== null) done = rowSeq;
         continue;
       }
       const op = parseOp({
@@ -693,30 +746,43 @@ export async function pullRemoteOps(db: Database, options: PullOptions = {}): Pr
         // Fail closed: never advance the cursor past an op we cannot
         // understand (a client/server version skew must be an incident, not a
         // silent skip of history).
+        keepProgress();
         return {
           polled,
           applied,
+          skipped,
           conflicts,
           cursor,
           error: `refusing to advance past malformed op (seq ${String(row.seq)})`,
         };
       }
+      const seq = typeof row.seq === "number" ? row.seq : 0;
       try {
-        await applyRemoteOp(op, { db });
+        if (row.status === "conflict") conflicts.push(op);
+        if (row.status === "conflict" && forksCanonicalContent(db, op)) {
+          // Lost optimistic concurrency: keep the canonical file, park the remote content as a conflict copy.
+          forkConflictFromOp(op, db, { serverSeq: seq });
+        } else {
+          await applyRemoteOp(op, { db });
+        }
         applied++;
+        clearApplyFailure(db, seq);
+        if (rowSeq !== null) done = rowSeq;
       } catch (err) {
+        if (recordApplyFailure(db, seq, op, err)) {
+          skipped++;
+          if (rowSeq !== null) done = rowSeq;
+          continue;
+        }
+        keepProgress();
         return {
           polled,
           applied,
+          skipped,
           conflicts,
           cursor,
           error: `failed to apply seq ${String(row.seq)}: ${describeError(err)}`,
         };
-      }
-      if (row.status === "conflict") {
-        // Applied (the log is authoritative) and surfaced for the Phase 5
-        // Conflict Manager (fork copy + 4-way resolution).
-        conflicts.push(op);
       }
     }
 
@@ -737,7 +803,7 @@ export async function pullRemoteOps(db: Database, options: PullOptions = {}): Pr
     if (caughtUp) break;
   }
 
-  return { polled, applied, conflicts, cursor, error: null };
+  return { polled, applied, skipped, conflicts, cursor, error: null };
 }
 
 // ---------------------------------------------------------------------------

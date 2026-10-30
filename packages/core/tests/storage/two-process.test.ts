@@ -20,6 +20,7 @@ import { pathToFileURL } from "node:url";
 import { Worker } from "node:worker_threads";
 import { createHash } from "node:crypto";
 import { createDatabase, closeDatabase, getDatabase } from "../../src/db/index.js";
+import { resetDataDirCache } from "../../src/util/paths.js";
 import {
   acquireSyncLock,
   releaseSyncLock,
@@ -62,9 +63,13 @@ function sha256(content: string): string {
 describe("Two-process concurrency and advisory locking (M60)", () => {
   let testDir: string;
   let dbPath: string;
+  let prevDataDir: string | undefined;
 
   beforeEach(() => {
     testDir = mkdtempSync(join(tmpdir(), "kontexta-two-process-test-"));
+    prevDataDir = process.env.KONTEXTA_DATA_DIR;
+    process.env.KONTEXTA_DATA_DIR = testDir;
+    resetDataDirCache();
     dbPath = join(testDir, "test.db");
     mkdirSync(join(testDir, "knowledge"), { recursive: true });
     createDatabase(dbPath);
@@ -72,6 +77,9 @@ describe("Two-process concurrency and advisory locking (M60)", () => {
 
   afterEach(() => {
     closeDatabase();
+    if (prevDataDir === undefined) delete process.env.KONTEXTA_DATA_DIR;
+    else process.env.KONTEXTA_DATA_DIR = prevDataDir;
+    resetDataDirCache();
     if (existsSync(testDir)) {
       rmSync(testDir, { recursive: true, force: true });
     }
@@ -299,6 +307,14 @@ describe("Two-process concurrency and advisory locking (M60)", () => {
           created_at: Date.now() + 1,
         },
         {
+          gid: gid1,
+          kind: "tag.add",
+          origin: "mach-remote",
+          base_version: 2,
+          payload: { tags: ["w2-added-tag"] },
+          created_at: Date.now() + 3,
+        },
+        {
           gid: gid3,
           kind: "file.create",
           origin: "mach-remote",
@@ -333,8 +349,8 @@ describe("Two-process concurrency and advisory locking (M60)", () => {
       ];
 
       // Worker 2 operations: overlapping GIDs applied concurrently! These are
-      // self-healing ops (file.update / tag.add) that require their target file
-      // to exist, so they block on the per-gid advisory lock until worker 1 has
+      // self-healing file.update ops that create their target file if absent,
+      // so they block on the per-gid advisory lock until worker 1 has
       // created the file — exercising genuine cross-worker lock contention.
       const worker2Ops: Op[] = [
         {
@@ -344,14 +360,6 @@ describe("Two-process concurrency and advisory locking (M60)", () => {
           base_version: 1,
           payload: { path: file2Path, content: "# Shared File 2 (w2 update)" },
           created_at: Date.now() + 2,
-        },
-        {
-          gid: gid1,
-          kind: "tag.add",
-          origin: "mach-remote",
-          base_version: 2,
-          payload: { tags: ["w2-added-tag"] },
-          created_at: Date.now() + 3,
         },
         {
           gid: gid3,

@@ -3,9 +3,10 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, rmSync, existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, existsSync, readFileSync, readdirSync, writeFileSync, mkdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { tmpdir } from "node:os";
+import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import Database from "better-sqlite3";
 import {
@@ -22,6 +23,7 @@ import {
 } from "../../src/storage/conflicts.js";
 import { pendingCount, pendingOps } from "../../src/storage/outbox.js";
 import type { Op } from "../../src/storage/op.js";
+import { resetDataDirCache } from "../../src/util/paths.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CORE_MIGRATIONS_DIR = join(__dirname, "..", "..", "src", "db", "migrations");
@@ -74,6 +76,27 @@ describe("Conflict resolution core engine (Milestone 77)", () => {
         .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'conflicts'")
         .all();
       expect(tables).toHaveLength(1);
+    });
+  });
+
+  describe("computeDiff on large divergent inputs", () => {
+    it("stays fast and bounded when the edit distance exceeds the cap", () => {
+      const a = Array.from({ length: 6000 }, (_, i) => `a-${i}`).join("\n");
+      const b = Array.from({ length: 6000 }, (_, i) => `b-${i}`).join("\n");
+      const t0 = Date.now();
+      const r = computeDiff(a, b);
+      expect(Date.now() - t0).toBeLessThan(2000);
+      expect(r.additions).toBe(6000);
+      expect(r.deletions).toBe(6000);
+    });
+
+    it("keeps the exact diff when a small edit sits inside long identical text", () => {
+      const lines = Array.from({ length: 5000 }, (_, i) => `line ${i}`);
+      const edited = [...lines];
+      edited[2500] = "changed";
+      const r = computeDiff(lines.join("\n"), edited.join("\n"));
+      expect(r.additions).toBe(1);
+      expect(r.deletions).toBe(1);
     });
   });
 
@@ -194,6 +217,42 @@ describe("Conflict resolution core engine (Milestone 77)", () => {
     });
 
     it("forks conflict directly from an Op", () => {
+      const prevDir = process.env.KONTEXTA_DATA_DIR;
+      process.env.KONTEXTA_DATA_DIR = testDir;
+      resetDataDirCache();
+      try {
+        runForkFromOp();
+      } finally {
+        if (prevDir === undefined) delete process.env.KONTEXTA_DATA_DIR;
+        else process.env.KONTEXTA_DATA_DIR = prevDir;
+        resetDataDirCache();
+      }
+    });
+
+    it("maps the origin's absolute path via rel_path and refuses paths outside the data dir", () => {
+      const prevDir = process.env.KONTEXTA_DATA_DIR;
+      process.env.KONTEXTA_DATA_DIR = testDir;
+      resetDataDirCache();
+      try {
+        mkdirSync(join(testDir, "knowledge"), { recursive: true });
+        writeFileSync(join(testDir, "knowledge", "m.md"), "Mine", "utf8");
+        const base = { gid: `201@${MACHINE_LOCAL}`, kind: "file.update" as const, origin: MACHINE_REMOTE, base_version: 0, created_at: Date.now() };
+        const rec = forkConflictFromOp(
+          { ...base, payload: { path: "/Users/other/data/knowledge/m.md", rel_path: "knowledge/m.md", content: "Theirs" } },
+          db
+        );
+        expect(rec.file_path).toBe(join(testDir, "knowledge", "m.md"));
+        expect(() =>
+          forkConflictFromOp({ ...base, payload: { path: "/etc/passwd", content: "x" } }, db)
+        ).toThrow();
+      } finally {
+        if (prevDir === undefined) delete process.env.KONTEXTA_DATA_DIR;
+        else process.env.KONTEXTA_DATA_DIR = prevDir;
+        resetDataDirCache();
+      }
+    });
+
+    function runForkFromOp(): void {
       const canonicalPath = join(testDir, "op-note.md");
       writeFileSync(canonicalPath, "Mine", "utf8");
 
@@ -223,7 +282,7 @@ describe("Conflict resolution core engine (Milestone 77)", () => {
       expect(record.local_content).toBe("Mine");
       expect(existsSync(record.conflict_path)).toBe(true);
       expect(readFileSync(record.conflict_path, "utf-8")).toBe("Theirs");
-    });
+    }
   });
 
   describe("listConflicts, getConflict, and countUnresolvedConflicts", () => {
@@ -259,6 +318,8 @@ describe("Conflict resolution core engine (Milestone 77)", () => {
       expect(unresolved).toHaveLength(2);
       expect(unresolved[0].gid).toBe(`2@${MACHINE_LOCAL}`);
       expect(unresolved[1].gid).toBe(`1@${MACHINE_LOCAL}`);
+      expect(unresolved[0].diff).toBeUndefined();
+      expect(unresolved[0].additions).toBeUndefined();
 
       expect(countUnresolvedConflicts(db)).toBe(2);
 
@@ -367,6 +428,30 @@ describe("Conflict resolution core engine (Milestone 77)", () => {
       const updated = getConflict(gid, db);
       expect(updated?.status).toBe("resolved");
       expect(updated?.resolution).toBe("keep-mine");
+    });
+
+    it("keep-mine uses the CURRENT file, not the registration snapshot", async () => {
+      const filePath = join(testDir, "stale.md");
+      const gid = `21@${MACHINE_LOCAL}`;
+      seedFile(filePath, gid, "snapshot content");
+      registerConflict(
+        { gid, filePath, origin: MACHINE_REMOTE, originLabel: "laptop-b", baseVersion: 1, remoteContent: "remote" },
+        db
+      );
+
+      writeFileSync(filePath, "edited after the conflict was registered", "utf8");
+      await resolveConflict(gid, { strategy: "keep-mine" }, db);
+
+      const newer = "edited after the conflict was registered";
+      expect(readFileSync(filePath, "utf-8")).toBe(newer);
+      const hash = createHash("sha256").update(newer, "utf8").digest("hex");
+      const row = db.prepare("SELECT id, content_hash FROM files WHERE gid = ?").get(gid) as { id: number; content_hash: string };
+      expect(row.content_hash).toBe(hash);
+      const fts = db.prepare("SELECT content FROM fts_index WHERE rowid = ?").get(row.id) as { content: string };
+      expect(fts.content).toBe(newer);
+      const payload = pendingOps(db)[0].op.payload as any;
+      expect(payload.content).toBe(newer);
+      expect(payload.content_hash).toBe(hash);
     });
 
     it("resolves via keep-both: retains canonical file, keeps conflict copy, registers it as a new file, and enqueues create op", async () => {

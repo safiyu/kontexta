@@ -6,6 +6,7 @@ import { getMachineId } from "../identity/machine.js";
 import { enqueueOp } from "../storage/outbox.js";
 import { inRemoteApply } from "../storage/apply.js";
 import type { Op } from "../storage/op.js";
+import { gidOfRow } from "../storage/gids.js";
 
 /**
  * Append a calendar-mutation op to the outbox — UNLESS we are applying a
@@ -61,12 +62,16 @@ interface RawEventRow {
   gid: string | null;
 }
 
+function entityGid(id: number): string | null {
+  return gidOfRow("calendar_entities", id);
+}
+
 function eventPayload(row: RawEventRow): {
-  entity_id: number; type: string; title: string; notes: string | null;
+  entity_gid: string | null; type: string; title: string; notes: string | null;
   starts_at: string; ends_at: string; original_timezone: string | null; source: string | null;
 } {
   return {
-    entity_id: row.entity_id,
+    entity_gid: entityGid(row.entity_id),
     type: row.type,
     title: row.title,
     notes: row.notes,
@@ -81,8 +86,8 @@ interface RawLinkRow {
   id: number; from_entity_id: number; to_entity_id: number; label: string | null; gid: string | null;
 }
 
-function linkPayload(row: RawLinkRow): { from_entity_id: number; to_entity_id: number; label: string | null } {
-  return { from_entity_id: row.from_entity_id, to_entity_id: row.to_entity_id, label: row.label };
+function linkPayload(row: RawLinkRow): { from_entity_gid: string | null; to_entity_gid: string | null; label: string | null } {
+  return { from_entity_gid: entityGid(row.from_entity_id), to_entity_gid: entityGid(row.to_entity_id), label: row.label };
 }
 
 interface RawEntityRow {
