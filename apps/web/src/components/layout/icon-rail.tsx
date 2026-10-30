@@ -2,7 +2,7 @@
 
 import { useState, useEffect, type ReactNode } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { GitMerge } from "lucide-react";
+import { Brain, GitMerge } from "lucide-react";
 
 export interface IconRailItem {
   id: string;
@@ -119,9 +119,29 @@ export function IconRail({ items, footer, conflictsItem, unresolvedConflicts }: 
       ? defaultConflictsItem
       : conflictsItem;
 
+  const brainItem: IconRailItem | null = items.some((it) => it.id === "brain")
+    ? null
+    : {
+        id: "brain",
+        label: "Brain",
+        active: pathname === "/brain",
+        onClick: () => {
+          try {
+            if (router) {
+              router.push("/brain");
+            } else if (typeof window !== "undefined") {
+              window.location.href = "/brain";
+            }
+          } catch {}
+        },
+        icon: <Brain className="w-5 h-5" strokeWidth={2.2} />,
+        href: "/brain",
+      };
+
   const allItems = [
     ...items,
     ...(resolvedConflictsItem ? [resolvedConflictsItem] : []),
+    ...(brainItem ? [brainItem] : []),
     ...(footer ? [footer] : []),
   ];
   const peekItem = allItems.find((i) => i.id === peekId) ?? null;
@@ -135,7 +155,7 @@ export function IconRail({ items, footer, conflictsItem, unresolvedConflicts }: 
           ))}
         </div>
         <div className="flex-1" />
-        {(resolvedConflictsItem || footer) && (
+        {(resolvedConflictsItem || brainItem || footer) && (
           <div className="pt-4 border-t border-[var(--border)] w-full flex flex-col items-center gap-3">
             {resolvedConflictsItem && (
               <RailButton
@@ -144,6 +164,7 @@ export function IconRail({ items, footer, conflictsItem, unresolvedConflicts }: 
                 badge={resolvedConflictsItem.badge ?? (unresolvedCount > 0 ? unresolvedCount : undefined)}
               />
             )}
+            {brainItem && <RailButton item={brainItem} onPeek={() => setPeekId(brainItem.id)} />}
             {footer && (
               <RailButton item={footer} onPeek={() => setPeekId(footer.id)} />
             )}

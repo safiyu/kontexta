@@ -57,6 +57,16 @@ describe("IconRail navigation and Conflict Manager", () => {
     expect(mockPush).toHaveBeenCalledWith("/conflicts");
   });
 
+  it("renders a Brain navigation item pointing to /brain", () => {
+    render(<IconRail items={mockItems} footer={mockFooter} unresolvedConflicts={0} />);
+
+    const brainBtn = screen.getByTestId("rail-button-brain");
+    expect(brainBtn.getAttribute("aria-label")).toBe("Brain");
+
+    fireEvent.click(brainBtn);
+    expect(mockPush).toHaveBeenCalledWith("/brain");
+  });
+
   it("renders unresolved conflicts badge when count > 0", () => {
     render(<IconRail items={mockItems} footer={mockFooter} unresolvedConflicts={3} />);
 
