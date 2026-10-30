@@ -20,6 +20,7 @@ export async function fetchJson(
   url: string,
   signal: AbortSignal | undefined,
   init: {
+    method?: string;
     headers?: Record<string, string>;
     body?: string;
     timeoutMs?: number;
@@ -33,7 +34,7 @@ export async function fetchJson(
   signal?.addEventListener("abort", onExternalAbort, { once: true });
   try {
     const res = await fetchImpl(url, {
-      method: init.body === undefined ? "GET" : "POST",
+      method: init.method ?? (init.body === undefined ? "GET" : "POST"),
       headers: init.headers,
       body: init.body,
       signal: ctrl.signal,

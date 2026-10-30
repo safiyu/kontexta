@@ -16,10 +16,10 @@ function escapeRegExp(s: string): string {
 const cliRoot = __dirname + '/..';
 const repoRoot = join(cliRoot, '..', '..');
 // The real command body ships inside apps/mcp (next to the MCP entry), like
-// hooks-cli/connect-cli. packages/cli/src/endpoint.ts is a thin spawner that
+// hooks-cli/connect-cli. packages/cli/src/brain.ts is a thin spawner that
 // execs this file. We test the body directly so the suite is deterministic and
 // independent of the gitignored dev bundle (packages/cli/bundle) being fresh.
-const entry = join(repoRoot, 'apps', 'mcp', 'dist', 'endpoint-cli.js');
+const entry = join(repoRoot, 'apps', 'mcp', 'dist', 'brain-cli.js');
 
 async function cli(args: string[], env: Record<string, string>): Promise<{ code: number; out: string; err: string }> {
   try {
@@ -36,9 +36,8 @@ async function cli(args: string[], env: Record<string, string>): Promise<{ code:
 }
 
 /**
- * A minimal in-process kontexta-storage-server (spec 1.6) just rich enough to
- * exercise the CLI: health, self-registration (one-time token), and empty op
- * polling. Real op application is covered by the kxta-core client/apply tests.
+ * A minimal in-process brain host just rich enough to exercise the CLI: health, join,
+ * brain status, an empty snapshot, and empty op polling. Real op application is covered by the kxta-core client/apply tests.
  */
 let server: http.Server;
 let base: string;
@@ -58,12 +57,21 @@ beforeAll(async () => {
       const u = new URL(req.url ?? '/', 'http://x');
       if (u.pathname === '/health') {
         res.writeHead(200, { 'content-type': 'application/json' });
-        return res.end(JSON.stringify({ ok: true, service: 'kontexta-storage-server' }));
+        return res.end(JSON.stringify({ ok: true, service: 'kontexta-brain-host' }));
       }
-      if (u.pathname === '/clients' && req.method === 'POST') {
+      if (u.pathname === '/brains/join' && req.method === 'POST') {
         lastIssuedToken = randomBytes(16).toString('hex');
+        const parsed = JSON.parse(body || '{}') as { name?: string };
         res.writeHead(201, { 'content-type': 'application/json' });
-        return res.end(JSON.stringify({ machine_id: 'testmachine1', registered: true, token: lastIssuedToken }));
+        return res.end(JSON.stringify({ brain_id: 1, name: parsed.name ?? 'cli-brain', created: true, token: lastIssuedToken, latest_seq: 0 }));
+      }
+      if (u.pathname === '/brains/me' && req.method === 'GET') {
+        res.writeHead(200, { 'content-type': 'application/json' });
+        return res.end(JSON.stringify({ brain_id: 1, name: 'cli-brain', latest_seq: 0, machines: [{ machine_id: 'testmachine1', hostname: 'box', last_seen_at: 1, acked_seq: 0 }] }));
+      }
+      if (u.pathname === '/brains/snapshot' && req.method === 'GET') {
+        res.writeHead(200, { 'content-type': 'application/json' });
+        return res.end(JSON.stringify({ gids: [], next: null, latest_seq: 0 }));
       }
       if (u.pathname === '/ops' && req.method === 'GET') {
         res.writeHead(200, { 'content-type': 'application/json' });
@@ -76,7 +84,7 @@ beforeAll(async () => {
         return res.end(
           JSON.stringify({
             machine_id: 'testmachine1',
-            results: arr.map((o: { client_seq?: number }) => ({ client_seq: o.client_seq, seq: seq++, status: 'ok' })),
+            results: arr.map((o: { client_seq?: number }) => ({ client_seq: o.client_seq, seq: seq++, status: 'accepted', version: 1 })),
           }),
         );
       }
@@ -93,15 +101,15 @@ afterAll(async () => {
   await new Promise<void>((resolve) => server.close(() => resolve()));
 });
 
-describe('kontexta endpoint (command body)', () => {
+describe('kontexta brain (command body)', () => {
   function freshEnv(): { env: Record<string, string>; dir: string } {
     const dir = mkdtempSync(join(tmpdir(), 'kx-endpoint-data-'));
     return { env: { KONTEXTA_DATA_DIR: dir }, dir };
   }
 
-  it('help lists the endpoint command', () => {
+  it('help lists the brain command', () => {
     const r = execSync('node dist/index.js --help', { cwd: cliRoot, encoding: 'utf8' });
-    expect(r).toMatch(/kontexta endpoint <connect\|status\|disconnect\|push\|pull\|run>/);
+    expect(r).toMatch(/kontexta brain <connect\|status\|share\|machines\|disconnect\|push\|pull\|run>/);
   });
 
   it('rejects an unknown subcommand with usage (exit 2)', async () => {
@@ -137,40 +145,48 @@ describe('kontexta endpoint (command body)', () => {
     }
   });
 
-  it('connect self-registers (POST /clients), verifies, and persists the token', async () => {
+  it('connect --create makes a brain, prints the share id once, and status masks it afterwards', async () => {
     const { env, dir } = freshEnv();
     try {
-      const r = await cli(['connect', base], env);
+      const r = await cli(['connect', base, '--create', '--name', 'Mine'], env);
       expect(r.code, r.err).toBe(0);
-      expect(r.out).toMatch(new RegExp(`connected to ${escapeRegExp(base)}`));
-      expect(r.out).toMatch(/registered/);
-      // Token is masked as first4…last4, never printed in the clear.
-      const mask = `${lastIssuedToken.slice(0, 4)}…${lastIssuedToken.slice(-4)}`;
-      expect(r.out).toContain(mask);
-      expect(r.out).not.toContain(lastIssuedToken);
+      expect(r.out).toMatch(/created brain "Mine"/);
+      const m = r.out.match(/share id: ((?:[0-9A-Z]{4}-){12}[0-9A-Z]{4})/);
+      expect(m).not.toBeNull();
+      expect(r.out).toMatch(/Save this share id somewhere safe/);
 
       const s = await cli(['status', '--json'], env);
       expect(s.code, s.err).toBe(0);
       const report = JSON.parse(s.out);
       expect(report.connected).toBe(true);
-      expect(report.url).toBe(base);
-      expect(report.token).toBe(mask);
-      expect(report.activePollIntervalMs).toBe(15000);
-      expect(report.idlePollIntervalMs).toBe(60000);
-      expect(report.syncCursor).toBe(0);
+      expect(report.remote).toBe(base);
+      expect(report.shareId).toBe(`${m![1].slice(0, 4)}-...-${m![1].slice(-4)}`);
+      expect(JSON.stringify(report)).not.toContain(m![1]);
+      expect(report.cursor).toBe(0);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
   });
 
-  it('connect accepts an explicit token (no self-registration)', async () => {
+  it('connect without --share-id or --create exits 2 when not interactive', async () => {
     const { env, dir } = freshEnv();
     try {
-      const r = await cli(['connect', base, 'my-explicit-token-1234567890'], env);
+      const r = await cli(['connect', base, '--create'], env);
+      expect(r.code).toBe(2);
+      expect(r.err).toMatch(/--share-id/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('share prints the stored share id with --yes', async () => {
+    const { env, dir } = freshEnv();
+    try {
+      const c = await cli(['connect', base, '--create'], env);
+      const shareId = c.out.match(/share id: ((?:[0-9A-Z]{4}-){12}[0-9A-Z]{4})/)![1];
+      const r = await cli(['share', '--yes'], env);
       expect(r.code, r.err).toBe(0);
-      expect(r.out).toMatch(/provided/);
-      const s = await cli(['status', '--json'], env);
-      expect(JSON.parse(s.out).token).toBe('my-e…7890');
+      expect(r.out.trim()).toBe(shareId);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -179,7 +195,7 @@ describe('kontexta endpoint (command body)', () => {
   it('push with an empty outbox reports nothing to push', async () => {
     const { env, dir } = freshEnv();
     try {
-      await cli(['connect', base], env);
+      await cli(['connect', base, '--create'], env);
       const r = await cli(['push'], env);
       expect(r.code, r.err).toBe(0);
       expect(r.out).toMatch(/outbox empty/);
@@ -191,7 +207,7 @@ describe('kontexta endpoint (command body)', () => {
   it('pull with no remote ops advances the cursor and reports applied 0', async () => {
     const { env, dir } = freshEnv();
     try {
-      await cli(['connect', base], env);
+      await cli(['connect', base, '--create'], env);
       const r = await cli(['pull'], env);
       expect(r.code, r.err).toBe(0);
       expect(r.out).toMatch(/pulled 0 op\(s\), applied 0/);
@@ -217,7 +233,7 @@ describe('kontexta endpoint (command body)', () => {
   it('disconnect clears credentials; status reflects the change', async () => {
     const { env, dir } = freshEnv();
     try {
-      await cli(['connect', base], env);
+      await cli(['connect', base, '--create'], env);
       const d = await cli(['disconnect'], env);
       expect(d.code, d.err).toBe(0);
       expect(d.out).toMatch(/disconnected/);

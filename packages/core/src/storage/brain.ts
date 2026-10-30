@@ -192,3 +192,48 @@ export async function joinBrain(db: Database, remoteUrl: string, opts: JoinBrain
     sameBrainAsBefore,
   };
 }
+
+export interface BrainRemoteStatus {
+  brain_id: number;
+  name: string;
+  latest_seq: number;
+  machines: Array<{ machine_id: string; hostname: string | null; last_seen_at: number; acked_seq: number }>;
+}
+
+export interface RemoteCallOptions {
+  fetchImpl?: typeof fetch;
+  requestTimeoutMs?: number;
+}
+
+/** The remote's view of this brain, or null when not connected or the remote is unreachable. */
+export async function fetchBrainStatus(db: Database, opts: RemoteCallOptions = {}): Promise<BrainRemoteStatus | null> {
+  const cfg = readBrainConfig(db);
+  if (!cfg.connected) return null;
+  try {
+    const res = await fetchJson(opts.fetchImpl ?? globalThis.fetch, `${cfg.remoteUrl}/brains/me`, undefined, {
+      headers: { authorization: `Bearer ${cfg.token}` },
+      timeoutMs: opts.requestTimeoutMs,
+    });
+    return res.status === 200 ? (res.body as BrainRemoteStatus) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Revoke a machine's access to this brain; true when the remote removed it. */
+export async function removeBrainMachine(db: Database, machineId: string, opts: RemoteCallOptions = {}): Promise<boolean> {
+  const cfg = readBrainConfig(db);
+  if (!cfg.connected) throw new Error("not connected to a brain");
+  const res = await fetchJson(opts.fetchImpl ?? globalThis.fetch, `${cfg.remoteUrl}/brains/me/machines/${encodeURIComponent(machineId)}`, undefined, {
+    method: "DELETE",
+    headers: { authorization: `Bearer ${cfg.token}` },
+    timeoutMs: opts.requestTimeoutMs,
+  });
+  return res.status === 204;
+}
+
+/** First and last group of a formatted share id, for display; the middle stays hidden. */
+export function maskShareId(formatted: string): string {
+  const groups = formatted.split("-");
+  return groups.length < 3 ? "****" : `${groups[0]}-...-${groups[groups.length - 1]}`;
+}
