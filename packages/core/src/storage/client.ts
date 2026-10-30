@@ -363,7 +363,11 @@ export function advanceSyncCursor(db: Database, seq: number): void {
 /** True when a remote content op must be parked as a conflict copy instead of overwriting the local file. */
 export function shouldForkInsteadOfApply(db: Database, op: Op, status: unknown): boolean {
   if (op.kind !== "file.create" && op.kind !== "file.update") return false;
-  if (db.prepare("SELECT 1 FROM files WHERE gid = ?").get(op.gid) === undefined) return false;
+  const local = db.prepare("SELECT content_hash FROM files WHERE gid = ?").get(op.gid) as { content_hash: string | null } | undefined;
+  if (local === undefined) return false;
+  // Two machines that ended up with the same content have nothing to resolve.
+  const remoteHash = (op.payload as { content_hash?: unknown }).content_hash;
+  if (typeof remoteHash === "string" && remoteHash === local.content_hash) return false;
   if (status === "conflict" || hasLostPush(db, op.gid)) return true;
   const unsent = db
     .prepare(
