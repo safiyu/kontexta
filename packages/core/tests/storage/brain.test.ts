@@ -116,7 +116,7 @@ describe("joinBrain", () => {
     const { fetch } = fakeFetch(okHost({ created: false }));
     await joinBrain(db, "https://host.test", { shareId: formatShareId(generateShareId()), hostname: "h", fetchImpl: fetch });
     db.prepare("UPDATE sync_cursor SET last_seq = 42 WHERE id = 1").run();
-    recordGidVersion(db, "1@aaaaaaaaaaaaaaaa", 4);
+    recordGidVersion(db, "1@aaaaaaaaaaaaaaaa", "content", 4);
     const id = enqueueOp(db, { gid: "1@aaaaaaaaaaaaaaaa", kind: "file.update", origin: "aaaaaaaaaaaaaaaa", base_version: 0, payload: {}, created_at: 1 });
     markAcked(db, id, 9);
     const other = await joinBrain(db, "https://host.test", { shareId: formatShareId(generateShareId()), hostname: "h", fetchImpl: fetch });

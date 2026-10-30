@@ -13,3 +13,4 @@ export * from "./shareid.js";
 export * from "./versions.js";
 export * from "./paths.js";
 export * from "./errors.js";
+export * from "./bootstrap.js";

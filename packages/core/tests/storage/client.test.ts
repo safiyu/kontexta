@@ -309,9 +309,9 @@ describe("storage client (M68)", () => {
     it("sends the base_version captured at enqueue time even if a pull advanced the gid since", async () => {
       setEndpoint(db);
       const G = "30@" + MID;
-      recordGidVersion(db, G, 3);
+      recordGidVersion(db, G, "content", 3);
       enqueueOp(db, validOp(30, { gid: G, kind: "file.update", base_version: 0 }));
-      recordGidVersion(db, G, 4); // a pull landed between enqueue and send
+      recordGidVersion(db, G, "content", 4); // a pull landed between enqueue and send
       const { fetch, calls } = fakeFetch(() => ({
         status: 200,
         body: { results: [{ client_seq: 1, seq: 9, status: "accepted", duplicate: false, version: 5 }] },
@@ -323,7 +323,7 @@ describe("storage client (M68)", () => {
     it("bumps later pending ops of the gid when an earlier one is acked in another batch", async () => {
       setEndpoint(db);
       const G = "31@" + MID;
-      recordGidVersion(db, G, 3);
+      recordGidVersion(db, G, "content", 3);
       const first = enqueueOp(db, validOp(31, { gid: G, kind: "file.update", base_version: 0 }));
       const second = enqueueOp(db, validOp(31, { gid: G, kind: "file.update", base_version: 0 }));
       db.prepare("UPDATE outbox SET next_attempt_at = ? WHERE id = ?").run(Date.now() + 60_000, second);

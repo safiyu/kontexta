@@ -54,15 +54,16 @@
  */
 
 import type { Database } from "better-sqlite3";
-import { parseOp, type Op } from "./op.js";
+import { kindFamily, parseOp, type Op } from "./op.js";
 import { markAcked, markFailed, markSent, pendingCount } from "./outbox.js";
 import { applyRemoteOp } from "./apply.js";
 import { fetchJson, describeError, DEFAULT_REQUEST_TIMEOUT_MS, type FetchJsonResult } from "./http.js";
+import { bootstrapIfNeeded, bootstrapPending } from "./bootstrap.js";
 import { readBrainConfig, settingValue, normalizeBaseUrl, ACTIVE_POLL_INTERVAL_DEFAULT_MS, IDLE_POLL_INTERVAL_DEFAULT_MS } from "./brain.js";
 export { normalizeBaseUrl, DEFAULT_REQUEST_TIMEOUT_MS, ACTIVE_POLL_INTERVAL_DEFAULT_MS, IDLE_POLL_INTERVAL_DEFAULT_MS };
 import { UnappliableOpError } from "./errors.js";
 import { ensureConflictsTable, forkConflictFromOp } from "./conflicts.js";
-import { bumpPendingBases, clearLostPush, hasLostPush, knownGidVersions, markLostPush, recordGidVersion } from "./versions.js";
+import { bumpPendingBases, clearLostPush, hasLostPush, knownGidVersions, markLostPush, recordGidVersion, versionKey } from "./versions.js";
 
 // ---------------------------------------------------------------------------
 // Tunables (spec 1.6)
@@ -146,6 +147,9 @@ export async function pushOutbox(db: Database, options: PushOptions = {}): Promi
   if (!cfg.connected) {
     return { attempted: 0, delivered: 0, conflicts: [], error: "not connected" };
   }
+  if (bootstrapPending(db)) {
+    return { attempted: 0, delivered: 0, conflicts: [], error: "brain bootstrap pending" };
+  }
   const fetchImpl = options.fetchImpl ?? globalThis.fetch;
 
   // Crash recovery: a `sent` row whose process died mid-POST is orphaned.
@@ -190,8 +194,9 @@ export async function pushOutbox(db: Database, options: PushOptions = {}): Promi
   // so each op is also based on the earlier ops for its gid in this batch. A create (null) with no predecessor stays null.
   const seenInBatch = new Map<string, number>();
   const wire = rows.map((r) => {
-    const predecessors = seenInBatch.get(r.gid) ?? 0;
-    seenInBatch.set(r.gid, predecessors + 1);
+    const key = versionKey(r.gid, kindFamily(r.kind as Op["kind"]));
+    const predecessors = seenInBatch.get(key) ?? 0;
+    seenInBatch.set(key, predecessors + 1);
     const baseVersion = r.base_version === null && predecessors === 0 ? null : (r.base_version ?? 0) + predecessors;
     return {
       id: r.id,
@@ -290,8 +295,10 @@ export async function pushOutbox(db: Database, options: PushOptions = {}): Promi
       if (w.op.kind === "file.create" || w.op.kind === "file.update") markLostPush(db, w.op.gid);
     }
     markAcked(db, w.id, r.seq);
-    recordGidVersion(db, w.op.gid, r.version ?? (knownByGid.get(w.op.gid) ?? 0) + 1);
-    bumpPendingBases(db, w.op.gid, w.id);
+    const family = kindFamily(w.op.kind);
+    recordGidVersion(db, w.op.gid, family, r.version ?? (knownByGid.get(versionKey(w.op.gid, family)) ?? 0) + 1);
+    // A lost op did not raise the accepted version, so later pending ops keep their base (and lose too).
+    if (r.status !== "conflict") bumpPendingBases(db, w.op.gid, family, w.id);
     delivered++;
   }
 
@@ -414,6 +421,9 @@ export async function pullRemoteOps(db: Database, options: PullOptions = {}): Pr
       error: "not connected",
     };
   }
+  if (bootstrapPending(db)) {
+    return { polled: 0, applied: 0, skipped: 0, conflicts: [], cursor: getSyncCursor(db), error: "brain bootstrap pending" };
+  }
   const fetchImpl = options.fetchImpl ?? globalThis.fetch;
   const machineId = settingValue(db, "machine_id") ?? "";
   const pageLimit = Math.min(
@@ -474,7 +484,9 @@ export async function pullRemoteOps(db: Database, options: PullOptions = {}): Pr
       // Own-origin: this is OUR op echoed back from the authoritative log.
       // The local state IS the source for it, so record its version and skip it.
       if (typeof row.origin === "string" && row.origin === machineId) {
-        if (rowGid !== null && rowVersion !== null) recordGidVersion(db, rowGid, rowVersion);
+        if (rowGid !== null && rowVersion !== null && typeof row.kind === "string") {
+          recordGidVersion(db, rowGid, kindFamily(row.kind as Op["kind"]), rowVersion);
+        }
         if (rowSeq !== null) done = rowSeq;
         continue;
       }
@@ -513,12 +525,12 @@ export async function pullRemoteOps(db: Database, options: PullOptions = {}): Pr
         }
         applied++;
         clearApplyFailure(db, seq);
-        if (rowGid !== null && rowVersion !== null) recordGidVersion(db, rowGid, rowVersion);
+        if (rowVersion !== null) recordGidVersion(db, op.gid, kindFamily(op.kind), rowVersion);
         if (rowSeq !== null) done = rowSeq;
       } catch (err) {
         if (recordApplyFailure(db, seq, op, err)) {
           skipped++;
-          if (rowGid !== null && rowVersion !== null) recordGidVersion(db, rowGid, rowVersion);
+          if (rowVersion !== null) recordGidVersion(db, op.gid, kindFamily(op.kind), rowVersion);
           if (rowSeq !== null) done = rowSeq;
           continue;
         }
@@ -685,6 +697,7 @@ export function startSyncLoop(
     let pull: PullResult | null = null;
     let error: string | null = null;
     try {
+      await bootstrapIfNeeded(db, { fetchImpl: options.fetchImpl, signal: options.signal });
       push = await pushOutbox(db, {
         fetchImpl: options.fetchImpl,
         signal: options.signal,
