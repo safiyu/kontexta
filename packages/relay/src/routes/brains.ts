@@ -16,7 +16,7 @@ import { authenticate } from "./ops.js";
 const MACHINE_ID_RE = /^[0-9a-f]{16}$/;
 const ROUTE_ID_RE = /^[0-9a-f]{64}$/;
 
-/** The routing id is derived on the machine from the share id; the host never sees the share id or the encryption key. */
+/** The routing id is derived on the machine from the share id; the relay never sees the share id or the encryption key. */
 function hashRouteId(routeId: string, pepper: string): string {
   return createHmac("sha256", pepper).update(`route:${routeId}`, "utf8").digest("hex");
 }
@@ -94,7 +94,7 @@ export function createBrainsRouter(db: Database.Database, options: BrainsRouterO
     })();
 
     if (result === "closed") {
-      return c.json({ error: "creating a brain is closed: set KXTA_BRAIN_ENROLL_SECRET on the server" }, 503);
+      return c.json({ error: "creating a brain is closed: set KXTA_RELAY_ENROLL_SECRET on the server" }, 503);
     }
     if (result === "denied") return c.json({ error: "invalid enrollment secret" }, 403);
     return c.json(

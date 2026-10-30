@@ -1,5 +1,5 @@
 -- 019-gid-version-families.sql
--- The brain host versions each record per kind family (content vs metadata), so the machine tracks versions the same way.
+-- The relay versions each record per kind family (content vs metadata), so the machine tracks versions the same way.
 CREATE TABLE gid_versions_v2 (
   gid       TEXT    NOT NULL,
   family    TEXT    NOT NULL,

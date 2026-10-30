@@ -15,7 +15,7 @@ function stubBrainHost(created: boolean) {
     "fetch",
     vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
-      if (url.endsWith("/health")) return new Response(JSON.stringify({ status: "ok", service: "kontexta-brain-host" }), { status: 200 });
+      if (url.endsWith("/health")) return new Response(JSON.stringify({ status: "ok", service: "kontexta-relay" }), { status: 200 });
       if (url.endsWith("/brains/join")) {
         return new Response(JSON.stringify({ brain_id: 1, name: "Web Brain", created, token: "t".repeat(64), latest_seq: 0 }), { status: created ? 201 : 200 });
       }

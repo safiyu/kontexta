@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import Database from "better-sqlite3";
 import type { Hono } from "hono";
-import { createApp } from "../../../../brain-host/src/server.js";
+import { createApp } from "../../../../relay/src/server.js";
 import { resetDataDirCache } from "../../../src/util/paths.js";
 import { joinBrain } from "../../../src/storage/brain.js";
 import { bootstrapIfNeeded } from "../../../src/storage/bootstrap.js";
@@ -12,7 +12,7 @@ import { pullRemoteOps, pushOutbox } from "../../../src/storage/client.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const MIGRATIONS = join(here, "..", "..", "..", "src", "db", "migrations");
-const SERVER_SCHEMA = readFileSync(join(here, "..", "..", "..", "..", "brain-host", "src", "db", "schema.sql"), "utf-8");
+const SERVER_SCHEMA = readFileSync(join(here, "..", "..", "..", "..", "relay", "src", "db", "schema.sql"), "utf-8");
 
 export const HOST_URL = "http://brain.test";
 
@@ -23,11 +23,11 @@ export interface Host {
   close(): void;
 }
 
-/** An in-process brain host that lets anyone create brains (tests only). */
+/** An in-process relay that lets anyone create brains (tests only). */
 export function createHost(): Host {
   const db = new Database(":memory:");
   db.exec(SERVER_SCHEMA);
-  process.env.KXTA_BRAIN_ALLOW_OPEN_CREATE = "1";
+  process.env.KXTA_RELAY_ALLOW_OPEN_CREATE = "1";
   const app = createApp(db);
   const f = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const u = new URL(typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url);

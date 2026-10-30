@@ -36,7 +36,7 @@ async function cli(args: string[], env: Record<string, string>): Promise<{ code:
 }
 
 /**
- * A minimal in-process brain host just rich enough to exercise the CLI: health, join,
+ * A minimal in-process relay just rich enough to exercise the CLI: health, join,
  * brain status, an empty snapshot, and empty op polling. Real op application is covered by the kxta-core client/apply tests.
  */
 let server: http.Server;
@@ -57,7 +57,7 @@ beforeAll(async () => {
       const u = new URL(req.url ?? '/', 'http://x');
       if (u.pathname === '/health') {
         res.writeHead(200, { 'content-type': 'application/json' });
-        return res.end(JSON.stringify({ ok: true, service: 'kontexta-brain-host' }));
+        return res.end(JSON.stringify({ ok: true, service: 'kontexta-relay' }));
       }
       if (u.pathname === '/brains/join' && req.method === 'POST') {
         lastIssuedToken = randomBytes(16).toString('hex');

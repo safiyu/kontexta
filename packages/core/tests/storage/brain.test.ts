@@ -49,7 +49,7 @@ function fakeFetch(h: Handler) {
 }
 const okHost = (join: { created?: boolean; name?: string; token?: string } = {}): Handler => (url) =>
   url.endsWith("/health")
-    ? { body: { status: "ok", service: "kontexta-brain-host" } }
+    ? { body: { status: "ok", service: "kontexta-relay" } }
     : { status: join.created === false ? 200 : 201, body: { brain_id: 1, name: join.name ?? "Mine", created: join.created ?? true, token: join.token ?? "t".repeat(64), latest_seq: 5 } };
 
 describe("readBrainConfig", () => {
@@ -149,17 +149,17 @@ describe("joinBrain", () => {
     expect((db.prepare("SELECT value FROM settings WHERE key = 'brain_bootstrap_pending'").get() as { value: string }).value).toBe("1");
   });
 
-  it("persists nothing when the server rejects the join, or is not a brain host", async () => {
-    const reject = fakeFetch((url) => (url.endsWith("/health") ? { body: { service: "kontexta-brain-host" } } : { status: 403, body: { error: "invalid enrollment secret" } }));
+  it("persists nothing when the server rejects the join, or is not a relay", async () => {
+    const reject = fakeFetch((url) => (url.endsWith("/health") ? { body: { service: "kontexta-relay" } } : { status: 403, body: { error: "invalid enrollment secret" } }));
     await expect(joinBrain(db, "https://host.test", { create: true, hostname: "h", fetchImpl: reject.fetch })).rejects.toThrow(/invalid enrollment secret/);
     const wrong = fakeFetch(() => ({ body: { service: "something-else" } }));
-    await expect(joinBrain(db, "https://host.test", { create: true, hostname: "h", fetchImpl: wrong.fetch })).rejects.toThrow(/not a kontexta brain host/);
+    await expect(joinBrain(db, "https://host.test", { create: true, hostname: "h", fetchImpl: wrong.fetch })).rejects.toThrow(/not a kontexta relay/);
     expect(readBrainConfig(db).connected).toBe(false);
   });
 
   it("a create whose request fails still tells the user the generated share id", async () => {
     const dropped = ((input: RequestInfo | URL) => {
-      if (String(input).endsWith("/health")) return Promise.resolve(new Response(JSON.stringify({ service: "kontexta-brain-host" }), { status: 200 }));
+      if (String(input).endsWith("/health")) return Promise.resolve(new Response(JSON.stringify({ service: "kontexta-relay" }), { status: 200 }));
       throw new Error("connection reset");
     }) as typeof fetch;
     const err = await joinBrain(db, "https://host.test", { create: true, hostname: "h", fetchImpl: dropped }).catch((e: Error) => e);

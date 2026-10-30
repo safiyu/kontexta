@@ -35,11 +35,11 @@ export const TOKEN_BYTES = 32;
 /**
  * The default HMAC pepper. A production deployment MUST override this with a
  * per-instance secret (see the server bootstrap, which reads
- * `KXTA_BRAIN_PEPPER`) — the default exists so local dev and tests run
+ * `KXTA_RELAY_PEPPER`) — the default exists so local dev and tests run
  * without wiring environment config, and because it is NOT the secret that
  * protects a real deployment.
  */
-export const DEFAULT_PEPPER = "kontexta-brain-host-default-pepper-v1";
+export const DEFAULT_PEPPER = "kontexta-relay-default-pepper-v1";
 
 /**
  * Mint a fresh client token: TOKEN_BYTES random bytes as lowercase hex.

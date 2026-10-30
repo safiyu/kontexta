@@ -139,6 +139,6 @@ describe("snapshot", () => {
 
 describe("default pepper guard still applies", () => {
   it("refuses the default pepper on a public bind", () => {
-    expect(defaultPepperRefusal(true, "0.0.0.0", {})).toMatch(/KXTA_BRAIN_PEPPER/);
+    expect(defaultPepperRefusal(true, "0.0.0.0", {})).toMatch(/KXTA_RELAY_PEPPER/);
   });
 });

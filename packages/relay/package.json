@@ -1,7 +1,7 @@
 {
-  "name": "kontexta-brain-host",
+  "name": "kontexta-relay",
   "version": "7.0.0",
-  "description": "Kontexta brain host: one server hosting many fully separate brains, each the durable copy and sync engine for one user's machines",
+  "description": "Kontexta relay: one server hosting many fully separate brains, each the durable copy and sync engine for one user's machines",
   "type": "module",
   "license": "Apache-2.0",
   "author": "Safiyu",
@@ -29,7 +29,7 @@
   },
   "rulesVersion": "3.2.0",
   "bin": {
-    "kontexta-brain-host": "dist/server.js"
+    "kontexta-relay": "dist/server.js"
   },
   "files": [
     "dist",

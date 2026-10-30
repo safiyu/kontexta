@@ -1,4 +1,4 @@
-# kontexta-brain-host — one server hosting many fully separate brains.
+# kontexta-relay — one server hosting many fully separate brains.
 #
 # Spec 1.6: a plain, stateless short-polling HTTP service designed for
 # serverless hosting (Cloud Run et al.). No persistent connections, one SQLite
@@ -20,7 +20,7 @@
 #
 # Nested layout: the package tsconfig.json extends `../../tsconfig.json`
 # (the repo root). We preserve that two-level layout in the builder —
-# /app/tsconfig.json + /app/packages/brain-host/* — so the extends target
+# /app/tsconfig.json + /app/packages/relay/* — so the extends target
 # resolves. (Copying both tsconfigs to the same flat path would break it.)
 
 # Stage 1: Build
@@ -28,14 +28,14 @@ FROM node:24-slim AS builder
 WORKDIR /app
 
 # Package manifest + the tsconfig it extends (repo root, two levels up) +
-# the package's own tsconfig + sources. Kept under packages/brain-host to
+# the package's own tsconfig + sources. Kept under packages/relay to
 # mirror the repo so `extends: ../../tsconfig.json` resolves.
 COPY tsconfig.json ./tsconfig.json
-COPY packages/brain-host/package.json ./packages/brain-host/package.json
-COPY packages/brain-host/tsconfig.json ./packages/brain-host/tsconfig.json
-COPY packages/brain-host/src ./packages/brain-host/src
+COPY packages/relay/package.json ./packages/relay/package.json
+COPY packages/relay/tsconfig.json ./packages/relay/tsconfig.json
+COPY packages/relay/src ./packages/relay/src
 
-WORKDIR /app/packages/brain-host
+WORKDIR /app/packages/relay
 
 # Install this package's dependencies in isolation (no workspace context),
 # build, then drop devDependencies (typescript, vitest, @types) so the runner
@@ -52,16 +52,16 @@ WORKDIR /app
 ENV NODE_ENV=production \
     PORT=23010 \
     HOSTNAME=0.0.0.0 \
-    KXTA_BRAIN_DB=/data/kontexta-brain.db
+    KXTA_RELAY_DB=/data/kontexta-relay.db
 
 # Copy the built server + its (production) dependencies + the sources. The
 # db/schema.sql is a .sql file (not emitted by tsc) resolved from src/db at
 # runtime — see src/db/index.ts (it searches /app/src/db, the layout we copy
 # here).
-COPY --from=builder /app/packages/brain-host/node_modules ./node_modules
-COPY --from=builder /app/packages/brain-host/package.json ./package.json
-COPY --from=builder /app/packages/brain-host/dist ./dist
-COPY --from=builder /app/packages/brain-host/src ./src
+COPY --from=builder /app/packages/relay/node_modules ./node_modules
+COPY --from=builder /app/packages/relay/package.json ./package.json
+COPY --from=builder /app/packages/relay/dist ./dist
+COPY --from=builder /app/packages/relay/src ./src
 
 # The SQLite op log + clients table live on this volume. Create it before
 # dropping privileges so the node user (uid 1000) can write to it; bind- and

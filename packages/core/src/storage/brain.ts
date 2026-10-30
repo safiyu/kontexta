@@ -170,7 +170,7 @@ export async function joinBrain(db: Database, remoteUrl: string, opts: JoinBrain
   const health = await fetchJson(fetchImpl, `${url}/health`, undefined, { timeoutMs });
   if (health.status !== 200) throw new Error(`joinBrain: health check failed (HTTP ${health.status})`);
   const service = (health.body as { service?: unknown } | null)?.service;
-  if (service !== "kontexta-brain-host") throw new Error(`joinBrain: ${url} is not a kontexta brain host`);
+  if (service !== "kontexta-relay") throw new Error(`joinBrain: ${url} is not a kontexta relay`);
 
   const machineId = settingValue(db, "machine_id") ?? "";
   let res;
@@ -185,7 +185,7 @@ export async function joinBrain(db: Database, remoteUrl: string, opts: JoinBrain
     // The server may have created the brain before the connection dropped; a generated id would be lost otherwise.
     throw new Error(
       opts.create && opts.shareId === undefined
-        ? `joinBrain: request failed (${msg}). If the remote created the brain, join it with share id ${formatShareId(bytes)}`
+        ? `joinBrain: request failed (${msg}). If the relay created the brain, join it with share id ${formatShareId(bytes)}`
         : `joinBrain: request failed (${msg})`,
     );
   }

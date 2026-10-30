@@ -1,7 +1,7 @@
 /**
  * Remote client + adaptive short-polling sync loop.
  *
- * The client half of the wire boundary. Everything here talks to a `kontexta-brain-host` over plain,
+ * The client half of the wire boundary. Everything here talks to a `kontexta-relay` over plain,
  * stateless HTTP, scoped to this machine's brain by its bearer token:
  *
  *   GET  {remote}/ops?since&limit&acked  poll remote ops since the cursor
@@ -77,7 +77,7 @@ export const BACKOFF_INITIAL_MS = 1_000;
 export const BACKOFF_MAX_MS = 300_000;
 /**
  * Hard cap on a single POST /ops batch. Mirrors the server's `MAX_OPS_LIMIT`
- * (packages/brain-host/src/routes/ops.ts); a larger outbox drains over
+ * (packages/relay/src/routes/ops.ts); a larger outbox drains over
  * successive ticks.
  */
 export const MAX_BATCH_SIZE = 1000;

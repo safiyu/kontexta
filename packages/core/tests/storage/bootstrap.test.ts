@@ -6,7 +6,7 @@ import { enqueueOp } from "../../src/storage/outbox.js";
 import { settingUpsert, settingValue } from "../../src/storage/brain.js";
 import { bootstrapIfNeeded } from "../../src/storage/bootstrap.js";
 import { countUnresolvedConflicts } from "../../src/storage/conflicts.js";
-import { createHost, createMachine, connect, sync, use, disposeMachine, writeKb, type Machine, type Host } from "./helpers/brainhost.js";
+import { createHost, createMachine, connect, sync, use, disposeMachine, writeKb, type Machine, type Host } from "./helpers/relayhost.js";
 
 const A = "a1b2c3d4e5f60718";
 const B = "0f1e2d3c4b5a6978";

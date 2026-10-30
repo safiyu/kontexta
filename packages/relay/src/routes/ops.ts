@@ -1,5 +1,5 @@
 /**
- * Ops + health routes of the brain host.
+ * Ops + health routes of the relay.
  *
  *   GET  /health        liveness + version (no auth)
  *   GET  /ops           poll ops after a cursor (token)
@@ -105,7 +105,7 @@ export function createOpsRouter(db: Database.Database, options: OpsRouterOptions
   const router = new Hono();
 
   router.get("/health", (c) =>
-    c.json({ status: "ok", service: "kontexta-brain-host", version: VERSION, time: Date.now() }),
+    c.json({ status: "ok", service: "kontexta-relay", version: VERSION, time: Date.now() }),
   );
 
   router.get("/ops", (c) => {

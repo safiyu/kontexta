@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { createHash } from "node:crypto";
 import { enqueueOp } from "../../src/storage/outbox.js";
 import { countUnresolvedConflicts, listConflicts, resolveConflict } from "../../src/storage/conflicts.js";
-import { createHost, createMachine, connect, sync, use, disposeMachine, writeKb, HOST_URL, type Machine, type Host } from "./helpers/brainhost.js";
+import { createHost, createMachine, connect, sync, use, disposeMachine, writeKb, HOST_URL, type Machine, type Host } from "./helpers/relayhost.js";
 import { joinBrain } from "../../src/storage/brain.js";
 import { generateShareId, formatShareId } from "../../src/storage/shareid.js";
 

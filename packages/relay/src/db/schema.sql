@@ -1,5 +1,5 @@
 -- schema.sql
--- kontexta-brain-host: one server, many fully separate brains.
+-- kontexta-relay: one server, many fully separate brains.
 -- Every table is scoped by brain_id; nothing is ever pruned (a brain remembers everything).
 -- Time columns are INTEGER ms since epoch. Ordering is the server's: ops.seq is the only order.
 -- No foreign keys: gids and origins are logical references to records that live on machines.

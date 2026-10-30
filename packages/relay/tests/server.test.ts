@@ -1,5 +1,5 @@
 /**
- * Brain host ops, auth and startup tests.
+ * Relay ops, auth and startup tests.
  *
  * Routes run through Hono's in-process client against a real in-memory SQLite database loaded with the
  * real schema, so the schema and the routes are tested exactly as deployed.
@@ -22,7 +22,8 @@ import { createBrainsRouter } from "../src/routes/brains.js";
 import { DEFAULT_PEPPER, hashToken } from "../src/auth.js";
 import { randomBytes } from "node:crypto";
 import { VERSION } from "../src/index.js";
-import { defaultPepperRefusal, isLoopbackHost } from "../src/server.js";
+import { defaultPepperRefusal, isLoopbackHost, defaultDbPath } from "../src/server.js";
+import { homedir } from "node:os";
 import { Hono } from "hono";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -104,7 +105,7 @@ describe("GET /health", () => {
     const res = await app.request("/health");
     expect(res.status).toBe(200);
     const body = (await res.json()) as { service: string; version: string };
-    expect(body.service).toBe("kontexta-brain-host");
+    expect(body.service).toBe("kontexta-relay");
     expect(body.version).toBe(VERSION);
   });
 });
@@ -337,9 +338,18 @@ describe("default pepper startup guard", () => {
   });
 
   it("refuses the default pepper on a non-loopback bind unless overridden", () => {
-    expect(defaultPepperRefusal(true, "0.0.0.0", {})).toMatch(/KXTA_BRAIN_PEPPER/);
-    expect(defaultPepperRefusal(true, "0.0.0.0", { KXTA_BRAIN_ALLOW_DEFAULT_PEPPER: "1" })).toBeNull();
+    expect(defaultPepperRefusal(true, "0.0.0.0", {})).toMatch(/KXTA_RELAY_PEPPER/);
+    expect(defaultPepperRefusal(true, "0.0.0.0", { KXTA_RELAY_ALLOW_DEFAULT_PEPPER: "1" })).toBeNull();
     expect(defaultPepperRefusal(true, "127.0.0.1", {})).toBeNull();
     expect(defaultPepperRefusal(false, "0.0.0.0", {})).toBeNull();
+  });
+});
+
+describe("default database path", () => {
+  it("lives in the user's home so a bare `npx kontexta-relay` can create it (Docker sets KXTA_RELAY_DB to /data)", () => {
+    const p = defaultDbPath();
+    expect(p.startsWith(homedir())).toBe(true);
+    expect(p.endsWith("relay.db")).toBe(true);
+    expect(p.startsWith("/data")).toBe(false);
   });
 });

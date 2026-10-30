@@ -54,7 +54,7 @@ jobs:
       - name: Verify tag matches package versions
         run: |
           TAG="${GITHUB_REF_NAME#v}"
-          for MANIFEST in apps/mcp/package.json packages/cli/package.json packages/brain-host/package.json; do
+          for MANIFEST in apps/mcp/package.json packages/cli/package.json packages/relay/package.json; do
             PKG=$(node -p "require('./$MANIFEST').version")
             if [ "$TAG" != "$PKG" ]; then
               echo "::error::Tag $GITHUB_REF_NAME does not match $MANIFEST version $PKG"
@@ -119,8 +119,8 @@ jobs:
       - name: Publish kontexta to npm
         run: npx -y npm@latest publish ./packages/cli --access public --provenance
 
-      - name: Publish kontexta-brain-host to npm
-        run: npx -y npm@latest publish ./packages/brain-host --access public --provenance
+      - name: Publish kontexta-relay to npm
+        run: npx -y npm@latest publish ./packages/relay --access public --provenance
 
       - name: Extract release notes from CHANGELOG
         id: notes
@@ -203,3 +203,42 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
+  publish-relay-image:
+    name: Build and Push Relay Image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            safiyu/kontexta-relay
+            ghcr.io/safiyu/kontexta-relay
+          tags: |
+            type=semver,pattern={{version}}
+            type=raw,value=latest,enable=${{ github.ref_type == 'tag' }}
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: packages/relay/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}

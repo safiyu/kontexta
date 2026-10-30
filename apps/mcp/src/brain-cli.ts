@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// `kontexta brain ...`: connect this machine to a brain on a remote and manage that connection.
+// `kontexta brain ...`: connect this machine to a brain on a relay and manage that connection.
 // Ships inside the MCP bundle so it reaches kxta-core without a second dependency graph (like hooks-cli).
 import { hostname } from "node:os";
 import { realpathSync } from "node:fs";
@@ -29,13 +29,13 @@ import {
 
 type Database = ReturnType<typeof getDatabase>;
 
-const USAGE = `kontexta brain: connect this machine to a brain on a remote
+const USAGE = `kontexta brain: connect this machine to a brain on a relay
 
 Usage:
   kontexta brain connect <url> [--share-id <id> | --create [--name <n>]] [--enroll-secret <s>]
                                [--hostname <label>] [--no-keep-share-id] [--json]
-      Join a brain with its share id, or create a new one (needs the remote's enrollment secret via
-      --enroll-secret or KXTA_BRAIN_ENROLL_SECRET). With neither flag you are asked.
+      Join a brain with its share id, or create a new one (needs the relay's enrollment secret via
+      --enroll-secret or KXTA_RELAY_ENROLL_SECRET). With neither flag you are asked.
   kontexta brain status [--json]
       Brain name, remote, machines, outbox depth, skipped ops and sync cursor.
   kontexta brain share [--yes]
@@ -43,9 +43,9 @@ Usage:
   kontexta brain machines [remove <machine-id>]
       List the machines in this brain, or revoke one.
   kontexta brain disconnect [--json]
-      Forget the remote and token. The brain's history stays on this machine.
+      Forget the relay and token. The brain's history stays on this machine.
   kontexta brain push | pull
-      Ship the local outbox, or poll and apply remote ops.
+      Ship the local outbox, or poll and apply ops from your other machines.
   kontexta brain run
       Run the sync loop in the foreground until interrupted.
 
@@ -133,7 +133,7 @@ async function doStatus(db: Database, json: boolean): Promise<number> {
     print("  machines:");
     for (const m of remote.machines) print(`    ${m.machine_id}  ${m.hostname ?? "-"}  last seen ${new Date(m.last_seen_at).toISOString()}`);
   } else if (cfg.connected) {
-    print("  machines: remote unreachable");
+    print("  machines: relay unreachable");
   }
   print(`  pending ops: ${data.pending}   skipped ops: ${data.skipped}   cursor: ${data.cursor}`);
   return 0;
@@ -168,7 +168,7 @@ async function doMachines(db: Database, rest: string[], json: boolean): Promise<
   }
   const remote = await fetchBrainStatus(db);
   if (!remote) {
-    process.stderr.write("could not reach the remote (not connected, or offline)\n");
+    process.stderr.write("could not reach the relay (not connected, or offline)\n");
     return 1;
   }
   if (json) print(JSON.stringify(remote.machines));
@@ -257,7 +257,7 @@ export async function runBrainCli(argv: string[], env: NodeJS.ProcessEnv = proce
           shareId: values["share-id"],
           create: values.create,
           name: values.name,
-          enrollSecret: values["enroll-secret"] ?? env.KXTA_BRAIN_ENROLL_SECRET,
+          enrollSecret: values["enroll-secret"] ?? env.KXTA_RELAY_ENROLL_SECRET,
           host: values.hostname ?? hostname(),
           keep: !values["no-keep-share-id"],
           timeoutMs,

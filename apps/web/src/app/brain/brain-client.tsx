@@ -104,7 +104,7 @@ export function BrainClient() {
         <div>
           <h1 className="text-2xl font-semibold">Brain</h1>
           <p className="text-sm text-[var(--text-secondary)]">
-            Your context lives on this machine. Connect it to a brain on a remote to keep a durable copy and sync your other machines.
+            Your context lives on this machine. Connect it to a brain on a relay to keep a durable copy and sync your other machines.
           </p>
         </div>
       </header>
@@ -169,13 +169,13 @@ export function BrainClient() {
             <label><input type="radio" checked={mode === "join"} onChange={() => setMode("join")} /> Join with a share id</label>
             <label><input type="radio" checked={mode === "create"} onChange={() => setMode("create")} /> Create a new brain</label>
           </div>
-          <input className="input w-full" placeholder="Remote URL, e.g. https://brain.example.com" value={url} onChange={(e) => setUrl(e.target.value)} />
+          <input className="input w-full" placeholder="Relay URL, e.g. https://relay.example.com" value={url} onChange={(e) => setUrl(e.target.value)} />
           {mode === "join" ? (
             <input className="input w-full font-mono" placeholder="Share id" value={shareId} onChange={(e) => setShareId(e.target.value)} />
           ) : (
             <>
               <input className="input w-full" placeholder="Brain name (optional)" value={name} onChange={(e) => setName(e.target.value)} />
-              <input type="password" className="input w-full" placeholder="Remote enrollment secret" value={enrollSecret} onChange={(e) => setEnrollSecret(e.target.value)} />
+              <input type="password" className="input w-full" placeholder="Relay enrollment secret" value={enrollSecret} onChange={(e) => setEnrollSecret(e.target.value)} />
             </>
           )}
           <button className="btn-primary" disabled={busy || !url || (mode === "join" && !shareId)} onClick={() => void connect()}>

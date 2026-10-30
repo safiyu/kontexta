@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Brain host HTTP bootstrap.
+ * Relay HTTP bootstrap.
  *
  * The thin process entry that the routes (routes/ops.ts) and database
  * (db/index.ts) were built for: it opens the server's standalone SQLite
@@ -10,18 +10,18 @@
  * called), so the in-process test client (tests/server.test.ts) never touches
  * a listener.
  *
- * It is also the Docker entrypoint (packages/brain-host/Dockerfile →
+ * It is also the Docker entrypoint (packages/relay/Dockerfile →
  * `node dist/server.js`) and the `pnpm start` target.
  *
  * Configuration (all optional; sensible defaults make `node dist/server.js`
  * work out of the box on the default Docker volume):
  *   PORT                 listen port                     (default 23010)
  *   HOSTNAME             bind address                    (default 0.0.0.0)
- *   KXTA_BRAIN_DB      SQLite file path                (default /data/kontexta-brain.db)
- *   KXTA_BRAIN_PEPPER  HMAC pepper for token hashes    (default DEFAULT_PEPPER)
- *   KXTA_BRAIN_ENROLL_SECRET  secret needed to create a brain (joining needs only the share id)
- *   KXTA_BRAIN_ALLOW_OPEN_CREATE=1  dev only: create brains without a secret
- *   KXTA_BRAIN_ALLOW_DEFAULT_PEPPER=1   allow the default pepper on a non-loopback bind
+ *   KXTA_RELAY_DB      SQLite file path                (default ~/.kontexta-relay/relay.db; the Docker image uses /data)
+ *   KXTA_RELAY_PEPPER  HMAC pepper for token hashes    (default DEFAULT_PEPPER)
+ *   KXTA_RELAY_ENROLL_SECRET  secret needed to create a brain (joining needs only the share id)
+ *   KXTA_RELAY_ALLOW_OPEN_CREATE=1  dev only: create brains without a secret
+ *   KXTA_RELAY_ALLOW_DEFAULT_PEPPER=1   allow the default pepper on a non-loopback bind
  *
  * The pepper is the one value a real deployment MUST override: token hashes
  * are bound to it, so a forgotten override means every client token on the
@@ -29,6 +29,7 @@
  */
 
 import { existsSync, realpathSync } from "node:fs";
+import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { serve } from "@hono/node-server";
@@ -40,14 +41,14 @@ import { DEFAULT_PEPPER } from "./auth.js";
 import { VERSION } from "./index.js";
 
 /**
- * The default SQLite path. It lives under `/data` (the Docker volume, see
- * the Dockerfile / docker-compose.brain.yml) so the authoritative op log
- * survives container recreation; on a bare `node dist/server.js` run the
- * parent directory is created on demand (openDatabase does that).
+ * The default SQLite path for a bare `npx kontexta-relay` or `node dist/server.js` run: a folder in the user's home,
+ * created on demand. The Docker image sets `KXTA_RELAY_DB=/data/kontexta-relay.db` so its volume holds the data.
  */
-export const DEFAULT_DB_PATH = "/data/kontexta-brain.db";
+export function defaultDbPath(): string {
+  return join(homedir(), ".kontexta-relay", "relay.db");
+}
 
-/** The default bind port (spec: the brain host is the sibling of the web app on 23002). */
+/** The default bind port (spec: the relay is the sibling of the web app on 23002). */
 export const DEFAULT_PORT = 23010;
 
 /**
@@ -61,7 +62,7 @@ function locateSchemaPath(): string | null {
   const candidates = [
     join(here, "db", "schema.sql"), // dist/db/.. (built layout, /app in Docker)
     join(here, "..", "src", "db", "schema.sql"), // src/db/index.js (source layout)
-    join(process.cwd(), "packages", "brain-host", "src", "db", "schema.sql"), // WORKDIR=/app
+    join(process.cwd(), "packages", "relay", "src", "db", "schema.sql"), // WORKDIR=/app
   ];
   for (const candidate of candidates) {
     if (existsSync(candidate)) return candidate;
@@ -84,14 +85,14 @@ function parsePort(raw: string | undefined, fallback: number): number {
  */
 export function createApp(db: ReturnType<typeof openDatabase>): Hono {
   const app = new Hono();
-  const pepper = process.env.KXTA_BRAIN_PEPPER || DEFAULT_PEPPER;
+  const pepper = process.env.KXTA_RELAY_PEPPER || DEFAULT_PEPPER;
   app.route("/", createOpsRouter(db, { pepper }));
   app.route(
     "/",
     createBrainsRouter(db, {
       pepper,
-      enrollSecret: process.env.KXTA_BRAIN_ENROLL_SECRET || "",
-      allowOpenCreate: process.env.KXTA_BRAIN_ALLOW_OPEN_CREATE === "1",
+      enrollSecret: process.env.KXTA_RELAY_ENROLL_SECRET || "",
+      allowOpenCreate: process.env.KXTA_RELAY_ALLOW_OPEN_CREATE === "1",
     }),
   );
 
@@ -108,7 +109,7 @@ export function createApp(db: ReturnType<typeof openDatabase>): Hono {
     ),
   );
   app.onError((err, c) => {
-    process.stderr.write(`brain-host: unhandled error: ${err.stack ?? String(err)}\n`);
+    process.stderr.write(`relay: unhandled error: ${err.stack ?? String(err)}\n`);
     return c.json({ error: "internal server error" }, 500);
   });
   return app;
@@ -126,10 +127,10 @@ export function defaultPepperRefusal(
   env: NodeJS.ProcessEnv = process.env,
 ): string | null {
   if (!usingDefaultPepper || isLoopbackHost(hostname)) return null;
-  if (env.KXTA_BRAIN_ALLOW_DEFAULT_PEPPER === "1") return null;
+  if (env.KXTA_RELAY_ALLOW_DEFAULT_PEPPER === "1") return null;
   return (
-    `refusing to listen on ${hostname} with the default token pepper: set KXTA_BRAIN_PEPPER ` +
-    "(or KXTA_BRAIN_ALLOW_DEFAULT_PEPPER=1 to override)"
+    `refusing to listen on ${hostname} with the default token pepper: set KXTA_RELAY_PEPPER ` +
+    "(or KXTA_RELAY_ALLOW_DEFAULT_PEPPER=1 to override)"
   );
 }
 
@@ -143,12 +144,12 @@ export function defaultPepperRefusal(
 export function main(): void {
   const port = parsePort(process.env.PORT, DEFAULT_PORT);
   const hostname = process.env.HOSTNAME || "0.0.0.0";
-  const dbPath = process.env.KXTA_BRAIN_DB || DEFAULT_DB_PATH;
-  const usingDefaultPepper = !process.env.KXTA_BRAIN_PEPPER;
+  const dbPath = process.env.KXTA_RELAY_DB || defaultDbPath();
+  const usingDefaultPepper = !process.env.KXTA_RELAY_PEPPER;
 
   const refusal = defaultPepperRefusal(usingDefaultPepper, hostname);
   if (refusal) {
-    process.stderr.write(`brain-host: ${refusal}\n`);
+    process.stderr.write(`relay: ${refusal}\n`);
     process.exit(1);
   }
 
@@ -157,7 +158,7 @@ export function main(): void {
     db = openDatabase(dbPath);
   } catch (e) {
     process.stderr.write(
-      `brain-host: could not open database at ${dbPath}: ${e instanceof Error ? e.message : e}\n`,
+      `relay: could not open database at ${dbPath}: ${e instanceof Error ? e.message : e}\n`,
     );
     process.exit(1);
   }
@@ -170,13 +171,13 @@ export function main(): void {
   // surface it as a clean exit rather than a crash dump.
   const server = serve({ fetch: app.fetch, port, hostname });
   server.on("error", (e: Error & { code?: string }) => {
-    process.stderr.write(`brain-host: failed to bind ${hostname}:${port}: ${e.code ?? e.message}\n`);
+    process.stderr.write(`relay: failed to bind ${hostname}:${port}: ${e.code ?? e.message}\n`);
     process.exit(1);
   });
   server.on("listening", () => {
     const addr = server.address();
     process.stdout.write(
-      `kontexta-brain-host v${VERSION} listening on ${hostname}:${addr && typeof addr === "object" ? addr.port : port} ` +
+      `kontexta-relay v${VERSION} listening on ${hostname}:${addr && typeof addr === "object" ? addr.port : port} ` +
         `(db: ${dbPath})\n`,
     );
     if (schemaPath) {
@@ -184,7 +185,7 @@ export function main(): void {
     }
     if (usingDefaultPepper) {
       process.stdout.write(
-        "  WARNING: using the DEFAULT token pepper — set KXTA_BRAIN_PEPPER for any real deployment.\n",
+        "  WARNING: using the DEFAULT token pepper — set KXTA_RELAY_PEPPER for any real deployment.\n",
       );
     }
   });
