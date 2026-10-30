@@ -845,12 +845,31 @@ describe("POST /clients enrollment", () => {
     expect((await post(r, { machine_id: MACHINE_A })).status).toBe(403);
   });
 
-  it("re-registration of a known machine needs no secret and returns no token", async () => {
+  it("re-registration without the secret is 403 and does not change the hostname", async () => {
+    await tokenFor(MACHINE_A);
+    db.prepare("UPDATE clients SET hostname = 'original' WHERE machine_id = ?").run(MACHINE_A);
+    const r = createOpsRouter(db, { enrollSecret: "s3cret" });
+    const res = await post(r, { machine_id: MACHINE_A, hostname: "pwned" });
+    expect(res.status).toBe(403);
+    expect((db.prepare("SELECT hostname FROM clients WHERE machine_id = ?").get(MACHINE_A) as { hostname: string }).hostname).toBe("original");
+  });
+
+  it("answers identically for known and unknown machine ids without the secret", async () => {
     await tokenFor(MACHINE_A);
     const r = createOpsRouter(db, { enrollSecret: "s3cret" });
-    const res = await post(r, { machine_id: MACHINE_A });
+    const known = await post(r, { machine_id: MACHINE_A });
+    const unknown = await post(r, { machine_id: "0123456789abcdef" });
+    expect(known.status).toBe(unknown.status);
+    expect(await known.json()).toEqual(await unknown.json());
+  });
+
+  it("re-registration with the secret refreshes the hostname and returns no token", async () => {
+    await tokenFor(MACHINE_A);
+    const r = createOpsRouter(db, { enrollSecret: "s3cret" });
+    const res = await post(r, { machine_id: MACHINE_A, hostname: "renamed" }, { "x-enroll-secret": "s3cret" });
     expect(res.status).toBe(200);
     expect(((await res.json()) as { token: unknown }).token).toBeNull();
+    expect((db.prepare("SELECT hostname FROM clients WHERE machine_id = ?").get(MACHINE_A) as { hostname: string }).hostname).toBe("renamed");
   });
 });
 

@@ -297,16 +297,7 @@ export function createOpsRouter(
         ? hostname
         : null;
 
-    const now = Date.now();
-    if (isClientKnown(db, machine_id)) {
-      // Re-registration: refresh the label/seen time, issue nothing.
-      db.prepare(
-        `UPDATE clients SET hostname = COALESCE(?, hostname), last_seen_at = ?
-         WHERE machine_id = ?`,
-      ).run(host, now, machine_id);
-      return c.json({ machine_id, registered: false, token: null });
-    }
-
+    // The secret is checked before any lookup so known and unknown machine ids answer identically.
     if (enrollSecret === "") {
       if (!allowOpenEnrollment) {
         return c.json(
@@ -326,6 +317,16 @@ export function createOpsRouter(
       if (!secretsEqual(presented, enrollSecret)) {
         return c.json({ error: "invalid enrollment secret" }, 403);
       }
+    }
+
+    const now = Date.now();
+    if (isClientKnown(db, machine_id)) {
+      // Re-registration: refresh the label/seen time, issue nothing.
+      db.prepare(
+        `UPDATE clients SET hostname = COALESCE(?, hostname), last_seen_at = ?
+         WHERE machine_id = ?`,
+      ).run(host, now, machine_id);
+      return c.json({ machine_id, registered: false, token: null });
     }
 
     const token = generateClientToken();
