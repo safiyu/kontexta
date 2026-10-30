@@ -1,94 +1,22 @@
 /**
- * Storage-server HTTP routes — Phase 4 (storage/04-server).
+ * Ops + health routes of the brain host.
  *
- * The four endpoints of the authoritative op-log backend (spec 1.6–1.7):
+ *   GET  /health        liveness + version (no auth)
+ *   GET  /ops           poll ops after a cursor (token)
+ *   POST /ops           ship a batch of ops (token)
  *
- *   GET  /health          liveness + package version (no auth)
- *   POST /clients         machine registration; issues a one-time sync token
- *   GET  /ops             poll new ops: `?since=<cursor>&limit=<n>` (auth)
- *   POST /ops             ship a batch of local outbox ops (auth)
- *
- * Design notes
- * ============
- *
- * AUTH — `POST /clients` is the ONLY unauthenticated route. Every machine
- * presents `machine_id` (its stable 16-hex identity, the same value its local
- * store keeps in `settings.machine_id`) and receives a fresh 256-bit token,
- * returned exactly ONCE; only its peppered hash is stored (auth.ts). All other
- * routes require `Authorization: Bearer <token>` and resolve the owning
- * `machine_id` via `validateClientToken` — an unknown token is 401.
- *
- * ORDERING (spec 1.7) — the SERVER assigns the sole authoritative order:
- * each accepted op gets the next `ops.seq` (AUTOINCREMENT). Client clocks
- * (`created_at`) are stored for display only and never used to order.
- *
- * CONFLICT DETECTION (spec 1.7) — before an op is appended, the server counts
- * the ops already stored for its `gid` (`COUNT(*)`, all statuses: the log is
- * append-only, so stored == applied). That count is the current canonical
- * version for the gid, starting at 0. An op whose `base_version` (the last
- * version its client knew) is LOWER than that version — or that is a create
- * (`null`) for a gid that already has ops — is stored with `status =
- * 'conflict'` and flagged in the response; the receiving client forks a
- * conflict copy (spec 1.7) instead of clobbering its canonical record.
- *
- *   * `base_version: null` (create) asserts "no prior state": accepted for a
- *     fresh gid, CONFLICT when the gid already has ops — the offline-both-
- *     create case the roundtrip/integration tests exercise.
- *   * `base_version: N` (an update based on version N, the last version the
- *     client knew) is accepted while the canonical version is N and conflicts
- *     once the gid's version has advanced past it (N < version).
- *
- *   CLIENT PROTOCOL — the op's `base_version` is meaningful only if the client
- *   sends the LAST version it knew for the gid. The Phase-3 write sites
- *   hardcode `base_version: 0` (a "mutation" marker, not a version counter),
- *   so the M68 sync loop (kxta-core `storage/client.ts`) rewrites each
- *   outbound op's `base_version` at send time from the local per-gid
- *   high-water mark (max server version known for that gid). This module
- *   documents the contract the loop must honor.
- *
- *   The server NEVER rejects or drops a conflicting op: it stays in the log
- *   (the authoritative record of what happened) and is served to OTHER
- *   machines; only its `status` and the response flag tell the client how to
- *   treat it.
- *
- * IDEMPOTENT RETRIES — a batch may be retried after a lost ACK. The partial
- * unique index `idx_ops_origin_clientseq` (schema.sql) makes a repeat of
- * `(origin, client_seq)` a no-op that returns the ORIGINAL seq instead of
- * double-storing.
- *
- * ATOMICITY — each `POST /ops` runs in a single better-sqlite3 transaction:
- * the per-op version counts, inserts, and dedup checks commit together, so
- * two concurrent batches from the same machine interleave op-by-op with
- * consistent counts (SQLite serializes writers; busy_timeout in db/index.ts
- * absorbs the wait).
+ * Every request is scoped to the brain its token belongs to. The server never interprets a payload:
+ * it orders ops, versions each (gid, kind family), parks losing ops as conflicts, and keeps the log forever.
  */
 
-import { createHash, timingSafeEqual } from "node:crypto";
 import { Hono } from "hono";
 import type Database from "better-sqlite3";
-import {
-  generateClientToken,
-  hashToken,
-  validateClientToken,
-  isClientKnown,
-  DEFAULT_PEPPER,
-} from "../auth.js";
+import { validateClientToken, DEFAULT_PEPPER } from "../auth.js";
+import { BrainStore, type NewOp } from "../store.js";
 import { VERSION } from "../index.js";
 
-/** The `machine_id` a machine may present at POST /clients: the same 16-hex
- *  identity the client keeps in `settings.machine_id`. */
-const MACHINE_ID_RE = /^[0-9a-f]{16}$/;
-
-/** GID shape: `<non-negative-integer>@<non-empty>` (mirrors core parseGid). */
 const GID_RE = /^\d+@.+/;
 
-/**
- * The closed set of mutation kinds an op may carry. Mirrors `OP_KINDS` in
- * kxta-core (packages/core/src/storage/op.ts); the server is a standalone
- * deployment and does NOT import core, so it re-declares the set. The two
- * lists must stay in lockstep: a client and server on mismatched versions
- * fail closed (400) rather than silently mis-applying an unknown kind.
- */
 export const OP_KINDS: readonly string[] = [
   "file.create",
   "file.update",
@@ -106,30 +34,24 @@ export const OP_KINDS: readonly string[] = [
   "journal.meta.upsert",
 ];
 
-/** Default batch size for GET /ops when the client sends no `limit`. */
+/** Mirrors `kindFamily` in kxta-core (the server does not import core). */
+export function kindFamily(kind: string): string {
+  if (kind.startsWith("file.")) return "content";
+  if (kind === "tag.set" || kind === "favorite.set") return "metadata";
+  if (kind.startsWith("folder.")) return "folder";
+  if (kind.startsWith("project.")) return "project";
+  if (kind === "journal.meta.upsert") return "journal";
+  return kind;
+}
+
 export const DEFAULT_OPS_LIMIT = 200;
-/** Hard cap on any single GET /ops batch or POST /ops batch. */
 export const MAX_OPS_LIMIT = 1000;
 
-/** Parsed `since` / `limit` query params for GET /ops. */
 export interface GetOpsParams {
   since: number;
   limit: number;
 }
 
-/**
- * Parse `since` / `limit` query params for GET /ops.
- *
- * `since` defaults to 0 (fetch from the beginning — matches the client's
- * `sync_cursor.last_seq` seed); an absent `limit` falls back to the
- * deployment's configured default (`defaultLimit`, 200 by factory default),
- * and any explicit value is capped at {@link MAX_OPS_LIMIT} so a single poll
- * can never grow unbounded.
- *
- * Returns `null` for anything malformed (non-integer, negative, or an EMPTY
- * string — `Number("") === 0` would silently coerce `?since=` into "from the
- * beginning", a guess rather than a request); the caller answers 400.
- */
 export function parseGetOpsParams(
   rawSince: string | undefined,
   rawLimit: string | undefined,
@@ -145,261 +67,58 @@ export function parseGetOpsParams(
   // `limit` is the client's choice, bounded only by the hard cap.
   return { since, limit: Math.min(limit, MAX_OPS_LIMIT) };
 }
-
-/**
- * Extract and normalize a Bearer token from an Authorization header value.
- * Accepts `Bearer <token>` (case-insensitive scheme, surrounding whitespace
- * tolerated). Anything else — missing header, wrong scheme, empty token —
- * yields `null` (the caller answers 401 without revealing which part failed).
- */
 export function extractBearerToken(header: string | undefined): string | null {
   if (typeof header !== "string") return null;
   const match = /^Bearer\s+(\S+)\s*$/i.exec(header.trim());
   return match ? match[1] : null;
 }
 
-/** One op row as served / stored: the six Op fields + server bookkeeping. */
-export interface StoredOp {
-  seq: number;
-  gid: string;
-  kind: string;
-  origin: string;
-  base_version: number | null;
-  /** Decoded `op.payload` (the column holds its canonical JSON). */
-  payload: unknown;
-  created_at: number;
-  client_seq: number | null;
-  status: "accepted" | "conflict";
-  received_at: number;
-  /** The gid's version right after this op (count of its ops with seq <= this seq). */
-  gid_version: number;
-}
+/** One validated incoming op (see {@link validateIncomingOp}). */
+export type ValidatedOp = NewOp;
 
-/** An op after server-side validation (see {@link validateIncomingOp}). */
-export interface ValidatedOp {
-  gid: string;
-  kind: string;
-  origin: string;
-  base_version: number | null;
-  /** Canonical JSON of `op.payload` — exactly what the column stores. */
-  payloadJson: string;
-  created_at: number;
-  client_seq: number | null;
-}
-
-/** Per-op result of a POST /ops batch. */
-export interface OpPostResult {
-  /** The client's local outbox id, echoed back (null when not sent). */
-  client_seq: number | null;
-  /** The server-assigned authoritative seq (the ACK cursor). */
-  seq: number;
-  /** `conflict` when the op lost optimistic concurrency (spec 1.7). */
-  status: "accepted" | "conflict";
-  /** True when this (origin, client_seq) was already stored (retry). */
-  duplicate: boolean;
-  /** The gid's version right after this op was stored. */
-  version: number;
-}
-
-interface OpsRouterOptions {
-  /** The pepper bound into token hashes (override `DEFAULT_PEPPER`). */
+export interface OpsRouterOptions {
   pepper?: string;
-  /** Shared secret a new machine must present at POST /clients. */
-  enrollSecret?: string;
-  /** Dev/test only: allow POST /clients with no enrollment secret configured. */
-  allowOpenEnrollment?: boolean;
-  /** Default batch size for GET /ops (capped at {@link MAX_OPS_LIMIT}). */
   defaultLimit?: number;
 }
 
-/**
- * Build the ops router bound to a live database.
- *
- * Exported as a factory (not a singleton) so each deployment — and each test —
- * wires its own connection + pepper. The Hono app (server.ts) mounts it at the
- * root; nothing here owns the HTTP listener or process lifecycle.
- */
-export function createOpsRouter(
+/** Resolve the bearer token to its brain and machine, or null. */
+export function authenticate(
   db: Database.Database,
-  options: OpsRouterOptions = {},
-): Hono {
+  header: string | undefined,
+  pepper: string,
+): { brainId: number; machineId: string } | null {
+  const token = extractBearerToken(header);
+  return token ? validateClientToken(db, token, pepper) : null;
+}
+
+export function createOpsRouter(db: Database.Database, options: OpsRouterOptions = {}): Hono {
   const pepper = options.pepper ?? DEFAULT_PEPPER;
-  const enrollSecret = options.enrollSecret ?? "";
-  const allowOpenEnrollment = options.allowOpenEnrollment === true;
   const defaultLimit = Math.min(options.defaultLimit ?? DEFAULT_OPS_LIMIT, MAX_OPS_LIMIT);
+  const store = new BrainStore(db);
   const router = new Hono();
 
-  // Prepared statements, created once against the bound connection.
-  const insertOp = db.prepare(
-    `INSERT INTO ops (gid, kind, origin, base_version, payload, created_at, client_seq, status)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-  );
-  const countGidOps = db.prepare(`SELECT COUNT(*) AS n FROM ops WHERE gid = ?`);
-  const findByClientSeq = db.prepare(
-    `SELECT seq, status FROM ops WHERE origin = ? AND client_seq = ?`,
-  );
-  const fetchSince = db.prepare(
-    `SELECT o.seq, o.gid, o.kind, o.origin, o.base_version, o.payload, o.created_at,
-            o.client_seq, o.status, o.received_at,
-            (SELECT COUNT(*) FROM ops p WHERE p.gid = o.gid AND p.seq <= o.seq) AS gid_version
-     FROM ops o WHERE o.seq > ? ORDER BY o.seq ASC LIMIT ?`,
-  );
-  const versionAtSeq = db.prepare(
-    `SELECT COUNT(*) AS n FROM ops WHERE gid = ? AND seq <= ?`,
-  );
-  const touchClient = db.prepare(
-    `UPDATE clients SET last_seen_at = ? WHERE machine_id = ?`,
-  );
-
-  /**
-   * Liveness + package version (no auth): load balancers / Cloud Run probe
-   * this path, so it must not require credentials.
-   */
   router.get("/health", (c) =>
-    c.json({
-      status: "ok",
-      service: "kontexta-storage-server",
-      version: VERSION,
-      time: Date.now(),
-    }),
+    c.json({ status: "ok", service: "kontexta-brain-host", version: VERSION, time: Date.now() }),
   );
 
-  /**
-   * Machine registration — the ONLY unauthenticated route.
-   *
-   * Body: `{ "machine_id": "<16-hex>", "hostname": "<optional label>" }`.
-   *
-   * First contact issues a fresh token (returned ONCE, never stored in the
-   * clear). A machine that registers again gets NO token — it already holds
-   * one; the response says so explicitly so a lost token is an operational
-   * incident (delete the row) rather than a silent re-issue.
-   */
-  router.post("/clients", async (c) => {
-    let body: unknown;
-    try {
-      body = await c.req.json();
-    } catch {
-      return c.json({ error: "invalid JSON body" }, 400);
-    }
-    if (typeof body !== "object" || body === null || Array.isArray(body)) {
-      return c.json({ error: "body must be a JSON object" }, 400);
-    }
-    const { machine_id, hostname } = body as Record<string, unknown>;
-    if (typeof machine_id !== "string" || !MACHINE_ID_RE.test(machine_id)) {
-      return c.json(
-        { error: "machine_id must be a 16-character lowercase hex string" },
-        400,
-      );
-    }
-    const host =
-      typeof hostname === "string" && hostname.length > 0 && hostname.length <= 255
-        ? hostname
-        : null;
-
-    // The secret is checked before any lookup so known and unknown machine ids answer identically.
-    if (enrollSecret === "") {
-      if (!allowOpenEnrollment) {
-        return c.json(
-          {
-            error:
-              "enrollment is closed: set KXTA_STORAGE_ENROLL_SECRET on the server (or KXTA_STORAGE_ALLOW_OPEN_ENROLLMENT=1 for dev)",
-          },
-          403,
-        );
-      }
-    } else {
-      const presented =
-        c.req.header("x-enroll-secret") ??
-        (typeof (body as Record<string, unknown>).enroll_secret === "string"
-          ? ((body as Record<string, unknown>).enroll_secret as string)
-          : "");
-      if (!secretsEqual(presented, enrollSecret)) {
-        return c.json({ error: "invalid enrollment secret" }, 403);
-      }
-    }
-
-    const now = Date.now();
-    if (isClientKnown(db, machine_id)) {
-      // Re-registration: refresh the label/seen time, issue nothing.
-      db.prepare(
-        `UPDATE clients SET hostname = COALESCE(?, hostname), last_seen_at = ?
-         WHERE machine_id = ?`,
-      ).run(host, now, machine_id);
-      return c.json({ machine_id, registered: false, token: null });
-    }
-
-    const token = generateClientToken();
-    db.prepare(
-      `INSERT INTO clients (machine_id, hostname, token_hash, first_seen_at, last_seen_at)
-       VALUES (?, ?, ?, ?, ?)`,
-    ).run(machine_id, host, hashToken(token, pepper), now, now);
-    return c.json({ machine_id, registered: true, token }, 201);
-  });
-
-  /**
-   * Poll new ops — the sync-loop hot path (spec 1.6).
-   *
-   * `?since=<cursor>` serves ops with `seq > since` in seq order. The cursor
-   * is the client's `sync_cursor.last_seq`; the client advances it to the
-   * highest seq it applied. `?limit=<n>` caps the batch. An empty result is a
-   * normal 200 `{ ops: [], next: since }` — the short-polling idle case that
-   * keeps serverless vCPUs asleep between polls.
-   */
   router.get("/ops", (c) => {
-    const token = extractBearerToken(c.req.header("authorization"));
-    const machineId = token ? validateClientToken(db, token, pepper) : null;
-    if (machineId === null) return c.json({ error: "unauthorized" }, 401);
-
-    const params = parseGetOpsParams(
-      c.req.query("since"),
-      c.req.query("limit"),
-      defaultLimit,
-    );
-    if (params === null) {
-      return c.json({ error: "since/limit must be non-negative integers" }, 400);
+    const who = authenticate(db, c.req.header("authorization"), pepper);
+    if (who === null) return c.json({ error: "unauthorized" }, 401);
+    const params = parseGetOpsParams(c.req.query("since"), c.req.query("limit"), defaultLimit);
+    if (params === null) return c.json({ error: "since/limit must be non-negative integers" }, 400);
+    const rawAcked = c.req.query("acked");
+    const acked = rawAcked === undefined ? undefined : Number(rawAcked);
+    if (acked !== undefined && (!Number.isInteger(acked) || acked < 0)) {
+      return c.json({ error: "acked must be a non-negative integer" }, 400);
     }
-
-    const rows = (fetchSince.all(params.since, params.limit) as Array<{
-      seq: number;
-      gid: string;
-      kind: string;
-      origin: string;
-      base_version: number | null;
-      payload: string;
-      created_at: number;
-      client_seq: number | null;
-      status: "accepted" | "conflict";
-      received_at: number;
-      gid_version: number;
-    }>).map((r) => ({ ...r, payload: JSON.parse(r.payload) }));
-    touchClient.run(Date.now(), machineId);
-
-    return c.json({
-      ops: rows,
-      // The cursor for the NEXT poll: the highest seq served, or the input
-      // cursor unchanged when the batch was empty.
-      next: rows.length > 0 ? rows[rows.length - 1].seq : params.since,
-    });
+    const ops = store.opsSince(who.brainId, params.since, params.limit);
+    store.touchMachine(who.brainId, who.machineId, acked);
+    return c.json({ ops, next: ops.length > 0 ? ops[ops.length - 1].seq : params.since });
   });
 
-  /**
-   * Ship a batch of local outbox ops (spec 1.6).
-   *
-   * Body: an array of ops, or `{ "ops": [...] }`. Each op is validated
-   * field-by-field (fail closed, mirroring kxta-core's `parseOp` — see
-   * {@link validateIncomingOp}); a malformed op rejects the WHOLE batch with
-   * 400 so the client fixes its outbox rather than getting a half-applied
-   * batch.
-   *
-   * Response: per op — its server-assigned `seq`, the `status`
-   * (`accepted` | `conflict`, spec 1.7), and a `duplicate` flag. A retried
-   * `(origin, client_seq)` returns the ORIGINAL seq with `duplicate: true`
-   * instead of double-storing.
-   */
   router.post("/ops", async (c) => {
-    const token = extractBearerToken(c.req.header("authorization"));
-    const machineId = token ? validateClientToken(db, token, pepper) : null;
-    if (machineId === null) return c.json({ error: "unauthorized" }, 401);
+    const who = authenticate(db, c.req.header("authorization"), pepper);
+    if (who === null) return c.json({ error: "unauthorized" }, 401);
 
     let body: unknown;
     try {
@@ -407,118 +126,57 @@ export function createOpsRouter(
     } catch {
       return c.json({ error: "invalid JSON body" }, 400);
     }
-    const rawOps: unknown = Array.isArray(body)
-      ? body
-      : (body as Record<string, unknown> | null)?.ops;
+    const rawOps: unknown = Array.isArray(body) ? body : (body as Record<string, unknown> | null)?.ops;
     if (!Array.isArray(rawOps)) {
-      return c.json(
-        { error: "body must be an array of ops or { \"ops\": [...] }" },
-        400,
-      );
+      return c.json({ error: 'body must be an array of ops or { "ops": [...] }' }, 400);
     }
-    if (rawOps.length === 0) {
-      return c.json({ machine_id: machineId, results: [] });
-    }
+    if (rawOps.length === 0) return c.json({ machine_id: who.machineId, results: [] });
     if (rawOps.length > MAX_OPS_LIMIT) {
       return c.json({ error: `batch too large (max ${MAX_OPS_LIMIT} ops)` }, 400);
     }
 
-    // Validate the whole batch BEFORE touching the DB (fail closed).
     const validated: ValidatedOp[] = [];
     for (let i = 0; i < rawOps.length; i++) {
       const op = validateIncomingOp(rawOps[i]);
-      if (op === null) {
-        return c.json({ error: `ops[${i}] is malformed`, index: i }, 400);
-      }
-      if (op.origin !== machineId) {
-        return c.json({ error: `ops[${i}].origin does not match the authenticated machine`, index: i }, 403);
+      if (op === null) return c.json({ error: `ops[${i}] is malformed`, index: i }, 400);
+      if (op.origin !== who.machineId) {
+        return c.json({ error: `ops[${i}] origin does not match the authenticated machine`, index: i }, 403);
       }
       validated.push(op);
     }
 
-    // One transaction per batch: per-op version counts, inserts, and dedup
-    // checks commit together (SQLite serializes writers; busy_timeout in
-    // db/index.ts absorbs contention).
     const results = db.transaction(() => {
-      const out: OpPostResult[] = [];
+      const out: Array<{ client_seq: number | null; seq: number; status: "accepted" | "conflict"; duplicate: boolean; version: number }> = [];
+      // A later op of the same record in this batch is based on an earlier one; if that lost, so does it.
+      const lostInBatch = new Set<string>();
       for (const op of validated) {
-        // 1. Idempotent-retry dedup (partial unique index, schema.sql).
         if (op.client_seq !== null) {
-          const existing = findByClientSeq.get(op.origin, op.client_seq) as
-            | { seq: number; status: string }
-            | undefined;
+          const existing = store.findByClientSeq(who.brainId, op.origin, op.client_seq);
           if (existing) {
-            out.push({
-              client_seq: op.client_seq,
-              seq: existing.seq,
-              status: existing.status === "conflict" ? "conflict" : "accepted",
-              duplicate: true,
-              version: (versionAtSeq.get(op.gid, existing.seq) as { n: number }).n,
-            });
+            out.push({ client_seq: op.client_seq, seq: existing.seq, status: existing.status, duplicate: true, version: existing.version });
             continue;
           }
         }
-
-        // 2. Conflict detection (spec 1.7): the canonical version for the gid
-        //    is the count of ops already stored for it (append-only log, so
-        //    stored == applied). A create (`base_version: null`) asserts "no
-        //    prior state" and conflicts iff the gid already has ops (the
-        //    offline-both-create case). An update (`base_version: N`, the last
-        //    version the client knew) conflicts iff N < currentVersion.
-        const currentVersion = (countGidOps.get(op.gid) as { n: number }).n;
-        const status: "accepted" | "conflict" =
-          op.base_version === null
-            ? currentVersion > 0
-              ? "conflict"
-              : "accepted"
-            : op.base_version < currentVersion
-              ? "conflict"
-              : "accepted";
-
-        // 3. Append: the server assigns the authoritative seq (spec 1.7).
-        const info = insertOp.run(
-          op.gid,
-          op.kind,
-          op.origin,
-          op.base_version,
-          op.payloadJson,
-          op.created_at,
-          op.client_seq,
-          status,
-        );
-        out.push({
-          client_seq: op.client_seq,
-          seq: Number(info.lastInsertRowid),
-          status,
-          duplicate: false,
-          version: currentVersion + 1,
-        });
+        const family = kindFamily(op.kind);
+        const key = `${op.gid}|${family}`;
+        const current = store.currentVersion(who.brainId, op.gid, family);
+        const stale = op.base_version === null ? current > 0 : op.base_version < current;
+        const status: "accepted" | "conflict" = stale || lostInBatch.has(key) ? "conflict" : "accepted";
+        if (status === "conflict") lostInBatch.add(key);
+        const res = store.appendOp(who.brainId, op, family, status);
+        out.push({ client_seq: op.client_seq, seq: res.seq, status, duplicate: false, version: res.version });
       }
-      touchClient.run(Date.now(), machineId);
+      store.touchMachine(who.brainId, who.machineId);
       return out;
     })();
 
-    return c.json({ machine_id: machineId, results });
+    return c.json({ machine_id: who.machineId, results });
   });
 
   return router;
 }
 
-/** Constant-time string compare (hashes first so lengths always match). */
-function secretsEqual(a: string, b: string): boolean {
-  const ha = createHash("sha256").update(a, "utf8").digest();
-  const hb = createHash("sha256").update(b, "utf8").digest();
-  return timingSafeEqual(ha, hb);
-}
-
-/**
- * Validate one incoming op (fail closed, mirroring kxta-core's `parseOp`).
- *
- * Returns the validated op or `null` — never throws. Accepts one EXTRA
- * optional field, `client_seq` (the client's local outbox id: positive
- * integer or null), used ONLY for retry dedup — it is not part of the Op
- * schema and is never forwarded into the payload.
- */
+/** Validate one incoming op (fail closed); null when malformed. Accepts an optional `client_seq` used only for retry dedup. */
 export function validateIncomingOp(raw: unknown): ValidatedOp | null {
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return null;
   const r = raw as Record<string, unknown>;

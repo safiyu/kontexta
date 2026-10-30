@@ -1,5 +1,5 @@
 /**
- * Client token auth — Phase 4 (storage/04-server).
+ * Client token auth.
  *
  * Every machine that syncs with the server holds a long-lived secret TOKEN.
  * The server never stores the token in plaintext: it stores only a one-way,
@@ -39,7 +39,7 @@ export const TOKEN_BYTES = 32;
  * without wiring environment config, and because it is NOT the secret that
  * protects a real deployment.
  */
-export const DEFAULT_PEPPER = "kontexta-storage-server-default-pepper-v1";
+export const DEFAULT_PEPPER = "kontexta-brain-host-default-pepper-v1";
 
 /**
  * Mint a fresh client token: TOKEN_BYTES random bytes as lowercase hex.
