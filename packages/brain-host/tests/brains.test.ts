@@ -6,10 +6,11 @@ import { Hono } from "hono";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createOpsRouter } from "../src/routes/ops.js";
 import { createBrainsRouter } from "../src/routes/brains.js";
-import { generateShareId, formatShareId } from "../src/shareid.js";
+import { randomBytes } from "node:crypto";
 import { defaultPepperRefusal } from "../src/server.js";
 
 const SCHEMA_SQL = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "src", "db", "schema.sql"), "utf-8");
+const ENVELOPE = { e: 1, n: "AAAAAAAAAAAAAAAA", c: "AAAAAAAAAAAAAAAAAAAAAAAAAAAA" };
 const M1 = "1111111111111111";
 const M2 = "2222222222222222";
 const M3 = "3333333333333333";
@@ -29,17 +30,17 @@ beforeEach(() => {
   app = build();
 });
 
-const share = () => formatShareId(generateShareId());
+const share = () => randomBytes(32).toString("hex");
 const joinAs = (a: Hono, shareId: string, machine: string, headers: Record<string, string> = {}, extra: Record<string, unknown> = {}) =>
   a.request("/brains/join", {
     method: "POST",
     headers: { "content-type": "application/json", ...headers },
-    body: JSON.stringify({ share_id: shareId, machine_id: machine, hostname: "box", ...extra }),
+    body: JSON.stringify({ route_id: shareId, machine_id: machine, hostname: "box", ...extra }),
   });
 const SECRET = { "x-enroll-secret": "s3cret" };
 const auth = (token: string) => ({ authorization: `Bearer ${token}` });
 const tok = async (r: Response) => ((await r.json()) as { token: string }).token;
-const op = (machine: string, gid: string, kind = "file.create", base: number | null = null, payload: Record<string, unknown> = { content: "x", content_hash: "h" }, seq = 1) => ({
+const op = (machine: string, gid: string, kind = "file.create", base: number | null = null, payload: Record<string, unknown> = ENVELOPE, seq = 1) => ({
   gid, kind, origin: machine, base_version: base, payload, created_at: 1, client_seq: seq,
 });
 const post = (token: string, ops: unknown[]) =>
@@ -53,7 +54,7 @@ describe("POST /brains/join", () => {
     const body = (await res.json()) as { created: boolean; name: string; token: string };
     expect(body).toMatchObject({ created: true, name: "Mine" });
     expect(body.token).toHaveLength(64);
-    expect((db.prepare("SELECT share_hash FROM brains").get() as { share_hash: string }).share_hash).not.toContain(s.replace(/-/g, ""));
+    expect((db.prepare("SELECT share_hash FROM brains").get() as { share_hash: string }).share_hash).not.toContain(s);
   });
 
   it("joins an existing brain with the share id alone", async () => {
@@ -88,7 +89,7 @@ describe("POST /brains/join", () => {
     expect((await joinAs(open, share(), M1)).status).toBe(201);
   });
 
-  it("rejects a malformed share id or machine id", async () => {
+  it("rejects a malformed route id or machine id", async () => {
     expect((await joinAs(app, "nope", M1, SECRET)).status).toBe(400);
     expect((await joinAs(app, share(), "xyz", SECRET)).status).toBe(400);
   });
@@ -124,23 +125,15 @@ describe("brain isolation and machine routes", () => {
 describe("snapshot", () => {
   it("pages by gid and includes unresolved conflicts", async () => {
     const t = await tok(await joinAs(app, share(), M1, SECRET));
-    await post(t, [op(M1, "1@aaaaaaaaaaaaaaaa", "file.create", null, { content: "a", content_hash: "ha" }, 1), op(M1, "2@aaaaaaaaaaaaaaaa", "file.create", null, { content: "b", content_hash: "hb" }, 2)]);
-    await post(t, [op(M1, "1@aaaaaaaaaaaaaaaa", "file.update", 1, { content: "a2", content_hash: "ha2" }, 3)]);
-    await post(t, [op(M1, "1@aaaaaaaaaaaaaaaa", "file.update", 1, { content: "lost", content_hash: "hl" }, 4)]);
+    await post(t, [op(M1, "1@aaaaaaaaaaaaaaaa", "file.create", null, ENVELOPE, 1), op(M1, "2@aaaaaaaaaaaaaaaa", "file.create", null, ENVELOPE, 2)]);
+    await post(t, [op(M1, "1@aaaaaaaaaaaaaaaa", "file.update", 1, ENVELOPE, 3)]);
+    await post(t, [op(M1, "1@aaaaaaaaaaaaaaaa", "file.update", 1, ENVELOPE, 4)]);
     const p1 = (await (await app.request("/brains/snapshot?limit=1", { headers: auth(t) })).json()) as { gids: Array<{ gid: string; records: unknown[]; conflicts: unknown[] }>; next: string | null };
     expect(p1.gids[0].gid).toBe("1@aaaaaaaaaaaaaaaa");
     expect(p1.gids[0].records).toHaveLength(2);
     expect(p1.gids[0].conflicts).toHaveLength(1);
     const p2 = (await (await app.request(`/brains/snapshot?limit=1&after=${p1.next}`, { headers: auth(t) })).json()) as { gids: Array<{ gid: string }> };
     expect(p2.gids[0].gid).toBe("2@aaaaaaaaaaaaaaaa");
-  });
-
-  it("the index carries content hashes instead of payloads", async () => {
-    const t = await tok(await joinAs(app, share(), M1, SECRET));
-    await post(t, [op(M1, "1@aaaaaaaaaaaaaaaa", "file.create", null, { content: "secret body", content_hash: "abc" })]);
-    const idx = (await (await app.request("/brains/snapshot/index", { headers: auth(t) })).json()) as { entries: Array<{ records: Array<Record<string, unknown>> }> };
-    expect(idx.entries[0].records[0]).toMatchObject({ content_hash: "abc" });
-    expect(JSON.stringify(idx)).not.toContain("secret body");
   });
 });
 

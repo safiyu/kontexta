@@ -59,10 +59,12 @@ import { markAcked, markFailed, markSent, pendingCount } from "./outbox.js";
 import { applyRemoteOp } from "./apply.js";
 import { fetchJson, describeError, DEFAULT_REQUEST_TIMEOUT_MS, type FetchJsonResult } from "./http.js";
 import { bootstrapIfNeeded, bootstrapPending } from "./bootstrap.js";
-import { readBrainConfig, settingValue, normalizeBaseUrl, ACTIVE_POLL_INTERVAL_DEFAULT_MS, IDLE_POLL_INTERVAL_DEFAULT_MS } from "./brain.js";
+import { decryptPayload, encryptPayload } from "./crypto.js";
+import { readBrainConfig, readBrainKey, settingValue, normalizeBaseUrl, ACTIVE_POLL_INTERVAL_DEFAULT_MS, IDLE_POLL_INTERVAL_DEFAULT_MS } from "./brain.js";
 export { normalizeBaseUrl, DEFAULT_REQUEST_TIMEOUT_MS, ACTIVE_POLL_INTERVAL_DEFAULT_MS, IDLE_POLL_INTERVAL_DEFAULT_MS };
 import { UnappliableOpError } from "./errors.js";
-import { ensureConflictsTable, forkConflictFromOp } from "./conflicts.js";
+import { ensureConflictsTable } from "./conflicts.js";
+import { mergeOrFork } from "./journal-merge.js";
 import { bumpPendingBases, clearLostPush, hasLostPush, knownGidVersions, markLostPush, recordGidVersion, versionKey } from "./versions.js";
 
 // ---------------------------------------------------------------------------
@@ -150,6 +152,10 @@ export async function pushOutbox(db: Database, options: PushOptions = {}): Promi
   if (bootstrapPending(db)) {
     return { attempted: 0, delivered: 0, conflicts: [], error: "brain bootstrap pending" };
   }
+  const brainKey = readBrainKey(db);
+  if (brainKey === null) {
+    return { attempted: 0, delivered: 0, conflicts: [], error: "this machine has no brain key; reconnect with the share id" };
+  }
   const fetchImpl = options.fetchImpl ?? globalThis.fetch;
 
   // Crash recovery: a `sent` row whose process died mid-POST is orphaned.
@@ -220,7 +226,7 @@ export async function pushOutbox(db: Database, options: PushOptions = {}): Promi
       kind: w.op.kind,
       origin: w.op.origin,
       base_version: w.wireBase,
-      payload: w.op.payload,
+      payload: encryptPayload(brainKey, w.op.payload, w.op.gid, w.op.kind, w.op.origin),
       created_at: w.op.created_at,
       client_seq: w.id,
     })),
@@ -428,6 +434,10 @@ export async function pullRemoteOps(db: Database, options: PullOptions = {}): Pr
   if (bootstrapPending(db)) {
     return { polled: 0, applied: 0, skipped: 0, conflicts: [], cursor: getSyncCursor(db), error: "brain bootstrap pending" };
   }
+  const brainKey = readBrainKey(db);
+  if (brainKey === null) {
+    return { polled: 0, applied: 0, skipped: 0, conflicts: [], cursor: getSyncCursor(db), error: "this machine has no brain key; reconnect with the share id" };
+  }
   const fetchImpl = options.fetchImpl ?? globalThis.fetch;
   const machineId = settingValue(db, "machine_id") ?? "";
   const pageLimit = Math.min(
@@ -494,12 +504,27 @@ export async function pullRemoteOps(db: Database, options: PullOptions = {}): Pr
         if (rowSeq !== null) done = rowSeq;
         continue;
       }
+      let plainPayload: unknown;
+      try {
+        plainPayload = decryptPayload(brainKey, row.payload, String(row.gid), String(row.kind), String(row.origin));
+      } catch (err) {
+        // Fail closed: ciphertext that does not authenticate was altered or is not from this brain.
+        keepProgress();
+        return {
+          polled,
+          applied,
+          skipped,
+          conflicts,
+          cursor,
+          error: `refusing to advance past an op that failed to decrypt (seq ${String(row.seq)}): ${describeError(err)}`,
+        };
+      }
       const op = parseOp({
         gid: row.gid,
         kind: row.kind,
         origin: row.origin,
         base_version: row.base_version,
-        payload: row.payload,
+        payload: plainPayload,
         created_at: row.created_at,
       });
       if (op === null) {
@@ -522,7 +547,7 @@ export async function pullRemoteOps(db: Database, options: PullOptions = {}): Pr
         if (row.status === "conflict" && op.kind === "file.delete") {
           // Lost optimistic concurrency: never delete a file another machine just edited.
         } else if (shouldForkInsteadOfApply(db, op, row.status)) {
-          forkConflictFromOp(op, db, { serverSeq: seq });
+          mergeOrFork(db, op, seq);
           clearLostPush(db, op.gid);
         } else {
           await applyRemoteOp(op, { db });

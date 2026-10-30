@@ -20,7 +20,7 @@ import {
 } from "../src/routes/ops.js";
 import { createBrainsRouter } from "../src/routes/brains.js";
 import { DEFAULT_PEPPER, hashToken } from "../src/auth.js";
-import { generateShareId, formatShareId } from "../src/shareid.js";
+import { randomBytes } from "node:crypto";
 import { VERSION } from "../src/index.js";
 import { defaultPepperRefusal, isLoopbackHost } from "../src/server.js";
 import { Hono } from "hono";
@@ -32,6 +32,7 @@ const MACHINE_A = "a1b2c3d4e5f60718";
 const MACHINE_B = "0f1e2d3c4b5a6978";
 const OTHER_PEPPER = "unit-test-pepper-2";
 const T0 = 1_700_000_000_000;
+const ENVELOPE = { e: 1, n: "AAAAAAAAAAAAAAAA", c: "AAAAAAAAAAAAAAAAAAAAAAAAAAAA" };
 
 function freshDb(): Database.Database {
   const db = new Database(":memory:");
@@ -48,14 +49,14 @@ beforeEach(() => {
   app = new Hono();
   app.route("/", createOpsRouter(db));
   app.route("/", createBrainsRouter(db, { allowOpenCreate: true }));
-  shareId = formatShareId(generateShareId());
+  shareId = randomBytes(32).toString("hex");
 });
 
 async function joinReq(machineId: string, share: string = shareId, extra: Record<string, unknown> = {}) {
   return app.request("/brains/join", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ share_id: share, machine_id: machineId, hostname: "laptop", ...extra }),
+    body: JSON.stringify({ route_id: share, machine_id: machineId, hostname: "laptop", ...extra }),
   });
 }
 
@@ -85,7 +86,7 @@ function makeOp(overrides: Record<string, unknown> = {}) {
     kind: "file.create",
     origin: MACHINE_A,
     base_version: null,
-    payload: { path: "/kb/notes/a.md", content: "hello" },
+    payload: ENVELOPE,
     created_at: T0,
     ...overrides,
   };
@@ -156,7 +157,7 @@ describe("POST /ops", () => {
   it("a tag.set does not raise the content version of the same gid", async () => {
     const t = await tokenFor();
     await postOps(t, [makeOp({ client_seq: 1 })]);
-    await postOps(t, [makeOp({ kind: "tag.set", base_version: 0, payload: { tags: ["a"] }, client_seq: 2 })]);
+    await postOps(t, [makeOp({ kind: "tag.set", base_version: 0, client_seq: 2 })]);
     const res = await postOps(t, [makeOp({ kind: "file.update", base_version: 1, client_seq: 3 })]);
     const { results } = (await res.json()) as { results: Array<{ status: string }> };
     expect(results[0].status).toBe("accepted");
@@ -175,6 +176,14 @@ describe("POST /ops", () => {
     const again = (await (await postOps(t, [makeOp({ client_seq: 7 })])).json()) as { results: Array<{ seq: number; duplicate: boolean; version: number }> };
     expect(again.results[0]).toMatchObject({ seq: first.results[0].seq, duplicate: true, version: 1 });
     expect(opsCount()).toBe(1);
+  });
+
+  it("refuses a plaintext payload with 400 so the host only ever stores ciphertext", async () => {
+    const t = await tokenFor();
+    const res = await postOps(t, [makeOp({ payload: { path: "/kb/a.md", content: "plain" } })]);
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { error: string }).error).toMatch(/encrypted envelope/);
+    expect(opsCount()).toBe(0);
   });
 
   it("rejects a malformed op with 400 and stores nothing", async () => {

@@ -7,14 +7,19 @@
  */
 
 import { Hono } from "hono";
-import { createHash, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import type Database from "better-sqlite3";
 import { DEFAULT_PEPPER, generateClientToken, hashToken } from "../auth.js";
 import { BrainStore } from "../store.js";
-import { hashShareId, parseShareId } from "../shareid.js";
 import { authenticate } from "./ops.js";
 
 const MACHINE_ID_RE = /^[0-9a-f]{16}$/;
+const ROUTE_ID_RE = /^[0-9a-f]{64}$/;
+
+/** The routing id is derived on the machine from the share id; the host never sees the share id or the encryption key. */
+function hashRouteId(routeId: string, pepper: string): string {
+  return createHmac("sha256", pepper).update(`route:${routeId}`, "utf8").digest("hex");
+}
 const SNAPSHOT_DEFAULT = 200;
 const SNAPSHOT_MAX = 1000;
 
@@ -55,9 +60,10 @@ export function createBrainsRouter(db: Database.Database, options: BrainsRouterO
     if (typeof body !== "object" || body === null || Array.isArray(body)) {
       return c.json({ error: "body must be a JSON object" }, 400);
     }
-    const { share_id, machine_id, hostname, name } = body as Record<string, unknown>;
-    const bytes = typeof share_id === "string" ? parseShareId(share_id) : null;
-    if (bytes === null) return c.json({ error: "share_id is not a valid share id" }, 400);
+    const { route_id, machine_id, hostname, name } = body as Record<string, unknown>;
+    if (typeof route_id !== "string" || !ROUTE_ID_RE.test(route_id)) {
+      return c.json({ error: "route_id must be a 64-character lowercase hex string" }, 400);
+    }
     if (typeof machine_id !== "string" || !MACHINE_ID_RE.test(machine_id)) {
       return c.json({ error: "machine_id must be a 16-character lowercase hex string" }, 400);
     }
@@ -65,7 +71,7 @@ export function createBrainsRouter(db: Database.Database, options: BrainsRouterO
     const brainName =
       typeof name === "string" && name.trim().length > 0 ? name.trim().slice(0, 120) : (host ?? "brain");
 
-    const shareHash = hashShareId(bytes, pepper);
+    const shareHash = hashRouteId(route_id, pepper);
     const token = generateClientToken();
     const tokenHash = hashToken(token, pepper);
 
@@ -132,16 +138,14 @@ export function createBrainsRouter(db: Database.Database, options: BrainsRouterO
       : c.json({ error: "no such machine in this brain" }, 404);
   });
 
-  const snapshotRoute = (full: boolean) => (c: import("hono").Context) => {
+  router.get("/brains/snapshot", (c) => {
     const who = authenticate(db, c.req.header("authorization"), pepper);
     if (who === null) return c.json({ error: "unauthorized" }, 401);
     const limit = parseLimit(c.req.query("limit"));
     if (limit === null) return c.json({ error: "limit must be a positive integer" }, 400);
-    const page = store.snapshotPage(who.brainId, c.req.query("after") ?? "", limit, full);
-    return c.json({ ...(full ? { gids: page.gids } : { entries: page.gids }), next: page.next, latest_seq: store.latestSeq(who.brainId) });
-  };
-  router.get("/brains/snapshot/index", snapshotRoute(false));
-  router.get("/brains/snapshot", snapshotRoute(true));
+    const page = store.snapshotPage(who.brainId, c.req.query("after") ?? "", limit);
+    return c.json({ gids: page.gids, next: page.next, latest_seq: store.latestSeq(who.brainId) });
+  });
 
   return router;
 }

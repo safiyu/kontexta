@@ -17,6 +17,13 @@ import { VERSION } from "../index.js";
 
 const GID_RE = /^\d+@.+/;
 
+/** The host only relays ciphertext: a payload that is not an AES-GCM envelope is refused so plaintext is never stored. */
+export function isEnvelope(v: unknown): boolean {
+  if (typeof v !== "object" || v === null) return false;
+  const o = v as Record<string, unknown>;
+  return o.e === 1 && typeof o.n === "string" && /^[A-Za-z0-9+/]{16}$/.test(o.n) && typeof o.c === "string" && o.c.length >= 24;
+}
+
 export const OP_KINDS: readonly string[] = [
   "file.create",
   "file.update",
@@ -139,6 +146,9 @@ export function createOpsRouter(db: Database.Database, options: OpsRouterOptions
     for (let i = 0; i < rawOps.length; i++) {
       const op = validateIncomingOp(rawOps[i]);
       if (op === null) return c.json({ error: `ops[${i}] is malformed`, index: i }, 400);
+      if (!isEnvelope(JSON.parse(op.payloadJson))) {
+        return c.json({ error: `ops[${i}] payload must be an encrypted envelope`, index: i }, 400);
+      }
       if (op.origin !== who.machineId) {
         return c.json({ error: `ops[${i}] origin does not match the authenticated machine`, index: i }, 403);
       }

@@ -24,6 +24,8 @@
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { recordGidVersion, markLostPush, hasLostPush } from "../../src/storage/versions.js";
+import { storeBrainKey } from "../../src/storage/brain.js";
+import { encryptPayload, decryptPayload } from "../../src/storage/crypto.js";
 import { mkdtempSync, rmSync, existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -53,6 +55,11 @@ import type { Database } from "better-sqlite3";
 
 import { createHash } from "node:crypto";
 const sha = (c: string): string => createHash("sha256").update(c, "utf8").digest("hex");
+const TEST_KEY = Buffer.alloc(32, 7);
+/** A relay row as the host serves it: the payload is an envelope bound to gid, kind and origin. */
+function sealed<T extends { gid: unknown; kind: unknown; origin: unknown; payload: unknown }>(row: T): T {
+  return { ...row, payload: encryptPayload(TEST_KEY, row.payload, String(row.gid), String(row.kind), String(row.origin)) };
+}
 const REMOTE_MID = "aaaaaaaaaaaaaaaa";
 const REMOTE_GID = (n: number): string => `${n}@${REMOTE_MID}`;
 
@@ -86,6 +93,7 @@ function setEndpoint(db: Database, url = "https://store.test", token = "tok-1"):
   up.run("remote_url", url);
   up.run("remote_token", token);
   up.run("brain_share_hash", "testbrain");
+  storeBrainKey(db, TEST_KEY);
 }
 
 interface RecordedRequest {
@@ -306,6 +314,32 @@ describe("storage client (M68)", () => {
       expect(bySeq.get(idB)).toBe(1);
       expect(bySeq.get(idC)).toBe(2);
       expect(idA).toBeTypeOf("number");
+    });
+
+    it("sends payloads as envelopes bound to gid, kind and origin; no plaintext leaves the machine", async () => {
+      setEndpoint(db);
+      enqueueOp(db, validOp(40, { payload: { path: "/kb/a/f40.md", content: "top secret body" } }));
+      const { fetch, calls } = fakeFetch((_u, init) => ({
+        status: 200,
+        body: { results: JSON.parse(init!.body as string).map((o: Record<string, unknown>) => ({ client_seq: o.client_seq, seq: 1, status: "accepted", duplicate: false, version: 1 })) },
+      }));
+      await pushOutbox(db, { fetchImpl: fetch });
+      const raw = calls[0].init!.body as string;
+      expect(raw).not.toContain("top secret body");
+      const sent = JSON.parse(raw)[0];
+      expect(sent.payload).toMatchObject({ e: 1 });
+      expect(decryptPayload(TEST_KEY, sent.payload, sent.gid, sent.kind, sent.origin)).toEqual({ path: "/kb/a/f40.md", content: "top secret body" });
+      expect(() => decryptPayload(TEST_KEY, sent.payload, sent.gid, "file.delete", sent.origin)).toThrow();
+    });
+
+    it("refuses to push or pull without a brain key", async () => {
+      setEndpoint(db);
+      db.prepare("DELETE FROM settings WHERE key = 'brain_enc_key_enc'").run();
+      enqueueOp(db, validOp(41));
+      const { fetch, calls } = fakeFetch(() => ({ status: 200, body: { results: [], ops: [], next: 0 } }));
+      expect((await pushOutbox(db, { fetchImpl: fetch })).error).toMatch(/no brain key/);
+      expect((await pullRemoteOps(db, { fetchImpl: fetch })).error).toMatch(/no brain key/);
+      expect(calls).toHaveLength(0);
     });
 
     it("sends the base_version captured at enqueue time even if a pull advanced the gid since", async () => {
@@ -544,7 +578,7 @@ describe("storage client (M68)", () => {
       const u = new URL(url);
       const since = Number(u.searchParams.get("since") ?? "0");
       const limit = Number(u.searchParams.get("limit") ?? "1000");
-      const page = rows.filter((r) => (r.seq as number) > since).slice(0, limit);
+      const page = rows.filter((r) => (r.seq as number) > since).slice(0, limit).map((r) => sealed(r as { gid: unknown; kind: unknown; origin: unknown; payload: unknown }));
       return {
         status: 200,
         body: { ops: page, next: page.length > 0 ? page[page.length - 1].seq : since },
@@ -786,6 +820,21 @@ describe("storage client (M68)", () => {
       expect(db.prepare("SELECT 1 FROM files WHERE gid = ?").get(REMOTE_GID(1))).toBeDefined();
     });
 
+    it("fails closed on an op whose ciphertext was altered or is not from this brain", async () => {
+      setEndpoint(db);
+      const good = sealed(remoteRow(1, 1));
+      const tampered = { ...sealed(remoteRow(2, 2)), payload: { ...sealed(remoteRow(2, 2)).payload, c: Buffer.alloc(40, 1).toString("base64") } };
+      const plain = remoteRow(3, 3);
+      for (const bad of [tampered, plain]) {
+        const { fetch } = fakeFetch(() => ({ body: { ops: [good, bad], next: 3 } }));
+        db.prepare("UPDATE sync_cursor SET last_seq = 0 WHERE id = 1").run();
+        const res = await pullRemoteOps(db, { fetchImpl: fetch });
+        expect(res.error).toMatch(/failed to decrypt \(seq (2|3)\)/);
+        expect(res.applied).toBe(1);
+        expect(res.cursor).toBe(1);
+      }
+    });
+
     it("returns 'not connected' when endpoint credentials are not set", async () => {
       const { fetch, calls } = fakeFetch(serveGet([]));
       const res = await pullRemoteOps(db, { fetchImpl: fetch });
@@ -836,7 +885,7 @@ describe("storage client (M68)", () => {
         if (url.includes("/ops?since=")) {
           return {
             status: 200,
-            body: { ops: [remote], next: 1 },
+            body: { ops: [sealed(remote)], next: 1 },
           };
         }
         return { status: 404 };

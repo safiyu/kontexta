@@ -220,12 +220,11 @@ export class BrainStore {
     return row.s ?? 0;
   }
 
-  /** One page of current state, paged by gid. `full` includes payloads; the index keeps only each payload's content_hash. */
+  /** One page of current state, paged by gid. Payloads are opaque ciphertext envelopes. */
   snapshotPage(
     brainId: number,
     afterGid: string,
     limit: number,
-    full: boolean,
   ): { gids: SnapshotGid[]; next: string | null } {
     const gids = (
       this.db
@@ -246,15 +245,7 @@ export class BrainStore {
       `SELECT seq, gid, kind, kind_family, origin, base_version, payload, created_at
        FROM conflicts WHERE brain_id = ? AND gid = ? ORDER BY seq ASC`,
     );
-    const shape = (payload: string): Record<string, unknown> => {
-      const parsed = JSON.parse(payload) as unknown;
-      if (full) return { payload: parsed };
-      const hash =
-        parsed && typeof parsed === "object" && typeof (parsed as { content_hash?: unknown }).content_hash === "string"
-          ? (parsed as { content_hash: string }).content_hash
-          : null;
-      return { content_hash: hash };
-    };
+    const shape = (payload: string): Record<string, unknown> => ({ payload: JSON.parse(payload) as unknown });
 
     const out: SnapshotGid[] = gids.map((gid) => ({
       gid,

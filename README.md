@@ -167,6 +167,8 @@ Everything Kontexta knows about you and your work (knowledge files, projects, pr
 
 A remote hosts any number of brains, each fully separate. For your brain it is two things at once: the durable copy of everything (nothing is ever pruned, a brain remembers) and the sync engine between your machines. Teammates can use the same remote, each with their own brain; nobody sees anyone else's.
 
+**The remote cannot read your brain.** Payloads (file contents, paths, tags, journal entries, calendar data) are encrypted on your machine with AES-256-GCM before they leave it. The key is derived from your share id and never sent anywhere; the remote only ever sees a derived routing id, plus the metadata it needs to order ops (record ids, op kinds, which machine, timing and size). If a remote is compromised or misconfigured, an attacker gets ciphertext. The flip side: lose every copy of the share id and the data is unrecoverable, and revoking a machine stops its access to the remote but not its ability to decrypt data it already holds (for that, create a new brain).
+
 Machines exchange fine-grained operations (file create, update, delete, move, tags, favorites, projects, calendar, journal) over short polling, so a decision made on one machine appears on the others without merging repositories or database files. A machine that never connects simply works locally.
 
 ### Run a remote (brain host)
@@ -202,7 +204,7 @@ All brains, their full history and their machines live in one SQLite file (the D
 
 ### Connect a machine (`kontexta brain`)
 
-The share id is what identifies a brain, and it is also the secret for joining it. Kontexta generates it when you create a brain; you paste it on your other machines.
+The share id is what identifies a brain, and it is also the secret for joining it and the root of its encryption key. Kontexta generates it when you create a brain; you paste it on your other machines.
 
 ```bash
 # First machine: create a brain (prints the share id once, save it):
@@ -238,6 +240,8 @@ The same flow is on the **Brain** page of the web app. Add `--json` to any subco
 **How the cadence works.** A connected machine short-polls: **15 s** while active, **60 s** while idle, and **exponential backoff up to 5 minutes** on failure.
 
 **Ordering and conflicts.** The remote assigns every op a sequence number, the only source of ordering (client clocks are never trusted). Each machine tracks the version of each record it has seen and sends it with every edit, so an edit made on top of everything the machine has pulled is accepted. When two machines edit the same record without having seen each other's change, the remote keeps both. Neither machine overwrites its own file: each gets a conflict copy next to the canonical file (`<name> (from <machine label>).<ext>`) and lists it in the Conflict Manager, where you choose keep server, keep mine, keep both, or a merged version. Every resolution is pushed so your machines converge. Two machines creating the same path independently produce a path conflict instead of swapping content.
+
+**Journals merge instead of conflicting.** The daily journal (`knowledge/journal/journal-YYYY-MM-DD.md`) is append-only, so when two machines write the same day their entries are merged into one sorted union on every machine. No conflict copy, nothing lost, and every machine ends with identical content.
 
 **Portable ops.** Ops never carry machine-local ids or absolute paths. Records are referenced by global id (`<id>@<machine>`), and file paths travel relative to the data directory. A remote op that points outside the data directory is refused, and files in project repos never sync (only your knowledge base does).
 

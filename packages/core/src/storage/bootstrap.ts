@@ -10,10 +10,11 @@
 import { createHash } from "node:crypto";
 import type { Database } from "better-sqlite3";
 import { applyRemoteOp } from "./apply.js";
-import { forkConflictFromOp } from "./conflicts.js";
+import { decryptPayload } from "./crypto.js";
+import { mergeOrFork } from "./journal-merge.js";
 import { UnappliableOpError } from "./errors.js";
 import { fetchJson, describeError } from "./http.js";
-import { readBrainConfig, settingDelete, settingUpsert, settingValue } from "./brain.js";
+import { readBrainConfig, readBrainKey, settingDelete, settingUpsert, settingValue } from "./brain.js";
 import { kindFamily, parseOp, type Op } from "./op.js";
 import { recordGidVersion } from "./versions.js";
 
@@ -42,13 +43,20 @@ function sha256(s: string): string {
   return createHash("sha256").update(s, "utf8").digest("hex");
 }
 
-function toOp(row: Record<string, unknown>): Op | null {
+function toOp(key: Buffer, row: Record<string, unknown>): Op | null {
+  let payload: unknown;
+  try {
+    payload = decryptPayload(key, row.payload, String(row.gid), String(row.kind), String(row.origin));
+  } catch (err) {
+    // Ciphertext that does not authenticate was altered or is not from this brain: stop rather than skip it.
+    throw new Error(`bootstrap: a snapshot record failed to decrypt (${err instanceof Error ? err.message : String(err)})`);
+  }
   return parseOp({
     gid: row.gid,
     kind: row.kind,
     origin: row.origin,
     base_version: null,
-    payload: row.payload,
+    payload,
     created_at: row.created_at,
   });
 }
@@ -92,6 +100,8 @@ function dependsOnMissing(db: Database, op: Op): boolean {
 export async function bootstrapIfNeeded(db: Database, opts: BootstrapOptions = {}): Promise<BootstrapResult | null> {
   const cfg = readBrainConfig(db);
   if (!cfg.connected || !bootstrapPending(db)) return null;
+  const brainKey = readBrainKey(db);
+  if (brainKey === null) throw new Error("bootstrap: this machine has no brain key; reconnect with the share id");
   const fetchImpl = opts.fetchImpl ?? globalThis.fetch;
   const limit = opts.pageLimit ?? PAGE;
   const mode: "empty" | "merge" = (db.prepare("SELECT COUNT(*) AS n FROM files").get() as { n: number }).n === 0 ? "empty" : "merge";
@@ -122,8 +132,8 @@ export async function bootstrapIfNeeded(db: Database, opts: BootstrapOptions = {
         const payload = op.payload as { content?: unknown; content_hash?: unknown };
         const remoteHash = typeof payload.content_hash === "string" ? payload.content_hash : sha256(typeof payload.content === "string" ? payload.content : "");
         if (local.content_hash !== remoteHash) {
-          forkConflictFromOp(op, db, { serverSeq: seq });
-          forked++;
+          if (mergeOrFork(db, op, seq) === "forked") forked++;
+          else applied++;
         }
       } else {
         await applyRemoteOp(op, { db });
@@ -156,7 +166,7 @@ export async function bootstrapIfNeeded(db: Database, opts: BootstrapOptions = {
     for (const entry of body.gids as Array<{ gid: string; records: Array<Record<string, unknown>>; conflicts: Array<Record<string, unknown>> }>) {
       for (const rec of entry.records) {
         if (rec.deleted === true) continue;
-        const op = toOp(rec);
+        const op = toOp(brainKey, rec);
         if (op === null) {
           skipped++;
           continue;
@@ -164,15 +174,14 @@ export async function bootstrapIfNeeded(db: Database, opts: BootstrapOptions = {
         await processRecord(op, typeof rec.seq === "number" ? rec.seq : 0, typeof rec.version === "number" ? rec.version : null, false);
       }
       for (const c of entry.conflicts) {
-        const op = toOp(c);
+        const op = toOp(brainKey, c);
         const local = op === null ? undefined : localFile(db, op.gid);
         if (op === null || !isContentOp(op) || !local) continue;
         // A parked op whose content already matches the canonical file has nothing left to resolve.
         const hash = (op.payload as { content_hash?: unknown }).content_hash;
         if (typeof hash === "string" && hash === local.content_hash) continue;
         try {
-          forkConflictFromOp(op, db, { serverSeq: typeof c.seq === "number" ? c.seq : undefined });
-          forked++;
+          if (mergeOrFork(db, op, typeof c.seq === "number" ? c.seq : undefined) === "forked") forked++;
         } catch (err) {
           if (!(err instanceof UnappliableOpError)) throw err;
           skipped++;

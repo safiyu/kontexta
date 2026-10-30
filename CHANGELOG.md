@@ -9,6 +9,8 @@ Everything Kontexta knows about you is now one thing, your **brain**. It lives o
 - **Brains and the brain host.** `kontexta-brain-host` (`npx kontexta-brain-host`, or `docker-compose.brain.yml`) hosts any number of fully separate brains on one server. For each brain it is the durable copy (nothing is ever pruned) and the sync engine between that user's machines. Teammates can share a server; nobody sees another brain.
 - **Share ids.** A brain is identified by a Kontexta-generated share id (52 characters, Crockford base32). Creating a brain needs the server's enrollment secret; joining one needs only its share id. The server stores only a peppered hash of it.
 - **`kontexta brain`** (`connect`, `status`, `share`, `machines`, `disconnect`, `push`, `pull`, `run`) and a **Brain page** in the web app. `connect` creates or joins a brain; `brain machines remove` revokes a lost machine.
+- **End-to-end encryption.** Op payloads are AES-256-GCM envelopes (bound to gid, kind and origin) encrypted on the machine with a key derived from the share id (HKDF-SHA256). The machine sends the host only a derived routing id, so the host never sees the share id, the key, or any content, and refuses plaintext payloads. Old ciphertext that fails to authenticate stops the pull instead of being skipped.
+- **Journal union merge.** Daily journal files merge as the sorted union of their timestamped entries when two machines write the same day (including two machines that each created the file), so they never produce conflicts.
 - **Snapshot bootstrap.** A new or replacement machine pulls the brain's current state instead of replaying its history. A machine that already has content keeps matching files and forks a conflict copy where it differs.
 - **Sync loop everywhere.** The web app and the MCP server start the loop at boot (dormant until connected); `kontexta brain run` runs it in the foreground.
 - **`admin_overview`** reports a `brain` block (connected, name, remote, pending, skipped).
@@ -26,6 +28,7 @@ Everything Kontexta knows about you is now one thing, your **brain**. It lives o
 
 ### Security
 
+- **The brain host is a blind relay.** It stores ciphertext only (see End-to-end encryption). It still sees record ids, op kinds, origin machine ids, timing and sizes. `POST /brains/join` now takes `route_id` instead of the share id, and `GET /brains/snapshot/index` is gone because the host can no longer read content hashes.
 - **Remote ops cannot write outside the data directory.** Paths travel relative to the data directory and are resolved against each machine's own; folder ops cannot target the data directory itself.
 - **The brain host authenticates everything per brain.** Every query is scoped to the brain its token belongs to, `POST /ops` rejects ops whose `origin` is not the authenticated machine, and the server refuses to start on the default pepper when bound beyond loopback. The compose file publishes on `127.0.0.1` by default.
 

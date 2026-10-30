@@ -13,8 +13,10 @@ import {
   joinBrain,
   settingUpsert,
   normalizeBaseUrl,
+  readBrainKey,
 } from "../../src/storage/brain.js";
 import { generateShareId, formatShareId, parseShareId } from "../../src/storage/shareid.js";
+import { deriveBrainKeys } from "../../src/storage/crypto.js";
 import { recordGidVersion } from "../../src/storage/versions.js";
 import { enqueueOp, markAcked } from "../../src/storage/outbox.js";
 import type { Database } from "better-sqlite3";
@@ -100,6 +102,26 @@ describe("joinBrain", () => {
     const joinCall = calls.find((c) => c.url.endsWith("/brains/join"))!;
     expect((joinCall.init!.headers as Record<string, string>)["x-enroll-secret"]).toBe("s3cret");
     expect(revealShareId(db)).toBe(r.shareId);
+  });
+
+  it("sends only a derived route id (never the share id), and keeps the derived encryption key", async () => {
+    const { fetch, calls } = fakeFetch(okHost());
+    const r = await joinBrain(db, "https://host.test", { create: true, hostname: "h", fetchImpl: fetch });
+    const sent = String(calls.find((c) => c.url.endsWith("/brains/join"))!.init!.body);
+    const keys = deriveBrainKeys(parseShareId(r.shareId)!);
+    expect(JSON.parse(sent)).toMatchObject({ route_id: keys.routeId });
+    expect(sent).not.toContain("share_id");
+    expect(sent).not.toContain(r.shareId);
+    expect(sent).not.toContain(r.shareId.replace(/-/g, ""));
+    expect(sent).not.toContain(keys.key.toString("hex"));
+    expect(readBrainKey(db)).toEqual(keys.key);
+  });
+
+  it("keeps the encryption key even when the share id itself is not kept", async () => {
+    const { fetch } = fakeFetch(okHost());
+    await joinBrain(db, "https://host.test", { create: true, hostname: "h", keepShareId: false, fetchImpl: fetch });
+    expect(revealShareId(db)).toBeNull();
+    expect(readBrainKey(db)).not.toBeNull();
   });
 
   it("joining the same brain again keeps the cursor and does not re-pend history", async () => {

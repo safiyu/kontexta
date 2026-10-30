@@ -14,3 +14,5 @@ export * from "./versions.js";
 export * from "./paths.js";
 export * from "./errors.js";
 export * from "./bootstrap.js";
+export * from "./crypto.js";
+export * from "./journal-merge.js";

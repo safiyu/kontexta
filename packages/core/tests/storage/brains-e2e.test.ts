@@ -149,4 +149,56 @@ describe("brains end to end", () => {
     expect(listConflicts(a.db, { status: "all" })).toEqual([]);
     void generateShareId; void formatShareId;
   });
+
+  it("the host is a blind relay: it never sees the share id or any plaintext", async () => {
+    host = createHost();
+    const a = mk(A, "a");
+    use(a);
+    seedFile(a, "secret.md", "SUPER-SECRET-BODY and sk-live-abc123", 1);
+    const seen: string[] = [];
+    const spying = ((input: RequestInfo | URL, init?: RequestInit) => {
+      if (typeof init?.body === "string") seen.push(init.body);
+      return host.fetch(input, init);
+    }) as typeof fetch;
+    const spy = { ...host, fetch: spying } as Host;
+    const share = await connect(a, spy, { create: true });
+    const raw = share.replace(/-/g, "");
+    for (const body of seen) {
+      expect(body).not.toContain(share);
+      expect(body).not.toContain(raw);
+      expect(body).not.toContain("SUPER-SECRET-BODY");
+    }
+    const stored = [
+      ...(host.db.prepare("SELECT payload FROM ops").all() as Array<{ payload: string }>),
+      ...(host.db.prepare("SELECT payload FROM records").all() as Array<{ payload: string }>),
+    ];
+    expect(stored.length).toBeGreaterThan(0);
+    for (const r of stored) expect(r.payload).not.toContain("SUPER-SECRET");
+    const brain = host.db.prepare("SELECT share_hash FROM brains").get() as { share_hash: string };
+    expect(brain.share_hash).not.toContain(raw.toLowerCase());
+  });
+
+  it("two machines writing the same day's journal converge on the union of entries, without a conflict", async () => {
+    host = createHost();
+    const a = mk(A, "a");
+    const b = mk(B, "b");
+    use(a);
+    const stamp = (t: string, text: string) => `**2026-10-30 ${t}** ${text}`;
+    const day = (...e: string[]) => `# Journal: 2026-10-30\n\n---\n${e.join("\n\n---\n")}\n`;
+    const rel = "journal/journal-2026-10-30.md";
+    seedFile(a, rel, day(stamp("09:00:00", "A one")), 1);
+    const share = await connect(a, host, { create: true });
+    // B opens its own copy of today's journal before it has seen A's (same path, different gid).
+    use(b);
+    seedFile(b, rel, day(stamp("09:30:00", "B one")), 2);
+    await connect(b, host, { shareId: share });
+    for (let i = 0; i < 3; i++) for (const m of [a, b]) await sync(m, host);
+    const merged = day(stamp("09:00:00", "A one"), stamp("09:30:00", "B one"));
+    expect(read(a, rel)).toBe(merged);
+    expect(read(b, rel)).toBe(merged);
+    for (const m of [a, b]) {
+      use(m);
+      expect(countUnresolvedConflicts(m.db), `conflicts on ${m.label}`).toBe(0);
+    }
+  });
 });

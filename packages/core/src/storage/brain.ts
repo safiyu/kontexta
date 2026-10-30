@@ -9,6 +9,7 @@ import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:
 import type { Database } from "better-sqlite3";
 import { fetchJson, DEFAULT_REQUEST_TIMEOUT_MS } from "./http.js";
 import { formatShareId, generateShareId, parseShareId } from "./shareid.js";
+import { deriveBrainKeys } from "./crypto.js";
 
 export const ACTIVE_POLL_INTERVAL_DEFAULT_MS = 15_000;
 export const IDLE_POLL_INTERVAL_DEFAULT_MS = 60_000;
@@ -87,27 +88,45 @@ function machineKey(db: Database): Buffer {
   return createHash("sha256").update(secret, "utf8").digest();
 }
 
-/** Keep the share id on this machine, encrypted with the machine secret (AES-256-GCM). */
-export function storeShareId(db: Database, bytes: Uint8Array): void {
+function sealSetting(db: Database, key: string, bytes: Uint8Array): void {
   const iv = randomBytes(12);
   const cipher = createCipheriv("aes-256-gcm", machineKey(db), iv);
   const enc = Buffer.concat([cipher.update(Buffer.from(bytes)), cipher.final()]);
-  settingUpsert(db, "brain_share_id_enc", [iv, cipher.getAuthTag(), enc].map((b) => b.toString("hex")).join(":"));
+  settingUpsert(db, key, [iv, cipher.getAuthTag(), enc].map((b) => b.toString("hex")).join(":"));
 }
 
-/** The formatted share id if this machine kept it, else null. */
-export function revealShareId(db: Database): string | null {
-  const stored = settingValue(db, "brain_share_id_enc");
+function unsealSetting(db: Database, key: string): Buffer | null {
+  const stored = settingValue(db, key);
   if (!stored) return null;
   try {
     const [iv, tag, enc] = stored.split(":").map((h) => Buffer.from(h, "hex"));
     const decipher = createDecipheriv("aes-256-gcm", machineKey(db), iv);
     decipher.setAuthTag(tag);
-    const bytes = Buffer.concat([decipher.update(enc), decipher.final()]);
-    return formatShareId(new Uint8Array(bytes));
+    return Buffer.concat([decipher.update(enc), decipher.final()]);
   } catch {
     return null;
   }
+}
+
+/** Keep the share id on this machine, encrypted with the machine secret (AES-256-GCM). */
+export function storeShareId(db: Database, bytes: Uint8Array): void {
+  sealSetting(db, "brain_share_id_enc", bytes);
+}
+
+/** The formatted share id if this machine kept it, else null. */
+export function revealShareId(db: Database): string | null {
+  const bytes = unsealSetting(db, "brain_share_id_enc");
+  return bytes && bytes.length === 32 ? formatShareId(new Uint8Array(bytes)) : null;
+}
+
+/** The brain's encryption key. Always kept: without it this machine could neither push nor read ops. */
+export function storeBrainKey(db: Database, key: Buffer): void {
+  sealSetting(db, "brain_enc_key_enc", key);
+}
+
+export function readBrainKey(db: Database): Buffer | null {
+  const key = unsealSetting(db, "brain_enc_key_enc");
+  return key && key.length === 32 ? key : null;
 }
 
 /** Clear the connection; the share hash, cursor and known versions stay so the same brain resumes. */
@@ -158,7 +177,7 @@ export async function joinBrain(db: Database, remoteUrl: string, opts: JoinBrain
   try {
     res = await fetchJson(fetchImpl, `${url}/brains/join`, undefined, {
       headers: { "content-type": "application/json", ...(opts.enrollSecret ? { "x-enroll-secret": opts.enrollSecret } : {}) },
-      body: JSON.stringify({ share_id: formatShareId(bytes), machine_id: machineId, hostname: opts.hostname, name: opts.name }),
+      body: JSON.stringify({ route_id: deriveBrainKeys(bytes).routeId, machine_id: machineId, hostname: opts.hostname, name: opts.name }),
       timeoutMs,
     });
   } catch (err) {
@@ -183,6 +202,7 @@ export async function joinBrain(db: Database, remoteUrl: string, opts: JoinBrain
     settingUpsert(db, "remote_token", body.token as string);
     settingUpsert(db, "brain_name", name);
     settingUpsert(db, "brain_share_hash", shareHash);
+    storeBrainKey(db, deriveBrainKeys(bytes).key);
     if (opts.keepShareId === false) settingDelete(db, "brain_share_id_enc");
     else storeShareId(db, bytes);
     if (!sameBrainAsBefore) {

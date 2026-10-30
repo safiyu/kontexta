@@ -48,6 +48,7 @@ import { upsertJournalMeta } from "../journal/repository.js";
 import { resolveSyncPath } from "./paths.js";
 import { UnappliableOpError } from "./errors.js";
 import { registerPathConflict } from "./conflicts.js";
+import { isDailyJournalPath, mergeJournalInto } from "./journal-merge.js";
 
 /**
  * Options for {@link applyRemoteOp}.
@@ -234,6 +235,11 @@ function parkIfPathTaken(op: Op, db: Database, path: string, content: string): b
     | { id: number; gid: string | null }
     | undefined;
   if (!owner || owner.gid === null || owner.gid === op.gid) return false;
+  // Two machines each opened today's journal: keep one row and union the entries.
+  if (isDailyJournalPath(path)) {
+    mergeJournalInto(db, owner.gid, path, content);
+    return true;
+  }
   registerPathConflict({ remoteOp: op, localFileId: owner.id, localPath: path, remoteContent: content }, db);
   return true;
 }
