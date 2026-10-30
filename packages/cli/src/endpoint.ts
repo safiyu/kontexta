@@ -5,7 +5,7 @@ import { resolveMcpEntry } from './mcp.js';
 
 /**
  * `kontexta endpoint …` — manage this machine's storage-server connection
- * (connect / status / disconnect / push / pull).
+ * (connect / status / disconnect / push / pull / run).
  *
  * Like `hooks` and `connect`, the command body ships inside the MCP bundle
  * (apps/mcp/dist/endpoint-cli.js) so it reaches kxta-core without a second

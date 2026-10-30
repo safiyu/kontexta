@@ -151,6 +151,10 @@ Or install automatically via [Smithery](https://smithery.ai/servers/safiyu/konte
 npx -y @smithery/cli install safiyu/kontexta --client claude
 ```
 
+### No MCP? Use the skill
+
+If your AI client can't load MCP servers (e.g. managed installs that block user-added servers), the [`skills/kontexta`](skills/kontexta) agent skill exposes every kxta tool through a small Python bridge the agent runs from its shell. See [`skills/kontexta/README.md`](skills/kontexta/README.md).
+
 ### Alternative: Docker
 
 For containerized deployments, see [`docs/INSTALL.md#docker-hub-compose`](docs/INSTALL.md#docker-hub-compose).

@@ -28,6 +28,8 @@ export {
   injectOrUpdate,
   syncAgentRules,
   checkAgentRulesStatus,
+  SKILL_BRIDGE_REFRESH_COMMAND,
+  skillBridgeRefreshCommands,
   InjectError,
   type AgentId,
   type ParseResult,

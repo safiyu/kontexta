@@ -46,6 +46,7 @@ import {
   syncAgentRules,
   checkAgentRulesStatus,
   RULE_BLOCK_VERSION,
+  skillBridgeRefreshCommands,
   gracefulShutdown,
   startDistillEngine,
   writeResource,
@@ -189,6 +190,9 @@ function getAgentRulesWarning(projectId?: number | null): string | null {
     // projects_register nudge would never get flagged again.
     const missingProjects: string[] = [];
     const outdatedProjects: string[] = [];
+    // Skill-bridge blocks (written by `kxta.py rules --write`) are refreshed by re-running that command, not admin_onboard_agent.
+    const outdatedSkillProjects: string[] = [];
+    const skillRefreshCommands = new Set<string>();
     for (const p of projects) {
       if (!p || !p.path || !existsSync(p.path)) continue;
       const contextFiles = detectAgentContextFiles(p.path);
@@ -196,8 +200,12 @@ function getAgentRulesWarning(projectId?: number | null): string | null {
         missingProjects.push(p.name);
         continue;
       }
-      const statuses = checkAgentRulesStatus(p.path, contextFiles);
-      if (statuses.some((s) => !s.upToDate)) {
+      const stale = checkAgentRulesStatus(p.path, contextFiles).filter((s) => !s.upToDate);
+      if (stale.length === 0) continue;
+      if (stale.every((s) => s.flavor === "skill-bridge")) {
+        outdatedSkillProjects.push(p.name);
+        for (const cmd of skillBridgeRefreshCommands(stale)) skillRefreshCommands.add(cmd);
+      } else {
         outdatedProjects.push(p.name);
       }
     }
@@ -213,8 +221,19 @@ function getAgentRulesWarning(projectId?: number | null): string | null {
     } else if (outdatedProjects.length > 1) {
       sentences.push(`${outdatedProjects.length} projects have outdated agent rules (v${RULE_BLOCK_VERSION} available).`);
     }
+    if (outdatedSkillProjects.length === 1) {
+      sentences.push(`Project "${outdatedSkillProjects[0]}" has an outdated skill-bridge rules block (v${RULE_BLOCK_VERSION} available).`);
+    } else if (outdatedSkillProjects.length > 1) {
+      sentences.push(`${outdatedSkillProjects.length} projects have outdated skill-bridge rules blocks (v${RULE_BLOCK_VERSION} available).`);
+    }
     if (sentences.length === 0) return null;
-    sentences.push("Run admin_onboard_agent to fix.");
+    if (missingProjects.length > 0 || outdatedProjects.length > 0) {
+      sentences.push("Run admin_onboard_agent to fix.");
+    }
+    if (outdatedSkillProjects.length > 0) {
+      const cmds = [...skillRefreshCommands].map((c) => `\`${c}\``).join(" or ");
+      sentences.push(`For skill-bridge blocks, run ${cmds} from the project root.`);
+    }
     return sentences.join(" ");
   } catch (e) {
     console.error("Error checking agent rules status:", e);
@@ -1494,7 +1513,9 @@ ERROR CONDITIONS: Returns isError=true if path is missing or unresolvable. Scan 
           recommendationReason =
             `Your project's agent instructions file is out of date: it still references kontexta workflow rules from an older release. ` +
             `Files needing an update: ${versions}. Latest rules version is v${RULE_BLOCK_VERSION}. ` +
-            `Run admin_onboard_agent to refresh the kontexta rules block in-place (your existing project content is preserved).`;
+            (outdated.every((s) => s.flavor === "skill-bridge")
+              ? `These hold the skill-bridge rules block: re-run ${skillBridgeRefreshCommands(outdated).map((c) => `\`${c}\``).join(" or ")} from the project root to refresh it in-place, or run admin_onboard_agent to switch to the full MCP rules block.`
+              : `Run admin_onboard_agent to refresh the kontexta rules block in-place (your existing project content is preserved).`);
         } else {
           recommendationReason =
             `Found ${detected.join(", ")} with kontexta workflow rules already at the latest version (v${RULE_BLOCK_VERSION}). No action needed: your AI agent will load these rules automatically every session.`;

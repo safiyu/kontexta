@@ -540,7 +540,22 @@ export interface RuleStatus {
   path: string;
   version: string | null;
   upToDate: boolean;
+  /** "skill-bridge" = the light block written by `kxta.py rules --write`; refreshed by re-running that, not admin_onboard_agent. */
+  flavor?: "skill-bridge";
+  /** Skill-bridge only: the refresh command recorded in the block (matches that install's path and python), else the default. */
+  refreshCommand?: string;
   error?: "malformed" | "duplicate" | "unreadable";
+}
+
+/** Fallback for skill-bridge blocks that predate the recorded refresh command (user-wide install, POSIX python). */
+export const SKILL_BRIDGE_REFRESH_COMMAND = "python3 ~/.claude/skills/kontexta/scripts/kxta.py rules --write";
+
+const SKILL_BRIDGE_FLAVOR_RE = /<!--\s*kontexta:flavor\s+skill-bridge\s*-->/;
+const SKILL_BRIDGE_REFRESH_RE = /<!--\s*kontexta:refresh\s+(.+?)\s*-->/;
+
+/** Distinct refresh commands for a set of skill-bridge statuses, in first-seen order. */
+export function skillBridgeRefreshCommands(statuses: RuleStatus[]): string[] {
+  return [...new Set(statuses.map((s) => s.refreshCommand ?? SKILL_BRIDGE_REFRESH_COMMAND))];
 }
 
 export function checkAgentRulesStatus(projectPath: string, files: string[]): RuleStatus[] {
@@ -558,10 +573,15 @@ export function checkAgentRulesStatus(projectPath: string, files: string[]): Rul
       if (!parsed) {
         out.push({ path: rel, version: null, upToDate: false });
       } else if (parsed.kind === "ok") {
+        const block = content.slice(parsed.beginAt, parsed.endAt);
+        const isSkillBridge = SKILL_BRIDGE_FLAVOR_RE.test(block);
         out.push({
           path: rel,
           version: parsed.version,
           upToDate: parsed.version === RULE_BLOCK_VERSION,
+          ...(isSkillBridge
+            ? { flavor: "skill-bridge" as const, refreshCommand: block.match(SKILL_BRIDGE_REFRESH_RE)?.[1] ?? SKILL_BRIDGE_REFRESH_COMMAND }
+            : {}),
         });
       } else {
         out.push({

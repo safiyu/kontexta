@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { RULE_BLOCK_VERSION, RULES_BLOCK_BODY, RULES_REFERENCE_BODY, KONTEXTA_MD, SCAFFOLDS, detectAgentContextFiles, parseMarker, injectOrUpdate, syncAgentRules } from "../src/agent-rules/index.js";
+import { RULE_BLOCK_VERSION, RULES_BLOCK_BODY, RULES_REFERENCE_BODY, KONTEXTA_MD, SCAFFOLDS, detectAgentContextFiles, parseMarker, injectOrUpdate, syncAgentRules, checkAgentRulesStatus, skillBridgeRefreshCommands, SKILL_BRIDGE_REFRESH_COMMAND } from "../src/agent-rules/index.js";
 import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, rmSync, readFileSync, existsSync, readdirSync as readdirSyncForTest } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
@@ -431,5 +431,54 @@ describe("rules-reference.md (full reference) structural integrity", () => {
 
     expect(missing, `Tools registered in MCP but missing routing rows: ${missing.join(", ")}`).toEqual([]);
     expect(extra, `Routing rows present for tools not registered in MCP: ${extra.join(", ")}`).toEqual([]);
+  });
+});
+
+describe("checkAgentRulesStatus skill-bridge flavor", () => {
+  let dir: string;
+  beforeEach(() => { dir = mkdtempSync(join(tmpdir(), "kxta-flavor-")); });
+  afterEach(() => { rmSync(dir, { recursive: true, force: true }); });
+
+  const skillBlock = (v: string) =>
+    `<!-- BEGIN kontexta:rules v${v} -->\n<!-- kontexta:flavor skill-bridge -->\n## kxta tools (via skill bridge)\n<!-- END kontexta:rules v${v} -->\n`;
+
+  it("flags an old skill-bridge block as outdated and tags its flavor", () => {
+    writeFileSync(join(dir, "CLAUDE.md"), skillBlock("0.0.1"));
+    const [s] = checkAgentRulesStatus(dir, ["CLAUDE.md"]);
+    expect(s.upToDate).toBe(false);
+    expect(s.version).toBe("0.0.1");
+    expect(s.flavor).toBe("skill-bridge");
+  });
+
+  it("treats a current skill-bridge block as up to date", () => {
+    writeFileSync(join(dir, "CLAUDE.md"), skillBlock(RULE_BLOCK_VERSION));
+    const [s] = checkAgentRulesStatus(dir, ["CLAUDE.md"]);
+    expect(s.upToDate).toBe(true);
+    expect(s.flavor).toBe("skill-bridge");
+  });
+
+  it("does not tag the standard MCP rules block", () => {
+    writeFileSync(join(dir, "CLAUDE.md"), RULES_BLOCK_BODY);
+    const [s] = checkAgentRulesStatus(dir, ["CLAUDE.md"]);
+    expect(s.flavor).toBeUndefined();
+    expect(s.refreshCommand).toBeUndefined();
+  });
+
+  it("reads the refresh command recorded in the block", () => {
+    const cmd = "python .claude/skills/kontexta/scripts/kxta.py rules --write";
+    writeFileSync(
+      join(dir, "CLAUDE.md"),
+      skillBlock("0.0.1").replace("-->\n## kxta", `-->\n<!-- kontexta:refresh ${cmd} -->\n## kxta`),
+    );
+    const statuses = checkAgentRulesStatus(dir, ["CLAUDE.md"]);
+    expect(statuses[0].refreshCommand).toBe(cmd);
+    expect(skillBridgeRefreshCommands(statuses)).toEqual([cmd]);
+  });
+
+  it("falls back to the default refresh command for older blocks", () => {
+    writeFileSync(join(dir, "CLAUDE.md"), skillBlock("0.0.1"));
+    const statuses = checkAgentRulesStatus(dir, ["CLAUDE.md"]);
+    expect(statuses[0].refreshCommand).toBe(SKILL_BRIDGE_REFRESH_COMMAND);
+    expect(skillBridgeRefreshCommands(statuses)).toEqual([SKILL_BRIDGE_REFRESH_COMMAND]);
   });
 });

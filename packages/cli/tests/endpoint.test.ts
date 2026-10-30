@@ -101,7 +101,7 @@ describe('kontexta endpoint (command body)', () => {
 
   it('help lists the endpoint command', () => {
     const r = execSync('node dist/index.js --help', { cwd: cliRoot, encoding: 'utf8' });
-    expect(r).toMatch(/kontexta endpoint <connect\|status\|disconnect\|push\|pull>/);
+    expect(r).toMatch(/kontexta endpoint <connect\|status\|disconnect\|push\|pull\|run>/);
   });
 
   it('rejects an unknown subcommand with usage (exit 2)', async () => {

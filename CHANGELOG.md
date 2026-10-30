@@ -47,6 +47,27 @@
 
 - This is a breaking change for anyone who relied on pushing the vault to a Git remote. Multi-device sync is being replaced by a new asynchronous, operation-based local-first storage module (machine identity + global IDs, an operation outbox, short-polling sync against a dedicated storage server, and a Conflict Manager). See the storage-module plan for details.
 
+## 6.1.2 - Skill-bridge rules carry the workflow rules and their own refresh command (2026-10-14)
+
+### Changed
+
+- **Rules version 3.3.0.** Existing rules blocks are reported as outdated; refresh them with `admin_onboard_agent`, or `kxta.py rules --write` for skill-bridge blocks.
+- **The skill-bridge block now includes the core workflow rules.** `kxta.py rules --write` adds the session-start greeting, KB-write, search-before-read, Hands-timing and journal rules (adapted for the bridge) and links to `KONTEXTA.md`, so agents on the bridge follow the same workflow as native MCP agents instead of only seeing a tool list.
+- **Refresh nudges quote the right command.** The block records the command that wrote it (`<!-- kontexta:refresh ... -->`), and the session context and `projects_register` quote it instead of a fixed user-wide `python3` path. Project installs (`--project`) and Windows (`python`) now get a command that works. `checkAgentRulesStatus` reports it as `refreshCommand`; older blocks fall back to the previous default.
+- Project installs record the script path relative to the project root, so a committed block works for everyone on the team.
+
+## 6.1.1 - Agent skill for clients that block MCP (2026-10-14)
+
+### Added
+
+- **`skills/kontexta` agent skill.** A dependency-free Python bridge (`kxta.py`) that exposes every kxta tool through the agent's shell, for managed installs where user-added MCP servers are blocked. One background daemon per project keeps the server alive between calls and listens on a loopback TCP port guarded by a per-daemon token, so it runs on macOS, Linux and Windows.
+- **`kontexta skill install [--project] [--force]`.** Installs the skill into `~/.claude/skills` (or `.claude/skills` with `--project`). The skill ships inside the published `kontexta` package. Unknown flags are rejected, and `--force` copies to a staging folder first so a failed copy cannot remove a working install.
+- **`kxta.py rules [--write [file]]`.** Writes a light, versioned block (bridge-prefix line plus the tool list) into `CLAUDE.md`. It uses the same `kontexta:rules` marker as the server's block, so it is replaced in place on re-run and never duplicated.
+
+### Changed
+
+- **Rules-version nudges understand the skill block.** A skill-bridge block that predates the current `rulesVersion` is reported as outdated like any other, but the session context and `projects_register` now tell you to re-run `kxta.py rules --write` instead of `admin_onboard_agent`. `checkAgentRulesStatus` reports a `flavor` field for these blocks.
+
 ## 6.1.0 - Journal topic-shift detection and event triage (2026-10-05)
 
 ### Added
