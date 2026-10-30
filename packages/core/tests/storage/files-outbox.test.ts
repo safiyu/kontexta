@@ -95,7 +95,7 @@ describe("files write-routine outbox instrumentation (M54)", () => {
     const del = pending().find((o) => o.op.kind === "file.delete");
     expect(del).toBeDefined();
     expect(del!.op.gid).toBe(file.gid);
-    expect(del!.op.payload).toEqual({ path: file.path });
+    expect(del!.op.payload).toEqual({ path: file.path, rel_path: expect.stringMatching(/^knowledge\/.+\.md$/) });
     // The row itself is gone from the files table.
     const row = getDatabase().prepare("SELECT id FROM files WHERE id = ?").get(file.id);
     expect(row).toBeUndefined();

@@ -84,8 +84,8 @@ describe("conflicts/[gid] API route", () => {
     expect(readFileSync(fp, "utf8")).toBe("remote-b");
     expect(existsSync(copy)).toBe(false);
 
-    // No outbox op for keep-server (remote state already canonical).
-    expect(out.outboxOpId).toBeUndefined();
+    // keep-server is a sync event too: it enqueues an update so other machines converge.
+    expect(typeof out.outboxOpId).toBe("number");
 
     // Conflict is now resolved.
     const after = getConflict(gid);

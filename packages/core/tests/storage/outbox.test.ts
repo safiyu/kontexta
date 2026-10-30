@@ -229,8 +229,9 @@ describe("Outbox queue (src/storage/outbox.ts)", () => {
         expect(typeof e.id, "each entry must carry a numeric id").toBe("number");
         expect(parseOp(e.op), "each entry.op must be a valid Op").not.toBeNull();
       }
-      expect(entries[0].op).toEqual(validOp(1));
-      expect(entries[1].op).toEqual(validOp(3));
+      // A mutation's base_version is the version this machine has seen for the gid (0 on a fresh vault).
+      expect(entries[0].op).toEqual({ ...validOp(1), base_version: 0 });
+      expect(entries[1].op).toEqual({ ...validOp(3), base_version: 0 });
     });
 
     it("excludes sent, acked, and failed ops", () => {

@@ -146,7 +146,7 @@ describe("brains end to end", () => {
     expect(again.sameBrainAsBefore).toBe(true);
     expect(host.db.prepare("SELECT COUNT(*) AS n FROM brains").get()).toEqual({ n: 1 });
     await sync(a, host);
-    expect(listConflicts({ status: "all" }, a.db)).toEqual([]);
+    expect(listConflicts(a.db, { status: "all" })).toEqual([]);
     void generateShareId; void formatShareId;
   });
 });

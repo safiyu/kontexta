@@ -182,7 +182,7 @@ describe("watcher outbox instrumentation (M57)", () => {
     const del = pending().find((o) => o.op.kind === "file.delete");
     expect(del).toBeDefined();
     expect(del!.op.base_version).toBe(0);
-    expect(del!.op.payload).toEqual({ path: filePath });
+    expect(del!.op.payload).toEqual({ path: filePath, rel_path: "knowledge/gone.md" });
     expect(rowByPath(filePath), "the row is gone after unlink").toBeUndefined();
   });
 

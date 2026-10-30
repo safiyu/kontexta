@@ -15,13 +15,8 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 // tests/db/migrations -> up 3 to packages/core -> src/db/migrations.
 const MIG_DIR = join(__dirname, "..", "..", "..", "src", "db", "migrations");
 
-/** The four endpoint-config keys and their disconnected/idle defaults. */
+/** The poll cadence keys seeded by 015 (migration 018 replaced endpoint_url/endpoint_token with the brain settings). */
 const ENDPOINT_DEFAULTS: ReadonlyArray<{ key: string; value: string }> = [
-  // Empty URL = NOT connected: the sync loop stays disabled until
-  // `kontexta endpoint connect` writes a real base URL.
-  { key: "endpoint_url", value: "" },
-  // Empty token: minted once by the server's POST /clients at connect time.
-  { key: "endpoint_token", value: "" },
   // Spec 1.6: 15 s active poll, 60 s idle poll.
   { key: "poll_active_interval_ms", value: "15000" },
   { key: "poll_idle_interval_ms", value: "60000" },
@@ -92,7 +87,7 @@ describe("Migration 015: endpoint config settings", () => {
   });
 
   describe("via the migration runner", () => {
-    it("seeds the four endpoint-config settings rows with disconnected/idle defaults", () => {
+    it("seeds the two poll-cadence settings rows with disconnected/idle defaults", () => {
       const db = createDatabase(mkDbPath());
       for (const { key, value } of ENDPOINT_DEFAULTS) {
         expect(settingValue(db, key), `settings.${key} must be seeded`).not.toBeNull();
@@ -118,10 +113,10 @@ describe("Migration 015: endpoint config settings", () => {
       const db = createDatabase(mkDbPath());
       const rows = db
         .prepare(
-          "SELECT key, updated_at FROM settings WHERE key IN ('endpoint_url','endpoint_token','poll_active_interval_ms','poll_idle_interval_ms')",
+          "SELECT key, updated_at FROM settings WHERE key IN ('poll_active_interval_ms','poll_idle_interval_ms')",
         )
         .all() as Array<{ key: string; updated_at: string }>;
-      expect(rows.length, "exactly four endpoint settings rows").toBe(4);
+      expect(rows.length, "exactly two poll settings rows").toBe(2);
       for (const r of rows) {
         expect(r.updated_at, `settings.${r.key}.updated_at must be set`).toBeTruthy();
         expect(new Date(r.updated_at).getTime(), "updated_at must be parseable").not.toBeNaN();

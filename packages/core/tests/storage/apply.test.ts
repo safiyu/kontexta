@@ -834,9 +834,8 @@ describe("applyRemoteOp (M58)", () => {
       const sentinel = join(outsideDir, "sentinel.txt");
       writeFileSync(sentinel, "keep me", "utf8");
 
-      await expect(
-        applyRemoteOp(op("1002@" + ORIGIN, "file.delete", { path: sentinel })),
-      ).rejects.toBeInstanceOf(UnappliableOpError);
+      // file.delete matches by gid only, so an unknown gid is a no-op and never touches the path.
+      await expect(applyRemoteOp(op("1002@" + ORIGIN, "file.delete", { path: sentinel }))).resolves.toBeUndefined();
       await expect(
         applyRemoteOp(op("1003@" + ORIGIN, "folder.delete", { path: outsideDir })),
       ).rejects.toBeInstanceOf(UnappliableOpError);

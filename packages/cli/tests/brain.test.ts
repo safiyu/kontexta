@@ -171,7 +171,7 @@ describe('kontexta brain (command body)', () => {
   it('connect without --share-id or --create exits 2 when not interactive', async () => {
     const { env, dir } = freshEnv();
     try {
-      const r = await cli(['connect', base, '--create'], env);
+      const r = await cli(['connect', base], env);
       expect(r.code).toBe(2);
       expect(r.err).toMatch(/--share-id/);
     } finally {
@@ -247,7 +247,7 @@ describe('kontexta brain (command body)', () => {
   it('refuses a non-http(s) URL at connect time', async () => {
     const { env, dir } = freshEnv();
     try {
-      const r = await cli(['connect', 'ftp://not-a-valid-scheme.example', 'tok'], env);
+      const r = await cli(['connect', 'ftp://not-a-valid-scheme.example', '--create'], env);
       expect(r.code).toBe(1);
       expect(r.err).toMatch(/protocol|valid URL/i);
     } finally {

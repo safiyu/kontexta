@@ -280,7 +280,7 @@ describe("kindFamily and retired tag kinds", () => {
     expect(kindFamily("file.move")).toBe("content");
     expect(kindFamily("tag.set")).toBe("metadata");
     expect(kindFamily("favorite.set")).toBe("metadata");
-    expect(kindFamily("calendar.event.upsert")).toBe("calendar.event");
+    expect(kindFamily("calendar.event.upsert")).toBe("calendar.event.upsert");
     expect(kindFamily("journal.meta.upsert")).toBe("journal");
   });
   it("parseOp rejects the retired tag.add and tag.remove kinds", () => {

@@ -30,7 +30,7 @@ beforeEach(() => {
 });
 
 const share = () => formatShareId(generateShareId());
-const join = (a: Hono, shareId: string, machine: string, headers: Record<string, string> = {}, extra: Record<string, unknown> = {}) =>
+const joinAs = (a: Hono, shareId: string, machine: string, headers: Record<string, string> = {}, extra: Record<string, unknown> = {}) =>
   a.request("/brains/join", {
     method: "POST",
     headers: { "content-type": "application/json", ...headers },
@@ -48,7 +48,7 @@ const post = (token: string, ops: unknown[]) =>
 describe("POST /brains/join", () => {
   it("creates a brain with the enroll secret and returns a token once", async () => {
     const s = share();
-    const res = await join(app, s, M1, SECRET, { name: "Mine" });
+    const res = await joinAs(app, s, M1, SECRET, { name: "Mine" });
     expect(res.status).toBe(201);
     const body = (await res.json()) as { created: boolean; name: string; token: string };
     expect(body).toMatchObject({ created: true, name: "Mine" });
@@ -58,8 +58,8 @@ describe("POST /brains/join", () => {
 
   it("joins an existing brain with the share id alone", async () => {
     const s = share();
-    await join(app, s, M1, SECRET);
-    const res = await join(app, s, M2);
+    await joinAs(app, s, M1, SECRET);
+    const res = await joinAs(app, s, M2);
     expect(res.status).toBe(200);
     expect(((await res.json()) as { created: boolean }).created).toBe(false);
     expect((db.prepare("SELECT COUNT(*) n FROM clients").get() as { n: number }).n).toBe(2);
@@ -67,8 +67,8 @@ describe("POST /brains/join", () => {
 
   it("re-join rotates the token and the old token stops working (a retried create converges, never a second brain)", async () => {
     const s = share();
-    const first = await tok(await join(app, s, M1, SECRET));
-    const second = await tok(await join(app, s, M1));
+    const first = await tok(await joinAs(app, s, M1, SECRET));
+    const second = await tok(await joinAs(app, s, M1));
     expect(second).not.toBe(first);
     expect((await app.request("/ops", { headers: auth(first) })).status).toBe(401);
     expect((await app.request("/ops", { headers: auth(second) })).status).toBe(200);
@@ -76,28 +76,28 @@ describe("POST /brains/join", () => {
   });
 
   it("without the secret, an unknown share id is 403 and leaks nothing", async () => {
-    const res = await join(app, share(), M1);
+    const res = await joinAs(app, share(), M1);
     expect(res.status).toBe(403);
     expect((db.prepare("SELECT COUNT(*) n FROM brains").get() as { n: number }).n).toBe(0);
   });
 
   it("creating is closed with 503 when no secret is configured and open create is off", async () => {
     const closed = build({});
-    expect((await join(closed, share(), M1)).status).toBe(503);
+    expect((await joinAs(closed, share(), M1)).status).toBe(503);
     const open = build({ allowOpenCreate: true });
-    expect((await join(open, share(), M1)).status).toBe(201);
+    expect((await joinAs(open, share(), M1)).status).toBe(201);
   });
 
   it("rejects a malformed share id or machine id", async () => {
-    expect((await join(app, "nope", M1, SECRET)).status).toBe(400);
-    expect((await join(app, share(), "xyz", SECRET)).status).toBe(400);
+    expect((await joinAs(app, "nope", M1, SECRET)).status).toBe(400);
+    expect((await joinAs(app, share(), "xyz", SECRET)).status).toBe(400);
   });
 });
 
 describe("brain isolation and machine routes", () => {
   it("brain A's token never reads brain B's ops, snapshot, machines or revocation", async () => {
-    const ta = await tok(await join(app, share(), M1, SECRET));
-    const tb = await tok(await join(app, share(), M2, SECRET));
+    const ta = await tok(await joinAs(app, share(), M1, SECRET));
+    const tb = await tok(await joinAs(app, share(), M2, SECRET));
     await post(ta, [op(M1, "1@aaaaaaaaaaaaaaaa")]);
     const bOps = (await (await app.request("/ops?since=0", { headers: auth(tb) })).json()) as { ops: unknown[] };
     expect(bOps.ops).toEqual([]);
@@ -110,8 +110,8 @@ describe("brain isolation and machine routes", () => {
 
   it("lists machines, renames the brain and revokes a machine", async () => {
     const s = share();
-    const t1 = await tok(await join(app, s, M1, SECRET));
-    const t2 = await tok(await join(app, s, M2));
+    const t1 = await tok(await joinAs(app, s, M1, SECRET));
+    const t2 = await tok(await joinAs(app, s, M2));
     const me = (await (await app.request("/brains/me", { headers: auth(t1) })).json()) as { machines: unknown[] };
     expect(me.machines).toHaveLength(2);
     const patched = await app.request("/brains/me", { method: "PATCH", headers: { ...auth(t1), "content-type": "application/json" }, body: JSON.stringify({ name: "Renamed" }) });
@@ -123,7 +123,7 @@ describe("brain isolation and machine routes", () => {
 
 describe("snapshot", () => {
   it("pages by gid and includes unresolved conflicts", async () => {
-    const t = await tok(await join(app, share(), M1, SECRET));
+    const t = await tok(await joinAs(app, share(), M1, SECRET));
     await post(t, [op(M1, "1@aaaaaaaaaaaaaaaa", "file.create", null, { content: "a", content_hash: "ha" }, 1), op(M1, "2@aaaaaaaaaaaaaaaa", "file.create", null, { content: "b", content_hash: "hb" }, 2)]);
     await post(t, [op(M1, "1@aaaaaaaaaaaaaaaa", "file.update", 1, { content: "a2", content_hash: "ha2" }, 3)]);
     await post(t, [op(M1, "1@aaaaaaaaaaaaaaaa", "file.update", 1, { content: "lost", content_hash: "hl" }, 4)]);
@@ -136,7 +136,7 @@ describe("snapshot", () => {
   });
 
   it("the index carries content hashes instead of payloads", async () => {
-    const t = await tok(await join(app, share(), M1, SECRET));
+    const t = await tok(await joinAs(app, share(), M1, SECRET));
     await post(t, [op(M1, "1@aaaaaaaaaaaaaaaa", "file.create", null, { content: "secret body", content_hash: "abc" })]);
     const idx = (await (await app.request("/brains/snapshot/index", { headers: auth(t) })).json()) as { entries: Array<{ records: Array<Record<string, unknown>> }> };
     expect(idx.entries[0].records[0]).toMatchObject({ content_hash: "abc" });

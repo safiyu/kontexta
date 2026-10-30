@@ -59,9 +59,9 @@ export type KindFamily =
   | "metadata"
   | "folder"
   | "project"
-  | "calendar.entity"
-  | "calendar.event"
-  | "calendar.link"
+  | "calendar.entity.upsert"
+  | "calendar.event.upsert"
+  | "calendar.link.upsert"
   | "journal";
 
 export function kindFamily(kind: OpKind): KindFamily {

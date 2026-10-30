@@ -51,7 +51,7 @@ beforeEach(() => {
   shareId = formatShareId(generateShareId());
 });
 
-async function join(machineId: string, share: string = shareId, extra: Record<string, unknown> = {}) {
+async function joinReq(machineId: string, share: string = shareId, extra: Record<string, unknown> = {}) {
   return app.request("/brains/join", {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -61,7 +61,7 @@ async function join(machineId: string, share: string = shareId, extra: Record<st
 
 /** Join (creating the brain on first use) and return the machine's token. */
 async function tokenFor(machineId: string = MACHINE_A, share: string = shareId): Promise<string> {
-  const res = await join(machineId, share);
+  const res = await joinReq(machineId, share);
   const body = (await res.json()) as { token: string | null };
   if (typeof body.token !== "string") throw new Error(`join(${machineId}) failed: ${res.status} ${JSON.stringify(body)}`);
   return body.token;
