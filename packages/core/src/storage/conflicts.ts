@@ -63,6 +63,7 @@ export interface ConflictRecord {
   resolution: ConflictStrategy | null;
   resolved_at: number | null;
   created_at: number;
+  conflict_kind: "content" | "path";
 }
 
 export interface RegisterConflictInput {
@@ -153,6 +154,21 @@ export function ensureConflictsTable(db: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_conflicts_gid ON conflicts(gid);
     CREATE INDEX IF NOT EXISTS idx_conflicts_status ON conflicts(status);
   `);
+  const cols = db.prepare("PRAGMA table_info(conflicts)").all() as Array<{ name: string }>;
+  if (!cols.some((c) => c.name === "conflict_kind")) {
+    db.exec("ALTER TABLE conflicts ADD COLUMN conflict_kind TEXT NOT NULL DEFAULT 'content'");
+  }
+}
+
+/** True when `path` is the conflict copy of a still-unresolved conflict (the watcher must not sync it). */
+export function isUnresolvedConflictCopy(db: Database.Database, path: string): boolean {
+  if (!/ \(from [^()]+\)(\.[^.]*)?$/.test(basename(path))) return false;
+  try {
+    ensureConflictsTable(db);
+    return db.prepare("SELECT 1 FROM conflicts WHERE conflict_path = ? AND status = 'unresolved'").get(path) !== undefined;
+  } catch {
+    return false;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -486,7 +502,41 @@ export function registerConflict(
     resolution: null,
     resolved_at: null,
     created_at: now,
+    conflict_kind: "content",
   };
+}
+
+function labelForOrigin(db: Database.Database, origin: string): string {
+  try {
+    const clientRow = db.prepare("SELECT hostname FROM clients WHERE machine_id = ?").get(origin) as
+      | { hostname: string | null }
+      | undefined;
+    if (clientRow?.hostname) return clientRow.hostname;
+  } catch {}
+  return origin.slice(0, 8);
+}
+
+/** Park a remote file that landed on a path another local file owns; the local file stays untouched. */
+export function registerPathConflict(
+  input: { remoteOp: Op; localFileId: number; localPath: string; remoteContent: string },
+  dbHandle?: Database.Database
+): ConflictRecord {
+  const db = resolveDb(dbHandle);
+  ensureConflictsTable(db);
+  const rec = registerConflict(
+    {
+      gid: input.remoteOp.gid,
+      filePath: input.localPath,
+      origin: input.remoteOp.origin,
+      originLabel: labelForOrigin(db, input.remoteOp.origin),
+      baseVersion: input.remoteOp.base_version,
+      remoteContent: input.remoteContent,
+      createdAt: input.remoteOp.created_at,
+    },
+    db
+  );
+  db.prepare("UPDATE conflicts SET conflict_kind = 'path' WHERE id = ?").run(rec.id);
+  return { ...rec, conflict_kind: "path" };
 }
 
 /**
@@ -512,18 +562,7 @@ export function forkConflictFromOp(
 
   const remoteContent = typeof payload.content === "string" ? payload.content : "";
 
-  let originLabel = options?.originLabel;
-  if (!originLabel) {
-    try {
-      const clientRow = db
-        .prepare("SELECT hostname FROM clients WHERE machine_id = ?")
-        .get(op.origin) as { hostname: string } | undefined;
-      originLabel = clientRow?.hostname;
-    } catch {}
-  }
-  if (!originLabel) {
-    originLabel = op.origin.slice(0, 8);
-  }
+  const originLabel = options?.originLabel ?? labelForOrigin(db, op.origin);
 
   return registerConflict(
     {
@@ -565,6 +604,7 @@ function rowToRecord(row: any, withDiff: boolean): ConflictRecord {
     resolution: row.resolution,
     resolved_at: row.resolved_at,
     created_at: row.created_at,
+    conflict_kind: row.conflict_kind === "path" ? "path" : "content",
   };
 }
 
@@ -688,6 +728,12 @@ export async function resolveConflict(
   const machineId = readLocalMachineId(db);
   const now = Date.now();
 
+  if (conflict.conflict_kind === "path") {
+    return await withLock(fileLockKey(conflict.file_path), async () =>
+      resolvePathConflict(db, conflict, options, machineId, now)
+    );
+  }
+
   return await withLock(fileLockKey(conflict.file_path), async () => {
     let outboxOpId: number | undefined;
     let newFileGid: string | undefined;
@@ -720,6 +766,22 @@ export async function resolveConflict(
               conflict.remote_content
             );
           }
+
+          // Taking the server's content is still a sync event: other machines may hold a different winner.
+          outboxOpId = enqueueOp(db, {
+            gid: conflict.gid,
+            kind: "file.update",
+            origin: machineId,
+            base_version: 0,
+            payload: {
+              path: conflict.file_path,
+              rel_path: toRelPath(conflict.file_path) ?? undefined,
+              title: file?.title ?? basename(conflict.file_path),
+              content: conflict.remote_content,
+              content_hash: hash,
+            },
+            created_at: now,
+          });
 
           db.prepare(`
             UPDATE conflicts SET
@@ -962,4 +1024,108 @@ export async function resolveConflict(
       newFileGid,
     };
   });
+}
+
+function resolvePathConflict(
+  db: Database.Database,
+  conflict: any,
+  options: ResolveConflictOptions,
+  machineId: string,
+  now: number
+): ResolveConflictResult {
+  const { strategy } = options;
+  const local = db
+    .prepare("SELECT id, gid, title, project_id, storage_type, content_class FROM files WHERE path = ?")
+    .get(conflict.file_path) as
+    | { id: number; gid: string | null; title: string; project_id: number | null; storage_type: string; content_class: string | null }
+    | undefined;
+  let outboxOpId: number | undefined;
+
+  if (strategy === "keep-server" || strategy === "merged") {
+    const text = strategy === "merged" ? (options.mergedContent as string) : conflict.remote_content;
+    mkdirSync(dirname(conflict.file_path), { recursive: true });
+    writeFileSync(conflict.file_path, text, "utf8");
+    const hash = sha256(text);
+    db.transaction(() => {
+      const title = local?.title ?? basename(conflict.file_path);
+      if (local) {
+        db.prepare("UPDATE files SET gid = ?, content_hash = ?, updated_at = datetime('now') WHERE id = ?").run(conflict.gid, hash, local.id);
+        db.prepare("DELETE FROM fts_index WHERE rowid = ?").run(local.id);
+        db.prepare("INSERT INTO fts_index (rowid, title, content) VALUES (?, ?, ?)").run(local.id, title, text);
+        if (local.gid && local.gid !== conflict.gid) {
+          enqueueOp(db, {
+            gid: local.gid,
+            kind: "file.delete",
+            origin: machineId,
+            base_version: 0,
+            payload: { path: conflict.file_path, rel_path: toRelPath(conflict.file_path) ?? undefined },
+            created_at: now,
+          });
+        }
+      }
+      if (strategy === "merged") {
+        outboxOpId = enqueueOp(db, {
+          gid: conflict.gid,
+          kind: "file.update",
+          origin: machineId,
+          base_version: 0,
+          payload: {
+            path: conflict.file_path,
+            rel_path: toRelPath(conflict.file_path) ?? undefined,
+            title,
+            content: text,
+            content_hash: hash,
+          },
+          created_at: now,
+        });
+      }
+      db.prepare("UPDATE conflicts SET status = 'resolved', resolution = ?, resolved_at = ? WHERE id = ?").run(strategy, now, conflict.id);
+    })();
+    if (existsSync(conflict.conflict_path)) {
+      try {
+        rmSync(conflict.conflict_path, { force: true });
+      } catch {}
+    }
+  } else {
+    if (!existsSync(conflict.conflict_path)) {
+      mkdirSync(dirname(conflict.conflict_path), { recursive: true });
+      writeFileSync(conflict.conflict_path, conflict.remote_content, "utf8");
+    }
+    const copyHash = sha256(conflict.remote_content);
+    const copyTitle = basename(conflict.conflict_path);
+    db.transaction(() => {
+      const existingCopy = db.prepare("SELECT id FROM files WHERE path = ?").get(conflict.conflict_path) as { id: number } | undefined;
+      let copyId: number;
+      if (existingCopy) {
+        copyId = existingCopy.id;
+        db.prepare("UPDATE files SET gid = ?, content_hash = ? WHERE id = ?").run(conflict.gid, copyHash, copyId);
+      } else {
+        const res = db
+          .prepare(
+            "INSERT INTO files (path, title, project_id, storage_type, content_class, source_path, content_hash, gid) VALUES (?, ?, ?, ?, ?, NULL, ?, ?)"
+          )
+          .run(conflict.conflict_path, copyTitle, local?.project_id ?? null, local?.storage_type ?? "local", local?.content_class ?? null, copyHash, conflict.gid);
+        copyId = Number(res.lastInsertRowid);
+      }
+      db.prepare("DELETE FROM fts_index WHERE rowid = ?").run(copyId);
+      db.prepare("INSERT INTO fts_index (rowid, title, content) VALUES (?, ?, ?)").run(copyId, copyTitle, conflict.remote_content);
+      // The remote record keeps its gid and moves to the copy path so both files live side by side everywhere.
+      outboxOpId = enqueueOp(db, {
+        gid: conflict.gid,
+        kind: "file.move",
+        origin: machineId,
+        base_version: 0,
+        payload: {
+          from: conflict.file_path,
+          to: conflict.conflict_path,
+          rel_from: toRelPath(conflict.file_path) ?? undefined,
+          rel_to: toRelPath(conflict.conflict_path) ?? undefined,
+        },
+        created_at: now,
+      });
+      db.prepare("UPDATE conflicts SET status = 'resolved', resolution = ?, resolved_at = ? WHERE id = ?").run(strategy, now, conflict.id);
+    })();
+  }
+
+  return { success: true, gid: conflict.gid, strategy, resolvedAt: now, outboxOpId, newFileGid: conflict.gid };
 }

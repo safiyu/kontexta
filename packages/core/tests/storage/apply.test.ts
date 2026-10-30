@@ -74,6 +74,39 @@ describe("applyRemoteOp (M58)", () => {
     await expect(applyRemoteOp(badKindOp)).rejects.toThrow("refusing to apply a malformed op");
   });
 
+  describe("gid-only matching", () => {
+    const create = (gid: string, path: string, content: string): Op => ({
+      gid, kind: "file.create", origin: "remote0123456789", base_version: null,
+      payload: { path, title: "T", content, storage_type: "local" }, created_at: Date.now(),
+    });
+
+    it("file.create for a new gid at an occupied path registers a path conflict and leaves the local file alone", async () => {
+      const path = join(TEST_DATA_DIR, "knowledge", "todo.md");
+      await applyRemoteOp(create("101@remote0123456789", path, "first"));
+      await applyRemoteOp(create("102@remote0123456789", path, "second"));
+      expect(readFileSync(path, "utf8")).toBe("first");
+      const db = getDatabase();
+      expect((db.prepare("SELECT gid FROM files WHERE path = ?").get(path) as { gid: string }).gid).toBe("101@remote0123456789");
+      const rows = db.prepare("SELECT gid, conflict_kind FROM conflicts WHERE status = 'unresolved'").all();
+      expect(rows).toEqual([{ gid: "102@remote0123456789", conflict_kind: "path" }]);
+    });
+
+    it("file.update never matches a row by path", async () => {
+      const path = join(TEST_DATA_DIR, "knowledge", "u.md");
+      await applyRemoteOp(create("103@remote0123456789", path, "first"));
+      await applyRemoteOp({ gid: "104@remote0123456789", kind: "file.update", origin: "remote0123456789", base_version: 0, payload: { path, content: "hijack" }, created_at: Date.now() });
+      expect(readFileSync(path, "utf8")).toBe("first");
+      expect((getDatabase().prepare("SELECT gid FROM files WHERE path = ?").get(path) as { gid: string }).gid).toBe("103@remote0123456789");
+    });
+
+    it("file.delete with no gid match deletes nothing even if the path exists", async () => {
+      const path = join(TEST_DATA_DIR, "knowledge", "d.md");
+      await applyRemoteOp(create("105@remote0123456789", path, "keep me"));
+      await applyRemoteOp({ gid: "106@remote0123456789", kind: "file.delete", origin: "remote0123456789", base_version: 0, payload: { path }, created_at: Date.now() });
+      expect(existsSync(path)).toBe(true);
+    });
+  });
+
   describe("file ops", () => {
     it("file.create persists to DB + disk with remote gid and enqueues zero ops", async () => {
       const filePath = join(TEST_DATA_DIR, "knowledge", "remote-created.md");

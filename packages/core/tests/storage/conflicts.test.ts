@@ -14,6 +14,8 @@ import {
   buildConflictPath,
   computeDiff,
   registerConflict,
+  registerPathConflict,
+  isUnresolvedConflictCopy,
   forkConflictFromOp,
   listConflicts,
   getConflict,
@@ -385,6 +387,62 @@ describe("Conflict resolution core engine (Milestone 77)", () => {
       expect(updated?.status).toBe("resolved");
       expect(updated?.resolution).toBe("keep-server");
       expect(countUnresolvedConflicts(db)).toBe(0);
+    });
+
+    it("keep-server enqueues a file.update carrying the remote content", async () => {
+      const filePath = join(testDir, "ks-op.md");
+      const gid = `11@${MACHINE_LOCAL}`;
+      seedFile(filePath, gid, "Local text");
+      registerConflict({ gid, filePath, origin: MACHINE_REMOTE, originLabel: "laptop-b", remoteContent: "Server text" }, db);
+      const result = await resolveConflict(gid, { strategy: "keep-server" }, db);
+      expect(result.outboxOpId).toBeTypeOf("number");
+      const ops = pendingOps(db);
+      expect(ops).toHaveLength(1);
+      expect(ops[0].op.kind).toBe("file.update");
+      expect((ops[0].op.payload as { content: string }).content).toBe("Server text");
+    });
+
+    describe("path conflicts (same path, different gid)", () => {
+      const remoteOp = (gid: string, content: string): Op =>
+        ({ gid, kind: "file.create", origin: MACHINE_REMOTE, base_version: null, payload: { path: "x", content }, created_at: 1 }) as unknown as Op;
+
+      it("registers a path conflict, writes the copy, and leaves the local file alone", () => {
+        const filePath = join(testDir, "todo.md");
+        const localGid = `30@${MACHINE_LOCAL}`;
+        const id = seedFile(filePath, localGid, "mine");
+        const rec = registerPathConflict({ remoteOp: remoteOp(`9@${MACHINE_REMOTE}`, "theirs"), localFileId: id, localPath: filePath, remoteContent: "theirs" }, db);
+        expect(rec.conflict_kind).toBe("path");
+        expect(readFileSync(filePath, "utf-8")).toBe("mine");
+        expect(readFileSync(rec.conflict_path, "utf-8")).toBe("theirs");
+        expect(isUnresolvedConflictCopy(db, rec.conflict_path)).toBe(true);
+      });
+
+      it("keep-server adopts the remote gid and enqueues delete(old gid)", async () => {
+        const filePath = join(testDir, "adopt.md");
+        const localGid = `31@${MACHINE_LOCAL}`;
+        const remoteGid = `8@${MACHINE_REMOTE}`;
+        const id = seedFile(filePath, localGid, "mine");
+        registerPathConflict({ remoteOp: remoteOp(remoteGid, "theirs"), localFileId: id, localPath: filePath, remoteContent: "theirs" }, db);
+        await resolveConflict(remoteGid, { strategy: "keep-server" }, db);
+        expect(readFileSync(filePath, "utf-8")).toBe("theirs");
+        expect((db.prepare("SELECT gid FROM files WHERE id = ?").get(id) as { gid: string }).gid).toBe(remoteGid);
+        const kinds = pendingOps(db).map((o) => `${o.op.kind}:${o.op.gid}`);
+        expect(kinds).toContain(`file.delete:${localGid}`);
+      });
+
+      it("keep-mine turns the copy into a tracked file under the remote gid and enqueues file.move", async () => {
+        const filePath = join(testDir, "both.md");
+        const localGid = `32@${MACHINE_LOCAL}`;
+        const remoteGid = `7@${MACHINE_REMOTE}`;
+        const id = seedFile(filePath, localGid, "mine");
+        const rec = registerPathConflict({ remoteOp: remoteOp(remoteGid, "theirs"), localFileId: id, localPath: filePath, remoteContent: "theirs" }, db);
+        await resolveConflict(remoteGid, { strategy: "keep-mine" }, db);
+        expect(existsSync(rec.conflict_path)).toBe(true);
+        expect((db.prepare("SELECT path FROM files WHERE gid = ?").get(remoteGid) as { path: string }).path).toBe(rec.conflict_path);
+        const move = pendingOps(db).find((o) => o.op.kind === "file.move");
+        expect(move?.op.gid).toBe(remoteGid);
+        expect(readFileSync(filePath, "utf-8")).toBe("mine");
+      });
     });
 
     it("resolves via keep-mine: preserves local content, enqueues update op, and deletes conflict copy", async () => {

@@ -47,6 +47,7 @@ import {
 import { upsertJournalMeta } from "../journal/repository.js";
 import { resolveSyncPath } from "./paths.js";
 import { UnappliableOpError } from "./errors.js";
+import { registerPathConflict } from "./conflicts.js";
 
 /**
  * Options for {@link applyRemoteOp}.
@@ -228,6 +229,17 @@ async function dispatchOp(op: Op, db: Database): Promise<void> {
 // File Op Handlers
 // ---------------------------------------------------------------------------
 
+/** A remote file for an unknown gid landing on a path another local file owns is parked as a conflict, never merged. */
+function parkIfPathTaken(op: Op, db: Database, path: string, content: string): boolean {
+  if (db.prepare("SELECT 1 FROM files WHERE gid = ?").get(op.gid) !== undefined) return false;
+  const owner = db.prepare("SELECT id, gid FROM files WHERE path = ?").get(path) as
+    | { id: number; gid: string | null }
+    | undefined;
+  if (!owner || owner.gid === null || owner.gid === op.gid) return false;
+  registerPathConflict({ remoteOp: op, localFileId: owner.id, localPath: path, remoteContent: content }, db);
+  return true;
+}
+
 async function applyFileCreate(op: Op, db: Database): Promise<void> {
   const payload = op.payload as {
     path?: string;
@@ -247,6 +259,7 @@ async function applyFileCreate(op: Op, db: Database): Promise<void> {
   }
   const filePath = resolveSyncPath(payload.path, payload.rel_path);
   const projectId = localProjectId(db, payload.project_gid);
+  if (parkIfPathTaken(op, db, filePath, typeof payload.content === "string" ? payload.content : "")) return;
   const content = typeof payload.content === "string" ? payload.content : "";
   const contentHash = payload.content_hash ?? computeHash(content);
   const title = payload.title ?? basename(filePath);
@@ -260,7 +273,7 @@ async function applyFileCreate(op: Op, db: Database): Promise<void> {
     let fileId: number;
     db.transaction(() => {
       const existing = db
-        .prepare("SELECT id, path FROM files WHERE gid = ? OR path = ?")
+        .prepare("SELECT id, path FROM files WHERE gid = ? OR (path = ? AND gid IS NULL)")
         .get(op.gid, filePath) as { id: number; path: string } | undefined;
 
       if (existing) {
@@ -346,10 +359,12 @@ async function applyFileUpdate(op: Op, db: Database): Promise<void> {
   const payloadPath =
     typeof payload.path === "string" && payload.path ? resolveSyncPath(payload.path, payload.rel_path) : null;
   const existing = db
-    .prepare("SELECT id, path, title FROM files WHERE gid = ? OR (path = ? AND ? IS NOT NULL)")
+    .prepare("SELECT id, path, title FROM files WHERE gid = ? OR (path = ? AND gid IS NULL AND ? IS NOT NULL)")
     .get(op.gid, payloadPath, payloadPath) as
     | { id: number; path: string; title: string }
     | undefined;
+
+  if (payloadPath && parkIfPathTaken(op, db, payloadPath, typeof payload.content === "string" ? payload.content : "")) return;
 
   const targetPath = payloadPath ?? existing?.path;
   if (!targetPath) {
@@ -366,7 +381,7 @@ async function applyFileUpdate(op: Op, db: Database): Promise<void> {
     let fileId: number;
     db.transaction(() => {
       const current = db
-        .prepare("SELECT id, path, title FROM files WHERE gid = ? OR (path = ? AND ? IS NOT NULL)")
+        .prepare("SELECT id, path, title FROM files WHERE gid = ? OR (path = ? AND gid IS NULL AND ? IS NOT NULL)")
         .get(op.gid, targetPath, targetPath) as
         | { id: number; path: string; title: string }
         | undefined;
@@ -405,33 +420,21 @@ async function applyFileUpdate(op: Op, db: Database): Promise<void> {
 }
 
 async function applyFileDelete(op: Op, db: Database): Promise<void> {
-  const payload = op.payload as { path?: string; rel_path?: string };
-  const payloadPath =
-    typeof payload.path === "string" && payload.path ? resolveSyncPath(payload.path, payload.rel_path) : null;
-  const existing = db
-    .prepare("SELECT id, path FROM files WHERE gid = ? OR (path = ? AND ? IS NOT NULL)")
-    .get(op.gid, payloadPath, payloadPath) as
+  const existing = db.prepare("SELECT id, path FROM files WHERE gid = ?").get(op.gid) as
     | { id: number; path: string }
     | undefined;
-
-  const targetPath = payloadPath ?? (existing ? resolveSyncPath(existing.path, undefined) : null);
-  if (existing) {
-    await withLock(fileLockKey(existing.path), async () => {
-      db.transaction(() => {
-        db.prepare("DELETE FROM files WHERE id = ?").run(existing.id);
-        db.prepare("DELETE FROM fts_index WHERE rowid = ?").run(existing.id);
-      }).immediate();
-      if (existsSync(existing.path)) {
-        try {
-          rmSync(existing.path, { force: true });
-        } catch {}
-      }
-    });
-  } else if (targetPath && existsSync(targetPath)) {
-    try {
-      rmSync(targetPath, { force: true });
-    } catch {}
-  }
+  if (!existing) return;
+  await withLock(fileLockKey(existing.path), async () => {
+    db.transaction(() => {
+      db.prepare("DELETE FROM files WHERE id = ?").run(existing.id);
+      db.prepare("DELETE FROM fts_index WHERE rowid = ?").run(existing.id);
+    }).immediate();
+    if (existsSync(existing.path)) {
+      try {
+        rmSync(existing.path, { force: true });
+      } catch {}
+    }
+  });
 }
 
 async function applyFileMove(op: Op, db: Database): Promise<void> {
@@ -449,8 +452,9 @@ async function applyFileMove(op: Op, db: Database): Promise<void> {
   const toPath = resolveSyncPath(payload.to, payload.rel_to);
 
   const existing = db
-    .prepare("SELECT id, path FROM files WHERE gid = ? OR path = ?")
-    .get(op.gid, fromPath) as { id: number; path: string } | undefined;
+    .prepare("SELECT id, path FROM files WHERE gid = ?")
+    .get(op.gid) as { id: number; path: string } | undefined;
+  if (!existing) return;
 
   await withLock(fileLockKey(fromPath), async () => {
     await withLock(fileLockKey(toPath), async () => {
@@ -465,9 +469,9 @@ async function applyFileMove(op: Op, db: Database): Promise<void> {
         `).run(toPath, payload.content_class ?? null, op.gid, existing.id);
       }
 
-      if (existsSync(fromPath)) {
+      if (existsSync(existing.path)) {
         mkdirSync(dirname(toPath), { recursive: true });
-        renameSync(fromPath, toPath);
+        renameSync(existing.path, toPath);
       }
     });
   });
