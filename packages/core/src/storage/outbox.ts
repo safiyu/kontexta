@@ -35,6 +35,7 @@
 
 import Database from "better-sqlite3";
 import { parseOp, type Op } from "./op.js";
+import { knownGidVersion } from "./versions.js";
 
 /** One row of the `outbox` table (the delivery-state columns the queue owns). */
 interface OutboxRow {
@@ -83,13 +84,15 @@ export function enqueueOp(db: Database.Database, op: Op): number {
     `INSERT INTO outbox (gid, kind, origin, base_version, payload, created_at, status)
      VALUES (?, ?, ?, ?, ?, ?, 'pending')`,
   );
+  // A mutation is based on the version this machine has seen right now; a create (null) stays null.
+  const baseVersion = normalized.base_version === null ? null : knownGidVersion(db, normalized.gid);
   // Wrap ONLY the insert: participates in a caller transaction via SAVEPOINT,
   // or commits standalone. Returning lastInsertRowid propagates the new seq.
   // The `payload` column stores the JSON of op.payload ONLY (spec 014 schema:
   // "canonical JSON of op.payload"); the other five schema fields live in their
   // own columns. A null payload is stored as the 4-char string "null".
   const insertTxn = db.transaction(() =>
-    Number(insert.run(normalized.gid, normalized.kind, normalized.origin, normalized.base_version, JSON.stringify(normalized.payload), normalized.created_at).lastInsertRowid),
+    Number(insert.run(normalized.gid, normalized.kind, normalized.origin, baseVersion, JSON.stringify(normalized.payload), normalized.created_at).lastInsertRowid),
   );
   return insertTxn();
 }

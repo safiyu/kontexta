@@ -67,6 +67,7 @@ import { markAcked, markFailed, markSent, pendingCount } from "./outbox.js";
 import { applyRemoteOp } from "./apply.js";
 import { UnappliableOpError } from "./errors.js";
 import { forkConflictFromOp } from "./conflicts.js";
+import { bumpPendingBases, knownGidVersions, recordGidVersion } from "./versions.js";
 
 // ---------------------------------------------------------------------------
 // Tunables (spec 1.6)
@@ -373,22 +374,6 @@ export function backoffDelay(
   return Math.min(initialMs * 2 ** exp, maxMs);
 }
 
-/** The server version of `gid` this machine has seen (0 when unknown). */
-function knownGidVersion(db: Database, gid: string): number {
-  const row = db.prepare("SELECT version FROM gid_versions WHERE gid = ?").get(gid) as
-    | { version: number }
-    | undefined;
-  return row?.version ?? 0;
-}
-
-/** Record a server-reported gid version; monotonic. */
-function recordGidVersion(db: Database, gid: string, version: number): void {
-  db.prepare(
-    `INSERT INTO gid_versions (gid, version) VALUES (?, ?)
-     ON CONFLICT(gid) DO UPDATE SET version = MAX(version, excluded.version)`,
-  ).run(gid, version);
-}
-
 /**
  * Ship the due outbox ops to the server and reconcile their delivery state.
  *
@@ -452,16 +437,13 @@ export async function pushOutbox(db: Database, options: PushOptions = {}): Promi
     created_at: number;
   }>;
 
-  // base_version rewrite (spec 1.7): the server version of the gid this machine
-  // has seen (own acks + pulled ops), plus same-batch predecessors (the server
-  // applies a batch in order, so each op is based on everything before it). A
-  // stored `null` (a true create) on a gid at version 0 stays `null`.
+  // The stored base_version was captured when the edit was enqueued; the server applies a batch in order,
+  // so each op is also based on the earlier ops for its gid in this batch. A create (null) with no predecessor stays null.
   const seenInBatch = new Map<string, number>();
   const wire = rows.map((r) => {
     const predecessors = seenInBatch.get(r.gid) ?? 0;
     seenInBatch.set(r.gid, predecessors + 1);
-    const base = knownGidVersion(db, r.gid) + predecessors;
-    const baseVersion = base === 0 && r.base_version === null ? null : base;
+    const baseVersion = r.base_version === null && predecessors === 0 ? null : (r.base_version ?? 0) + predecessors;
     return {
       id: r.id,
       op: {
@@ -537,6 +519,7 @@ export async function pushOutbox(db: Database, options: PushOptions = {}): Promi
 
   const conflicts: Op[] = [];
   let delivered = 0;
+  const knownByGid = knownGidVersions(db, wire.map((w) => w.op.gid));
   for (const w of wire) {
     const r = byClientSeq.get(w.id);
     if (r === undefined) {
@@ -557,7 +540,8 @@ export async function pushOutbox(db: Database, options: PushOptions = {}): Promi
       conflicts.push(w.op);
     }
     markAcked(db, w.id, r.seq);
-    recordGidVersion(db, w.op.gid, r.version ?? knownGidVersion(db, w.op.gid) + 1);
+    recordGidVersion(db, w.op.gid, r.version ?? (knownByGid.get(w.op.gid) ?? 0) + 1);
+    bumpPendingBases(db, w.op.gid, w.id);
     delivered++;
   }
 
