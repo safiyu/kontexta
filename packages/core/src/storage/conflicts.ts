@@ -2,7 +2,7 @@
  * Conflict resolution core engine — Phase 5 (storage/05-conflicts).
  *
  * Spec 1.7 (Conflict Resolution Model):
- *   1. Server Authority: The kontexta-storage-server assigns sequential ordering (seq).
+ *   1. Server Authority: The kontexta-brain-host assigns sequential ordering (seq).
  *      Client clocks are considered untrusted.
  *   2. Detection & Preservation: If an incoming op on the server has a base_version
  *      lower than the current canonical version for that gid, the server flags a conflict.

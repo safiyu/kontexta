@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import Database from "better-sqlite3";
 import type { Hono } from "hono";
-import { createApp } from "../../../../storage-server/src/server.js";
+import { createApp } from "../../../../brain-host/src/server.js";
 import { resetDataDirCache } from "../../../src/util/paths.js";
 import { joinBrain } from "../../../src/storage/brain.js";
 import { bootstrapIfNeeded } from "../../../src/storage/bootstrap.js";
@@ -12,7 +12,7 @@ import { pullRemoteOps, pushOutbox } from "../../../src/storage/client.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const MIGRATIONS = join(here, "..", "..", "..", "src", "db", "migrations");
-const SERVER_SCHEMA = readFileSync(join(here, "..", "..", "..", "..", "storage-server", "src", "db", "schema.sql"), "utf-8");
+const SERVER_SCHEMA = readFileSync(join(here, "..", "..", "..", "..", "brain-host", "src", "db", "schema.sql"), "utf-8");
 
 export const HOST_URL = "http://brain.test";
 

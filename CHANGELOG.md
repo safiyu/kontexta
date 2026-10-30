@@ -1,41 +1,39 @@
 # Changelog
 
-## 6.2.0 - Storage module: multi-machine op-log sync (2026-10-30)
+## 7.0.0 - Brains: one storage architecture, optional remote (2026-10-30)
+
+Everything Kontexta knows about you is now one thing, your **brain**. It lives on your machine as markdown files and SQLite, and you may connect it to a **remote** that holds a durable copy and syncs your machines. One architecture, no separate "local mode".
 
 ### Added
 
-- **Multi-machine sync through a storage server.** Each machine keeps its own vault and exchanges fine-grained ops (files, tags, favorites, projects, calendar, journal) with a `kontexta-storage-server` over short polling. This covers machine identity and global ids, a local outbox, the storage server, the endpoint client and sync loop, and a Conflict Manager (`/conflicts`, top-bar badge, `conflicts_*` MCP tools). Sync is optional and off until `kontexta endpoint connect`.
-- **`kontexta endpoint run`** runs the sync loop in the foreground for machines without the web app. The web app starts the loop at boot and it stays dormant until a machine is connected.
-- **`--enroll-secret`** on `kontexta endpoint connect` (or `KXTA_STORAGE_ENROLL_SECRET`), needed to register a new machine.
-- **Server env vars:** `KXTA_STORAGE_ENROLL_SECRET`, `KXTA_STORAGE_ALLOW_OPEN_ENROLLMENT`, `KXTA_STORAGE_ALLOW_DEFAULT_PEPPER`, and `HOST_BIND` in `docker-compose.storage.yml`.
-- **Migration 016:** `gid_versions` (server version seen per record) and `sync_skipped_ops` (remote ops that could not be applied).
+- **Brains and the brain host.** `kontexta-brain-host` (`npx kontexta-brain-host`, or `docker-compose.brain.yml`) hosts any number of fully separate brains on one server. For each brain it is the durable copy (nothing is ever pruned) and the sync engine between that user's machines. Teammates can share a server; nobody sees another brain.
+- **Share ids.** A brain is identified by a Kontexta-generated share id (52 characters, Crockford base32). Creating a brain needs the server's enrollment secret; joining one needs only its share id. The server stores only a peppered hash of it.
+- **`kontexta brain`** (`connect`, `status`, `share`, `machines`, `disconnect`, `push`, `pull`, `run`) and a **Brain page** in the web app. `connect` creates or joins a brain; `brain machines remove` revokes a lost machine.
+- **Snapshot bootstrap.** A new or replacement machine pulls the brain's current state instead of replaying its history. A machine that already has content keeps matching files and forks a conflict copy where it differs.
+- **Sync loop everywhere.** The web app and the MCP server start the loop at boot (dormant until connected); `kontexta brain run` runs it in the foreground.
+- **`admin_overview`** reports a `brain` block (connected, name, remote, pending, skipped).
+- **Migrations 016 to 019:** per-record, per-kind-family versions (`gid_versions`), `sync_skipped_ops`, the brain settings and a machine secret.
 
 ### Fixed
 
-- **Conflicts now converge.** A machine's base version used to count only its own acked ops, so the first edit of any record that came from another machine was flagged as a conflict, and a resolution was flagged again. Each machine now tracks the server version it has seen per record. The server returns `version` on `POST /ops` and `gid_version` on `GET /ops`.
-- **Conflict copies are created.** Conflict-flagged remote file content used to overwrite the local file, so local edits were lost and the Conflict Manager stayed empty. It now writes a conflict copy and leaves the local file alone.
-- **Automatic sync actually runs.** Nothing started the sync loop before, so only manual `push` and `pull` worked.
-- **A failing remote op no longer blocks sync.** It is recorded in `sync_skipped_ops` and skipped (retried five times first, unless it can never apply). Malformed ops still stop the pull.
-- **Ops no longer use machine-local ids.** Tags, favorites, journal metadata, calendar events and links, and file project links are resolved by global id. Before, they could attach to an unrelated record that had the same local id on another machine. Tags set at file creation now replicate.
-- **Keep-mine, keep-both and merged use the file's current content,** not the content captured when the conflict was detected.
-- **Conflict list is cheap.** Diffs are only computed for a single conflict and are capped, and the top-bar badge polls a count-only endpoint.
-- **Edits are based on what the machine had seen when it made them.** The base version is captured when the edit is enqueued, so a pull that lands before the push can no longer turn a stale edit into an accepted one. A pulled op's version is recorded only after it applied or was skipped.
-- **The losing machine keeps its edit and sees the conflict too.** When your push is flagged as a conflict, the winner's content arrives as a conflict copy instead of overwriting your file. A conflict-flagged delete is never applied. Every resolution, including keep-server, is pushed so machines converge.
-- **Remote files match by id, never by path.** Two machines creating the same path independently now produce a path conflict instead of swapping each other's content.
-- **The watcher no longer syncs conflict copies, and its ops are portable.** Files in project repos never sync, and the old `/knowledge/` path fallback is gone.
-- **Storage server:** the enrollment secret is checked before any machine lookup, so unauthenticated callers can no longer probe machine ids or rename machines.
+- **Conflicts converge, and nobody loses an edit.** Each machine sends the version it had seen when it made the edit (captured at enqueue time, per record and kind family), so edits on top of everything pulled are accepted. The losing machine keeps its file and gets a conflict copy of the winner, conflict-flagged deletes are never applied, and every resolution (including keep-server) is pushed.
+- **Remote files match by id, never by path.** Two machines creating the same path produce a path conflict instead of swapping content.
+- **Tags are full state.** `tag.add` and `tag.remove` became one `tag.set` carrying the file's full tag list, tags set at file creation replicate, and a tag change no longer causes a false content conflict.
+- **Ops use global ids.** Tags, favorites, journal metadata, calendar events and links, and project links are resolved by gid; before, they could attach to an unrelated record with the same local id on another machine.
+- **A failing remote op no longer blocks sync.** It is recorded in `sync_skipped_ops` and skipped (retried five times first, unless it can never apply). Malformed ops still stop the pull, and a mid-page failure keeps the progress already made.
+- **Keep-mine, keep-both and merged use the file's current content,** and conflict diffs are only computed for one conflict at a time and are capped.
+- **The watcher never syncs conflict copies,** and files in project repos never sync.
 
 ### Security
 
-- **Remote ops can no longer write outside the data directory.** File paths travel relative to the data directory and are resolved against each machine's own, and folder ops cannot target the data directory itself. Previously a peer's absolute path was written or deleted as is.
-- **Storage server registration needs an enrollment secret.** `POST /clients` was open and handed out a full-access token. New machines are refused unless `KXTA_STORAGE_ENROLL_SECRET` matches.
-- **`POST /ops` rejects ops whose `origin` is not the authenticated machine.**
-- **The server refuses to start on the default pepper** when bound to a non-loopback address, and the compose file now publishes the port on `127.0.0.1` by default.
+- **Remote ops cannot write outside the data directory.** Paths travel relative to the data directory and are resolved against each machine's own; folder ops cannot target the data directory itself.
+- **The brain host authenticates everything per brain.** Every query is scoped to the brain its token belongs to, `POST /ops` rejects ops whose `origin` is not the authenticated machine, and the server refuses to start on the default pepper when bound beyond loopback. The compose file publishes on `127.0.0.1` by default.
 
-### Changed
+### Breaking
 
-- Op payloads changed shape (`rel_path`, `project_gid`, `entity_gid` and similar replace absolute paths and local ids), so all machines and the server should be upgraded together.
-- `file.*` ops for files outside the data directory (project-repo files) are skipped on other machines. Only knowledge-base files sync.
+- `kontexta endpoint` is removed; use `kontexta brain`. The server package is renamed from `kontexta-storage-server` to `kontexta-brain-host`, the compose file to `docker-compose.brain.yml`, and its environment variables to `KXTA_BRAIN_*`.
+- Op payloads changed shape (relative paths, `project_gid`, `entity_gid`, `tag.set`). The server schema changed and its database is not migrated: start a fresh one. Upgrade all machines and the server together.
+- Files outside the data directory (project-repo files) are never synced; only the knowledge base is.
 
 ### Removed
 

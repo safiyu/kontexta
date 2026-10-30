@@ -15,7 +15,7 @@ export async function register() {
     process.on("SIGTERM", () => scheduler.stop());
     process.on("SIGINT", () => scheduler.stop());
 
-    // Storage sync: dormant until `kontexta endpoint connect` stores credentials.
+    // Storage sync: dormant until `kontexta brain connect` stores credentials.
     const { startSyncLoop, stopSyncLoop, getDatabase } = await import("kxta-core");
     startSyncLoop(getDatabase());
     process.on("SIGTERM", () => stopSyncLoop());

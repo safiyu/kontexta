@@ -1,8 +1,7 @@
 {
-  "name": "kontexta-storage-server",
-  "version": "6.2.0",
-  "description": "Authoritative op-log backend for Kontexta's local-first storage sync",
-  "private": true,
+  "name": "kontexta-brain-host",
+  "version": "7.0.0",
+  "description": "Kontexta brain host: one server hosting many fully separate brains, each the durable copy and sync engine for one user's machines",
   "type": "module",
   "license": "Apache-2.0",
   "author": "Safiyu",
@@ -28,5 +27,21 @@
     "typescript": "^5.7.0",
     "vitest": "^3.0.0"
   },
-  "rulesVersion": "3.2.0"
+  "rulesVersion": "3.2.0",
+  "bin": {
+    "kontexta-brain-host": "dist/server.js"
+  },
+  "files": [
+    "dist",
+    "src/db/schema.sql"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": [
+    "kontexta",
+    "brain",
+    "sync",
+    "mcp"
+  ]
 }

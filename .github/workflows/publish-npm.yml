@@ -54,7 +54,7 @@ jobs:
       - name: Verify tag matches package versions
         run: |
           TAG="${GITHUB_REF_NAME#v}"
-          for MANIFEST in apps/mcp/package.json packages/cli/package.json; do
+          for MANIFEST in apps/mcp/package.json packages/cli/package.json packages/brain-host/package.json; do
             PKG=$(node -p "require('./$MANIFEST').version")
             if [ "$TAG" != "$PKG" ]; then
               echo "::error::Tag $GITHUB_REF_NAME does not match $MANIFEST version $PKG"
@@ -118,6 +118,9 @@ jobs:
 
       - name: Publish kontexta to npm
         run: npx -y npm@latest publish ./packages/cli --access public --provenance
+
+      - name: Publish kontexta-brain-host to npm
+        run: npx -y npm@latest publish ./packages/brain-host --access public --provenance
 
       - name: Extract release notes from CHANGELOG
         id: notes

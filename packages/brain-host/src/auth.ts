@@ -35,7 +35,7 @@ export const TOKEN_BYTES = 32;
 /**
  * The default HMAC pepper. A production deployment MUST override this with a
  * per-instance secret (see the server bootstrap, which reads
- * `KXTA_STORAGE_PEPPER`) — the default exists so local dev and tests run
+ * `KXTA_BRAIN_PEPPER`) — the default exists so local dev and tests run
  * without wiring environment config, and because it is NOT the secret that
  * protects a real deployment.
  */

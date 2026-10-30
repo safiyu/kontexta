@@ -45,7 +45,7 @@
  *   tick failure doubles the sleep from `backoffInitialMs` (1 s) up to
  *   `backoffMaxMs` (5 min); a healthy tick resets the counter. The loop never
  *   owns the DB connection or process lifecycle — it is started by the host
- *   (`kontexta endpoint` / apps) and stopped on shutdown.
+ *   (`kontexta brain` / apps) and stopped on shutdown.
  *
  * All functions take an explicit `db` handle (the caller owns the connection —
  * the storage module's convention) and accept an injectable `fetchImpl`, so
@@ -75,7 +75,7 @@ export const BACKOFF_INITIAL_MS = 1_000;
 export const BACKOFF_MAX_MS = 300_000;
 /**
  * Hard cap on a single POST /ops batch. Mirrors the server's `MAX_OPS_LIMIT`
- * (packages/storage-server/src/routes/ops.ts); a larger outbox drains over
+ * (packages/brain-host/src/routes/ops.ts); a larger outbox drains over
  * successive ticks.
  */
 export const MAX_BATCH_SIZE = 1000;
@@ -687,7 +687,7 @@ export function startSyncLoop(
 
     if (!cfg.connected) {
       // Dormant: no requests at all. Re-check on the idle cadence so a
-      // mid-run `kontexta endpoint connect` is picked up without a restart.
+      // mid-run `kontexta brain connect` is picked up without a restart.
       st.consecutiveFailures = 0;
       st.backoffMs = 0;
       return { phase: "disconnected", push: null, pull: null, nextDelayMs: idleMs };

@@ -25,14 +25,14 @@ import Database from "better-sqlite3";
  * Locate db/schema.sql across the deployment shapes:
  *   * source run (vitest / tsx / dev):  src/db/schema.sql   (sibling of this file)
  *   * tsc build:                        dist/db/index.js    -> ../../src/db/schema.sql
- *   * Docker:                           WORKDIR=/app        -> packages/storage-server/src/db/schema.sql
+ *   * Docker:                           WORKDIR=/app        -> packages/brain-host/src/db/schema.sql
  */
 function resolveSchemaPath(): string {
   const here = dirname(fileURLToPath(import.meta.url));
   const candidates = [
     join(here, "schema.sql"),
     join(here, "..", "..", "src", "db", "schema.sql"),
-    join(process.cwd(), "packages", "storage-server", "src", "db", "schema.sql"),
+    join(process.cwd(), "packages", "brain-host", "src", "db", "schema.sql"),
   ];
   for (const candidate of candidates) {
     if (existsSync(candidate)) return candidate;

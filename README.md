@@ -108,7 +108,7 @@ Kontexta doesn't try to replace your favorite agent or memory library — it sit
 | **Retrieval model** | Whole file dumped into context | Whole file / vendor-managed | Vector + graph (semantic) | Temporal knowledge graph (semantic) | Deterministic FTS5 + regex; surgical section reads |
 | **Token accounting** | None | None | None exposed to agent | None exposed to agent | Every response carries `est_tokens` / `size_bytes` |
 | **Command execution** | N/A | Vendor-defined tools | N/A (memory only) | N/A (memory only) | Sandboxed `Hands` with per-command contracts and approval tokens |
-| **Storage** | Repo file (clutters PRs) | Vendor cloud | Self-host or hosted, vector DB | Self-host or hosted | Local SQLite + markdown vault, with optional multi-machine cloud op-log sync |
+| **Storage** | Repo file (clutters PRs) | Vendor cloud | Self-host or hosted, vector DB | Self-host or hosted | Local SQLite + markdown vault, with an optional remote brain host for backup and multi-machine sync |
 | **Best at** | Static project conventions | Zero-config personal memory | Semantic recall inside one app | Long-running conversational memory | Multi-agent handoff + governed local execution |
 
 **Honest tradeoffs:**
@@ -161,89 +161,87 @@ For containerized deployments, see [`docs/INSTALL.md#docker-hub-compose`](docs/I
 
 ---
 
-## Sync Across Machines (Optional)
+## Your Brain on More Than One Machine (Optional)
 
-Kontexta is local-first: each machine's vault (SQLite + markdown + local git history) is the source of truth for that machine. If you run Kontexta on more than one machine — a laptop and a workstation, two agents on two boxes — you can point them at a shared **storage server** that keeps an authoritative, append-only op log. Machines exchange fine-grained operations (file create / update / delete / move, tags, favorites, projects, calendar, journal) over short polling, so a decision made on one machine appears on the others without ever merging whole repositories or database files.
+Everything Kontexta knows about you and your work (knowledge files, projects, profile, journals, calendar, tags) is your **brain**. It lives on your machine as markdown files and SQLite, and works fully offline. If you use Kontexta on more than one machine, or want a copy that survives a lost laptop, connect your brain to a **remote**.
 
-Sync is **optional**. A machine that has never run `kontexta endpoint connect` simply does not sync. (The legacy Git-remote sync has been removed; this op-log backend is the replacement.)
+A remote hosts any number of brains, each fully separate. For your brain it is two things at once: the durable copy of everything (nothing is ever pruned, a brain remembers) and the sync engine between your machines. Teammates can use the same remote, each with their own brain; nobody sees anyone else's.
 
-### Run the storage server (Docker)
+Machines exchange fine-grained operations (file create, update, delete, move, tags, favorites, projects, calendar, journal) over short polling, so a decision made on one machine appears on the others without merging repositories or database files. A machine that never connects simply works locally.
 
-The storage server is a plain, stateless short-polling HTTP service — no persistent connections, one SQLite file, one published port (`23010`). It is deliberately shaped for serverless hosting (Cloud Run et al.): each poll is a short request that returns fast and drops its socket, so it stays inside free-tier request quotas instead of billing a constantly-warm vCPU.
+### Run a remote (brain host)
 
-Build and start it from the repo root:
+The remote is `kontexta-brain-host`: a plain, stateless short-polling HTTP service with one SQLite file and one port (`23010`). Run it with Node or Docker.
 
 ```bash
-docker compose -f docker-compose.storage.yml up -d --build
+# With Node (any box, VPS or Cloud Run):
+KXTA_BRAIN_PEPPER="$(openssl rand -hex 32)" \
+KXTA_BRAIN_ENROLL_SECRET="$(openssl rand -hex 16)" \
+  npx kontexta-brain-host
+
+# With Docker, from the repo root:
+docker compose -f docker-compose.brain.yml up -d --build
 ```
 
-The server is ready once its health check passes: `http://127.0.0.1:23010/health`.
-
-**Configuration (environment variables):**
+It is ready once `http://127.0.0.1:23010/health` answers.
 
 | Variable | Default | Purpose |
 | :--- | :--- | :--- |
-| `HOST_PORT` | `23010` | Host port published for the storage server. |
-| `HOST_BIND` | `127.0.0.1` | Host address the port is published on. Set `0.0.0.0` only behind TLS and a firewall. |
-| `KXTA_STORAGE_PEPPER` | *(empty)* | HMAC pepper bound into client-token hashes. **Required for any non-loopback deployment.** |
-| `KXTA_STORAGE_ENROLL_SECRET` | *(empty)* | Shared secret a machine must present to register. With no secret set, new machines cannot register. |
-| `KXTA_STORAGE_DB` | `/data/kontexta-storage.db` | Path to the SQLite op log (inside the container). |
-| `KXTA_STORAGE_ALLOW_OPEN_ENROLLMENT` | *(unset)* | Set to `1` to let any caller register (local experiments only). |
-| `KXTA_STORAGE_ALLOW_DEFAULT_PEPPER` | *(unset)* | Set to `1` to start on the public default pepper on a non-loopback host (not recommended). |
+| `PORT` / `HOSTNAME` | `23010` / `0.0.0.0` | Where it listens. |
+| `HOST_PORT` / `HOST_BIND` | `23010` / `127.0.0.1` | Docker compose only: the published port and interface. |
+| `KXTA_BRAIN_PEPPER` | *(empty)* | HMAC pepper bound into token and share id hashes. Required for any non-loopback deployment. |
+| `KXTA_BRAIN_ENROLL_SECRET` | *(empty)* | Secret needed to **create** a brain. Joining an existing brain needs only its share id. |
+| `KXTA_BRAIN_DB` | `/data/kontexta-brain.db` | Path to the SQLite file. |
+| `KXTA_BRAIN_ALLOW_OPEN_CREATE` | *(unset)* | `1` lets anyone create brains (local experiments only). |
+| `KXTA_BRAIN_ALLOW_DEFAULT_PEPPER` | *(unset)* | `1` allows the public default pepper on a non-loopback host (not recommended). |
 
 > [!IMPORTANT]
-> Set both `KXTA_STORAGE_PEPPER` and `KXTA_STORAGE_ENROLL_SECRET` for anything beyond local experimentation. The pepper protects stored token hashes if the database file leaks, and the server refuses to start on the default pepper when bound to a non-loopback address. The enrollment secret stops strangers from registering and reading the op log. Use long random secrets:
->
-> ```bash
-> HOST_PORT=80 HOST_BIND=0.0.0.0 \
-> KXTA_STORAGE_PEPPER="$(openssl rand -hex 32)" \
-> KXTA_STORAGE_ENROLL_SECRET="$(openssl rand -hex 32)" \
->   docker compose -f docker-compose.storage.yml up -d
-> ```
->
-> Every op is bound to the machine that sent it: the server rejects a batch whose `origin` differs from the authenticated machine.
+> Set both `KXTA_BRAIN_PEPPER` and `KXTA_BRAIN_ENROLL_SECRET` for anything beyond local experiments. The server refuses to start on the default pepper when bound beyond loopback, and without the enrollment secret nobody can create a brain. Put TLS in front of it (nginx, Caddy, Cloudflare Tunnel, Cloud Run) as you would for any endpoint that issues credentials.
 
-**Data & persistence.** The op log and the registered-clients table live in the named volume `kontexta-storage-data` (mounted at `/data`), so they survive container recreation and re-runs of `compose up`. To wipe all sync history:
+All brains, their full history and their machines live in one SQLite file (the Docker volume `kontexta-brain-data`). Back that file up; to wipe everything, `docker compose -f docker-compose.brain.yml down -v`.
+
+### Connect a machine (`kontexta brain`)
+
+The share id is what identifies a brain, and it is also the secret for joining it. Kontexta generates it when you create a brain; you paste it on your other machines.
 
 ```bash
-docker compose -f docker-compose.storage.yml down -v
+# First machine: create a brain (prints the share id once, save it):
+kontexta brain connect https://brain.example.com --create --name "My brain" \
+  --enroll-secret "$KXTA_BRAIN_ENROLL_SECRET"
+
+# Another machine (or a replacement for a lost one): join with the share id:
+kontexta brain connect https://brain.example.com --share-id ABCD-EFGH-...
+
+# Brain name, remote, machines, outbox depth, skipped ops, cursor:
+kontexta brain status
+
+# List the machines in your brain, or revoke one:
+kontexta brain machines
+kontexta brain machines remove <machine-id>
+
+# Show the full share id again (asks first):
+kontexta brain share
+
+# Sync on demand, or run the loop in the foreground on a machine without the web app:
+kontexta brain push
+kontexta brain pull
+kontexta brain run
+
+# Stop syncing (everything stays on this machine):
+kontexta brain disconnect
 ```
 
-**Serverless / non-Docker.** The server is also just `node dist/server.js` with the same env vars (`PORT`, `HOSTNAME`, `KXTA_STORAGE_DB`, `KXTA_STORAGE_PEPPER`, `KXTA_STORAGE_ENROLL_SECRET`) — the Dockerfile is a convenience, not a requirement. Point a reverse proxy (nginx, Caddy, Cloudflare Tunnel, Cloud Run) at it and put TLS in front, as you would for any endpoint that issues credentials.
+The same flow is on the **Brain** page of the web app. Add `--json` to any subcommand for machine-readable output. `--no-keep-share-id` keeps the share id off this machine, and `--data-dir` / `--timeout` target a specific vault or bound a request. The Kontexta web app and the MCP server start the sync loop for you once a machine is connected.
 
-### Connect a machine (`kontexta endpoint`)
+**Joining.** Creating a brain on an empty remote makes your current vault its first content. Joining an existing brain on a new machine pulls the brain's current state instead of replaying its history. A machine that already has content keeps files that match, and where a file differs from the brain's version both are kept and a conflict copy appears for you to resolve.
 
-A machine registers itself once to receive a one-time sync token, then ships and polls its outbox against the server. It is all driven by the `kontexta endpoint` CLI:
+**How the cadence works.** A connected machine short-polls: **15 s** while active, **60 s** while idle, and **exponential backoff up to 5 minutes** on failure.
 
-```bash
-# Connect: self-registers (needs the enrollment secret) and stores the one-time token locally:
-kontexta endpoint connect http://127.0.0.1:23010 --enroll-secret "$KXTA_STORAGE_ENROLL_SECRET"
+**Ordering and conflicts.** The remote assigns every op a sequence number, the only source of ordering (client clocks are never trusted). Each machine tracks the version of each record it has seen and sends it with every edit, so an edit made on top of everything the machine has pulled is accepted. When two machines edit the same record without having seen each other's change, the remote keeps both. Neither machine overwrites its own file: each gets a conflict copy next to the canonical file (`<name> (from <machine label>).<ext>`) and lists it in the Conflict Manager, where you choose keep server, keep mine, keep both, or a merged version. Every resolution is pushed so your machines converge. Two machines creating the same path independently produce a path conflict instead of swapping content.
 
-# Show the connection, poll cadence, outbox depth, and sync cursor:
-kontexta endpoint status
+**Portable ops.** Ops never carry machine-local ids or absolute paths. Records are referenced by global id (`<id>@<machine>`), and file paths travel relative to the data directory. A remote op that points outside the data directory is refused, and files in project repos never sync (only your knowledge base does).
 
-# Ship the local outbox to the server:
-kontexta endpoint push
-
-# Poll + apply remote ops since the cursor:
-kontexta endpoint pull
-
-# Run the sync loop in the foreground (headless machines; Ctrl+C to stop):
-kontexta endpoint run
-
-# Stop syncing — clears the stored endpoint + token (the loop goes dormant):
-kontexta endpoint disconnect
-```
-
-Add `--json` to any subcommand for machine-readable output. The enrollment secret can also come from `KXTA_STORAGE_ENROLL_SECRET`. Pass a known token positionally (`kontexta endpoint connect <url> <token>`) to skip self-registration, and use `--data-dir <dir>` / `--timeout <ms>` to target a specific vault or bound a request.
-
-**How the cadence works.** A connected machine short-polls instead of holding a connection open: **15 s** while active (user / agent activity), **60 s** while idle, and **exponential backoff up to 5 minutes** on failure. The Kontexta web app starts this loop automatically once a machine is connected; on a machine without the web app, run `kontexta endpoint run`. You can also drive sync on demand with `push` / `pull` (e.g. from a cron job).
-
-**Ordering & conflicts.** The server assigns each op a monotonic `seq`, the single source of ordering authority. Client clocks are never trusted for ordering (only for display). Each machine tracks the server version it has seen per record and sends it as the op's base version, so an edit made on top of everything the machine has pulled is accepted. When a machine edits a record without having pulled another machine's newer change, the server flags the write as a **conflict** and keeps both versions. A machine that already has the file does not overwrite it: it writes a conflict copy next to the canonical file (`<name> (from <machine label>).<ext>`) and lists it in the Conflict Manager, where you pick keep server, keep mine, keep both, or a merged version. Resolving uses the file's current content, not the content at the time the conflict was detected.
-
-**Portable ops.** Ops never carry machine-local ids or absolute paths. Records are referenced by global id (`<id>@<machine>`), and file paths travel relative to the data directory and are resolved against each machine's own data directory. A remote op that points outside the data directory is refused.
-
-**Skipped ops.** An op that cannot be applied on a machine (an unsafe path, a record that machine does not have) is recorded in the local `sync_skipped_ops` table and skipped, so one bad op cannot block the rest of the log. Other apply errors are retried for a few polls before being skipped the same way. A malformed op still stops the pull so a client and server version mismatch is noticed rather than hidden.
+**Skipped ops.** An op that cannot be applied on a machine (an unsafe path, a record that machine does not have) is recorded in the local `sync_skipped_ops` table and skipped so it cannot block the rest of the log. Other apply errors are retried a few polls first. A malformed op still stops the pull, so a version mismatch between machine and remote is noticed rather than hidden.
 
 ---
 

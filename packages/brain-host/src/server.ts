@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 /**
  * Brain host HTTP bootstrap.
  *
