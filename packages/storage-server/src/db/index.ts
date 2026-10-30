@@ -38,7 +38,7 @@ function resolveSchemaPath(): string {
     if (existsSync(candidate)) return candidate;
   }
   throw new Error(
-    `storage-server: could not locate db/schema.sql; tried:\n${candidates.join("\n")}`,
+    `brain-host: could not locate db/schema.sql; tried:\n${candidates.join("\n")}`,
   );
 }
 
@@ -57,6 +57,15 @@ export function openDatabase(dbPath: string): Database.Database {
   const db = new Database(dbPath);
   db.pragma("journal_mode = WAL");
   db.pragma("busy_timeout = 5000");
+
+  const legacy = db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'ops'").get();
+  if (legacy) {
+    const cols = db.prepare("PRAGMA table_info(ops)").all() as Array<{ name: string }>;
+    if (!cols.some((c) => c.name === "brain_id")) {
+      db.close();
+      throw new Error(`${dbPath} uses the pre-brains layout; delete the file to start fresh (brains are not migrated from it)`);
+    }
+  }
 
   const schema = readFileSync(resolveSchemaPath(), "utf-8");
   db.exec(schema);

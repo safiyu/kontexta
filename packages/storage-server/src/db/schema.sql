@@ -1,67 +1,74 @@
 -- schema.sql
--- Phase 4 (storage/04-server): kontexta-storage-server database schema.
---
--- The AUTHORITATIVE op-log backend for Kontexta's local-first storage sync
--- (spec 1.6-1.7). It is a standalone deployment (Dockerfile +
--- docker-compose.storage.yml) with its OWN SQLite DB under /data — NOT the
--- client's local vault DB. The two schemas are deliberately distinct:
---   * Client (packages/core): outbox + sync_cursor + clients  (migrations 013/014)
---   * Server (this file):     ops (global seq-ordered op log) + clients
---
--- Conventions (mirror core migrations 013/014):
---   * Applied whole at startup via db.exec(); all DDL is idempotent (IF NOT
---     EXISTS) so a re-run never errors.
---   * Time columns are INTEGER ms since epoch (matches Op.created_at and the
---     local outbox) so they compare directly against JS Date.now().
---   * ops.payload is the canonical JSON of op.payload (null payload -> the 4
---     chars "null"), exactly as the local outbox stores it, so an op round-
---     trips through parseOp/deserializeOp unchanged.
---   * No foreign keys: ops.gid / ops.origin are logical refs to records that
---     live on client machines, not local row constraints.
---   * Ordering is the SERVER's authority (spec 1.7): ops.seq is a single
---     AUTOINCREMENT column and the sole source of ordering. Client clocks
---     (ops.created_at) are untrusted and never used to order.
+-- kontexta-brain-host: one server, many fully separate brains.
+-- Every table is scoped by brain_id; nothing is ever pruned (a brain remembers everything).
+-- Time columns are INTEGER ms since epoch. Ordering is the server's: ops.seq is the only order.
+-- No foreign keys: gids and origins are logical references to records that live on machines.
 
--- 1. The authoritative op log. Every op a client POSTs is appended and
---    assigned the next global seq. GET /ops?since=<cursor> serves rows with
---    seq > <cursor> in seq order (the sync-loop hot path); the PK serves that
---    ordering. The six Op schema fields (spec 1.3) are their own columns so
---    the server can filter / order / look up per-gid without decoding payloads.
+CREATE TABLE IF NOT EXISTS brains (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  share_hash TEXT    NOT NULL UNIQUE,   -- peppered HMAC of the share id; the id itself is never stored
+  name       TEXT    NOT NULL,
+  created_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS clients (
+  brain_id      INTEGER NOT NULL,
+  machine_id    TEXT    NOT NULL,
+  hostname      TEXT,
+  token_hash    TEXT    NOT NULL UNIQUE,
+  first_seen_at INTEGER NOT NULL,
+  last_seen_at  INTEGER NOT NULL,
+  acked_seq     INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (brain_id, machine_id)
+);
+
+-- The full op log of every brain, kept forever.
 CREATE TABLE IF NOT EXISTS ops (
-  seq          INTEGER PRIMARY KEY AUTOINCREMENT, -- authoritative global order (server-assigned)
-  gid          TEXT    NOT NULL,                  -- <localId>@<machineId>
-  kind         TEXT    NOT NULL,                  -- one of OP_KINDS (validated by the codec, not here)
-  origin       TEXT    NOT NULL,                  -- originating machine_id (16-hex)
-  base_version INTEGER,                           -- optimistic concurrency; NULL for create ops
-  payload      TEXT    NOT NULL,                  -- canonical JSON of op.payload
-  created_at   INTEGER NOT NULL,                  -- client wall-clock ms (informative; never for ordering)
-  client_seq   INTEGER,                           -- client local outbox id; NULL legal for callers without one
-  status       TEXT    NOT NULL DEFAULT 'accepted'
-             CHECK (status IN ('accepted','conflict')),  -- conflict set when base_version < current version (1.7)
+  seq          INTEGER PRIMARY KEY AUTOINCREMENT,
+  brain_id     INTEGER NOT NULL,
+  gid          TEXT    NOT NULL,
+  kind         TEXT    NOT NULL,
+  kind_family  TEXT    NOT NULL,
+  origin       TEXT    NOT NULL,
+  base_version INTEGER,
+  payload      TEXT    NOT NULL,
+  created_at   INTEGER NOT NULL,
+  client_seq   INTEGER,
+  status       TEXT    NOT NULL DEFAULT 'accepted' CHECK (status IN ('accepted','conflict')),
   received_at  INTEGER NOT NULL DEFAULT (CAST(strftime('%s','now') AS INTEGER)*1000)
 );
+CREATE INDEX IF NOT EXISTS idx_ops_brain_seq ON ops(brain_id, seq);
+CREATE INDEX IF NOT EXISTS idx_ops_brain_gid ON ops(brain_id, gid, kind_family, seq);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_ops_brain_origin_clientseq
+  ON ops(brain_id, origin, client_seq) WHERE client_seq IS NOT NULL;
 
--- Per-gid lookups: conflict detection + per-record history (current version /
--- last seq for a gid). seq is the secondary key so history is seq-ordered.
-CREATE INDEX IF NOT EXISTS idx_ops_gid ON ops(gid, seq);
-
--- Idempotent retry dedup: a given origin machine's given local outbox id is
--- stored at most once, so a retried POST /ops batch never double-stores.
--- Partial, so NULL client_seq (optional / legacy) is free.
-CREATE UNIQUE INDEX IF NOT EXISTS idx_ops_origin_clientseq
-  ON ops(origin, client_seq) WHERE client_seq IS NOT NULL;
-
--- 2. The machines this server knows. One row per machine, keyed on the stable
---    16-hex machine_id (the same identity the client stores in
---    settings.machine_id). token_hash is the scrypt hash of the client's sync
---    token (see auth.ts); the plaintext token is returned ONCE at
---    registration and never stored. Time columns are ms-since-epoch.
-CREATE TABLE IF NOT EXISTS clients (
-  machine_id   TEXT PRIMARY KEY,
-  hostname     TEXT,
-  token_hash   TEXT    NOT NULL,                  -- scrypt hash of the sync token; indexed for O(1) auth
-  first_seen_at INTEGER NOT NULL,
-  last_seen_at  INTEGER NOT NULL
+-- Current state: the latest accepted op per (gid, kind); a tombstone row when the record was deleted.
+CREATE TABLE IF NOT EXISTS records (
+  brain_id    INTEGER NOT NULL,
+  gid         TEXT    NOT NULL,
+  kind        TEXT    NOT NULL,
+  kind_family TEXT    NOT NULL,
+  version     INTEGER NOT NULL,
+  payload     TEXT    NOT NULL,
+  origin      TEXT    NOT NULL,
+  deleted     INTEGER NOT NULL DEFAULT 0,
+  last_seq    INTEGER NOT NULL,
+  updated_at  INTEGER NOT NULL,
+  PRIMARY KEY (brain_id, gid, kind)
 );
-CREATE UNIQUE INDEX IF NOT EXISTS idx_clients_token_hash ON clients(token_hash);
-CREATE INDEX IF NOT EXISTS idx_clients_last_seen ON clients(last_seen_at DESC);
+CREATE INDEX IF NOT EXISTS idx_records_brain_gid ON records(brain_id, gid);
+
+-- Conflict-flagged ops, kept aside until a later accepted op for the same record resolves them.
+CREATE TABLE IF NOT EXISTS conflicts (
+  brain_id     INTEGER NOT NULL,
+  seq          INTEGER NOT NULL,
+  gid          TEXT    NOT NULL,
+  kind         TEXT    NOT NULL,
+  kind_family  TEXT    NOT NULL,
+  origin       TEXT    NOT NULL,
+  base_version INTEGER,
+  payload      TEXT    NOT NULL,
+  created_at   INTEGER NOT NULL,
+  PRIMARY KEY (brain_id, seq)
+);
+CREATE INDEX IF NOT EXISTS idx_conflicts_brain_gid ON conflicts(brain_id, gid, kind_family);

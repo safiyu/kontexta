@@ -62,34 +62,15 @@ export function hashToken(token: string, pepper: string = DEFAULT_PEPPER): strin
   return createHmac("sha256", pepper).update(token, "utf8").digest("hex");
 }
 
-/**
- * Validate a presented token and return the owning machine_id, or `null`.
- *
- * Derives the token's hash and looks it up in `clients` (indexed). A `null`
- * result means the token is unknown — the caller should answer 401. Read-only:
- * it does NOT update `last_seen_at` (the authenticated route owns that
- * bookkeeping).
- */
+/** Resolve a presented token to its brain and machine, or null when unknown. */
 export function validateClientToken(
   db: Database.Database,
   token: string,
   pepper: string = DEFAULT_PEPPER,
-): string | null {
+): { brainId: number; machineId: string } | null {
   if (typeof token !== "string" || token.length === 0) return null;
   const row = db
-    .prepare("SELECT machine_id FROM clients WHERE token_hash = ?")
-    .get(hashToken(token, pepper)) as { machine_id: string } | undefined;
-  return row?.machine_id ?? null;
-}
-
-/**
- * True iff a machine with this stable 16-hex id is already registered with
- * this server. The `POST /clients` route uses it to decide between "issue a
- * new token" and "this machine already has credentials".
- */
-export function isClientKnown(db: Database.Database, machineId: string): boolean {
-  const row = db
-    .prepare("SELECT 1 AS one FROM clients WHERE machine_id = ?")
-    .get(machineId) as { one: number } | undefined;
-  return row != null;
+    .prepare("SELECT brain_id, machine_id FROM clients WHERE token_hash = ?")
+    .get(hashToken(token, pepper)) as { brain_id: number; machine_id: string } | undefined;
+  return row ? { brainId: row.brain_id, machineId: row.machine_id } : null;
 }
