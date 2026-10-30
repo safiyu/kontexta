@@ -8,3 +8,8 @@ export * from "./apply.js";
 export * from "./locks.js";
 export * from "./client.js";
 export * from "./conflicts.js";
+export * from "./brain.js";
+export * from "./shareid.js";
+export * from "./versions.js";
+export * from "./paths.js";
+export * from "./errors.js";

@@ -1,23 +1,15 @@
 /**
- * Endpoint client + adaptive short-polling sync loop — Phase 4 (storage/04-server).
+ * Remote client + adaptive short-polling sync loop.
  *
- * The client half of the wire boundary. Everything here talks to a
- * `kontexta-storage-server` deployment (spec 1.6) over plain, stateless HTTP —
- * no persistent connections (the serverless billing rationale, spec 1.6):
+ * The client half of the wire boundary. Everything here talks to a `kontexta-brain-host` over plain,
+ * stateless HTTP, scoped to this machine's brain by its bearer token:
  *
- *   GET  {endpoint}/health          connect-time probe (unauthenticated)
- *   GET  {endpoint}/ops?since&limit poll remote ops since the cursor (Bearer)
- *   POST {endpoint}/ops             ship the local outbox batch (Bearer)
+ *   GET  {remote}/ops?since&limit&acked  poll remote ops since the cursor
+ *   POST {remote}/ops                    ship the local outbox batch
  *
- * The three concerns and their invariants:
- *
- *   CONFIG — the connection lives in the local `settings` table (migration 015):
- *   `endpoint_url` + `endpoint_token` (both non-empty = connected; the empty
- *   seed means "not connected" and the loop stays dormant) plus the two poll
- *   cadences. `connectEndpoint` VERIFIES the server before persisting (health +
- *   a token probe), so a typo'd URL or token fails loudly at connect time.
- *   `disconnectEndpoint` deletes the two credentials (the loop notices on its
- *   next tick — the config is re-read every tick, never cached).
+ * The connection (remote URL, token, brain share hash) lives in the local `settings` table and is managed
+ * by brain.ts (`joinBrain`, `disconnectBrain`); the loop re-reads it every tick, so connect and disconnect
+ * take effect without a restart, and an unconnected machine simply never syncs.
  *
  *   PUSH — `pushOutbox` drains due outbox rows (`pending`, plus `failed` whose
  *   backoff window elapsed) in local-seq order, marks them `sent`, POSTs the
@@ -26,7 +18,7 @@
  *     * `client_seq` = the outbox id, so a retried batch after a lost ACK is a
  *       server-side no-op (the `(origin, client_seq)` partial unique index) that
  *       returns the ORIGINAL seq — delivery is at-least-once, effect exactly-once.
- *     * `base_version` is REWRITTEN at send time from `gid_versions`: the server
+ *     * `base_version` is captured when the op is enqueued (see versions.ts): the server
  *       version of the gid this machine has seen (own acks + pulled ops), plus
  *       same-batch predecessors. A true create (stored `null`) on a fresh gid
  *       stays `null` (the "no prior state" assertion).
@@ -65,6 +57,9 @@ import type { Database } from "better-sqlite3";
 import { parseOp, type Op } from "./op.js";
 import { markAcked, markFailed, markSent, pendingCount } from "./outbox.js";
 import { applyRemoteOp } from "./apply.js";
+import { fetchJson, describeError, DEFAULT_REQUEST_TIMEOUT_MS, type FetchJsonResult } from "./http.js";
+import { readBrainConfig, settingValue, normalizeBaseUrl, ACTIVE_POLL_INTERVAL_DEFAULT_MS, IDLE_POLL_INTERVAL_DEFAULT_MS } from "./brain.js";
+export { normalizeBaseUrl, DEFAULT_REQUEST_TIMEOUT_MS, ACTIVE_POLL_INTERVAL_DEFAULT_MS, IDLE_POLL_INTERVAL_DEFAULT_MS };
 import { UnappliableOpError } from "./errors.js";
 import { ensureConflictsTable, forkConflictFromOp } from "./conflicts.js";
 import { bumpPendingBases, clearLostPush, hasLostPush, knownGidVersions, markLostPush, recordGidVersion } from "./versions.js";
@@ -73,10 +68,6 @@ import { bumpPendingBases, clearLostPush, hasLostPush, knownGidVersions, markLos
 // Tunables (spec 1.6)
 // ---------------------------------------------------------------------------
 
-/** Active short-poll cadence: 15 s while the machine is active (spec 1.6). */
-export const ACTIVE_POLL_INTERVAL_DEFAULT_MS = 15_000;
-/** Idle short-poll cadence: 60 s when quiet (spec 1.6). */
-export const IDLE_POLL_INTERVAL_DEFAULT_MS = 60_000;
 /** First retry delay after a delivery failure: 1 s (spec 1.6 backoff). */
 export const BACKOFF_INITIAL_MS = 1_000;
 /** Backoff ceiling: 5 minutes (spec 1.6 "exponential backoff up to 5 minutes"). */
@@ -91,248 +82,6 @@ export const MAX_BATCH_SIZE = 1000;
 export const MAX_APPLY_ATTEMPTS = 5;
 /** Floor for a sane poll interval; anything smaller is treated as malformed. */
 const MIN_POLL_INTERVAL_MS = 1_000;
-/** Default per-request timeout (short polls are cheap; a hung socket is a fault). */
-export const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
-
-// ---------------------------------------------------------------------------
-// Endpoint configuration (migration 015 settings)
-// ---------------------------------------------------------------------------
-
-/** The machine's storage-endpoint configuration, read from `settings`. */
-export interface EndpointConfig {
-  /** True iff BOTH `endpoint_url` and `endpoint_token` are non-empty. */
-  connected: boolean;
-  /** The server base URL (normalized, no trailing slash). `""` = not set. */
-  url: string;
-  /** The machine's one-time sync token. `""` = not set. */
-  token: string;
-  /** Active-poll cadence in ms (sanitized; defaults per spec 1.6). */
-  activePollIntervalMs: number;
-  /** Idle-poll cadence in ms (sanitized; defaults per spec 1.6). */
-  idlePollIntervalMs: number;
-}
-
-function settingValue(db: Database, key: string): string | null {
-  const row = db
-    .prepare("SELECT value FROM settings WHERE key = ?")
-    .get(key) as { value: string } | undefined;
-  return row ? row.value : null;
-}
-
-/** Upsert a setting (same shape as metadata/settings.ts `setSetting`). */
-function settingUpsert(db: Database, key: string, value: string): void {
-  db.prepare(
-    `INSERT INTO settings (key, value, updated_at)
-     VALUES (?, ?, datetime('now'))
-     ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
-  ).run(key, value);
-}
-
-function settingDelete(db: Database, key: string): void {
-  db.prepare("DELETE FROM settings WHERE key = ?").run(key);
-}
-
-/**
- * Parse a persisted poll interval. Malformed values (non-integer, below the
- * 1 s floor, empty) fall back to `fallback` rather than throwing — a corrupt
- * setting must never wedge the sync loop.
- */
-function parseInterval(raw: string | null, fallback: number): number {
-  if (raw === null || raw === "") return fallback;
-  const n = Number(raw);
-  return Number.isInteger(n) && n >= MIN_POLL_INTERVAL_MS ? n : fallback;
-}
-
-/**
- * Normalize a user-supplied endpoint URL: trim, require an explicit http(s)
- * scheme, strip trailing slashes. Anything else throws — `connectEndpoint`
- * refuses to persist a URL it cannot talk to.
- */
-export function normalizeBaseUrl(raw: string): string {
-  if (typeof raw !== "string" || raw.trim() === "") {
-    throw new Error("normalizeBaseUrl: URL must be a non-empty string");
-  }
-  let u: URL;
-  try {
-    u = new URL(raw.trim());
-  } catch {
-    throw new Error(`normalizeBaseUrl: not a valid URL: "${raw}"`);
-  }
-  if (u.protocol !== "http:" && u.protocol !== "https:") {
-    throw new Error(
-      `normalizeBaseUrl: unsupported protocol "${u.protocol}" (http/https only)`,
-    );
-  }
-  return u.toString().replace(/\/+$/, "");
-}
-
-/**
- * Read the endpoint configuration from `settings` (migration 015).
- * `connected` is false whenever either credential is missing/empty — a
- * machine that never ran `kontexta endpoint connect` simply does not sync.
- */
-export function readEndpointConfig(db: Database): EndpointConfig {
-  const url = settingValue(db, "endpoint_url") ?? "";
-  const token = settingValue(db, "endpoint_token") ?? "";
-  return {
-    connected: url.length > 0 && token.length > 0,
-    url,
-    token,
-    activePollIntervalMs: parseInterval(
-      settingValue(db, "poll_active_interval_ms"),
-      ACTIVE_POLL_INTERVAL_DEFAULT_MS,
-    ),
-    idlePollIntervalMs: parseInterval(
-      settingValue(db, "poll_idle_interval_ms"),
-      IDLE_POLL_INTERVAL_DEFAULT_MS,
-    ),
-  };
-}
-
-export interface ConnectEndpointOptions {
-  /** Injectable fetch (tests). Defaults to `globalThis.fetch`. */
-  fetchImpl?: typeof fetch;
-  /** Abort the verification probes. */
-  signal?: AbortSignal;
-  /** Per-request timeout in ms (default {@link DEFAULT_REQUEST_TIMEOUT_MS}). */
-  requestTimeoutMs?: number;
-}
-
-/**
- * Verify a storage endpoint and persist the connection.
- *
- * Sequence (all-or-nothing — nothing is persisted unless BOTH probes pass):
- *   1. `GET {url}/health` must answer 200 (and, if it identifies itself, must
- *      be a `kontexta-storage-server` — a 200 from some other service is a
- *      misconfiguration, not a success).
- *   2. `GET {url}/ops?since=0&limit=1` with `Bearer <token>` must NOT answer
- *      401/403 — the token is valid, so the machine is registered.
- *
- * Only then are `endpoint_url` (normalized) and `endpoint_token` upserted into
- * `settings`. Re-connecting to a different endpoint overwrites the previous
- * credentials; the running sync loop picks the change up on its next tick.
- *
- * @throws if the URL is not http(s), the token is empty, the server is
- *   unreachable, the health check fails, or the server rejects the token.
- */
-export async function connectEndpoint(
-  db: Database,
-  endpointUrl: string,
-  endpointToken: string,
-  options: ConnectEndpointOptions = {},
-): Promise<void> {
-  const url = normalizeBaseUrl(endpointUrl);
-  const token = typeof endpointToken === "string" ? endpointToken.trim() : "";
-  if (token === "") {
-    throw new Error("connectEndpoint: endpoint token must be a non-empty string");
-  }
-  const fetchImpl = options.fetchImpl ?? globalThis.fetch;
-
-  const health = await fetchJson(fetchImpl, `${url}/health`, options.signal, {
-    timeoutMs: options.requestTimeoutMs,
-  });
-  if (health.status !== 200) {
-    throw new Error(`connectEndpoint: health check failed (HTTP ${health.status})`);
-  }
-  const service = (health.body as { service?: unknown } | null)?.service;
-  if (typeof service === "string" && service !== "kontexta-storage-server") {
-    throw new Error(`connectEndpoint: unexpected service at ${url} ("${service}")`);
-  }
-
-  const probe = await fetchJson(
-    fetchImpl,
-    `${url}/ops?since=0&limit=1`,
-    options.signal,
-    {
-      headers: { authorization: `Bearer ${token}` },
-      timeoutMs: options.requestTimeoutMs,
-    },
-  );
-  if (probe.status === 401 || probe.status === 403) {
-    throw new Error(
-      "connectEndpoint: the server rejected the token (HTTP 401) — is this machine registered (POST /clients)?",
-    );
-  }
-  if (probe.status !== 200) {
-    throw new Error(`connectEndpoint: token probe failed (HTTP ${probe.status})`);
-  }
-
-  settingUpsert(db, "endpoint_url", url);
-  settingUpsert(db, "endpoint_token", token);
-}
-
-/**
- * Clear the endpoint credentials (the `kontexta endpoint disconnect` action).
- * The poll cadences are left alone. A running sync loop notices on its next
- * tick and goes dormant (no requests are sent while disconnected).
- */
-export function disconnectEndpoint(db: Database): void {
-  settingDelete(db, "endpoint_url");
-  settingDelete(db, "endpoint_token");
-}
-
-// ---------------------------------------------------------------------------
-// HTTP helper (shared by connect / push / pull)
-// ---------------------------------------------------------------------------
-
-/** A decoded HTTP response (non-2xx bodies are kept as text for diagnostics). */
-interface FetchJsonResult {
-  status: number;
-  /** Parsed JSON body (null when the body was not valid JSON). */
-  body: unknown;
-  /** Raw body text (for error diagnostics). */
-  text: string;
-}
-
-/** One fetch with a timeout and JSON decode; network errors THROW. */
-async function fetchJson(
-  fetchImpl: typeof fetch,
-  url: string,
-  signal: AbortSignal | undefined,
-  init: {
-    headers?: Record<string, string>;
-    body?: string;
-    timeoutMs?: number;
-  } = {},
-): Promise<FetchJsonResult> {
-  const ctrl = new AbortController();
-  const timeoutMs = init.timeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
-  const timer = setTimeout(() => ctrl.abort(new Error("request timed out")), timeoutMs);
-  // Forward an external abort signal into this request.
-  const onExternalAbort = (): void => ctrl.abort(signal?.reason);
-  signal?.addEventListener("abort", onExternalAbort, { once: true });
-  try {
-    const res = await fetchImpl(url, {
-      method: init.body === undefined ? "GET" : "POST",
-      headers: init.headers,
-      body: init.body,
-      signal: ctrl.signal,
-    });
-    const text = await res.text();
-    let body: unknown = null;
-    if (text !== "") {
-      try {
-        body = JSON.parse(text);
-      } catch {
-        body = null;
-      }
-    }
-    return { status: res.status, body, text };
-  } finally {
-    clearTimeout(timer);
-    signal?.removeEventListener("abort", onExternalAbort);
-  }
-}
-
-/** A short, single-line description of an unknown thrown value. */
-function describeError(err: unknown): string {
-  if (err instanceof Error) {
-    return err.name === "AbortError" || /timed out|aborted/i.test(err.message)
-      ? `request aborted or timed out (${err.message})`
-      : err.message;
-  }
-  return String(err);
-}
 
 // ---------------------------------------------------------------------------
 // Outbox push
@@ -393,7 +142,7 @@ export function backoffDelay(
  * the sync loop (and the CLI `endpoint push`) can react uniformly.
  */
 export async function pushOutbox(db: Database, options: PushOptions = {}): Promise<PushResult> {
-  const cfg = readEndpointConfig(db);
+  const cfg = readBrainConfig(db);
   if (!cfg.connected) {
     return { attempted: 0, delivered: 0, conflicts: [], error: "not connected" };
   }
@@ -474,7 +223,7 @@ export async function pushOutbox(db: Database, options: PushOptions = {}): Promi
 
   let res: FetchJsonResult;
   try {
-    res = await fetchJson(fetchImpl, `${cfg.url}/ops`, options.signal, {
+    res = await fetchJson(fetchImpl, `${cfg.remoteUrl}/ops`, options.signal, {
       headers: {
         authorization: `Bearer ${cfg.token}`,
         "content-type": "application/json",
@@ -654,7 +403,7 @@ function recordApplyFailure(db: Database, seq: number, op: Op, err: unknown): bo
  *   * The cursor advances only after a whole page applied cleanly.
  */
 export async function pullRemoteOps(db: Database, options: PullOptions = {}): Promise<PullResult> {
-  const cfg = readEndpointConfig(db);
+  const cfg = readBrainConfig(db);
   if (!cfg.connected) {
     return {
       polled: 0,
@@ -683,7 +432,7 @@ export async function pullRemoteOps(db: Database, options: PullOptions = {}): Pr
     try {
       res = await fetchJson(
         fetchImpl,
-        `${cfg.url}/ops?since=${cursor}&limit=${pageLimit}`,
+        `${cfg.remoteUrl}/ops?since=${cursor}&limit=${pageLimit}&acked=${cursor}`,
         options.signal,
         {
           headers: { authorization: `Bearer ${cfg.token}` },
@@ -841,7 +590,7 @@ export interface SyncTickResult {
   /**
    * `ok` = a healthy round-trip; `backoff` = a failure (sleep = the backoff
    * delay); `disconnected` = no endpoint configured (dormant; re-checks on the
-   * idle cadence so a mid-run `connectEndpoint` is picked up).
+   * idle cadence so a mid-run `joinBrain` is picked up).
    */
   phase: "ok" | "backoff" | "disconnected";
   push: PushResult | null;
@@ -918,9 +667,9 @@ export function startSyncLoop(
 
   const tick = async (): Promise<SyncTickResult> => {
     // The config is re-read EVERY tick (never cached): a mid-run
-    // connectEndpoint / disconnectEndpoint / poll-interval change takes effect
+    // joinBrain / disjoinBrain / poll-interval change takes effect
     // on the very next tick, with no loop restart.
-    const cfg = readEndpointConfig(db);
+    const cfg = readBrainConfig(db);
     const activeMs = options.activePollIntervalMs ?? cfg.activePollIntervalMs;
     const idleMs = options.idlePollIntervalMs ?? cfg.idlePollIntervalMs;
 
@@ -1016,7 +765,7 @@ export function startSyncLoop(
     },
     tick,
     state() {
-      const cfg = readEndpointConfig(db);
+      const cfg = readBrainConfig(db);
       return {
         running,
         connected: cfg.connected,

@@ -3,15 +3,11 @@
  *
  * Contract pinned here (spec 1.6–1.7):
  *
- *   CONFIG — the connection lives in `settings` (migration 015). `connectEndpoint`
- *     VERIFIES the server (health + token probe) BEFORE persisting; a failed
- *     probe persists nothing. `disconnectEndpoint` deletes the credentials and
- *     the loop goes dormant on its next tick (config is re-read every tick).
+ *   CONFIG — see brain.test.ts (join, disconnect, brain settings).
  *
  *   PUSH — due outbox rows drain in local-seq order; `client_seq` = the outbox
  *     id (idempotent retries); `base_version` is rewritten at send time from
- *     the local per-gid high-water mark (the server's spec-1.7 client
- *     protocol); success acks with the server seq, failure marks `failed` with
+ *     the base captured at enqueue time plus same-batch predecessors; success acks with the server seq, failure marks `failed` with
  *     attempt counter + exponential backoff (1 s → 5 min); orphaned `sent`
  *     rows (crash mid-POST) are re-queued.
  *
@@ -43,9 +39,6 @@ import {
   MAX_APPLY_ATTEMPTS,
   backoffDelay,
   normalizeBaseUrl,
-  readEndpointConfig,
-  connectEndpoint,
-  disconnectEndpoint,
   pushOutbox,
   pullRemoteOps,
   getSyncCursor,
@@ -88,8 +81,9 @@ function setEndpoint(db: Database, url = "https://store.test", token = "tok-1"):
   const up = db.prepare(
     "INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, datetime('now'))",
   );
-  up.run("endpoint_url", url);
-  up.run("endpoint_token", token);
+  up.run("remote_url", url);
+  up.run("remote_token", token);
+  up.run("brain_share_hash", "testbrain");
 }
 
 interface RecordedRequest {
@@ -184,133 +178,6 @@ describe("storage client (M68)", () => {
       expect(() => normalizeBaseUrl("ftp://store.example.com")).toThrow(/protocol/);
       expect(() => normalizeBaseUrl("not a url")).toThrow(/valid URL/);
       expect(() => normalizeBaseUrl("")).toThrow(/non-empty/);
-    });
-  });
-
-  describe("readEndpointConfig (migration 015 settings)", () => {
-    it("reports disconnected with the spec-1.6 cadence defaults on a fresh vault", () => {
-      const cfg = readEndpointConfig(db);
-      expect(cfg.connected).toBe(false);
-      expect(cfg.url).toBe("");
-      expect(cfg.token).toBe("");
-      expect(cfg.activePollIntervalMs).toBe(15_000);
-      expect(cfg.idlePollIntervalMs).toBe(60_000);
-    });
-
-    it("reports connected only when BOTH credentials are non-empty", () => {
-      setEndpoint(db);
-      expect(readEndpointConfig(db).connected).toBe(true);
-      expect(readEndpointConfig(db).url).toBe("https://store.test");
-      expect(readEndpointConfig(db).token).toBe("tok-1");
-
-      db.prepare("DELETE FROM settings WHERE key = 'endpoint_token'").run();
-      expect(readEndpointConfig(db).connected).toBe(false);
-
-      db.prepare("DELETE FROM settings WHERE key = 'endpoint_url'").run();
-      db.prepare("INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('endpoint_token', 'tok-1', datetime('now'))").run();
-      expect(readEndpointConfig(db).connected).toBe(false); // token alone is not a connection
-    });
-
-    it("falls back to defaults for malformed poll intervals (never wedges the loop)", () => {
-      const up = db.prepare(
-        "INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, datetime('now'))",
-      );
-      up.run("poll_active_interval_ms", "not-a-number");
-      up.run("poll_idle_interval_ms", "250"); // below the 1 s floor
-      const cfg = readEndpointConfig(db);
-      expect(cfg.activePollIntervalMs).toBe(15_000);
-      expect(cfg.idlePollIntervalMs).toBe(60_000);
-
-      up.run("poll_active_interval_ms", "7000");
-      up.run("poll_idle_interval_ms", "120000");
-      expect(readEndpointConfig(db).activePollIntervalMs).toBe(7_000);
-      expect(readEndpointConfig(db).idlePollIntervalMs).toBe(120_000);
-    });
-  });
-
-  describe("connectEndpoint (verify-then-persist)", () => {
-    it("persists the normalized URL + token after a passing health + token probe", async () => {
-      const { fetch, calls } = fakeFetch((url) => {
-        if (url.endsWith("/health")) return { status: 200, body: { status: "ok", service: "kontexta-storage-server" } };
-        if (url.includes("/ops?since=0&limit=1")) return { status: 200, body: { ops: [], next: 0 } };
-        return { status: 404 };
-      });
-      await connectEndpoint(db, "https://store.example.com///", "  tok-abc  ", { fetchImpl: fetch });
-
-      const cfg = readEndpointConfig(db);
-      expect(cfg.connected).toBe(true);
-      expect(cfg.url).toBe("https://store.example.com");
-      expect(cfg.token).toBe("tok-abc");
-      // Exactly two probes: health (unauthenticated) then the token probe (Bearer).
-      expect(calls.length).toBe(2);
-      expect(calls[0].url).toBe("https://store.example.com/health");
-      expect(calls[1].url).toBe("https://store.example.com/ops?since=0&limit=1");
-      expect((calls[1].init?.headers as Record<string, string>).authorization).toBe("Bearer tok-abc");
-    });
-
-    it("persists NOTHING when the health check fails (non-200)", async () => {
-      const { fetch } = fakeFetch(() => ({ status: 503, raw: "unavailable" }));
-      await expect(connectEndpoint(db, "https://store.example.com", "tok", { fetchImpl: fetch }))
-        .rejects.toThrow(/health check failed \(HTTP 503\)/);
-      expect(readEndpointConfig(db).connected).toBe(false);
-    });
-
-    it("persists NOTHING when the server is not a kontexta-storage-server", async () => {
-      const { fetch } = fakeFetch((url) =>
-        url.endsWith("/health") ? { status: 200, body: { status: "ok", service: "some-other-service" } } : { status: 200, body: {} },
-      );
-      await expect(connectEndpoint(db, "https://store.example.com", "tok", { fetchImpl: fetch }))
-        .rejects.toThrow(/unexpected service/);
-      expect(readEndpointConfig(db).connected).toBe(false);
-    });
-
-    it("persists NOTHING when the server rejects the token (401)", async () => {
-      const { fetch } = fakeFetch((url) =>
-        url.endsWith("/health") ? { status: 200, body: { service: "kontexta-storage-server" } } : { status: 401, body: { error: "unauthorized" } },
-      );
-      await expect(connectEndpoint(db, "https://store.example.com", "bad-token", { fetchImpl: fetch }))
-        .rejects.toThrow(/rejected the token/);
-      expect(readEndpointConfig(db).connected).toBe(false);
-    });
-
-    it("persists NOTHING when the network is unreachable", async () => {
-      const { fetch } = fakeFetch(() => {
-        throw new TypeError("fetch failed");
-      });
-      await expect(connectEndpoint(db, "https://store.example.com", "tok", { fetchImpl: fetch }))
-        .rejects.toThrow();
-      expect(readEndpointConfig(db).connected).toBe(false);
-    });
-
-    it("rejects an empty token before touching the network", async () => {
-      const { fetch, calls } = fakeFetch(() => ({ status: 200, body: {} }));
-      await expect(connectEndpoint(db, "https://store.example.com", "   ", { fetchImpl: fetch }))
-        .rejects.toThrow(/token must be a non-empty/);
-      expect(calls.length).toBe(0);
-    });
-
-    it("overwrites a previous connection when re-connecting elsewhere", async () => {
-      setEndpoint(db, "https://old.example.com", "old-token");
-      const { fetch } = fakeFetch((url) =>
-        url.endsWith("/health") ? { status: 200, body: { service: "kontexta-storage-server" } } : { status: 200, body: { ops: [], next: 0 } },
-      );
-      await connectEndpoint(db, "https://new.example.com/", "new-token", { fetchImpl: fetch });
-      const cfg = readEndpointConfig(db);
-      expect(cfg.url).toBe("https://new.example.com");
-      expect(cfg.token).toBe("new-token");
-    });
-  });
-
-  describe("disconnectEndpoint", () => {
-    it("deletes both credentials and leaves the poll cadences intact", async () => {
-      setEndpoint(db, "https://store.example.com", "tok");
-      db.prepare("INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('poll_active_interval_ms', '7000', datetime('now'))").run();
-      disconnectEndpoint(db);
-      const cfg = readEndpointConfig(db);
-      expect(cfg.connected).toBe(false);
-      expect(cfg.url).toBe("");
-      expect(cfg.token).toBe("");
-      expect(cfg.activePollIntervalMs).toBe(7_000); // cadence survives
     });
   });
 
