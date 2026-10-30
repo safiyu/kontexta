@@ -69,6 +69,25 @@ function recordSkip(db: Database, seq: number, op: Op, err: unknown): void {
   ).run(seq, op.gid, op.kind, op.origin, describeError(err), Date.now());
 }
 
+interface Deferred {
+  op: Op;
+  seq: number;
+  version: number | null;
+}
+
+/** True when the op references a project or calendar entity this machine does not have yet. */
+function dependsOnMissing(db: Database, op: Op): boolean {
+  const p = op.payload as Record<string, unknown>;
+  const missing = (table: "projects" | "calendar_entities", gid: unknown): boolean =>
+    typeof gid === "string" && gid !== "" && db.prepare(`SELECT 1 FROM ${table} WHERE gid = ?`).get(gid) === undefined;
+  return (
+    missing("projects", p.project_gid) ||
+    missing("calendar_entities", p.entity_gid) ||
+    missing("calendar_entities", p.from_entity_gid) ||
+    missing("calendar_entities", p.to_entity_gid)
+  );
+}
+
 /** Runs once after a join; returns null when nothing is pending. Throws on a network or HTTP failure so it can be retried. */
 export async function bootstrapIfNeeded(db: Database, opts: BootstrapOptions = {}): Promise<BootstrapResult | null> {
   const cfg = readBrainConfig(db);
@@ -78,10 +97,45 @@ export async function bootstrapIfNeeded(db: Database, opts: BootstrapOptions = {
   const mode: "empty" | "merge" = (db.prepare("SELECT COUNT(*) AS n FROM files").get() as { n: number }).n === 0 ? "empty" : "merge";
 
   let after = settingValue(db, "brain_bootstrap_after") ?? "";
+  // The cursor is taken from the FIRST page of the whole bootstrap, so ops that land while paging are pulled afterwards.
+  let latest = Number(settingValue(db, "brain_bootstrap_latest") ?? 0);
+  let deferred: Deferred[] = [];
+  try {
+    deferred = JSON.parse(settingValue(db, "brain_bootstrap_deferred") ?? "[]") as Deferred[];
+  } catch {}
   let applied = 0;
   let forked = 0;
   let skipped = 0;
-  let latest = 0;
+
+  const saveDeferred = (): void => settingUpsert(db, "brain_bootstrap_deferred", JSON.stringify(deferred));
+
+  /** Apply one snapshot record; ops whose project or entity has not arrived yet wait for the final pass. */
+  const processRecord = async (op: Op, seq: number, version: number | null, finalPass: boolean): Promise<void> => {
+    if (!finalPass && dependsOnMissing(db, op)) {
+      deferred.push({ op, seq, version });
+      saveDeferred();
+      return;
+    }
+    try {
+      const local = isContentOp(op) ? localFile(db, op.gid) : undefined;
+      if (mode === "merge" && local) {
+        const payload = op.payload as { content?: unknown; content_hash?: unknown };
+        const remoteHash = typeof payload.content_hash === "string" ? payload.content_hash : sha256(typeof payload.content === "string" ? payload.content : "");
+        if (local.content_hash !== remoteHash) {
+          forkConflictFromOp(op, db, { serverSeq: seq });
+          forked++;
+        }
+      } else {
+        await applyRemoteOp(op, { db });
+        applied++;
+      }
+    } catch (err) {
+      if (!(err instanceof UnappliableOpError)) throw err;
+      recordSkip(db, seq, op, err);
+      skipped++;
+    }
+    if (version !== null) recordGidVersion(db, op.gid, kindFamily(op.kind), version);
+  };
 
   for (;;) {
     const res = await fetchJson(
@@ -94,7 +148,10 @@ export async function bootstrapIfNeeded(db: Database, opts: BootstrapOptions = {
     if (res.status !== 200 || !body || !Array.isArray(body.gids)) {
       throw new Error(`bootstrap: snapshot request failed (HTTP ${res.status})`);
     }
-    if (typeof body.latest_seq === "number") latest = Math.max(latest, body.latest_seq);
+    if (settingValue(db, "brain_bootstrap_latest") === null && typeof body.latest_seq === "number") {
+      latest = body.latest_seq;
+      settingUpsert(db, "brain_bootstrap_latest", String(latest));
+    }
 
     for (const entry of body.gids as Array<{ gid: string; records: Array<Record<string, unknown>>; conflicts: Array<Record<string, unknown>> }>) {
       for (const rec of entry.records) {
@@ -104,30 +161,15 @@ export async function bootstrapIfNeeded(db: Database, opts: BootstrapOptions = {
           skipped++;
           continue;
         }
-        const seq = typeof rec.seq === "number" ? rec.seq : 0;
-        try {
-          const local = isContentOp(op) ? localFile(db, op.gid) : undefined;
-          if (mode === "merge" && local) {
-            const payload = op.payload as { content?: unknown; content_hash?: unknown };
-            const remoteHash = typeof payload.content_hash === "string" ? payload.content_hash : sha256(typeof payload.content === "string" ? payload.content : "");
-            if (local.content_hash !== remoteHash) {
-              forkConflictFromOp(op, db, { serverSeq: seq });
-              forked++;
-            }
-          } else {
-            await applyRemoteOp(op, { db });
-            applied++;
-          }
-        } catch (err) {
-          if (!(err instanceof UnappliableOpError)) throw err;
-          recordSkip(db, seq, op, err);
-          skipped++;
-        }
-        if (typeof rec.version === "number") recordGidVersion(db, op.gid, kindFamily(op.kind), rec.version);
+        await processRecord(op, typeof rec.seq === "number" ? rec.seq : 0, typeof rec.version === "number" ? rec.version : null, false);
       }
       for (const c of entry.conflicts) {
         const op = toOp(c);
-        if (op === null || !isContentOp(op) || !localFile(db, op.gid)) continue;
+        const local = op === null ? undefined : localFile(db, op.gid);
+        if (op === null || !isContentOp(op) || !local) continue;
+        // A parked op whose content already matches the canonical file has nothing left to resolve.
+        const hash = (op.payload as { content_hash?: unknown }).content_hash;
+        if (typeof hash === "string" && hash === local.content_hash) continue;
         try {
           forkConflictFromOp(op, db, { serverSeq: typeof c.seq === "number" ? c.seq : undefined });
           forked++;
@@ -142,9 +184,16 @@ export async function bootstrapIfNeeded(db: Database, opts: BootstrapOptions = {
     if (typeof body.next !== "string") break;
   }
 
+  // Projects and entities have all arrived by now, so the ops that waited for them can apply.
+  const waiting = deferred;
+  deferred = [];
+  for (const d of waiting) await processRecord(d.op, d.seq, d.version, true);
+
   db.prepare("UPDATE sync_cursor SET last_seq = MAX(last_seq, ?), updated_at = ? WHERE id = 1").run(latest, Date.now());
   settingDelete(db, "brain_bootstrap_pending");
   settingDelete(db, "brain_bootstrap_after");
+  settingDelete(db, "brain_bootstrap_latest");
+  settingDelete(db, "brain_bootstrap_deferred");
   const cursor = (db.prepare("SELECT last_seq FROM sync_cursor WHERE id = 1").get() as { last_seq: number }).last_seq;
   return { mode, applied, forked, skipped, cursor };
 }

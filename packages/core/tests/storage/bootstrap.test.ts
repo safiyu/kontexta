@@ -123,4 +123,94 @@ describe("bootstrap", () => {
     expect(settingValue(b.db, "brain_bootstrap_pending")).toBeNull();
     void settingUpsert;
   });
+
+  it("does not fork a parked conflict whose content already matches the canonical file", async () => {
+    host = createHost();
+    const a = mk(A, "laptop-a");
+    const b = mk(B, "laptop-b");
+    use(a);
+    const pathA = seedFile(a, "same.md", "v1", 1);
+    const share = await connect(a, host, { create: true });
+    await connect(b, host, { shareId: share });
+    const gid = `1@${A}`;
+    const upd = (m: Machine, content: string, p: string) =>
+      enqueueOp(m.db, { gid, kind: "file.update", origin: m.id, base_version: 0, payload: { path: p, rel_path: "knowledge/same.md", title: "same.md", content, content_hash: sha(content) }, created_at: Date.now() });
+    upd(a, "same text", pathA);
+    upd(b, "same text", join(b.dir, "knowledge", "same.md"));
+    await sync(a, host);
+    await sync(b, host); // identical content flagged as a conflict on the server
+    const c = mk(C, "replacement");
+    await connect(c, host, { shareId: share });
+    use(c);
+    expect(readFileSync(join(c.dir, "knowledge", "same.md"), "utf8")).toBe("same text");
+    expect(countUnresolvedConflicts(c.db)).toBe(0);
+  });
+
+  it("ops that land while paging are pulled afterwards instead of being skipped by the cursor", async () => {
+    host = createHost();
+    const a = mk(A, "laptop-a");
+    seedFile(a, "one.md", "1", 1);
+    seedFile(a, "two.md", "2", 2);
+    const share = await connect(a, host, { create: true });
+    const b = mk(B, "laptop-b");
+    use(b);
+    const { joinBrain } = await import("../../src/storage/brain.js");
+    await joinBrain(b.db, "http://brain.test", { shareId: share, hostname: "b", fetchImpl: host.fetch });
+    let injected = false;
+    const racing = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const res = await host.fetch(input, init);
+      if (!injected && String(input).includes("/brains/snapshot")) {
+        injected = true;
+        // A lands an edit to the gid on page 1 right after B fetched the first page.
+        const path = join(a.dir, "knowledge", "one.md");
+        enqueueOp(a.db, { gid: `1@${A}`, kind: "file.update", origin: A, base_version: 0, payload: { path, rel_path: "knowledge/one.md", title: "one.md", content: "edited mid-bootstrap", content_hash: sha("edited mid-bootstrap") }, created_at: Date.now() });
+        use(a);
+        await sync(a, host);
+        use(b);
+      }
+      return res;
+    }) as typeof fetch;
+    await bootstrapIfNeeded(b.db, { fetchImpl: racing, pageLimit: 1 });
+    await sync(b, host);
+    expect(readFileSync(join(b.dir, "knowledge", "one.md"), "utf8")).toBe("edited mid-bootstrap");
+  });
+});
+
+import { createDatabase, closeDatabase } from "../../src/db/index.js";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+
+describe("bootstrap dependents", () => {
+  it("applies a calendar event whose entity sorts after it in the snapshot", async () => {
+    host = createHost();
+    const a = mk(A, "laptop-a");
+    // "12@..." sorts before "3@..." as a string, so the event is paged before its entity.
+    enqueueOp(a.db, { gid: `3@${A}`, kind: "calendar.entity.upsert", origin: A, base_version: null, payload: { name: "Alice", deleted: false }, created_at: 1 });
+    enqueueOp(a.db, {
+      gid: `12@${A}`, kind: "calendar.event.upsert", origin: A, base_version: null,
+      payload: { entity_gid: `3@${A}`, type: "meeting", title: "Sync", starts_at: "2026-10-15T14:00:00Z", ends_at: "2026-10-15T15:00:00Z", deleted: false },
+      created_at: 2,
+    });
+    const share = await connect(a, host, { create: true });
+
+    // The calendar repository writes through the process-wide database, so the joining machine uses it.
+    const dir = mkdtempSync(join(tmpdir(), "kxta-dep-"));
+    process.env.KONTEXTA_DATA_DIR = dir;
+    const { resetDataDirCache } = await import("../../src/util/paths.js");
+    resetDataDirCache();
+    const db = createDatabase(join(dir, "b.db"));
+    try {
+      const machineId = (db.prepare("SELECT value FROM settings WHERE key = 'machine_id'").get() as { value: string }).value;
+      const { joinBrain } = await import("../../src/storage/brain.js");
+      await joinBrain(db, "http://brain.test", { shareId: share, hostname: "b", fetchImpl: host.fetch });
+      expect(machineId).toBeTruthy();
+      const result = await bootstrapIfNeeded(db, { fetchImpl: host.fetch, pageLimit: 1 });
+      expect(result?.skipped).toBe(0);
+      expect(db.prepare("SELECT gid FROM calendar_events").all()).toEqual([{ gid: `12@${A}` }]);
+      expect(db.prepare("SELECT gid FROM calendar_entities").all()).toEqual([{ gid: `3@${A}` }]);
+    } finally {
+      closeDatabase();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });

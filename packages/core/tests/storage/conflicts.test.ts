@@ -24,6 +24,7 @@ import {
   resolveConflict,
 } from "../../src/storage/conflicts.js";
 import { pendingCount, pendingOps } from "../../src/storage/outbox.js";
+import { markLostPush, hasLostPush } from "../../src/storage/versions.js";
 import type { Op } from "../../src/storage/op.js";
 import { resetDataDirCache } from "../../src/util/paths.js";
 
@@ -387,6 +388,16 @@ describe("Conflict resolution core engine (Milestone 77)", () => {
       expect(updated?.status).toBe("resolved");
       expect(updated?.resolution).toBe("keep-server");
       expect(countUnresolvedConflicts(db)).toBe(0);
+    });
+
+    it("every resolution clears a remembered lost push for the record", async () => {
+      const filePath = join(testDir, "lost.md");
+      const gid = `12@${MACHINE_LOCAL}`;
+      seedFile(filePath, gid, "Local text");
+      markLostPush(db, gid);
+      registerConflict({ gid, filePath, origin: MACHINE_REMOTE, originLabel: "laptop-b", remoteContent: "Server text" }, db);
+      await resolveConflict(gid, { strategy: "keep-mine" }, db);
+      expect(hasLostPush(db, gid)).toBe(false);
     });
 
     it("keep-server enqueues a file.update carrying the remote content", async () => {

@@ -216,4 +216,15 @@ describe("metadata write-routine outbox instrumentation (M55)", () => {
       expect(pendingCount(getDatabase()), "no project op may be enqueued").toBe(0);
     });
   });
+
+  it("tags and favorites on a file outside the data dir enqueue nothing", async () => {
+    const db = getDatabase();
+    const outside = join(TEST_DATA_DIR, "elsewhere", "repo.md");
+    const id = Number(db.prepare("INSERT INTO files (path, title, storage_type, content_hash, gid) VALUES (?, 'repo', 'reference', 'h', ?)").run(outside, "99@aaaaaaaaaaaaaaaa").lastInsertRowid);
+    addTags(id, ["alpha"]);
+    setFavorite(id, true);
+    removeTags(id, [tagId("alpha")!]);
+    expect(pendingCount(db)).toBe(0);
+    expect(db.prepare("SELECT COUNT(*) AS n FROM favorites WHERE file_id = ?").get(id)).toEqual({ n: 1 });
+  });
 });

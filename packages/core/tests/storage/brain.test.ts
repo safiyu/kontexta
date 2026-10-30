@@ -135,6 +135,23 @@ describe("joinBrain", () => {
     expect(readBrainConfig(db).connected).toBe(false);
   });
 
+  it("a create whose request fails still tells the user the generated share id", async () => {
+    const dropped = ((input: RequestInfo | URL) => {
+      if (String(input).endsWith("/health")) return Promise.resolve(new Response(JSON.stringify({ service: "kontexta-brain-host" }), { status: 200 }));
+      throw new Error("connection reset");
+    }) as typeof fetch;
+    const err = await joinBrain(db, "https://host.test", { create: true, hostname: "h", fetchImpl: dropped }).catch((e: Error) => e);
+    expect(err).toBeInstanceOf(Error);
+    expect((err as Error).message).toMatch(/connection reset/);
+    expect((err as Error).message).toMatch(/([0-9A-Z]{4}-){12}[0-9A-Z]{4}/);
+    expect(readBrainConfig(db).connected).toBe(false);
+  });
+
+  it("revealShareId returns null for a corrupt stored value instead of throwing", () => {
+    settingUpsert(db, "brain_share_id_enc", "zz:zz:zz");
+    expect(revealShareId(db)).toBeNull();
+  });
+
   it("disconnectBrain keeps the share hash and the cursor", async () => {
     const { fetch } = fakeFetch(okHost());
     await joinBrain(db, "https://host.test", { create: true, hostname: "h", fetchImpl: fetch });

@@ -28,7 +28,8 @@ export async function GET(req: NextRequest) {
   ensureDbInitialized();
   const db = getDatabase();
   const cfg = readBrainConfig(db);
-  const remote = cfg.connected ? await fetchBrainStatus(db) : null;
+  // A page load must not wait on a slow remote.
+  const remote = cfg.connected ? await fetchBrainStatus(db, { requestTimeoutMs: 3000 }) : null;
   const kept = revealShareId(db);
   const skipped = (db.prepare("SELECT COUNT(*) AS n FROM sync_skipped_ops WHERE skipped = 1").get() as { n: number }).n;
   return NextResponse.json({

@@ -162,11 +162,11 @@ export class BrainStore {
            deleted = excluded.deleted, last_seq = excluded.last_seq, updated_at = excluded.updated_at`,
       )
       .run(brainId, op.gid, op.kind, family, version, op.payloadJson, op.origin, tombstone, seq, Date.now());
-    // An accepted op based on a newer version than a parked conflict is what a resolution looks like.
+    // An accepted op based on at least a parked conflict's version is what a resolution looks like (an in-batch loser shares the resolver's base).
     if (op.base_version !== null) {
       this.db
         .prepare(
-          `DELETE FROM conflicts WHERE brain_id = ? AND gid = ? AND kind_family = ? AND (base_version IS NULL OR base_version < ?)`,
+          `DELETE FROM conflicts WHERE brain_id = ? AND gid = ? AND kind_family = ? AND (base_version IS NULL OR base_version <= ?)`,
         )
         .run(brainId, op.gid, family, op.base_version);
     }

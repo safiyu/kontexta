@@ -1,6 +1,7 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { GET, POST, DELETE } from "./route";
+import { POST as SHARE } from "./share/route";
 import { ensureDbInitialized } from "@/lib/db-init";
 
 afterEach(() => {
@@ -55,6 +56,16 @@ describe("brain API route", () => {
     expect(status.shareId).toBe(`${body.shareId.slice(0, 4)}-...-${body.shareId.slice(-4)}`);
     expect(JSON.stringify(status)).not.toContain(body.shareId);
 
+    await DELETE(new NextRequest("http://localhost/api/brain", { method: "DELETE" }));
+  });
+
+  it("share reveals the kept share id without a password when no master password is configured", async () => {
+    ensureDbInitialized();
+    stubBrainHost(true);
+    const created = await (await POST(new NextRequest("http://localhost/api/brain", json({ url: "https://h.test", create: true, enrollSecret: "s" })))).json();
+    const res = await SHARE(new NextRequest("http://localhost/api/brain/share", json({})));
+    expect(res.status).toBe(200);
+    expect((await res.json()).shareId).toBe(created.shareId);
     await DELETE(new NextRequest("http://localhost/api/brain", { method: "DELETE" }));
   });
 });

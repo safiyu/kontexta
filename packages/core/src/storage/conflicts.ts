@@ -29,6 +29,7 @@ import { getMachineId, getMachineLabel } from "../identity/machine.js";
 import { withLock, fileLockKey } from "../util/safety.js";
 import { enqueueOp } from "./outbox.js";
 import { toRelPath, resolveSyncPath } from "./paths.js";
+import { clearLostPush } from "./versions.js";
 import type { Op } from "./op.js";
 
 // ---------------------------------------------------------------------------
@@ -727,6 +728,8 @@ export async function resolveConflict(
 
   const machineId = readLocalMachineId(db);
   const now = Date.now();
+  // A resolved conflict ends any remembered lost push for the record.
+  clearLostPush(db, conflict.gid);
 
   if (conflict.conflict_kind === "path") {
     return await withLock(fileLockKey(conflict.file_path), async () =>

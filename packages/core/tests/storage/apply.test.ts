@@ -856,14 +856,22 @@ describe("applyRemoteOp (M58)", () => {
       expect(existsSync(join(TEST_DATA_DIR, "..", "escaped.md"))).toBe(false);
     });
 
-    it("rejects an absolute path outside the data dir even if it contains /knowledge/", async () => {
-      await expect(
-        applyRemoteOp({
-          gid: "107@remote0123456789", kind: "file.create", origin: "remote0123456789", base_version: null,
-          payload: { path: "/Users/someone/.kontexta/knowledge/legacy/note.md", title: "n", content: "x", storage_type: "local" },
-          created_at: Date.now(),
-        } as Op),
-      ).rejects.toThrow(/outside the data directory/);
+    it("re-roots a legacy op (no rel_path) at its /knowledge/ segment, and still refuses anything else outside the data dir", async () => {
+      await applyRemoteOp({
+        gid: "107@remote0123456789", kind: "file.create", origin: "remote0123456789", base_version: null,
+        payload: { path: "/Users/someone/.kontexta/knowledge/legacy/note.md", title: "n", content: "x", storage_type: "local" },
+        created_at: Date.now(),
+      } as Op);
+      expect(readFileSync(join(TEST_DATA_DIR, "knowledge", "legacy", "note.md"), "utf8")).toBe("x");
+      for (const path of ["/etc/passwd", "/Users/someone/knowledge/../../../etc/evil.md"]) {
+        await expect(
+          applyRemoteOp({
+            gid: "108@remote0123456789", kind: "file.create", origin: "remote0123456789", base_version: null,
+            payload: { path, title: "n", content: "x", storage_type: "local" },
+            created_at: Date.now(),
+          } as Op),
+        ).rejects.toBeInstanceOf(UnappliableOpError);
+      }
     });
 
     it("prefers rel_path over the origin's absolute path", async () => {

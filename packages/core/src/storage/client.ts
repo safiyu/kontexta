@@ -526,6 +526,8 @@ export async function pullRemoteOps(db: Database, options: PullOptions = {}): Pr
           clearLostPush(db, op.gid);
         } else {
           await applyRemoteOp(op, { db });
+          // The accepted remote state is now ours (or identical), so an old lost push no longer applies.
+          if (op.kind === "file.create" || op.kind === "file.update") clearLostPush(db, op.gid);
         }
         applied++;
         clearApplyFailure(db, seq);

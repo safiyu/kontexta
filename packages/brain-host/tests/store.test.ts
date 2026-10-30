@@ -77,4 +77,16 @@ describe("BrainStore", () => {
     expect(store.opsSince(a, 0, 10).map((r) => r.gid_version)).toEqual([1, 2]);
     expect(store.opsSince(a, 1, 10).map((r) => r.gid_version)).toEqual([2]);
   });
+
+  it("a keep-mine style resolution clears an in-batch loser parked at the same base", () => {
+    const g = "8@aaaaaaaaaaaaaaaa";
+    store.appendOp(a, op(g, "file.create", null), "content", "accepted");
+    store.appendOp(a, op(g, "file.update", 1), "content", "accepted");
+    // Offline machine sends U1 (base 1, stale) and U2 (base 2, based on U1): both park.
+    store.appendOp(a, op(g, "file.update", 1, { content: "u1" }), "content", "conflict");
+    store.appendOp(a, op(g, "file.update", 2, { content: "u2" }), "content", "conflict");
+    expect(store.snapshotPage(a, "", 10, true).gids[0].conflicts).toHaveLength(2);
+    store.appendOp(a, op(g, "file.update", 2), "content", "accepted");
+    expect(store.snapshotPage(a, "", 10, true).gids[0].conflicts).toHaveLength(0);
+  });
 });

@@ -23,7 +23,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { recordGidVersion } from "../../src/storage/versions.js";
+import { recordGidVersion, markLostPush, hasLostPush } from "../../src/storage/versions.js";
 import { mkdtempSync, rmSync, existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -51,6 +51,8 @@ import {
 import type { Op } from "../../src/storage/op.js";
 import type { Database } from "better-sqlite3";
 
+import { createHash } from "node:crypto";
+const sha = (c: string): string => createHash("sha256").update(c, "utf8").digest("hex");
 const REMOTE_MID = "aaaaaaaaaaaaaaaa";
 const REMOTE_GID = (n: number): string => `${n}@${REMOTE_MID}`;
 
@@ -756,6 +758,20 @@ describe("storage client (M68)", () => {
       await pullRemoteOps(db, { fetchImpl: fakeFetch(serveGet([remoteRow(1, 1), theirs])).fetch });
       expect(readFileSync(canonical, "utf8")).toBe("mine");
       expect((db.prepare("SELECT COUNT(*) AS n FROM conflicts WHERE status = 'unresolved'").get() as { n: number }).n).toBe(1);
+    });
+
+    it("clears a remembered lost push when an accepted remote op with identical content arrives, so a later edit applies", async () => {
+      setEndpoint(db);
+      await pullRemoteOps(db, { fetchImpl: fakeFetch(serveGet([remoteRow(1, 1)])).fetch });
+      const canonical = join(testDir, "knowledge", "r1.md");
+      markLostPush(db, REMOTE_GID(1));
+      const same = remoteRow(2, 1, { origin: "bbbbbbbbbbbbbbbb", payload: { path: canonical, content: "remote-1", content_hash: sha("remote-1") } });
+      await pullRemoteOps(db, { fetchImpl: fakeFetch(serveGet([remoteRow(1, 1), same])).fetch });
+      expect(hasLostPush(db, REMOTE_GID(1))).toBe(false);
+      const later = remoteRow(3, 1, { origin: "bbbbbbbbbbbbbbbb", payload: { path: canonical, content: "newer", content_hash: sha("newer") } });
+      await pullRemoteOps(db, { fetchImpl: fakeFetch(serveGet([remoteRow(1, 1), same, later])).fetch });
+      expect(readFileSync(canonical, "utf8")).toBe("newer");
+      expect((db.prepare("SELECT COUNT(*) AS n FROM conflicts WHERE status = 'unresolved'").get() as { n: number }).n).toBe(0);
     });
 
     it("does not apply a conflict-flagged file.delete and keeps the local file", async () => {

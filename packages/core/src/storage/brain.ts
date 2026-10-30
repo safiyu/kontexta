@@ -80,6 +80,7 @@ export function readBrainConfig(db: Database): BrainConfig {
   };
 }
 
+// The key sits in the same database as the ciphertext: this hides the share id from casual disclosure, not from a copied database.
 function machineKey(db: Database): Buffer {
   const secret = settingValue(db, "machine_secret");
   if (!secret) throw new Error("machine_secret is missing; run the database migrations");
@@ -98,11 +99,15 @@ export function storeShareId(db: Database, bytes: Uint8Array): void {
 export function revealShareId(db: Database): string | null {
   const stored = settingValue(db, "brain_share_id_enc");
   if (!stored) return null;
-  const [iv, tag, enc] = stored.split(":").map((h) => Buffer.from(h, "hex"));
-  const decipher = createDecipheriv("aes-256-gcm", machineKey(db), iv);
-  decipher.setAuthTag(tag);
-  const bytes = Buffer.concat([decipher.update(enc), decipher.final()]);
-  return formatShareId(new Uint8Array(bytes));
+  try {
+    const [iv, tag, enc] = stored.split(":").map((h) => Buffer.from(h, "hex"));
+    const decipher = createDecipheriv("aes-256-gcm", machineKey(db), iv);
+    decipher.setAuthTag(tag);
+    const bytes = Buffer.concat([decipher.update(enc), decipher.final()]);
+    return formatShareId(new Uint8Array(bytes));
+  } catch {
+    return null;
+  }
 }
 
 /** Clear the connection; the share hash, cursor and known versions stay so the same brain resumes. */
@@ -149,11 +154,22 @@ export async function joinBrain(db: Database, remoteUrl: string, opts: JoinBrain
   if (service !== "kontexta-brain-host") throw new Error(`joinBrain: ${url} is not a kontexta brain host`);
 
   const machineId = settingValue(db, "machine_id") ?? "";
-  const res = await fetchJson(fetchImpl, `${url}/brains/join`, undefined, {
-    headers: { "content-type": "application/json", ...(opts.enrollSecret ? { "x-enroll-secret": opts.enrollSecret } : {}) },
-    body: JSON.stringify({ share_id: formatShareId(bytes), machine_id: machineId, hostname: opts.hostname, name: opts.name }),
-    timeoutMs,
-  });
+  let res;
+  try {
+    res = await fetchJson(fetchImpl, `${url}/brains/join`, undefined, {
+      headers: { "content-type": "application/json", ...(opts.enrollSecret ? { "x-enroll-secret": opts.enrollSecret } : {}) },
+      body: JSON.stringify({ share_id: formatShareId(bytes), machine_id: machineId, hostname: opts.hostname, name: opts.name }),
+      timeoutMs,
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    // The server may have created the brain before the connection dropped; a generated id would be lost otherwise.
+    throw new Error(
+      opts.create && opts.shareId === undefined
+        ? `joinBrain: request failed (${msg}). If the remote created the brain, join it with share id ${formatShareId(bytes)}`
+        : `joinBrain: request failed (${msg})`,
+    );
+  }
   const body = res.body as { token?: unknown; name?: unknown; created?: unknown; latest_seq?: unknown; error?: unknown } | null;
   if ((res.status !== 200 && res.status !== 201) || typeof body?.token !== "string") {
     throw new Error(`joinBrain: ${typeof body?.error === "string" ? body.error : `server answered HTTP ${res.status}`}`);
@@ -181,6 +197,8 @@ export async function joinBrain(db: Database, remoteUrl: string, opts: JoinBrain
       ).run();
       settingUpsert(db, "brain_bootstrap_pending", "1");
       settingDelete(db, "brain_bootstrap_after");
+      settingDelete(db, "brain_bootstrap_latest");
+      settingDelete(db, "brain_bootstrap_deferred");
     }
   })();
 

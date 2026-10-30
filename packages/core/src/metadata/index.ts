@@ -12,6 +12,7 @@ import type { TagRecord, ProjectRecord, FileRecord, SearchFilters } from "../typ
 import { computeHash } from "../files/index.js";
 import { isIndexedFile, stripIndexedExt } from "../util/extensions.js";
 import { getDataDir } from "../util/paths.js";
+import { isSyncablePath } from "../storage/paths.js";
 import { syncProjectsSidecarIfStaged } from "../hooks/stage.js";
 import { formatGid } from "../identity/gid.js";
 import { getMachineId } from "../identity/machine.js";
@@ -146,7 +147,7 @@ export function addTags(fileId: number, tagNames: string[]): void {
     // applying a remote op (echo suppression, spec 1.4). The op is keyed by the
     // FILE's gid (file_tags has no gid of its own) so a receiving machine can
     // re-apply "these tags on that file".
-    if (linkedTags.length > 0) {
+    if (linkedTags.length > 0 && fileSyncs(db, fileId)) {
       enqueueMetadataOp({
         gid: fileGid(fileId),
         kind: "tag.set",
@@ -157,6 +158,12 @@ export function addTags(fileId: number, tagNames: string[]): void {
       });
     }
   })();
+}
+
+/** Files outside the data dir (project repos) never sync, so neither do their tags or favorites. */
+function fileSyncs(db: ReturnType<typeof getDatabase>, fileId: number): boolean {
+  const row = db.prepare("SELECT path FROM files WHERE id = ?").get(fileId) as { path: string } | undefined;
+  return row === undefined || isSyncablePath(row.path);
 }
 
 function fileTagNames(db: ReturnType<typeof getDatabase>, fileId: number): string[] {
@@ -188,7 +195,7 @@ export function removeTags(fileId: number, tagIds: number[]): void {
     // remote op (echo suppression, spec 1.4). Keyed by the FILE's gid, carrying
     // tag names (the global identity) so a receiving machine can re-apply "drop
     // these tags from that file".
-    if (removedTagIds.length > 0) {
+    if (removedTagIds.length > 0 && fileSyncs(db, fileId)) {
       enqueueMetadataOp({
         gid: fileGid(fileId),
         kind: "tag.set",
@@ -219,14 +226,16 @@ export function setFavorite(fileId: number, favorite: boolean): void {
     // Enqueue atomically with the write (spec 1.3); no-op while applying a
     // remote op (echo suppression, spec 1.4). Keyed by the FILE's gid (the
     // favorites table has no gid of its own).
-    enqueueMetadataOp({
-      gid: fileGid(fileId),
-      kind: "favorite.set",
-      origin: getMachineId(),
-      base_version: 0,
-      payload: { favorite },
-      created_at: Date.now(),
-    });
+    if (fileSyncs(db, fileId)) {
+      enqueueMetadataOp({
+        gid: fileGid(fileId),
+        kind: "favorite.set",
+        origin: getMachineId(),
+        base_version: 0,
+        payload: { favorite },
+        created_at: Date.now(),
+      });
+    }
   })();
 }
 
