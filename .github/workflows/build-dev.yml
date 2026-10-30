@@ -11,7 +11,7 @@ on:
 jobs:
   build-dev:
     name: Build and Push Dev Image
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     permissions:
       contents: read
       packages: write
@@ -31,7 +31,10 @@ jobs:
           cache: "pnpm"
 
       - name: Install build tools
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends python3 make g++ gcc
+        run: |
+          if ! command -v make >/dev/null 2>&1 || ! command -v g++ >/dev/null 2>&1; then
+            sudo apt-get update && sudo apt-get install -y --no-install-recommends python3 make g++ gcc
+          fi
 
       - name: Install
         run: pnpm install --frozen-lockfile
