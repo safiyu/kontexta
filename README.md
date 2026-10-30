@@ -108,7 +108,7 @@ Kontexta doesn't try to replace your favorite agent or memory library — it sit
 | **Retrieval model** | Whole file dumped into context | Whole file / vendor-managed | Vector + graph (semantic) | Temporal knowledge graph (semantic) | Deterministic FTS5 + regex; surgical section reads |
 | **Token accounting** | None | None | None exposed to agent | None exposed to agent | Every response carries `est_tokens` / `size_bytes` |
 | **Command execution** | N/A | Vendor-defined tools | N/A (memory only) | N/A (memory only) | Sandboxed `Hands` with per-command contracts and approval tokens |
-| **Storage** | Repo file (clutters PRs) | Vendor cloud | Self-host or hosted, vector DB | Self-host or hosted | Local SQLite, git-synced markdown vault |
+| **Storage** | Repo file (clutters PRs) | Vendor cloud | Self-host or hosted, vector DB | Self-host or hosted | Local SQLite + markdown vault, with an optional relay for backup and multi-machine sync |
 | **Best at** | Static project conventions | Zero-config personal memory | Semantic recall inside one app | Long-running conversational memory | Multi-agent handoff + governed local execution |
 
 **Honest tradeoffs:**
@@ -158,6 +158,99 @@ If your AI client can't load MCP servers (e.g. managed installs that block user-
 ### Alternative: Docker
 
 For containerized deployments, see [`docs/INSTALL.md#docker-hub-compose`](docs/INSTALL.md#docker-hub-compose).
+
+---
+
+## Your Brain on More Than One Machine (Optional)
+
+Everything Kontexta knows about you and your work (knowledge files, projects, profile, journals, calendar, tags) is your **brain**. It lives on your machine as markdown files and SQLite, and works fully offline. If you use Kontexta on more than one machine, or want a copy that survives a lost laptop, connect your brain to a **remote**.
+
+A relay hosts any number of brains, each fully separate. For your brain it is two things at once: the durable copy of everything (nothing is ever pruned, a brain remembers) and the sync engine between your machines. Teammates can use the same relay, each with their own brain; nobody sees anyone else's.
+
+**The remote cannot read your brain.** Payloads (file contents, paths, tags, journal entries, calendar data) are encrypted on your machine with AES-256-GCM before they leave it. The key is derived from your share id and never sent anywhere; the relay only ever sees a derived routing id, plus the metadata it needs to order ops (record ids, op kinds, which machine, timing and size). If a relay is compromised or misconfigured, an attacker gets ciphertext. The flip side: lose every copy of the share id and the data is unrecoverable, and revoking a machine stops its access to the relay but not its ability to decrypt data it already holds (for that, create a new brain).
+
+Machines exchange fine-grained operations (file create, update, delete, move, tags, favorites, projects, calendar, journal) over short polling, so a decision made on one machine appears on the others without merging repositories or database files. A machine that never connects simply works locally.
+
+### Run a relay
+
+The relay is `kontexta-relay`: a plain, stateless short-polling HTTP service with one SQLite file and one port (`23010`). Run it with Node or Docker.
+
+```bash
+# With Node (any box, VPS or Cloud Run):
+KXTA_RELAY_PEPPER="$(openssl rand -hex 32)" \
+KXTA_RELAY_ENROLL_SECRET="$(openssl rand -hex 16)" \
+  npx kontexta-relay
+
+# With Docker (published image, no clone needed):
+docker run -d --name kontexta-relay -p 127.0.0.1:23010:23010 -v kontexta-relay-data:/data \
+  -e KXTA_RELAY_PEPPER="$(openssl rand -hex 32)" -e KXTA_RELAY_ENROLL_SECRET="$(openssl rand -hex 16)" \
+  ghcr.io/safiyu/kontexta-relay:latest
+
+# Or with compose, from the repo root (pulls the image, or builds it with --build):
+docker compose -f docker-compose.relay.yml up -d
+```
+
+It is ready once `http://127.0.0.1:23010/health` answers.
+
+| Variable | Default | Purpose |
+| :--- | :--- | :--- |
+| `PORT` / `HOSTNAME` | `23010` / `0.0.0.0` | Where it listens. |
+| `HOST_PORT` / `HOST_BIND` | `23010` / `127.0.0.1` | Docker compose only: the published port and interface. |
+| `KXTA_RELAY_PEPPER` | *(empty)* | HMAC pepper bound into token and share id hashes. Required for any non-loopback deployment. |
+| `KXTA_RELAY_ENROLL_SECRET` | *(empty)* | Secret needed to **create** a brain. Joining an existing brain needs only its share id. |
+| `KXTA_RELAY_DB` | `~/.kontexta-relay/relay.db` | Path to the SQLite file (the Docker image keeps it at `/data/kontexta-relay.db` on its volume). |
+| `KXTA_RELAY_ALLOW_OPEN_CREATE` | *(unset)* | `1` lets anyone create brains (local experiments only). |
+| `KXTA_RELAY_ALLOW_DEFAULT_PEPPER` | *(unset)* | `1` allows the public default pepper on a non-loopback host (not recommended). |
+
+> [!IMPORTANT]
+> Set both `KXTA_RELAY_PEPPER` and `KXTA_RELAY_ENROLL_SECRET` for anything beyond local experiments. The server refuses to start on the default pepper when bound beyond loopback, and without the enrollment secret nobody can create a brain. Put TLS in front of it (nginx, Caddy, Cloudflare Tunnel, Cloud Run) as you would for any endpoint that issues credentials.
+
+All brains, their full history and their machines live in one SQLite file (the Docker volume `kontexta-relay-data`). Back that file up; to wipe everything, `docker compose -f docker-compose.relay.yml down -v`.
+
+### Connect a machine (`kontexta brain`)
+
+The share id is what identifies a brain, and it is also the secret for joining it and the root of its encryption key. Kontexta generates it when you create a brain; you paste it on your other machines.
+
+```bash
+# First machine: create a brain (prints the share id once, save it):
+kontexta brain connect https://brain.example.com --create --name "My brain" \
+  --enroll-secret "$KXTA_RELAY_ENROLL_SECRET"
+
+# Another machine (or a replacement for a lost one): join with the share id:
+kontexta brain connect https://brain.example.com --share-id ABCD-EFGH-...
+
+# Brain name, relay, machines, outbox depth, skipped ops, cursor:
+kontexta brain status
+
+# List the machines in your brain, or revoke one:
+kontexta brain machines
+kontexta brain machines remove <machine-id>
+
+# Show the full share id again (asks first):
+kontexta brain share
+
+# Sync on demand, or run the loop in the foreground on a machine without the web app:
+kontexta brain push
+kontexta brain pull
+kontexta brain run
+
+# Stop syncing (everything stays on this machine):
+kontexta brain disconnect
+```
+
+The same flow is on the **Brain** page of the web app. Add `--json` to any subcommand for machine-readable output. `--no-keep-share-id` keeps the share id off this machine, and `--data-dir` / `--timeout` target a specific vault or bound a request. The Kontexta web app and the MCP server start the sync loop for you once a machine is connected.
+
+**Joining.** Creating a brain on an empty relay makes your current vault its first content. Joining an existing brain on a new machine pulls the brain's current state instead of replaying its history. A machine that already has content keeps files that match, and where a file differs from the brain's version both are kept and a conflict copy appears for you to resolve.
+
+**How the cadence works.** A connected machine short-polls: **15 s** while active, **60 s** while idle, and **exponential backoff up to 5 minutes** on failure.
+
+**Ordering and conflicts.** The relay assigns every op a sequence number, the only source of ordering (client clocks are never trusted). Each machine tracks the version of each record it has seen and sends it with every edit, so an edit made on top of everything the machine has pulled is accepted. When two machines edit the same record without having seen each other's change, the relay keeps both. Neither machine overwrites its own file: each gets a conflict copy next to the canonical file (`<name> (from <machine label>).<ext>`) and lists it in the Conflict Manager, where you choose keep server, keep mine, keep both, or a merged version. Every resolution is pushed so your machines converge. Two machines creating the same path independently produce a path conflict instead of swapping content.
+
+**Journals merge instead of conflicting.** The daily journal (`knowledge/journal/journal-YYYY-MM-DD.md`) is append-only, so when two machines write the same day their entries are merged into one sorted union on every machine. No conflict copy, nothing lost, and every machine ends with identical content.
+
+**Portable ops.** Ops never carry machine-local ids or absolute paths. Records are referenced by global id (`<id>@<machine>`), and file paths travel relative to the data directory. A remote op that points outside the data directory is refused, and files in project repos never sync (only your knowledge base does).
+
+**Skipped ops.** An op that cannot be applied on a machine (an unsafe path, a record that machine does not have) is recorded in the local `sync_skipped_ops` table and skipped so it cannot block the rest of the log. Other apply errors are retried a few polls first. A malformed op still stops the pull, so a version mismatch between machine and relay is noticed rather than hidden.
 
 ---
 
@@ -212,7 +305,7 @@ What's deliberately deferred and what triggers will pull it forward lives in [`d
 ## Features Breakdown
 
 ### Brain
-- Global vault with two-way git sync.
+- Global vault: local-first knowledge store with git-backed history and version rollbacks.
 - 58 MCP tools tuned for context economy.
 - Batch operations (up to 500 files/call), grep, and regex support.
 - Web clipping with auth-wall detection.

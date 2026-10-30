@@ -7,7 +7,8 @@ export type ToolCategory =
   | "Versioning"
   | "Discovery"
   | "Calendar"
-  | "Hands";
+  | "Hands"
+  | "Admin";
 
 export const CATEGORY_ORDER: ToolCategory[] = [
   "Read",
@@ -19,6 +20,7 @@ export const CATEGORY_ORDER: ToolCategory[] = [
   "Discovery",
   "Calendar",
   "Hands",
+  "Admin",
 ];
 
 export const TOOL_CATEGORIES: Record<string, ToolCategory> = {
@@ -66,7 +68,6 @@ export const TOOL_CATEGORIES: Record<string, ToolCategory> = {
   "files_get_history": "Versioning",
   "files_get_diff": "Versioning",
   "files_restore": "Versioning",
-  "admin_commit_backup": "Versioning",
   // Discovery
   "admin_overview": "Discovery",
   "projects_map": "Discovery",
@@ -88,4 +89,10 @@ export const TOOL_CATEGORIES: Record<string, ToolCategory> = {
   "hands_list": "Hands",
   "hands_reload": "Hands",
   "hands_confirm": "Hands",
+  // Admin
+  "admin_set_machine_label": "Admin",
+  "admin_list_clients": "Admin",
+  "conflicts_list": "Admin",
+  "conflicts_get": "Admin",
+  "conflicts_resolve": "Admin",
 };

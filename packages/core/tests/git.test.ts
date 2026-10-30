@@ -8,13 +8,12 @@ import { join } from "node:path";
 import { execSync } from "node:child_process";
 import { platform } from "node:os";
 import simpleGit, { SimpleGit } from "simple-git";
-import { createDatabase, closeDatabase, getDatabase } from "../src/db/index.js";
+import { createDatabase, closeDatabase } from "../src/db/index.js";
 import {
   commitFile,
   getHistory,
   getDiff,
   restoreVersion,
-  syncBackup,
 } from "../src/git/index.js";
 
 import { tmpdir } from "node:os";
@@ -176,62 +175,5 @@ describe("Git Operations", () => {
     // Verify file on disk was updated
     content = readFileSync(filePath, "utf8");
     expect(content).toBe("Original content");
-  });
-
-  test("syncBackup copies reference files to backup directory and commits", async () => {
-    const db = getDatabase();
-
-    // Create external project directory
-    mkdirSync(EXTERNAL_PROJECT_DIR, { recursive: true });
-
-    // Create a test file in external directory
-    const externalFilePath = join(EXTERNAL_PROJECT_DIR, "test-file.md");
-    writeFileSync(externalFilePath, "External file content", "utf8");
-
-    // Register project in database
-    db.prepare(
-      "INSERT INTO projects (name, slug, description, path) VALUES (?, ?, ?, ?)"
-    ).run("Test Project", "test-project", "A test project", EXTERNAL_PROJECT_DIR);
-
-    const project = db
-      .prepare("SELECT id FROM projects WHERE slug = ?")
-      .get("test-project") as { id: number };
-
-    // Insert a reference file record
-    db.prepare(
-      "INSERT INTO files (path, title, project_id, storage_type, source_path) VALUES (?, ?, ?, ?, ?)"
-    ).run(
-      externalFilePath,
-      "Test File",
-      project.id,
-      "reference",
-      externalFilePath
-    );
-
-    // Call syncBackup
-    const copiedPaths = await syncBackup(project.id, TEST_DATA_DIR);
-
-    // Verify backup file was created
-    expect(copiedPaths).toHaveLength(1);
-
-    const backupPath = join(
-      TEST_DATA_DIR,
-      "backups",
-      "test-project",
-      "test-file.md"
-    );
-    expect(copiedPaths[0]).toBe(backupPath);
-    expect(existsSync(backupPath)).toBe(true);
-
-    // Verify backup file content
-    const backupContent = readFileSync(backupPath, "utf8");
-    expect(backupContent).toBe("External file content");
-
-    // Verify git commit was made
-    const git: SimpleGit = simpleGit(TEST_DATA_DIR, { unsafe: { allowUnsafeConfigPaths: true } });
-    const log = await git.log();
-
-    expect(log.latest?.message).toBe("Sync local changes for project: Test Project");
-    expect(log.total).toBe(1);
   });
 });

@@ -187,7 +187,7 @@ export function GitWizardModal({ isOpen, onClose, onSave, currentUrl }: GitWizar
             <div className="flex flex-col gap-1">
               <h4 className="text-[11px] font-bold text-amber-accent uppercase tracking-wider">Single Vault Architecture</h4>
               <p className="text-[10px] text-[var(--text-secondary)] leading-relaxed">
-                You can use the <b>same repository URL</b> across all your projects. Kontexta automatically organizes your files into project-specific folders (e.g., <code className="bg-black/10 dark:bg-black/30 px-1 py-0.5 rounded text-[9px]">/backups/your-project-name</code>). 
+                You can use the <b>same repository URL</b> for all your projects. Kontexta commits the entire knowledge base to this one vault — there is no per-project subfolder to manage.
                 <br/><br/>
                 <b>Note:</b> Kontexta exclusively synchronizes with the <code className="bg-black/10 dark:bg-black/30 px-1 py-0.5 rounded text-[9px] font-bold">main</code> branch.
               </p>

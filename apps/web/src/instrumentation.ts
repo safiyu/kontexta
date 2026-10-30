@@ -14,5 +14,11 @@ export async function register() {
     scheduler.start();
     process.on("SIGTERM", () => scheduler.stop());
     process.on("SIGINT", () => scheduler.stop());
+
+    // Storage sync: dormant until `kontexta brain connect` stores credentials.
+    const { startSyncLoop, stopSyncLoop, getDatabase } = await import("kxta-core");
+    startSyncLoop(getDatabase());
+    process.on("SIGTERM", () => stopSyncLoop());
+    process.on("SIGINT", () => stopSyncLoop());
   }
 }

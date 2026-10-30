@@ -156,7 +156,6 @@ The 58 tools are organized into these groups:
 |---|---|
 | `admin_onboard_agent` | Write/update kontexta workflow rules in agent context files |
 | `resources_clip_url` | Clip a web URL into the knowledge base |
-| `admin_commit_backup` | Push KB changes to the project's remote git |
 
 ## MCP Resources
 

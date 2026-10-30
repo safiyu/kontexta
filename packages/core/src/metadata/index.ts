@@ -12,7 +12,13 @@ import type { TagRecord, ProjectRecord, FileRecord, SearchFilters } from "../typ
 import { computeHash } from "../files/index.js";
 import { isIndexedFile, stripIndexedExt } from "../util/extensions.js";
 import { getDataDir } from "../util/paths.js";
+import { isSyncablePath } from "../storage/paths.js";
 import { syncProjectsSidecarIfStaged } from "../hooks/stage.js";
+import { formatGid } from "../identity/gid.js";
+import { getMachineId } from "../identity/machine.js";
+import { enqueueOp } from "../storage/outbox.js";
+import { inRemoteApply } from "../storage/apply.js";
+import type { Op } from "../storage/op.js";
 
 export interface FileRecordWithRank extends FileRecord {
   rank: number;
@@ -74,6 +80,39 @@ export function slugify(name: string): string {
 }
 
 /**
+ * Append a metadata-mutation op to the outbox — UNLESS we are applying a
+ * remote op.
+ *
+ * Echo suppression, layer 1 (spec 1.4): when a remote op is being applied
+ * locally, `applyRemoteOp` runs inside the `applyScope` remote-apply scope. In
+ * that case the write routine must persist to DB but NOT enqueue an outbound
+ * op (or the change would echo back to the server and loop). On the normal
+ * local-write path `inRemoteApply()` is false and the op is appended.
+ *
+ * Callers invoke this INSIDE their write transaction so the op commits or rolls
+ * back atomically with the write (spec 1.3). Mirrors the files module's
+ * `enqueueFileOp` (M54).
+ */
+function enqueueMetadataOp(op: Op): void {
+  if (inRemoteApply()) return;
+  enqueueOp(getDatabase(), op);
+}
+
+/**
+ * The global id of the file row `fileId` — read from the row, not recomputed.
+ * A locally-edited REMOTE file keeps its remote origin in the gid, so the
+ * outbound op must carry that identity. Falls back to the local gid if the row
+ * pre-dates migration 013 (no gid stamped).
+ */
+function fileGid(fileId: number): string {
+  const db = getDatabase();
+  const row = db.prepare("SELECT gid FROM files WHERE id = ?").get(fileId) as
+    | { gid: string | null }
+    | undefined;
+  return row?.gid ?? formatGid(fileId, getMachineId());
+}
+
+/**
  * Add tags to a file
  */
 export function addTags(fileId: number, tagNames: string[]): void {
@@ -82,15 +121,57 @@ export function addTags(fileId: number, tagNames: string[]): void {
   const insertTagStmt = db.prepare("INSERT OR IGNORE INTO tags (name) VALUES (?)");
   const getTagStmt = db.prepare("SELECT id FROM tags WHERE name = ?");
   const linkTagStmt = db.prepare("INSERT OR IGNORE INTO file_tags (file_id, tag_id) VALUES (?, ?)");
+  // gid depends on the auto-generated integer PK, so it is stamped via UPDATE
+  // inside the same transaction (matching the migration-013 backfill convention).
+  const setTagGidStmt = db.prepare("UPDATE tags SET gid = ? WHERE id = ?");
 
   db.transaction(() => {
+    // Track the tag names actually linked so the op carries the global identity
+    // (names, not machine-local tag ids) of what changed on this file.
+    const linkedTags: string[] = [];
     for (const tagName of tagNames) {
-      insertTagStmt.run(tagName);
+      const inserted = insertTagStmt.run(tagName);
       const tag = getTagStmt.get(tagName) as { id: number } | undefined;
       if (!tag) continue;
+      // Assign the global id now that the integer PK is known. Only on a fresh
+      // insert: INSERT OR IGNORE reports 0 changes for a pre-existing tag, whose
+      // gid the migration-013 backfill (or an earlier insert) already set.
+      if (inserted.changes > 0) {
+        setTagGidStmt.run(formatGid(tag.id, getMachineId()), tag.id);
+      }
       linkTagStmt.run(fileId, tag.id);
+      linkedTags.push(tagName);
+    }
+
+    // Enqueue the outbound op atomically with the write (spec 1.3); no-op while
+    // applying a remote op (echo suppression, spec 1.4). The op is keyed by the
+    // FILE's gid (file_tags has no gid of its own) so a receiving machine can
+    // re-apply "these tags on that file".
+    if (linkedTags.length > 0 && fileSyncs(db, fileId)) {
+      enqueueMetadataOp({
+        gid: fileGid(fileId),
+        kind: "tag.set",
+        origin: getMachineId(),
+        base_version: 0,
+        payload: { tags: fileTagNames(db, fileId) },
+        created_at: Date.now(),
+      });
     }
   })();
+}
+
+/** Files outside the data dir (project repos) never sync, so neither do their tags or favorites. */
+function fileSyncs(db: ReturnType<typeof getDatabase>, fileId: number): boolean {
+  const row = db.prepare("SELECT path FROM files WHERE id = ?").get(fileId) as { path: string } | undefined;
+  return row === undefined || isSyncablePath(row.path);
+}
+
+function fileTagNames(db: ReturnType<typeof getDatabase>, fileId: number): string[] {
+  return (
+    db
+      .prepare("SELECT t.name FROM tags t JOIN file_tags ft ON ft.tag_id = t.id WHERE ft.file_id = ? ORDER BY t.name")
+      .all(fileId) as { name: string }[]
+  ).map((r) => r.name);
 }
 
 /**
@@ -101,9 +182,30 @@ export function removeTags(fileId: number, tagIds: number[]): void {
 
   const deleteStmt = db.prepare("DELETE FROM file_tags WHERE file_id = ? AND tag_id = ?");
 
-  for (const tagId of tagIds) {
-    deleteStmt.run(fileId, tagId);
-  }
+  db.transaction(() => {
+    // Track the tags actually removed (0 changes means the file wasn't linked
+    // to that tag) so the op reflects only real changes.
+    const removedTagIds: number[] = [];
+    for (const tagId of tagIds) {
+      const r = deleteStmt.run(fileId, tagId);
+      if (r.changes > 0) removedTagIds.push(tagId);
+    }
+
+    // Enqueue atomically with the write (spec 1.3); no-op while applying a
+    // remote op (echo suppression, spec 1.4). Keyed by the FILE's gid, carrying
+    // tag names (the global identity) so a receiving machine can re-apply "drop
+    // these tags from that file".
+    if (removedTagIds.length > 0 && fileSyncs(db, fileId)) {
+      enqueueMetadataOp({
+        gid: fileGid(fileId),
+        kind: "tag.set",
+        origin: getMachineId(),
+        base_version: 0,
+        payload: { tags: fileTagNames(db, fileId) },
+        created_at: Date.now(),
+      });
+    }
+  })();
 }
 
 /**
@@ -112,13 +214,29 @@ export function removeTags(fileId: number, tagIds: number[]): void {
 export function setFavorite(fileId: number, favorite: boolean): void {
   const db = getDatabase();
 
-  if (favorite) {
-    const insertStmt = db.prepare("INSERT OR IGNORE INTO favorites (file_id) VALUES (?)");
-    insertStmt.run(fileId);
-  } else {
-    const deleteStmt = db.prepare("DELETE FROM favorites WHERE file_id = ?");
-    deleteStmt.run(fileId);
-  }
+  db.transaction(() => {
+    if (favorite) {
+      const insertStmt = db.prepare("INSERT OR IGNORE INTO favorites (file_id) VALUES (?)");
+      insertStmt.run(fileId);
+    } else {
+      const deleteStmt = db.prepare("DELETE FROM favorites WHERE file_id = ?");
+      deleteStmt.run(fileId);
+    }
+
+    // Enqueue atomically with the write (spec 1.3); no-op while applying a
+    // remote op (echo suppression, spec 1.4). Keyed by the FILE's gid (the
+    // favorites table has no gid of its own).
+    if (fileSyncs(db, fileId)) {
+      enqueueMetadataOp({
+        gid: fileGid(fileId),
+        kind: "favorite.set",
+        origin: getMachineId(),
+        base_version: 0,
+        payload: { favorite },
+        created_at: Date.now(),
+      });
+    }
+  })();
 }
 
 /**
@@ -226,9 +344,40 @@ export function registerProject(
     INSERT OR IGNORE INTO projects (name, slug, path, description, remote_url)
     VALUES (?, ?, ?, ?, ?)
   `);
+  // gid depends on the auto-generated integer PK, so it is stamped via UPDATE
+  // inside the same transaction (matching the migration-013 backfill convention).
+  const setGidStmt = db.prepare("UPDATE projects SET gid = ? WHERE id = ?");
 
   const absolutePath = resolve(path);
-  const result = insertStmt.run(name, slug, absolutePath, description || null, remoteUrl || null);
+  const result = db.transaction(() => {
+    const r = insertStmt.run(name, slug, absolutePath, description || null, remoteUrl || null);
+    if (r.changes > 0) {
+      // Assign the global id now that the integer PK is known. Done in-
+      // transaction so the row is never committed with a NULL gid.
+      const id = Number(r.lastInsertRowid);
+      const gid = formatGid(id, getMachineId());
+      setGidStmt.run(gid, id);
+
+      // Enqueue the registration atomically with the insert (spec 1.3); no-op
+      // while applying a remote op (echo suppression, spec 1.4). base_version is
+      // null for a create (no prior version to base against).
+      enqueueMetadataOp({
+        gid,
+        kind: "project.register",
+        origin: getMachineId(),
+        base_version: null,
+        payload: {
+          name,
+          slug,
+          path: absolutePath,
+          description: description || null,
+          remote_url: remoteUrl || null,
+        },
+        created_at: Date.now(),
+      });
+    }
+    return r;
+  })();
 
   let projectId: number;
 
@@ -255,9 +404,28 @@ export function registerProject(
       // its path is non-null, we'd already be in the PROJECT_CONFLICT
       // branch below) — so this UPDATE can never violate the name UNIQUE
       // constraint.
-      db.prepare(
-        `UPDATE projects SET name = ?, path = ?, description = ?, remote_url = ? WHERE id = ?`
-      ).run(name, absolutePath, description || null, remoteUrl || null, existing.id);
+      db.transaction(() => {
+        db.prepare(
+          `UPDATE projects SET name = ?, path = ?, description = ?, remote_url = ? WHERE id = ?`
+        ).run(name, absolutePath, description || null, remoteUrl || null, existing.id);
+        // Promoting a synthetic row is a real mutation of a syncable projects
+        // row — enqueue it (re-assertion, base_version 0) so the promotion
+        // converges on other machines rather than silently diverging.
+        enqueueMetadataOp({
+          gid: existing.gid ?? formatGid(existing.id, getMachineId()),
+          kind: "project.register",
+          origin: getMachineId(),
+          base_version: 0,
+          payload: {
+            name,
+            slug: existing.slug,
+            path: absolutePath,
+            description: description || null,
+            remote_url: remoteUrl || null,
+          },
+          created_at: Date.now(),
+        });
+      })();
       projectId = existing.id;
     } else if (existing.path !== absolutePath) {
       const conflicts: string[] = [];
@@ -291,10 +459,13 @@ export function registerProject(
 export function unregisterProject(projectId: number, dataDir?: string): void {
   const db = getDatabase();
 
-  // Capture slug before deleting the row — needed for backup subtree cleanup below.
-  const project = db.prepare("SELECT slug FROM projects WHERE id = ?").get(projectId) as
-    | { slug: string }
+  // Capture slug + gid before deleting the row — slug is needed for backup
+  // subtree cleanup below; gid identifies the unregistration in the outbox.
+  const project = db.prepare("SELECT slug, gid FROM projects WHERE id = ?").get(projectId) as
+    | { slug: string; gid: string | null }
     | undefined;
+
+  const projectGid = project?.gid ?? formatGid(projectId, getMachineId());
 
   db.transaction(() => {
     // Journal task files are KB files (no project_id), so they no longer cascade this away; journal_meta still points at the project.
@@ -312,12 +483,21 @@ export function unregisterProject(projectId: number, dataDir?: string): void {
     }
 
     db.prepare("DELETE FROM projects WHERE id = ?").run(projectId);
+
+    // Enqueue the unregistration atomically with the write (spec 1.3); no-op
+    // while applying a remote op (echo suppression, spec 1.4).
+    enqueueMetadataOp({
+      gid: projectGid,
+      kind: "project.unregister",
+      origin: getMachineId(),
+      base_version: 0,
+      payload: { project_id: projectId, slug: project?.slug ?? null },
+      created_at: Date.now(),
+    });
   })();
 
   try { syncProjectsSidecarIfStaged(getDataDir()); } catch { /* sidecar is best-effort; hooks fall back to slug "default" */ }
 
-  // Outside the txn: remove the backup subtree so re-register doesn't resurrect ghosts.
-  // next syncBackup doesn't resurrect ghost files. Best-effort; log on fail.
   if (dataDir && project?.slug) {
     const backupSubtree = join(dataDir, "backups", project.slug);
     try {

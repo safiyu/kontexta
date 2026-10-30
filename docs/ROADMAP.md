@@ -69,6 +69,18 @@ Iterate the prompt template against real raw-event samples from a few representa
 
 ---
 
+## Brain — Storage
+
+### 🟢 Brain compression
+
+**The gap.** A brain keeps the full op log of every record forever, on the remote and on each machine (see the brains design, 2026-10-30). That is deliberate: a brain remembers. But every edit stores the file's full content, so a busy brain grows by its whole history, and a bootstrap or audit over years of ops gets slow.
+
+**Direction.** Compress history without forgetting it: store content deltas between successive versions of a record instead of full copies, pack cold ranges of the log, and keep a materialized current state so reads never touch the packed history. Semantic summarisation of old history is a later layer on top, not a replacement for the raw log.
+
+**Trigger to pull forward:** a real brain whose remote database or local outbox crosses a few GB, or a bootstrap that takes more than a minute.
+
+---
+
 ## Hands — Sandboxed commands
 
 _(no open items; system has been stable since the 7.x line)_

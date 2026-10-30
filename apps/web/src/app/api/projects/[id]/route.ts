@@ -1,6 +1,6 @@
 import { checkAuth } from "@/lib/auth";
 import { NextRequest, NextResponse } from "next/server";
-import { getDatabase, unregisterProject, isValidGitRemoteUrl, withLock } from "kxta-core";
+import { getDatabase, unregisterProject, withLock } from "kxta-core";
 import { DATA_DIR, ensureDbInitialized } from "@/lib/db-init";
 import { existsSync, statSync } from "node:fs";
 import { resolve, sep } from "node:path";
@@ -50,21 +50,6 @@ export async function PATCH(
   const db = getDatabase();
   const existing = db.prepare("SELECT id FROM projects WHERE id = ?").get(n);
   if (!existing) return NextResponse.json({ error: "Project not found" }, { status: 404 });
-
-  if (body.remote_url !== undefined) {
-    if (body.remote_url === null || body.remote_url === "") {
-      db.prepare("UPDATE projects SET remote_url = NULL WHERE id = ?").run(n);
-    } else if (typeof body.remote_url !== "string") {
-      return NextResponse.json({ error: "remote_url must be a string" }, { status: 400 });
-    } else if (!isValidGitRemoteUrl(body.remote_url)) {
-      return NextResponse.json(
-        { error: "Invalid remote URL: must be https://, ssh://, git://, or user@host:path" },
-        { status: 400 }
-      );
-    } else {
-      db.prepare("UPDATE projects SET remote_url = ? WHERE id = ?").run(body.remote_url, n);
-    }
-  }
 
   // Allow updating the on-disk path of a project (e.g. user moved/renamed
   // the directory). Without this, the only recovery is unregister +

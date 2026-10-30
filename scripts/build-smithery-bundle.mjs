@@ -60,7 +60,7 @@ const DESTRUCTIVE_TOOLS = new Set([
 ]);
 
 const NEUTRAL_TOOLS = new Set([
-  "admin_commit_backup", "admin_onboard_agent", "admin_transfer_agent_context",
+  "admin_onboard_agent", "admin_transfer_agent_context",
   "calendar_entities_add", "calendar_entities_link", "calendar_entities_update",
   "calendar_events_add", "calendar_events_update",
   "files_create", "files_move", "files_update",

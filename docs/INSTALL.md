@@ -79,7 +79,7 @@ Before running `docker compose up`, open `docker-compose.hub.yml` and check the 
 
   **Required:** `PROJECT_DIR` must be set to an absolute path before running compose. The compose file includes a startup check that fails fast if `PROJECT_DIR` is not set.
 
-2. **Data Persistence**: By default, your vault (SQLite, backups, KB) is stored in `./kontexta-data` relative to the compose file. Use `DATA_DIR` to change the host-side path (e.g., `DATA_DIR=/var/lib/kontexta`).
+2. **Data Persistence**: By default, your vault (SQLite, KB, git history) is stored in `./kontexta-data` relative to the compose file. Use `DATA_DIR` to change the host-side path (e.g., `DATA_DIR=/var/lib/kontexta`).
 
    **Sharing one vault with non-Docker installs (optional):** `npx kontexta` and `pnpm dev` default to your OS data directory (`~/Library/Application Support/kontexta` on macOS, `~/.local/share/kontexta` on Linux). The container can use that same vault via the same-path mount variant documented in the compose file's `volumes` section — set `DATA_DIR` to your OS data dir and switch the mount to `${DATA_DIR}:${DATA_DIR}` with matching `KONTEXTA_DATA_DIR`.
 
@@ -128,7 +128,7 @@ docker run -d \
 **Flag breakdown:**
 - `-d`: Run in detached mode (background).
 - `-p 23002:23002`: Publish the Web UI. The WebSocket file-watcher shares this port (upgrade path `/_kontexta_ws`), so no second `-p` is needed.
-- `-v ...:/app/data`: Persist your vault (SQLite, backups, knowledge base).
+- `-v ...:/app/data`: Persist your vault (SQLite, knowledge base, git history).
 - `-v /host/path:/container/path`: Mount your projects so the agent can see them.
 - `--name kontexta`: Give the container a predictable name (useful for `docker exec` MCP tool calls).
 
@@ -400,7 +400,6 @@ If `packages/core/src/db/migrations/` gained new `.sql` files, they run automati
 - **`database is locked`** in dev — usually a leftover dev process holding the WAL handle. Stop all `pnpm dev` processes; if it persists, remove `kontexta.db-shm` and `kontexta.db-wal` from the data directory and restart.
 - **WebSocket not connecting** — the WS shares the web app's HTTP server at path `/_kontexta_ws`, so if the page loads then port reachability is already fine. Check that you're logged in (the WS uses the same `kontexta_session` cookie for auth, browser-side). If you're behind a reverse proxy, confirm it forwards the HTTP `Upgrade` header (nginx: `proxy_set_header Upgrade $http_upgrade; proxy_set_header Connection "upgrade";`).
 - **Dev server crashes the host with OOM (low-memory machines / Cloud Workstations)** — use `pnpm dev:lite` instead of `pnpm dev`. It runs webpack instead of Turbopack and caps Node's heap at 1.5 GB so Node fails fast with a recoverable error instead of pushing the VM OOM.
-- **Sync fails with "Configured global remote URL is not a valid git remote"** — only `https://`, `http://`, `ssh://`, `git://`, and scp-form (`user@host:path`) URLs are accepted. `file://` and credential helpers are rejected by design.
 - **MCP server returns "Database not initialized"** — ensure `KONTEXTA_DATA_DIR` points to the same directory the web UI uses; the MCP server opens its own SQLite handle and reads from `$KONTEXTA_DATA_DIR/kontexta.db`.
 - **Build succeeds but `/` shows a placeholder asking for a tablet** — your viewport is below 768px. Kontexta targets tablet+ on the desktop UI; widen the window or open on a larger screen.
 
@@ -437,7 +436,6 @@ The WebSocket file-watcher does not bind its own port — it attaches to Next.js
 ## Operations
 
 - **Health check:** `GET /api/health` → `200 {"status":"ok"}` when SQLite responds, `503` otherwise.
-- **Global git remote:** only `https://`, `http://`, `ssh://`, `git://`, and scp-form (`user@host:path`) URLs are accepted. `file://` and other helpers are rejected.
 - **WebSocket auth:** the WS shares the web app's HTTP server at `/_kontexta_ws`. Browsers authenticate via the same `kontexta_session` cookie used for the dashboard (no extra config). Programmatic clients can authenticate via the IP bypass list, `KONTEXTA_WS_ORIGINS`, or `KONTEXTA_WS_TOKEN` (see Configuration). Failed handshakes are dropped with a `1008` close code.
 - **Token estimation:** the file list and content header show `~Nk tok` per file plus per-folder totals. The heuristic samples each file's first 4 KB and switches between `bytes/4` (ASCII-heavy: ~10% accurate) and `bytes/3` (multi-byte: CJK/emoji, more conservative). MCP tool responses include the same `est_tokens` field plus a `total_est_tokens` for list-style tools so agents can budget their context window before pulling content.
 - **Minimum viewport:** the UI targets ≥768px. Below that, a placeholder is shown.

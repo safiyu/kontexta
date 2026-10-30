@@ -62,10 +62,11 @@ export function createDatabase(dbPath: string): Database.Database {
 
   mkdirSync(dirname(dbPath), { recursive: true });
 
-  db = new Database(dbPath);
+  db = new Database(dbPath, { timeout: 5000 });
   globalThis.__kontextaDb = db;
 
   db.pragma("journal_mode = WAL");
+  db.pragma("busy_timeout = 5000");
   db.pragma("foreign_keys = ON");
 
   runMigrations();

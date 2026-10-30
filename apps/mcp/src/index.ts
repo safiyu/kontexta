@@ -21,7 +21,6 @@ import {
   refreshIndex,
   listTags,
   listProjects,
-  syncBackup,
   bundleSearch,
   estimateTokensFromBuffer,
   clipUrl,
@@ -62,6 +61,15 @@ import {
   setInferenceDevice,
   setModelCacheDirOverride,
   rerankEngine,
+  recordClientConnected,
+  setMachineLabel,
+  getMachineLabel,
+  listClients,
+  getMachineId,
+  listConflicts,
+  getConflict,
+  resolveConflict,
+  countUnresolvedConflicts,
 } from "kxta-core";
 import RE2Class from "./re2-compat.js";
 import type RE2 from "re2";
@@ -82,7 +90,7 @@ import { registerCommitUpgradesTool } from "./journal-commit-upgrades-tool.js";
 import { registerHousekeepTool } from "./journal-housekeep-tool.js";
 import { registerCalendarTools } from "./calendar-tools.js";
 import { handleGetProfile } from "./profile-tool.js";
-import { getDataDir, profileRelPath, getEmptySections, listEvents, findConflicts, getEntity } from "kxta-core";
+import { getDataDir, profileRelPath, getEmptySections, listEvents, findConflicts, getEntity, readBrainConfig, pendingCount, startSyncLoop, stopSyncLoop } from "kxta-core";
 
 const dataDir = getDataDir();
 
@@ -502,6 +510,12 @@ const distillEngine = distillEngineEnabled
   : null;
 
 startGitPoller(process.env.KONTEXTA_PROJECT_PATH ?? process.cwd(), 30);
+// Dormant until `kontexta brain connect` stores a remote; a second loop in another process is safe (server-side dedup).
+try {
+  startSyncLoop(getDatabase());
+} catch (err) {
+  console.warn("[kontexta-mcp] sync loop not started", err);
+}
 process.on("exit", shutdownCapture);
 // Signal-handler ordering: kill detached Hands children FIRST so their
 // process groups receive SIGTERM before this process exits and orphans
@@ -516,6 +530,7 @@ async function handleShutdownSignal(signal: string) {
     ]);
   }
   shutdownCapture();
+  stopSyncLoop();
   try {
     const remaining = await gracefulShutdown(10_000);
     if (remaining > 0) {
@@ -1412,7 +1427,7 @@ server.tool(
 
 server.tool(
   "projects_list",
-  "List every registered project with id, name, absolute path, and a derived `has_hands` flag (true when the path exists on disk AND contains a `kontexta.json`). Read-only; no side effects, auth, or rate limits. Use to find the project_id to pass to scoped tools (`files_search`, `files_list`, `admin_commit_backup`, `projects_refresh_index`, etc.). To register a new project use `projects_register`; to inspect its Hands tools use `hands_list`.",
+  "List every registered project with id, name, absolute path, and a derived `has_hands` flag (true when the path exists on disk AND contains a `kontexta.json`). Read-only; no side effects, auth, or rate limits. Use to find the project_id to pass to scoped tools (`files_search`, `files_list`, `projects_refresh_index`, etc.). To register a new project use `projects_register`; to inspect its Hands tools use `hands_list`.",
   {},
   async () => {
     const result = listProjects();
@@ -1801,40 +1816,6 @@ IDEMPOTENT: re-running with the same files copies nothing if the content is unch
 
       return {
         content: [{ type: "text", text: JSON.stringify({ transferred, skipped, next_action }, null, 2) }],
-      };
-    } catch (e: any) {
-      return {
-        isError: true,
-        content: [{ type: "text", text: JSON.stringify({ error: e?.message ?? String(e) }, null, 2) }],
-      };
-    }
-  }
-);
-
-server.tool(
-  "admin_commit_backup",
-  "SIDE-EFFECTFUL: TOUCHES THE NETWORK. Sync the project's KB data into its git backup directory, create a commit, and `git push` to `origin`. AUTH: relies on the local user's git credentials (SSH agent, credential helper, etc.), there is no in-server auth. Kontexta does not rate-limit, but the remote may. Idempotent in steady state: a no-op commit is skipped, but the push still runs. Throws if the project has no configured backup repo or if push fails (network, auth, conflict). Returns `{success, copied_files_count, copied_paths}`. Use after a batch of KB writes to get changes off-machine.",
-  {
-    project_id: z.number().describe("Project ID"),
-  },
-  async ({ project_id }) => {
-    try {
-      const copiedPaths = await syncBackup(project_id, dataDir);
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(
-              {
-                success: true,
-                copied_files_count: copiedPaths.length,
-                copied_paths: copiedPaths,
-              },
-              null,
-              2
-            ),
-          },
-        ],
       };
     } catch (e: any) {
       return {
@@ -2473,6 +2454,11 @@ server.tool(
                 ...(byProject ? { by_project: byProject } : {}),
                 ...(totalEstTokens !== null ? { total_est_tokens: totalEstTokens } : {}),
                 rules_warning: getAgentRulesWarning(project_id),
+                brain: (() => {
+                  const cfg = readBrainConfig(db);
+                  const skipped = (db.prepare("SELECT COUNT(*) AS n FROM sync_skipped_ops WHERE skipped = 1").get() as { n: number }).n;
+                  return { connected: cfg.connected, name: cfg.name || null, remote: cfg.connected ? cfg.remoteUrl : null, pending: pendingCount(db), skipped };
+                })(),
                 system1: (() => {
                   const st = rerankEngine.getStatus();
                   return {
@@ -2911,8 +2897,195 @@ server.tool(
   }
 );
 
+server.tool(
+  "admin_set_machine_label",
+  "Set this machine's human-readable label (settings.machine_label). The label is how OTHER machines name conflict copies created from this one ('<filename> (from <label>).ext'), so pick something short and distinctive per machine (e.g. the machine's name or the user's workstation). Pass an empty string to clear it. Affects only conflict-copy naming; it does NOT change the stable machine_id that GIDs are keyed on. Returns the previous and new label.",
+  {
+    label: z.string().max(100).describe("The new label for this machine. Max 100 chars. Empty string clears the label."),
+  },
+  async ({ label }) => {
+    try {
+      const previous = getMachineLabel();
+      setMachineLabel(label);
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(
+              {
+                ok: true,
+                machine_id: getMachineId(),
+                previous_label: previous,
+                label,
+              },
+              null,
+              2,
+            ),
+          },
+        ],
+      };
+    } catch (e) {
+      return {
+        isError: true,
+        content: [{ type: "text", text: JSON.stringify({ error: (e as Error).message }, null, 2) }],
+      };
+    }
+  }
+);
+
+server.tool(
+  "admin_list_clients",
+  "List every machine that has ever connected to this vault (the sync group), most-recently-seen first. Each entry has machine_id, hostname, first_seen_at, last_seen_at, and is_local (true for the machine this MCP server runs on). Read-only; no side effects, auth, or rate limits. Use to see which machines are part of the sync group or to check that a new machine registered on startup.",
+  {},
+  async () => {
+    try {
+      const machineId = getMachineId();
+      const clients = listClients().map((c) => ({
+        ...c,
+        is_local: c.machine_id === machineId,
+      }));
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(
+              {
+                machine_id: machineId,
+                machine_label: getMachineLabel(),
+                count: clients.length,
+                clients,
+              },
+              null,
+              2,
+            ),
+          },
+        ],
+      };
+    } catch (e) {
+      return {
+        isError: true,
+        content: [{ type: "text", text: JSON.stringify({ error: (e as Error).message }, null, 2) }],
+      };
+    }
+  }
+);
+
+server.tool(
+  "conflicts_list",
+  "List sync conflicts in the local conflict registry (Phase 5 Conflict Manager). A conflict is recorded when the storage server delivers an operation for a file that was modified locally since the last sync (base_version drift); the canonical file is preserved and the remote version is forked to a '<filename> (from <machine_label>).<ext>' copy. Defaults to unresolved conflicts, newest first. Pass status='all' to include resolved, status='resolved' for the resolved history, and `limit` to cap the page. Returns {conflicts, count, unresolved}: `count` is the length of the returned list, `unresolved` is the global unresolved total (use it to decide whether there is anything to act on). Each conflict carries gid, file_path, conflict_path, origin, origin_label, base_version, server_seq, local_content, remote_content, diff, additions, deletions, status, resolution, resolved_at, created_at. Read-only; no side effects, auth, or rate limits. To inspect a single conflict use conflicts_get; to fix one use conflicts_resolve.",
+  {
+    status: z
+      .enum(["unresolved", "resolved", "all"])
+      .optional()
+      .describe("Filter by resolution state. Defaults to 'unresolved'."),
+    limit: z
+      .number()
+      .int()
+      .positive()
+      .optional()
+      .describe("Optional page size. Positive integer; omit for no cap."),
+  },
+  async ({ status, limit }) => {
+    try {
+      const conflicts = listConflicts(undefined, { status, limit });
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(
+              {
+                conflicts,
+                count: conflicts.length,
+                unresolved: countUnresolvedConflicts(),
+              },
+              null,
+              2,
+            ),
+          },
+        ],
+      };
+    } catch (e) {
+      return {
+        isError: true,
+        content: [{ type: "text", text: JSON.stringify({ error: (e as Error).message }, null, 2) }],
+      };
+    }
+  }
+);
+
+server.tool(
+  "conflicts_get",
+  "Fetch one sync conflict by its global ID (gid), for the Conflict Manager. Returns the full ConflictRecord including both content snapshots (local_content, the canonical file as it is on THIS machine, and remote_content, the version that arrived from the other machine), the unified line diff, addition/deletion counts, and the conflict copy's on-disk path. If there is no unresolved conflict for the gid it returns the most recent resolved one; returns an error if no conflict exists at all. gid is '<local_id>@<machine_id>' as reported by conflicts_list. Read-only; no side effects, auth, or rate limits. After reviewing the diff, resolve with conflicts_resolve.",
+  {
+    gid: z.string().describe("Global ID of the conflict, e.g. '104@4f9e1a8b3c7d2e0f' (as returned by conflicts_list)."),
+  },
+  async ({ gid }) => {
+    try {
+      const conflict = getConflict(gid);
+      if (!conflict) {
+        return {
+          isError: true,
+          content: [{ type: "text", text: JSON.stringify({ error: `No conflict found for gid: ${gid}`, gid }, null, 2) }],
+        };
+      }
+      return {
+        content: [{ type: "text", text: JSON.stringify(conflict, null, 2) }],
+      };
+    } catch (e) {
+      return {
+        isError: true,
+        content: [{ type: "text", text: JSON.stringify({ error: (e as Error).message }, null, 2) }],
+      };
+    }
+  }
+);
+
+server.tool(
+  "conflicts_resolve",
+  "Resolve one sync conflict using one of 4 deterministic strategies (spec 1.7). `strategy`: 'keep-server' = accept the remote version, overwrite the canonical file, delete the conflict copy. 'keep-mine' = keep the local version, re-assert it to the server (version bump + outbox op), delete the conflict copy. 'keep-both' = keep the canonical file AND permanently retain the conflict copy as its own newly-tracked file (no outbox op is dropped; the copy is registered with a fresh gid). 'merged' = use your own `mergedContent` (REQUIRED for this strategy) as the new canonical content, push it, delete the conflict copy. Only acts on an UNRESOLVED conflict for the gid; if none exists it is an error. Returns {success, gid, strategy, resolvedAt, outboxOpId?, newFileGid?}. This is a write operation: it mutates the local file and may enqueue an outbound op for sync.",
+  {
+    gid: z.string().describe("Global ID of the conflict to resolve, e.g. '104@4f9e1a8b3c7d2e0f' (as returned by conflicts_list)."),
+    strategy: z
+      .enum(["keep-server", "keep-mine", "keep-both", "merged"])
+      .describe("Resolution strategy. See tool description for each behavior."),
+    mergedContent: z
+      .string()
+      .optional()
+      .describe("REQUIRED when strategy='merged': the full merged file content to write as the new canonical version. Ignored for all other strategies."),
+  },
+  async ({ gid, strategy, mergedContent }) => {
+    try {
+      if (strategy === "merged" && typeof mergedContent !== "string") {
+        return {
+          isError: true,
+          content: [{ type: "text", text: JSON.stringify({ error: "strategy='merged' requires mergedContent (the full merged file content)" }, null, 2) }],
+        };
+      }
+      const result = await resolveConflict(gid, { strategy, mergedContent });
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      };
+    } catch (e) {
+      return {
+        isError: true,
+        content: [{ type: "text", text: JSON.stringify({ error: (e as Error).message }, null, 2) }],
+      };
+    }
+  }
+);
+
 async function main() {
   const transport = new StdioServerTransport();
+  // Register this machine in the clients registry (Phase 2 identity). The DB
+  // is normally already open from the module-load profile instructions, but
+  // getDatabase() is called defensively to be certain. Non-fatal: a registry
+  // failure must not prevent the MCP server from starting.
+  try {
+    getDatabase();
+    recordClientConnected(os.hostname());
+  } catch (e) {
+    console.warn("[identity] recordClientConnected failed:", e);
+  }
   {
     const projects = listProjects()
       .filter((p: any) => p.path && existsSync(p.path))

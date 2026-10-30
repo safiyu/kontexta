@@ -1,0 +1,47 @@
+{
+  "name": "kontexta-relay",
+  "version": "7.0.0",
+  "description": "Kontexta relay: one server hosting many fully separate brains, each the durable copy and sync engine for one user's machines",
+  "type": "module",
+  "license": "Apache-2.0",
+  "author": "Safiyu",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "start": "node dist/server.js",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.0.0",
+    "better-sqlite3": "^12.10.0",
+    "hono": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  },
+  "rulesVersion": "3.2.0",
+  "bin": {
+    "kontexta-relay": "dist/server.js"
+  },
+  "files": [
+    "dist",
+    "src/db/schema.sql"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": [
+    "kontexta",
+    "brain",
+    "sync",
+    "mcp"
+  ]
+}

@@ -17,6 +17,8 @@ export interface FileRecord {
   content_class: ContentClass | null;
   source_path: string | null;
   content_hash: string | null;
+  /** Global id `<localId>@<machineId>` (migration 013). */
+  gid: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -28,6 +30,8 @@ export interface ProjectRecord {
   description: string | null;
   path: string | null;
   remote_url: string | null;
+  /** Global id `<localId>@<machineId>` (migration 013). */
+  gid: string | null;
   created_at: string;
 }
 

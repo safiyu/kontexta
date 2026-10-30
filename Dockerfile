@@ -18,6 +18,7 @@ COPY apps/publish/package.json ./apps/publish/
 COPY packages/core/package.json ./packages/core/
 COPY packages/cli/package.json ./packages/cli/
 COPY packages/reranker-model/package.json ./packages/reranker-model/
+COPY packages/relay/package.json ./packages/relay/
 
 # Install dependencies
 RUN pnpm install --frozen-lockfile

@@ -22,7 +22,7 @@ describe("MCPPipelineRow", () => {
 
   it("marks the row as idle via data-status attribute", () => {
     const { container } = render(
-      <MCPPipelineRow label="kxta.commit_backup" result="idle" status="idle" />,
+      <MCPPipelineRow label="kxta.files_move" result="idle" status="idle" />,
     );
     const row = container.querySelector('[data-status="idle"]');
     expect(row).not.toBeNull();

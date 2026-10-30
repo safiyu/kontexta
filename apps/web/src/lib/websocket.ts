@@ -3,7 +3,6 @@ import type { Server as HttpServer, IncomingMessage } from "node:http";
 import { Server } from "node:http";
 import type { Duplex } from "node:stream";
 import { createFileWatcher, type WatcherEvent } from "kxta-core";
-import type { SyncEvent } from "./sync-events";
 import { checkAuth, verifySession } from "@/lib/auth";
 
 // The dedicated upgrade path. WS shares Next.js's HTTP server (single port);
@@ -151,7 +150,7 @@ export function attachWebSocketServer(watchPaths: string[]) {
   return wss;
 }
 
-function broadcast(payload: unknown) {
+export function broadcast(payload: unknown) {
   const message = JSON.stringify(payload);
   for (const client of clients) {
     if (client.readyState !== WebSocket.OPEN) continue;
@@ -166,8 +165,4 @@ function broadcast(payload: unknown) {
       clients.delete(client);
     }
   }
-}
-
-export function broadcastSync(event: SyncEvent): void {
-  broadcast(event);
 }

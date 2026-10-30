@@ -82,10 +82,10 @@ describe("generated tool list", () => {
     const names = KXTA_TOOLS.map((t) => t.name);
     expect(names).toContain("files_create");
     expect(new Set(names).size).toBe(names.length);
-    for (const n of ["files_delete", "folders_delete", "files_restore", "admin_commit_backup"]) expect(KXTA_TOOLS.find((t) => t.name === n)?.destructive).toBe(true);
+    for (const n of ["files_delete", "folders_delete", "files_restore"]) expect(KXTA_TOOLS.find((t) => t.name === n)?.destructive).toBe(true);
     expect(KXTA_TOOLS.find((t) => t.name === "files_read")?.destructive).toBe(false);
     // Guard against a naming change silently turning destructive tools into "safe" ones.
     // Mirrors the name-based rule in apps/mcp/scripts/generate-manifest.js (isDestructive).
-    for (const t of KXTA_TOOLS) if (/(^|[_/])delete(_|$)/.test(t.name) || t.name === "files_restore" || t.name === "admin_commit_backup") expect(t.destructive, t.name).toBe(true);
+    for (const t of KXTA_TOOLS) if (/(^|[_/])delete(_|$)/.test(t.name) || t.name === "files_restore") expect(t.destructive, t.name).toBe(true);
   });
 });

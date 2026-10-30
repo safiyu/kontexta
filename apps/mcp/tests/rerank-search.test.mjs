@@ -134,6 +134,12 @@ async function run() {
     assert(Array.isArray(overviewRes.system1.loaded_models), "Expected loaded_models array");
     console.log(`  ✓ admin_overview reported system1 status (device: ${overviewRes.system1.device})`);
 
+    assert(overviewRes.brain, "Expected a brain block in admin_overview");
+    assert.strictEqual(overviewRes.brain.connected, false, "A fresh vault is not connected to a brain");
+    assert.strictEqual(typeof overviewRes.brain.pending, "number");
+    assert.strictEqual(typeof overviewRes.brain.skipped, "number");
+    console.log("  ✓ admin_overview reported the brain block");
+
     console.log("\n[test] All rerank search tests passed successfully!");
   } finally {
     child.kill();

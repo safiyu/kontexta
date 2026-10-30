@@ -49,7 +49,7 @@ export const READ_ONLY_TOOL_NAMES = new Set<string>([
 
 const WRITE_TOOL_NAMES = new Set<string>([
   // underscore (current, 6.0.0+)
-  "admin_commit_backup", "admin_onboard_agent", "admin_transfer_agent_context",
+  "admin_onboard_agent", "admin_transfer_agent_context",
   "calendar_entities_add", "calendar_entities_delete", "calendar_entities_link", "calendar_entities_update",
   "calendar_events_add", "calendar_events_delete", "calendar_events_update",
   "files_create", "files_delete", "files_move",
@@ -61,7 +61,7 @@ const WRITE_TOOL_NAMES = new Set<string>([
   "resources_add_report", "resources_clip_url", "resources_delete_report",
   "tags_add", "tags_remove", "tags_search", "tags_set_favorite",
   // dot-notation (5.0.0-5.x — kept for historical journal entries)
-  "admin.commit_backup", "admin.onboard_agent", "admin.transfer_agent_context",
+  "admin.onboard_agent", "admin.transfer_agent_context",
   "calendar.entities.add", "calendar.entities.delete", "calendar.entities.link", "calendar.entities.update",
   "calendar.events.add", "calendar.events.delete", "calendar.events.update",
   "files.create", "files.delete", "files.move",

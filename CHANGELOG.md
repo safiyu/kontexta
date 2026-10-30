@@ -1,5 +1,58 @@
 # Changelog
 
+## 7.0.0 - Brains: one storage architecture, optional remote (2026-10-30)
+
+Everything Kontexta knows about you is now one thing, your **brain**. It lives on your machine as markdown files and SQLite, and you may connect it to a **remote** that holds a durable copy and syncs your machines. One architecture, no separate "local mode".
+
+### Added
+
+- **Brains and the relay.** `kontexta-relay` (`npx kontexta-relay`, the `kontexta-relay` Docker image, or `docker-compose.relay.yml`) hosts any number of fully separate brains on one server. For each brain it is the durable copy (nothing is ever pruned) and the sync engine between that user's machines. Teammates can share a server; nobody sees another brain.
+- **Share ids.** A brain is identified by a Kontexta-generated share id (52 characters, Crockford base32). Creating a brain needs the server's enrollment secret; joining one needs only its share id. The server stores only a peppered hash of it.
+- **`kontexta brain`** (`connect`, `status`, `share`, `machines`, `disconnect`, `push`, `pull`, `run`) and a **Brain page** in the web app. `connect` creates or joins a brain; `brain machines remove` revokes a lost machine.
+- **End-to-end encryption.** Op payloads are AES-256-GCM envelopes (bound to gid, kind and origin) encrypted on the machine with a key derived from the share id (HKDF-SHA256). The machine sends the relay only a derived routing id, so the relay never sees the share id, the key, or any content, and refuses plaintext payloads. Old ciphertext that fails to authenticate stops the pull instead of being skipped.
+- **Journal union merge.** Daily journal files merge as the sorted union of their timestamped entries when two machines write the same day (including two machines that each created the file), so they never produce conflicts.
+- **Snapshot bootstrap.** A new or replacement machine pulls the brain's current state instead of replaying its history. A machine that already has content keeps matching files and forks a conflict copy where it differs.
+- **Sync loop everywhere.** The web app and the MCP server start the loop at boot (dormant until connected); `kontexta brain run` runs it in the foreground.
+- **`admin_overview`** reports a `brain` block (connected, name, remote, pending, skipped).
+- **Migrations 016 to 019:** per-record, per-kind-family versions (`gid_versions`), `sync_skipped_ops`, the brain settings and a machine secret.
+
+### Fixed
+
+- **Conflicts converge, and nobody loses an edit.** Each machine sends the version it had seen when it made the edit (captured at enqueue time, per record and kind family), so edits on top of everything pulled are accepted. The losing machine keeps its file and gets a conflict copy of the winner, conflict-flagged deletes are never applied, and every resolution (including keep-server) is pushed.
+- **Remote files match by id, never by path.** Two machines creating the same path produce a path conflict instead of swapping content.
+- **Tags are full state.** `tag.add` and `tag.remove` became one `tag.set` carrying the file's full tag list, tags set at file creation replicate, and a tag change no longer causes a false content conflict.
+- **Ops use global ids.** Tags, favorites, journal metadata, calendar events and links, and project links are resolved by gid; before, they could attach to an unrelated record with the same local id on another machine.
+- **A failing remote op no longer blocks sync.** It is recorded in `sync_skipped_ops` and skipped (retried five times first, unless it can never apply). Malformed ops still stop the pull, and a mid-page failure keeps the progress already made.
+- **Keep-mine, keep-both and merged use the file's current content,** and conflict diffs are only computed for one conflict at a time and are capped.
+- **The watcher never syncs conflict copies,** and files in project repos never sync.
+
+### Security
+
+- **The relay is blind.** It stores ciphertext only (see End-to-end encryption). It still sees record ids, op kinds, origin machine ids, timing and sizes. `POST /brains/join` now takes `route_id` instead of the share id, and `GET /brains/snapshot/index` is gone because the relay can no longer read content hashes.
+- **Remote ops cannot write outside the data directory.** Paths travel relative to the data directory and are resolved against each machine's own; folder ops cannot target the data directory itself.
+- **The relay authenticates everything per brain.** Every query is scoped to the brain its token belongs to, `POST /ops` rejects ops whose `origin` is not the authenticated machine, and the server refuses to start on the default pepper when bound beyond loopback. The compose file publishes on `127.0.0.1` by default.
+
+### Breaking
+
+- `kontexta endpoint` is removed; use `kontexta brain`. The server package is renamed from `kontexta-storage-server` to `kontexta-relay`, the compose file to `docker-compose.relay.yml`, and its environment variables to `KXTA_RELAY_*`.
+- Op payloads changed shape (relative paths, `project_gid`, `entity_gid`, `tag.set`). The server schema changed and its database is not migrated: start a fresh one. Upgrade all machines and the server together.
+- Files outside the data directory (project-repo files) are never synced; only the knowledge base is.
+
+### Removed
+
+- **Git remote sync is gone.** The legacy mechanism that pushed/pulled the whole knowledge-base vault to a configured Git remote has been decommissioned. It performed repo-level working-tree merges, which produced merge conflicts inside the SQLite database file, broke fine-grained relationship mapping (tags, calendar entities, journal metadata), required per-remote credentials, and ran a second, competing conflict regime alongside the app's own. Removing it isolates Git strictly to **local** history tracking.
+  - **Core:** `syncGlobalVault`, `getGlobalRemote`, `setGlobalRemote`, and the `SyncStage` type (plus their now-dead helpers) are removed from `kxta-core` and no longer exported.
+  - **Dashboard:** the Sync popover, the sync status bar, the `useSyncStatus` hook, the sync event bus, and the `broadcastSync` WebSocket event are removed, along with the `/api/git/sync-all`, `/api/git/remote`, and per-project `/api/projects/[id]/sync` routes and the `remote_url` field on projects.
+  - **MCP tool removed:** `admin_commit_backup` is no longer registered; calling it returns tool-not-found.
+
+### Retained
+
+- **Local Git history & rollback stay intact.** `commitFile`, `commitDelete`, `getHistory`, `getDiff`, and `restoreVersion` (and the dashboard's history/restore UI built on them) are unchanged — the local Git repo is now used purely for local commit history, point-in-time diffs, and version rollbacks, with no remote attached.
+
+### Notes
+
+- This is a breaking change for anyone who relied on pushing the vault to a Git remote. Multi-device sync is being replaced by a new asynchronous, operation-based local-first storage module (machine identity + global IDs, an operation outbox, short-polling sync against a dedicated storage server, and a Conflict Manager). See the storage-module plan for details.
+
 ## 6.1.2 - Skill-bridge rules carry the workflow rules and their own refresh command (2026-10-14)
 
 ### Changed

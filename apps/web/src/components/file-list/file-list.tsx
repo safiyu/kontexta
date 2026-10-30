@@ -47,7 +47,6 @@ interface FileListProps {
   selectedProject: Project | null;
   selectedSection?: "projects" | "knowledge" | "favorites" | "tags" | null;
   basePath?: string | null;
-  onSync: () => void;
   onUnregisterProject?: () => void;
   onDeleteFolder?: () => void;
   loading?: boolean;
@@ -70,7 +69,6 @@ export function FileList({
   selectedProject,
   selectedSection,
   basePath,
-  onSync,
   onUnregisterProject,
   onDeleteFolder,
   loading,
@@ -232,7 +230,6 @@ export function FileList({
                     a.remove();
                   },
                 },
-                { label: "Sync Project", icon: <RotateCw className="w-3.5 h-3.5" aria-hidden />, onSelect: onSync },
                 { label: "Scan for New Files", icon: <Search className="w-3.5 h-3.5" aria-hidden />, onSelect: onRefresh },
                 { label: "Onboard Agent", icon: <span>✨</span>, onSelect: () => setOnboardOpen(true) },
                 ...(!selectedFolder && onUnregisterProject

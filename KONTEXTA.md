@@ -28,7 +28,7 @@ This project is registered with kontexta. Honor these rules to keep the index, h
 
 **Tag new KB files at creation time.** Pass `tags` on `files_create`, or call `tags_add` immediately after. Untagged files are recoverable but invisible to `files_find_related`.
 
-**`admin_overview({mode: "whats_new"})` early. `admin_commit_backup` late.** Run it at session start if you've been away — it returns files added/changed since a cutoff. End the session with `admin_commit_backup` if you mutated KB files and the project has a remote.
+**`admin_overview({mode: "whats_new"})` early.** Run it at session start if you've been away — it returns files added/changed since a cutoff.
 
 **Use `.mmd` for diagrams, not fenced code in `.md`.** When creating an architecture / flow / sequence diagram, or visualizing calendar events/timelines, call `files_create` with `format: "mmd"` and `destination: "knowledge"`, putting the raw mermaid source as the body (no ```` ```mermaid ```` fence). Never write `.mmd` files directly into the project repo. The web UI renders `.mmd` files as live diagrams with SVG/PNG export; mermaid embedded in markdown is just text. Default folder: `mermaid/` (or `<project>/mermaid/` for project-scoped diagrams).
 
@@ -143,7 +143,6 @@ The matrix below is grouped by intent. For each tool: when to reach for it, the 
 | `files_restore` | Roll back a KB file to an earlier revision | Want to use raw `git` | |
 | `files_diff_against_disk` | Find drift after raw filesystem edits | Normal search staleness | `projects_refresh_index` |
 | `projects_refresh_index` | Rescan after out-of-band changes | Normal in-app edits | |
-| `admin_commit_backup` | Push KB changes to remote git | Local-only work | |
 
 ### Discover
 

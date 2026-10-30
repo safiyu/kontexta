@@ -8,7 +8,7 @@ const project = { id: 7, name: "demo", path: "/tmp/demo", remote_url: null, agen
 function renderList(extra: Record<string, unknown> = {}) {
   const props = {
     files: [], selectedFileId: null, onSelectFile: vi.fn(), sortBy: "updated_at" as const, onSortChange: vi.fn(),
-    selectedFolder: null, selectedProject: project, selectedSection: "projects" as const, onSync: vi.fn(),
+    selectedFolder: null, selectedProject: project, selectedSection: "projects" as const,
     projects: [project], onRefresh: vi.fn(), onNewFile: vi.fn(), ...extra,
   };
   render(<FileList {...props} />);

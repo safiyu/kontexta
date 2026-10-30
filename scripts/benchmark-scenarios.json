@@ -76,18 +76,14 @@
         "files": [
           "apps/web/src/lib/websocket.ts",
           "apps/web/src/hooks/use-websocket.ts",
-          "apps/web/src/hooks/use-sync-status.ts",
           "apps/web/src/app/home-client.tsx",
-          "apps/web/src/components/layout/top-bar.tsx",
-          "apps/web/src/lib/sync-events.ts"
+          "apps/web/src/components/layout/top-bar.tsx"
         ]
       },
       "with_kontexta": {
-        "rationale": "Kontexta search('websocket reconnect') returns only the WS server and hook.",
+        "rationale": "Kontexta search('websocket reconnect') returns only the WS server module.",
         "files": [
-          "apps/web/src/lib/websocket.ts",
-          "apps/web/src/hooks/use-sync-status.ts",
-          "apps/web/src/lib/sync-events.ts"
+          "apps/web/src/lib/websocket.ts"
         ]
       }
     },
