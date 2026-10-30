@@ -28,7 +28,7 @@
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { recordGidVersion } from "../../src/storage/versions.js";
-import { mkdtempSync, rmSync, existsSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createDatabase, closeDatabase } from "../../src/db/index.js";
@@ -841,6 +841,66 @@ describe("storage client (M68)", () => {
       const rows = db.prepare("SELECT gid, status, remote_content FROM conflicts").all() as Array<Record<string, unknown>>;
       expect(rows).toEqual([{ gid: REMOTE_GID(1), status: "unresolved", remote_content: "loser-content" }]);
       expect(res.cursor).toBe(2);
+    });
+
+    const versionOf = (n: number): number =>
+      (db.prepare("SELECT version FROM gid_versions WHERE gid = ?").get(REMOTE_GID(n)) as { version: number } | undefined)?.version ?? 0;
+
+    it("does not record the gid version of an op whose apply failed transiently", async () => {
+      setEndpoint(db);
+      mkdirSync(join(testDir, "knowledge"), { recursive: true });
+      writeFileSync(join(testDir, "knowledge", "blocker.md"), "x");
+      const bad = remoteRow(2, 2, { gid_version: 1, payload: { path: join(testDir, "knowledge", "blocker.md", "x.md"), content: "b" } });
+      const rows = [remoteRow(1, 1, { gid_version: 1 }), bad, remoteRow(3, 3, { gid_version: 1 })];
+      const first = await pullRemoteOps(db, { fetchImpl: fakeFetch(serveGet(rows)).fetch });
+      expect(first.error).toMatch(/seq 2/);
+      expect([versionOf(1), versionOf(2), versionOf(3)]).toEqual([1, 0, 0]);
+      rmSync(join(testDir, "knowledge", "blocker.md"));
+      const second = await pullRemoteOps(db, { fetchImpl: fakeFetch(serveGet(rows)).fetch });
+      expect(second.error).toBeNull();
+      expect([versionOf(1), versionOf(2), versionOf(3)]).toEqual([1, 1, 1]);
+    });
+
+    it("forks an accepted remote op after this machine's own push for the gid was flagged conflict", async () => {
+      setEndpoint(db);
+      await pullRemoteOps(db, { fetchImpl: fakeFetch(serveGet([remoteRow(1, 1)])).fetch });
+      const canonical = join(testDir, "knowledge", "r1.md");
+      writeFileSync(canonical, "mine");
+      enqueueOp(db, validOp(1, { gid: REMOTE_GID(1), kind: "file.update", base_version: 0 }));
+      const push = fakeFetch((_u, init) => ({
+        status: 200,
+        body: { results: JSON.parse(init!.body as string).map((o: Record<string, unknown>) => ({ client_seq: o.client_seq, seq: 5, status: "conflict", duplicate: false, version: 2 })) },
+      }));
+      expect((await pushOutbox(db, { fetchImpl: push.fetch })).conflicts.length).toBe(1);
+      const theirs = remoteRow(2, 1, { origin: "bbbbbbbbbbbbbbbb", payload: { path: canonical, content: "theirs" }, gid_version: 1 });
+      const res = await pullRemoteOps(db, { fetchImpl: fakeFetch(serveGet([remoteRow(1, 1), theirs])).fetch });
+      expect(res.error).toBeNull();
+      expect(readFileSync(canonical, "utf8")).toBe("mine");
+      expect((db.prepare("SELECT COUNT(*) AS n FROM conflicts WHERE status = 'unresolved'").get() as { n: number }).n).toBe(1);
+    });
+
+    it("forks when a local content op for the gid is still unsent", async () => {
+      setEndpoint(db);
+      await pullRemoteOps(db, { fetchImpl: fakeFetch(serveGet([remoteRow(1, 1)])).fetch });
+      const canonical = join(testDir, "knowledge", "r1.md");
+      writeFileSync(canonical, "mine");
+      enqueueOp(db, validOp(1, { gid: REMOTE_GID(1), kind: "file.update", base_version: 0 }));
+      const theirs = remoteRow(2, 1, { origin: "bbbbbbbbbbbbbbbb", payload: { path: canonical, content: "theirs" } });
+      await pullRemoteOps(db, { fetchImpl: fakeFetch(serveGet([remoteRow(1, 1), theirs])).fetch });
+      expect(readFileSync(canonical, "utf8")).toBe("mine");
+      expect((db.prepare("SELECT COUNT(*) AS n FROM conflicts WHERE status = 'unresolved'").get() as { n: number }).n).toBe(1);
+    });
+
+    it("does not apply a conflict-flagged file.delete and keeps the local file", async () => {
+      setEndpoint(db);
+      await pullRemoteOps(db, { fetchImpl: fakeFetch(serveGet([remoteRow(1, 1)])).fetch });
+      const canonical = join(testDir, "knowledge", "r1.md");
+      const del = remoteRow(2, 1, { kind: "file.delete", origin: "bbbbbbbbbbbbbbbb", status: "conflict", payload: { path: canonical } });
+      const res = await pullRemoteOps(db, { fetchImpl: fakeFetch(serveGet([remoteRow(1, 1), del])).fetch });
+      expect(res.error).toBeNull();
+      expect(res.conflicts.length).toBe(1);
+      expect(existsSync(canonical)).toBe(true);
+      expect(db.prepare("SELECT 1 FROM files WHERE gid = ?").get(REMOTE_GID(1))).toBeDefined();
     });
 
     it("returns 'not connected' when endpoint credentials are not set", async () => {

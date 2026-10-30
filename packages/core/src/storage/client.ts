@@ -66,8 +66,8 @@ import { parseOp, type Op } from "./op.js";
 import { markAcked, markFailed, markSent, pendingCount } from "./outbox.js";
 import { applyRemoteOp } from "./apply.js";
 import { UnappliableOpError } from "./errors.js";
-import { forkConflictFromOp } from "./conflicts.js";
-import { bumpPendingBases, knownGidVersions, recordGidVersion } from "./versions.js";
+import { ensureConflictsTable, forkConflictFromOp } from "./conflicts.js";
+import { bumpPendingBases, clearLostPush, hasLostPush, knownGidVersions, markLostPush, recordGidVersion } from "./versions.js";
 
 // ---------------------------------------------------------------------------
 // Tunables (spec 1.6)
@@ -538,6 +538,7 @@ export async function pushOutbox(db: Database, options: PushOptions = {}): Promi
       // terminal — retrying it would only re-dedup), and the conflict is
       // surfaced for the user / the Phase 5 Conflict Manager.
       conflicts.push(w.op);
+      if (w.op.kind === "file.create" || w.op.kind === "file.update") markLostPush(db, w.op.gid);
     }
     markAcked(db, w.id, r.seq);
     recordGidVersion(db, w.op.gid, r.version ?? (knownByGid.get(w.op.gid) ?? 0) + 1);
@@ -603,10 +604,20 @@ export function advanceSyncCursor(db: Database, seq: number): void {
   ).run(seq, Date.now());
 }
 
-/** Conflict-flagged content ops fork a conflict copy when this machine already has the file. */
-function forksCanonicalContent(db: Database, op: Op): boolean {
+/** True when a remote content op must be parked as a conflict copy instead of overwriting the local file. */
+export function shouldForkInsteadOfApply(db: Database, op: Op, status: unknown): boolean {
   if (op.kind !== "file.create" && op.kind !== "file.update") return false;
-  return db.prepare("SELECT 1 FROM files WHERE gid = ?").get(op.gid) !== undefined;
+  if (db.prepare("SELECT 1 FROM files WHERE gid = ?").get(op.gid) === undefined) return false;
+  if (status === "conflict" || hasLostPush(db, op.gid)) return true;
+  const unsent = db
+    .prepare(
+      `SELECT 1 FROM outbox WHERE gid = ? AND kind IN ('file.create', 'file.update')
+       AND status IN ('pending', 'sent', 'failed') LIMIT 1`,
+    )
+    .get(op.gid);
+  if (unsent !== undefined) return true;
+  ensureConflictsTable(db);
+  return db.prepare("SELECT 1 FROM conflicts WHERE gid = ? AND status = 'unresolved'").get(op.gid) !== undefined;
 }
 
 function clearApplyFailure(db: Database, seq: number): void {
@@ -709,12 +720,12 @@ export async function pullRemoteOps(db: Database, options: PullOptions = {}): Pr
     for (const row of rows) {
       polled++;
       const rowSeq = typeof row.seq === "number" ? row.seq : null;
-      if (typeof row.gid === "string" && typeof row.gid_version === "number") {
-        recordGidVersion(db, row.gid, row.gid_version);
-      }
+      const rowGid = typeof row.gid === "string" ? row.gid : null;
+      const rowVersion = typeof row.gid_version === "number" ? row.gid_version : null;
       // Own-origin: this is OUR op echoed back from the authoritative log.
-      // The local state IS the source for it — skip, do not re-apply.
+      // The local state IS the source for it, so record its version and skip it.
       if (typeof row.origin === "string" && row.origin === machineId) {
+        if (rowGid !== null && rowVersion !== null) recordGidVersion(db, rowGid, rowVersion);
         if (rowSeq !== null) done = rowSeq;
         continue;
       }
@@ -740,21 +751,25 @@ export async function pullRemoteOps(db: Database, options: PullOptions = {}): Pr
           error: `refusing to advance past malformed op (seq ${String(row.seq)})`,
         };
       }
-      const seq = typeof row.seq === "number" ? row.seq : 0;
+      const seq = rowSeq ?? 0;
       try {
         if (row.status === "conflict") conflicts.push(op);
-        if (row.status === "conflict" && forksCanonicalContent(db, op)) {
-          // Lost optimistic concurrency: keep the canonical file, park the remote content as a conflict copy.
+        if (row.status === "conflict" && op.kind === "file.delete") {
+          // Lost optimistic concurrency: never delete a file another machine just edited.
+        } else if (shouldForkInsteadOfApply(db, op, row.status)) {
           forkConflictFromOp(op, db, { serverSeq: seq });
+          clearLostPush(db, op.gid);
         } else {
           await applyRemoteOp(op, { db });
         }
         applied++;
         clearApplyFailure(db, seq);
+        if (rowGid !== null && rowVersion !== null) recordGidVersion(db, rowGid, rowVersion);
         if (rowSeq !== null) done = rowSeq;
       } catch (err) {
         if (recordApplyFailure(db, seq, op, err)) {
           skipped++;
+          if (rowGid !== null && rowVersion !== null) recordGidVersion(db, rowGid, rowVersion);
           if (rowSeq !== null) done = rowSeq;
           continue;
         }
