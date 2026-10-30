@@ -44,8 +44,7 @@ export type OpKind =
   | "file.move"
   | "folder.create"
   | "folder.delete"
-  | "tag.add"
-  | "tag.remove"
+  | "tag.set"
   | "favorite.set"
   | "project.register"
   | "project.unregister"
@@ -53,6 +52,26 @@ export type OpKind =
   | "calendar.event.upsert"
   | "calendar.link.upsert"
   | "journal.meta.upsert";
+
+/** Ops that version independently on the server: file content, metadata, and each other kind on its own. */
+export type KindFamily =
+  | "content"
+  | "metadata"
+  | "folder"
+  | "project"
+  | "calendar.entity"
+  | "calendar.event"
+  | "calendar.link"
+  | "journal";
+
+export function kindFamily(kind: OpKind): KindFamily {
+  if (kind.startsWith("file.")) return "content";
+  if (kind === "tag.set" || kind === "favorite.set") return "metadata";
+  if (kind.startsWith("folder.")) return "folder";
+  if (kind.startsWith("project.")) return "project";
+  if (kind === "journal.meta.upsert") return "journal";
+  return kind as KindFamily;
+}
 
 /** Runtime list of every {@link OpKind}; `parseOp` validates against this. */
 export const OP_KINDS: readonly OpKind[] = [
@@ -62,8 +81,7 @@ export const OP_KINDS: readonly OpKind[] = [
   "file.move",
   "folder.create",
   "folder.delete",
-  "tag.add",
-  "tag.remove",
+  "tag.set",
   "favorite.set",
   "project.register",
   "project.unregister",

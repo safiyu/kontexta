@@ -79,13 +79,13 @@ describe("metadata write-routine outbox instrumentation (M55)", () => {
     rmSync(TEST_DATA_DIR, { recursive: true, force: true });
   });
 
-  it("addTags appends a tag.add op keyed by the file gid, carrying tag names", async () => {
+  it("addTags appends one tag.set op carrying the file's full tag list", async () => {
     const file = await makeFile("Tagged", "body");
     expect(pendingCount(getDatabase())).toBe(1); // the file.create op
 
     addTags(file.id, ["alpha", "beta"]);
 
-    const op = findOp("tag.add");
+    const op = findOp("tag.set");
     expect(op).toBeDefined();
     expect(op!.op.gid).toBe(file.gid, "the op is keyed by the FILE's gid");
     expect(op!.op.origin).toBe(getMachineId());
@@ -98,22 +98,22 @@ describe("metadata write-routine outbox instrumentation (M55)", () => {
   it("addTags with an empty name list enqueues no tag op", async () => {
     const file = await makeFile("Empty", "body");
     addTags(file.id, []);
-    expect(findOp("tag.add")).toBeUndefined();
+    expect(findOp("tag.set")).toBeUndefined();
     expect(pendingCount(getDatabase())).toBe(1);
   });
 
-  it("removeTags appends a tag.remove op keyed by the file gid, carrying tag names", async () => {
+  it("removeTags appends a tag.set op carrying the remaining tags", async () => {
     const file = await makeFile("Untagged", "body");
     addTags(file.id, ["alpha", "beta"]);
     expect(tagId("alpha")).not.toBeNull();
 
     removeTags(file.id, [tagId("alpha")!]);
 
-    const op = findOp("tag.remove");
+    const op = pending().filter((o) => o.op.kind === "tag.set").pop();
     expect(op).toBeDefined();
     expect(op!.op.gid).toBe(file.gid);
-    // Carries the tag NAME (global identity), not the machine-local id.
-    expect(op!.op.payload).toEqual({ tags: ["alpha"] });
+    // Carries tag NAMES (global identity), the full list after the removal.
+    expect(op!.op.payload).toEqual({ tags: ["beta"] });
   });
 
   it("removeTags of a tag not linked to the file enqueues no op", async () => {
@@ -122,8 +122,9 @@ describe("metadata write-routine outbox instrumentation (M55)", () => {
     // A tag id that is not linked to this file (fresh tag).
     getDatabase().prepare("INSERT INTO tags (name) VALUES (?)").run("orphan");
     const orphanId = tagId("orphan")!;
+    const before = pendingCount(getDatabase());
     removeTags(file.id, [orphanId]);
-    expect(findOp("tag.remove")).toBeUndefined();
+    expect(pendingCount(getDatabase())).toBe(before);
   });
 
   it("setFavorite appends a favorite.set op keyed by the file gid, carrying the state", async () => {

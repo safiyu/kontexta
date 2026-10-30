@@ -200,10 +200,8 @@ async function dispatchOp(op: Op, db: Database): Promise<void> {
       return applyFolderCreate(op, db);
     case "folder.delete":
       return applyFolderDelete(op, db);
-    case "tag.add":
-      return applyTagAdd(op, db);
-    case "tag.remove":
-      return applyTagRemove(op, db);
+    case "tag.set":
+      return applyTagSet(op, db);
     case "favorite.set":
       return applyFavoriteSet(op, db);
     case "project.register":
@@ -507,29 +505,17 @@ function resolveFolderPath(payload: { path?: string; rel_path?: string }): strin
 // Metadata Op Handlers (Tags, Favorites, Projects)
 // ---------------------------------------------------------------------------
 
-async function applyTagAdd(op: Op, db: Database): Promise<void> {
+async function applyTagSet(op: Op, db: Database): Promise<void> {
   const payload = op.payload as { tags?: string[] };
   const fileId = requireFileId(db, op);
-  if (Array.isArray(payload.tags) && payload.tags.length > 0) {
-    addTags(fileId, payload.tags);
-  }
-}
-
-async function applyTagRemove(op: Op, db: Database): Promise<void> {
-  const payload = op.payload as { tags?: string[] };
-  const fileId = requireFileId(db, op);
-  if (Array.isArray(payload.tags) && payload.tags.length > 0) {
-    const ph = payload.tags.map(() => "?").join(", ");
-    const tagRows = db
-      .prepare(`SELECT id FROM tags WHERE name IN (${ph})`)
-      .all(...payload.tags) as { id: number }[];
-    if (tagRows.length > 0) {
-      removeTags(
-        fileId,
-        tagRows.map((r) => r.id),
-      );
-    }
-  }
+  const wanted = Array.isArray(payload.tags) ? payload.tags : [];
+  const current = db
+    .prepare("SELECT t.id, t.name FROM tags t JOIN file_tags ft ON ft.tag_id = t.id WHERE ft.file_id = ?")
+    .all(fileId) as { id: number; name: string }[];
+  const drop = current.filter((t) => !wanted.includes(t.name)).map((t) => t.id);
+  if (drop.length > 0) removeTags(fileId, drop);
+  const add = wanted.filter((n) => !current.some((t) => t.name === n));
+  if (add.length > 0) addTags(fileId, add);
 }
 
 async function applyFavoriteSet(op: Op, db: Database): Promise<void> {

@@ -308,7 +308,7 @@ describe("Two-process concurrency and advisory locking (M60)", () => {
         },
         {
           gid: gid1,
-          kind: "tag.add",
+          kind: "tag.set",
           origin: "mach-remote",
           base_version: 2,
           payload: { tags: ["w2-added-tag"] },

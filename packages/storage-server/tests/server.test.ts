@@ -764,7 +764,7 @@ describe("validateIncomingOp", () => {
   it("accepts a null payload (stored as the 4 chars 'null')", () => {
     const v = validateIncomingOp({
       gid: "1@abc",
-      kind: "tag.remove",
+      kind: "tag.set",
       origin: MACHINE_A,
       base_version: 3,
       payload: null,

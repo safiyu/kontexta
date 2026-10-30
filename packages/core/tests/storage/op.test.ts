@@ -52,8 +52,7 @@ const SPEC_KINDS: readonly OpKind[] = [
   "file.move",
   "folder.create",
   "folder.delete",
-  "tag.add",
-  "tag.remove",
+  "tag.set",
   "favorite.set",
   "project.register",
   "project.unregister",
@@ -271,5 +270,22 @@ describe("Op codec (src/storage/op.ts)", () => {
         "an op missing its gid must be rejected",
       ).toBe(true);
     });
+  });
+});
+
+import { kindFamily, parseOp as parseOpForFamily } from "../../src/storage/op.js";
+describe("kindFamily and retired tag kinds", () => {
+  it("groups file.* as content and tag.set/favorite.set as metadata", () => {
+    expect(kindFamily("file.update")).toBe("content");
+    expect(kindFamily("file.move")).toBe("content");
+    expect(kindFamily("tag.set")).toBe("metadata");
+    expect(kindFamily("favorite.set")).toBe("metadata");
+    expect(kindFamily("calendar.event.upsert")).toBe("calendar.event");
+    expect(kindFamily("journal.meta.upsert")).toBe("journal");
+  });
+  it("parseOp rejects the retired tag.add and tag.remove kinds", () => {
+    for (const kind of ["tag.add", "tag.remove"]) {
+      expect(parseOpForFamily({ gid: "1@aaaaaaaaaaaaaaaa", kind, origin: "aaaaaaaaaaaaaaaa", base_version: 0, payload: {}, created_at: 1 })).toBeNull();
+    }
   });
 });

@@ -298,7 +298,7 @@ describe("applyRemoteOp (M58)", () => {
   });
 
   describe("metadata ops", () => {
-    it("tag.add and tag.remove update file tags with zero ops enqueued", async () => {
+    it("tag.set replaces the file's tags exactly with zero ops enqueued", async () => {
       const filePath = join(TEST_DATA_DIR, "knowledge", "tagged.md");
       const remoteGid = "301@remote0123456789";
 
@@ -313,7 +313,7 @@ describe("applyRemoteOp (M58)", () => {
 
       await applyRemoteOp({
         gid: remoteGid,
-        kind: "tag.add",
+        kind: "tag.set",
         origin: "remote0123456789",
         base_version: 0,
         payload: { tags: ["research", "backend"] },
@@ -331,10 +331,10 @@ describe("applyRemoteOp (M58)", () => {
 
       await applyRemoteOp({
         gid: remoteGid,
-        kind: "tag.remove",
+        kind: "tag.set",
         origin: "remote0123456789",
         base_version: 0,
-        payload: { tags: ["research"] },
+        payload: { tags: ["backend"] },
         created_at: Date.now() + 1000,
       });
 
@@ -891,7 +891,7 @@ describe("applyRemoteOp (M58)", () => {
       expect(existsSync(join(TEST_DATA_DIR, "knowledge"))).toBe(true);
     });
 
-    it("tag.add, favorite.set and journal.meta.upsert for an unknown gid throw and leave a same-id local file untouched", async () => {
+    it("tag.set, favorite.set and journal.meta.upsert for an unknown gid throw and leave a same-id local file untouched", async () => {
       const db = getDatabase();
       const localPath = join(TEST_DATA_DIR, "knowledge", "local.md");
       writeFileSync(localPath, "local", "utf8");
@@ -902,7 +902,7 @@ describe("applyRemoteOp (M58)", () => {
       const unknownGid = `${localId}@${ORIGIN}`;
 
       await expect(
-        applyRemoteOp(op(unknownGid, "tag.add", { file_id: localId, tags: ["leak"] })),
+        applyRemoteOp(op(unknownGid, "tag.set", { file_id: localId, tags: ["leak"] })),
       ).rejects.toBeInstanceOf(UnappliableOpError);
       await expect(
         applyRemoteOp(op(unknownGid, "favorite.set", { file_id: localId, favorite: true })),

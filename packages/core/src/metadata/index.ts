@@ -149,14 +149,22 @@ export function addTags(fileId: number, tagNames: string[]): void {
     if (linkedTags.length > 0) {
       enqueueMetadataOp({
         gid: fileGid(fileId),
-        kind: "tag.add",
+        kind: "tag.set",
         origin: getMachineId(),
         base_version: 0,
-        payload: { tags: linkedTags },
+        payload: { tags: fileTagNames(db, fileId) },
         created_at: Date.now(),
       });
     }
   })();
+}
+
+function fileTagNames(db: ReturnType<typeof getDatabase>, fileId: number): string[] {
+  return (
+    db
+      .prepare("SELECT t.name FROM tags t JOIN file_tags ft ON ft.tag_id = t.id WHERE ft.file_id = ? ORDER BY t.name")
+      .all(fileId) as { name: string }[]
+  ).map((r) => r.name);
 }
 
 /**
@@ -181,17 +189,12 @@ export function removeTags(fileId: number, tagIds: number[]): void {
     // tag names (the global identity) so a receiving machine can re-apply "drop
     // these tags from that file".
     if (removedTagIds.length > 0) {
-      const ph = removedTagIds.map(() => "?").join(", ");
-      const names = db
-        .prepare(`SELECT id, name FROM tags WHERE id IN (${ph})`)
-        .all(...removedTagIds) as { id: number; name: string }[];
-      const removedTags = names.map((n) => n.name);
       enqueueMetadataOp({
         gid: fileGid(fileId),
-        kind: "tag.remove",
+        kind: "tag.set",
         origin: getMachineId(),
         base_version: 0,
-        payload: { tags: removedTags },
+        payload: { tags: fileTagNames(db, fileId) },
         created_at: Date.now(),
       });
     }
