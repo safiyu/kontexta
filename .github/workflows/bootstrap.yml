@@ -1,6 +1,7 @@
 name: bootstrap
 
 env:
+  CI: "true"
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 on:
@@ -19,7 +20,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [self-hosted, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -27,10 +28,13 @@ jobs:
         with:
           node-version-file: '.nvmrc'
       - name: Install shellcheck (ubuntu)
-        if: matrix.os == 'ubuntu-latest'
-        run: sudo apt-get install -y shellcheck
+        if: matrix.os == 'ubuntu-latest' || matrix.os == 'self-hosted'
+        run: |
+          if ! command -v shellcheck >/dev/null 2>&1; then
+            sudo apt-get install -y shellcheck
+          fi
       - name: shellcheck
-        if: matrix.os == 'ubuntu-latest'
+        if: matrix.os == 'ubuntu-latest' || matrix.os == 'self-hosted'
         run: shellcheck bootstrap
       - run: ./bootstrap
       - run: ./bootstrap  # idempotency

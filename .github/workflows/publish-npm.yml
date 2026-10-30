@@ -101,7 +101,14 @@ jobs:
           fi
 
       - name: Publish kontexta-mcp to npm
-        run: npx -y npm@latest publish ./apps/mcp --access public --provenance
+        run: |
+          NAME=$(node -p "require('./apps/mcp/package.json').name")
+          VER=$(node -p "require('./apps/mcp/package.json').version")
+          if npm view "$NAME@$VER" version >/dev/null 2>&1; then
+            echo "$NAME@$VER already on npm; skipping"
+          else
+            npx -y npm@latest publish ./apps/mcp --access public --provenance
+          fi
 
       # ── kontexta (one-click CLI): same tag, same run — the two packages
       # must always ship together (the CLI bundles the MCP server's dist).
@@ -117,10 +124,24 @@ jobs:
           node dist/index.js --version
 
       - name: Publish kontexta to npm
-        run: npx -y npm@latest publish ./packages/cli --access public --provenance
+        run: |
+          NAME=$(node -p "require('./packages/cli/package.json').name")
+          VER=$(node -p "require('./packages/cli/package.json').version")
+          if npm view "$NAME@$VER" version >/dev/null 2>&1; then
+            echo "$NAME@$VER already on npm; skipping"
+          else
+            npx -y npm@latest publish ./packages/cli --access public --provenance
+          fi
 
       - name: Publish kontexta-relay to npm
-        run: npx -y npm@latest publish ./packages/relay --access public --provenance
+        run: |
+          NAME=$(node -p "require('./packages/relay/package.json').name")
+          VER=$(node -p "require('./packages/relay/package.json').version")
+          if npm view "$NAME@$VER" version >/dev/null 2>&1; then
+            echo "$NAME@$VER already on npm; skipping"
+          else
+            npx -y npm@latest publish ./packages/relay --access public --provenance
+          fi
 
       - name: Extract release notes from CHANGELOG
         id: notes
