@@ -19,6 +19,11 @@
 - **Ops no longer use machine-local ids.** Tags, favorites, journal metadata, calendar events and links, and file project links are resolved by global id. Before, they could attach to an unrelated record that had the same local id on another machine. Tags set at file creation now replicate.
 - **Keep-mine, keep-both and merged use the file's current content,** not the content captured when the conflict was detected.
 - **Conflict list is cheap.** Diffs are only computed for a single conflict and are capped, and the top-bar badge polls a count-only endpoint.
+- **Edits are based on what the machine had seen when it made them.** The base version is captured when the edit is enqueued, so a pull that lands before the push can no longer turn a stale edit into an accepted one. A pulled op's version is recorded only after it applied or was skipped.
+- **The losing machine keeps its edit and sees the conflict too.** When your push is flagged as a conflict, the winner's content arrives as a conflict copy instead of overwriting your file. A conflict-flagged delete is never applied. Every resolution, including keep-server, is pushed so machines converge.
+- **Remote files match by id, never by path.** Two machines creating the same path independently now produce a path conflict instead of swapping each other's content.
+- **The watcher no longer syncs conflict copies, and its ops are portable.** Files in project repos never sync, and the old `/knowledge/` path fallback is gone.
+- **Storage server:** the enrollment secret is checked before any machine lookup, so unauthenticated callers can no longer probe machine ids or rename machines.
 
 ### Security
 
