@@ -90,7 +90,7 @@ import { registerCommitUpgradesTool } from "./journal-commit-upgrades-tool.js";
 import { registerHousekeepTool } from "./journal-housekeep-tool.js";
 import { registerCalendarTools } from "./calendar-tools.js";
 import { handleGetProfile } from "./profile-tool.js";
-import { getDataDir, profileRelPath, getEmptySections, listEvents, findConflicts, getEntity } from "kxta-core";
+import { getDataDir, profileRelPath, getEmptySections, listEvents, findConflicts, getEntity, readBrainConfig, pendingCount, startSyncLoop, stopSyncLoop } from "kxta-core";
 
 const dataDir = getDataDir();
 
@@ -510,6 +510,12 @@ const distillEngine = distillEngineEnabled
   : null;
 
 startGitPoller(process.env.KONTEXTA_PROJECT_PATH ?? process.cwd(), 30);
+// Dormant until `kontexta brain connect` stores a remote; a second loop in another process is safe (server-side dedup).
+try {
+  startSyncLoop(getDatabase());
+} catch (err) {
+  console.warn("[kontexta-mcp] sync loop not started", err);
+}
 process.on("exit", shutdownCapture);
 // Signal-handler ordering: kill detached Hands children FIRST so their
 // process groups receive SIGTERM before this process exits and orphans
@@ -524,6 +530,7 @@ async function handleShutdownSignal(signal: string) {
     ]);
   }
   shutdownCapture();
+  stopSyncLoop();
   try {
     const remaining = await gracefulShutdown(10_000);
     if (remaining > 0) {
@@ -2447,6 +2454,11 @@ server.tool(
                 ...(byProject ? { by_project: byProject } : {}),
                 ...(totalEstTokens !== null ? { total_est_tokens: totalEstTokens } : {}),
                 rules_warning: getAgentRulesWarning(project_id),
+                brain: (() => {
+                  const cfg = readBrainConfig(db);
+                  const skipped = (db.prepare("SELECT COUNT(*) AS n FROM sync_skipped_ops WHERE skipped = 1").get() as { n: number }).n;
+                  return { connected: cfg.connected, name: cfg.name || null, remote: cfg.connected ? cfg.remoteUrl : null, pending: pendingCount(db), skipped };
+                })(),
                 system1: (() => {
                   const st = rerankEngine.getStatus();
                   return {
