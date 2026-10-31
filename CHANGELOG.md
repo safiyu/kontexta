@@ -1,5 +1,11 @@
 # Changelog
 
+## 7.1.0 - Import / export of contexts (2026-10-31)
+
+### Added
+
+- **`kontexta export <file>` / `kontexta import <file>`.** Back up or move your contexts (Knowledge Base and project files, with tags, favorites and project metadata) as a single JSON archive; a `.gz` suffix compresses it. Export can be filtered with `--project`, `--kb-only`, `--kind` and `--tag`. Import overwrites files that already exist at the same path, supports `--dry-run`, and writes through the normal file pipeline so indexing, git and sync still apply.
+
 ## 7.0.0 - Brains: one storage architecture, optional remote (2026-10-30)
 
 Everything Kontexta knows about you is now one thing, your **brain**. It lives on your machine as markdown files and SQLite, and you may connect it to a **remote** that holds a durable copy and syncs your machines. One architecture, no separate "local mode".

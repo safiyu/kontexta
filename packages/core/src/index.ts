@@ -63,3 +63,4 @@ export * from "./decision/index.js";
 export { writeResource, readResource, listResources, deleteResource, resourceUrlFor, resourceSrcFor, mimeFor } from "./reports/resources.js";
 export { sanitizeHtml } from "./reports/sanitize.js";
 export * from "./storage/index.js";
+export * from "./transfer/index.js";

@@ -1,6 +1,6 @@
 {
   "name": "kontexta-relay",
-  "version": "7.0.0",
+  "version": "7.1.0",
   "description": "Kontexta relay: one server hosting many fully separate brains, each the durable copy and sync engine for one user's machines",
   "type": "module",
   "license": "Apache-2.0",

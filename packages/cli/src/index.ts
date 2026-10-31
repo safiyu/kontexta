@@ -13,6 +13,9 @@ Usage:
                                      Register the kxta MCP server in your coding agents
   kontexta brain <connect|status|share|machines|disconnect|push|pull|run>
                                      Connect this machine to a brain on a remote
+  kontexta export <file> [--project <slug>|--kb-only] [--kind <k>] [--tag <t>]
+                                     Export contexts (files, tags, favorites) to an archive
+  kontexta import <file> [--dry-run] Import contexts from an archive (existing paths are overwritten)
   kontexta skill install [--project] Install the kxta agent-skill bridge for clients that block MCP
   kontexta --version                 Print version
   kontexta --help                    Print this help
@@ -54,6 +57,10 @@ Usage:
   if (arg === 'brain') {
     const { runBrain } = await import('./brain.js');
     process.exit(await runBrain(process.argv.slice(3)));
+  }
+  if (arg === 'export' || arg === 'import') {
+    const { runTransfer } = await import('./transfer.js');
+    process.exit(await runTransfer(arg, process.argv.slice(3)));
   }
   if (arg === 'skill') {
     const { runSkill } = await import('./skill.js');
