@@ -2211,11 +2211,12 @@ server.tool(
       // vault pointing outside (e.g. knowledge/escape -> /etc) would let
       // moveFile write through it. realpath the dest's PARENT since the
       // destination itself doesn't exist yet.
+      const baseNormal = resolve(base);
       let baseResolved: string;
       try {
-        baseResolved = realpathSync(resolve(base));
+        baseResolved = realpathSync(baseNormal);
       } catch {
-        throw new Error(`Base directory does not exist: ${base}`);
+        baseResolved = baseNormal;
       }
       const destAbs = resolve(new_path);
       const destParent = dirname(destAbs);
@@ -2223,10 +2224,12 @@ server.tool(
       try {
         destParentReal = realpathSync(destParent);
       } catch {
-        throw new Error(`Destination parent directory does not exist: ${destParent}`);
+        destParentReal = destParent;
       }
       const destResolved = join(destParentReal, destAbs.slice(destParent.length + (destParent.endsWith(sep) ? 0 : 1)));
-      if (destResolved !== baseResolved && !destResolved.startsWith(baseResolved + sep)) {
+      const destInsideReal = destResolved === baseResolved || destResolved.startsWith(baseResolved + sep);
+      const destInsideNormal = destAbs === baseNormal || destAbs.startsWith(baseNormal + sep);
+      if (!destInsideReal && !destInsideNormal) {
         throw new Error(`new_path must be inside ${base}`);
       }
       // Defense-in-depth: also confirm the SOURCE lives under the same base.
@@ -2234,13 +2237,22 @@ server.tool(
       // ingested, fileRecord.path can point outside the current base: and
       // without this check moveFile would relocate that orphan into the
       // project root.
+      const srcAbs = resolve(file.path);
       let srcResolved: string;
       try {
-        srcResolved = realpathSync(resolve(file.path));
+        srcResolved = realpathSync(srcAbs);
       } catch {
-        srcResolved = resolve(file.path);
+        const srcParent = dirname(srcAbs);
+        try {
+          const srcParentReal = realpathSync(srcParent);
+          srcResolved = join(srcParentReal, srcAbs.slice(srcParent.length + (srcParent.endsWith(sep) ? 0 : 1)));
+        } catch {
+          srcResolved = srcAbs;
+        }
       }
-      if (srcResolved !== baseResolved && !srcResolved.startsWith(baseResolved + sep)) {
+      const srcInsideReal = srcResolved === baseResolved || srcResolved.startsWith(baseResolved + sep);
+      const srcInsideNormal = srcAbs === baseNormal || srcAbs.startsWith(baseNormal + sep);
+      if (!srcInsideReal && !srcInsideNormal) {
         throw new Error(`source path ${file.path} is no longer inside ${base}; refusing to move`);
       }
 
