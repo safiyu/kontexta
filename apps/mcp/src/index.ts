@@ -269,7 +269,7 @@ function estimateTokensFromFile(filePath: string, sizeBytes: number): number {
   return Math.max(1, Math.ceil(sizeBytes / (mostlyAscii ? 4 : 3)));
 }
 
-function annotateTokens<T extends { path?: string; content?: string }>(rec: T): T & { size_bytes: number | null; est_tokens: number | null } {
+function annotateTokens<T extends { path?: string; content?: string | null }>(rec: T): T & { size_bytes: number | null; est_tokens: number | null } {
   let size_bytes: number | null = null;
   let est_tokens: number | null = null;
   if (typeof rec.content === "string") {
@@ -432,12 +432,12 @@ function buildCalendarSection(now: Date): string {
   }
 }
 
-function profileFreshnessNote(profilePath: string, empty: string[]): string {
+function profileFreshnessNote(profilePath: string, empty: string[], updatedAt?: string): string {
   const parts: string[] = [];
   if (empty.length > 0) parts.push(`${empty.length} section(s) still empty: ${empty.join(", ")}`);
   try {
-    const mtime = statSync(profilePath).mtime;
-    const days = Math.floor((Date.now() - mtime.getTime()) / (24 * 60 * 60 * 1000));
+    const timeMs = updatedAt ? new Date(updatedAt).getTime() : statSync(profilePath).mtime.getTime();
+    const days = Math.floor((Date.now() - timeMs) / (24 * 60 * 60 * 1000));
     if (days >= 30) parts.push(`profile hasn't been updated in ${days} days`);
   } catch {}
   if (parts.length === 0) return "";
@@ -449,8 +449,28 @@ function loadProfileInstructions(): string | undefined {
   const now = new Date();
   const today = now.toISOString().slice(0, 10);
   const path = join(dataDir, profileRelPath());
-  const profileExists = existsSync(path);
-  const content = profileExists ? readFileSync(path, "utf8").trim() : "";
+  let content = "";
+  let profileExists = false;
+  let updatedAt: string | undefined;
+
+  try {
+    const db = getDatabase();
+    const row = db.prepare("SELECT content, updated_at FROM files WHERE path = ?").get(path) as
+      | { content: string | null; updated_at: string }
+      | undefined;
+    if (row && row.content) {
+      content = row.content.trim();
+      profileExists = true;
+      updatedAt = row.updated_at;
+    }
+  } catch {}
+
+  if (!profileExists && existsSync(path)) {
+    try {
+      content = readFileSync(path, "utf8").trim();
+      profileExists = true;
+    } catch {}
+  }
   const empty = profileExists ? getEmptySections(content) : [];
 
   const header =
@@ -462,7 +482,7 @@ function loadProfileInstructions(): string | undefined {
     : `📋 PROFILE\n  (not set up yet, nudge the user to fill it in at knowledge/profile.md or the dashboard's profile pane)`;
 
   const calendarBlock = buildCalendarSection(now);
-  const freshness = profileExists ? profileFreshnessNote(path, empty) : "";
+  const freshness = profileExists ? profileFreshnessNote(path, empty, updatedAt) : "";
   // Recurring nudge: projects_register's onboarding prompt fires once, at
   // register time; if the calling agent doesn't relay it in the moment
   // there was previously no second chance to see it. Surfacing it here
@@ -963,18 +983,18 @@ server.tool(
           const ftsQuery = `"${escFts} md" OR ${escFts}`;
           const candidates = db
             .prepare(
-              `SELECT files.id, files.title, files.path
+              `SELECT files.id, files.title, files.path, files.content
                FROM fts_index
                JOIN files ON files.id = fts_index.rowid
                WHERE fts_index MATCH ? AND files.id != ?
                LIMIT 200`
             )
-            .all(ftsQuery, id) as { id: number; title: string; path: string }[];
+            .all(ftsQuery, id) as { id: number; title: string; path: string; content?: string | null }[];
           for (const c of candidates) {
             try {
-              const content = readFileSync(c.path, "utf8");
+              const content = c.content ?? (existsSync(c.path) ? readFileSync(c.path, "utf8") : "");
               if (linkPatterns.some((re) => re.test(content))) {
-                backlinks.push(c);
+                backlinks.push({ id: c.id, title: c.title, path: c.path });
                 if (backlinks.length >= 50) break;
               }
             } catch {}
@@ -1093,15 +1113,19 @@ server.tool(
       }
       const where = whereParts.length ? `WHERE ${whereParts.join(" AND ")}` : "";
       const rows = db
-        .prepare(`SELECT id, path, title FROM files ${where} LIMIT ?`)
-        .all(...params, fileCap) as { id: number; path: string; title: string }[];
+        .prepare(`SELECT id, path, title, content, storage_type FROM files ${where} LIMIT ?`)
+        .all(...params, fileCap) as { id: number; path: string; title: string; content?: string | null; storage_type: string }[];
 
       const hits: any[] = [];
       let scanned = 0;
       for (const r of rows) {
         scanned++;
         let content: string;
-        try { content = readFileSync(r.path, "utf8"); } catch { continue; }
+        if (r.content !== null && r.content !== undefined) {
+          content = r.content;
+        } else {
+          try { content = readFileSync(r.path, "utf8"); } catch { continue; }
+        }
         const lines = content.split("\n");
         const fileHits: { line: number; text: string }[] = [];
         for (let i = 0; i < lines.length; i++) {
@@ -2593,17 +2617,21 @@ server.tool(
     try {
       const db = getDatabase();
       const row = db
-        .prepare("SELECT path FROM files WHERE id = ?")
-        .get(file_id) as { path: string } | undefined;
+        .prepare("SELECT path, content, storage_type FROM files WHERE id = ?")
+        .get(file_id) as { path: string; content: string | null; storage_type: string } | undefined;
       if (!row) throw new Error(`File not found: ${file_id}`);
 
       let diskContent: string | null = null;
       let diskError: string | null = null;
-      try {
-        statSync(row.path);
-        diskContent = readFileSync(row.path, "utf8");
-      } catch (e: any) {
-        diskError = e?.message ?? String(e);
+      if (row.storage_type === "local") {
+        diskContent = row.content;
+      } else {
+        try {
+          statSync(row.path);
+          diskContent = readFileSync(row.path, "utf8");
+        } catch (e: any) {
+          diskError = e?.message ?? String(e);
+        }
       }
 
       const ftsRow = db

@@ -377,28 +377,24 @@ export function registerConflict(
   // 1. Resolve local content
   let localContent = input.localContent;
   if (localContent === undefined) {
-    if (existsSync(input.filePath)) {
-      try {
+    try {
+      const fileRow = db
+        .prepare("SELECT id, content, storage_type FROM files WHERE gid = ? OR path = ?")
+        .get(input.gid, input.filePath) as { id: number; content: string | null; storage_type: string } | undefined;
+      if (fileRow?.content !== null && fileRow?.content !== undefined) {
+        localContent = fileRow.content;
+      } else if (existsSync(input.filePath)) {
         localContent = readFileSync(input.filePath, "utf-8");
-      } catch {
+      } else if (fileRow) {
+        const ftsRow = db
+          .prepare("SELECT content FROM fts_index WHERE rowid = ?")
+          .get(fileRow.id) as { content: string } | undefined;
+        localContent = ftsRow?.content ?? "";
+      } else {
         localContent = "";
       }
-    } else {
-      try {
-        const fileRow = db
-          .prepare("SELECT id FROM files WHERE gid = ? OR path = ?")
-          .get(input.gid, input.filePath) as { id: number } | undefined;
-        if (fileRow) {
-          const ftsRow = db
-            .prepare("SELECT content FROM fts_index WHERE rowid = ?")
-            .get(fileRow.id) as { content: string } | undefined;
-          localContent = ftsRow?.content ?? "";
-        } else {
-          localContent = "";
-        }
-      } catch {
-        localContent = "";
-      }
+    } catch {
+      localContent = "";
     }
   }
 

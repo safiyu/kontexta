@@ -32,6 +32,7 @@ import type { Database } from "better-sqlite3";
 import { parseOp, type Op } from "./op.js";
 import { getDatabase } from "../db/index.js";
 import { withLock, fileLockKey } from "../util/safety.js";
+import { createRevision } from "../revisions/index.js";
 import { acquireSyncLock, releaseSyncLock, withSyncLock, type WithSyncLockOptions } from "./locks.js";
 import { addTags, removeTags, setFavorite, unregisterProject } from "../metadata/index.js";
 import {
@@ -290,6 +291,7 @@ async function applyFileCreate(op: Op, db: Database): Promise<void> {
             content_class = ?,
             source_path = ?,
             content_hash = ?,
+            content = ?,
             gid = ?,
             updated_at = datetime('now')
           WHERE id = ?
@@ -301,14 +303,15 @@ async function applyFileCreate(op: Op, db: Database): Promise<void> {
           contentClass,
           payload.source_path ?? null,
           contentHash,
+          content,
           op.gid,
           existing.id,
         );
         fileId = existing.id;
       } else {
         const result = db.prepare(`
-          INSERT INTO files (path, title, project_id, storage_type, content_class, source_path, content_hash, gid)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          INSERT INTO files (path, title, project_id, storage_type, content_class, source_path, content_hash, content, gid)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).run(
           filePath,
           title,
@@ -317,9 +320,18 @@ async function applyFileCreate(op: Op, db: Database): Promise<void> {
           contentClass,
           payload.source_path ?? null,
           contentHash,
+          content,
           op.gid,
         );
         fileId = Number(result.lastInsertRowid);
+      }
+
+      if (storageType === "local") {
+        createRevision(db, {
+          fileId,
+          content,
+          message: `Remote apply: create ${title}`,
+        });
       }
 
       db.prepare("DELETE FROM fts_index WHERE rowid = ?").run(fileId);
@@ -345,7 +357,7 @@ async function applyFileCreate(op: Op, db: Database): Promise<void> {
       }
     }).immediate();
 
-    // Write to disk after DB update (spec 1.4: watcher hash gating)
+    // Write to disk for reference storage or when in knowledge/ (mirroring)
     mkdirSync(dirname(filePath), { recursive: true });
     writeFileSync(filePath, content, "utf8");
   });
@@ -363,9 +375,9 @@ async function applyFileUpdate(op: Op, db: Database): Promise<void> {
   const payloadPath =
     typeof payload.path === "string" && payload.path ? resolveSyncPath(payload.path, payload.rel_path) : null;
   const existing = db
-    .prepare("SELECT id, path, title FROM files WHERE gid = ? OR (path = ? AND gid IS NULL AND ? IS NOT NULL)")
+    .prepare("SELECT id, path, title, storage_type FROM files WHERE gid = ? OR (path = ? AND gid IS NULL AND ? IS NOT NULL)")
     .get(op.gid, payloadPath, payloadPath) as
-    | { id: number; path: string; title: string }
+    | { id: number; path: string; title: string; storage_type: string }
     | undefined;
 
   if (payloadPath && parkIfPathTaken(op, db, payloadPath, typeof payload.content === "string" ? payload.content : "")) return;
@@ -383,30 +395,41 @@ async function applyFileUpdate(op: Op, db: Database): Promise<void> {
 
   await withLock(fileLockKey(targetPath), async () => {
     let fileId: number;
+    let targetStorageType = "local";
     db.transaction(() => {
       const current = db
-        .prepare("SELECT id, path, title FROM files WHERE gid = ? OR (path = ? AND gid IS NULL AND ? IS NOT NULL)")
+        .prepare("SELECT id, path, title, storage_type FROM files WHERE gid = ? OR (path = ? AND gid IS NULL AND ? IS NOT NULL)")
         .get(op.gid, targetPath, targetPath) as
-        | { id: number; path: string; title: string }
+        | { id: number; path: string; title: string; storage_type: string }
         | undefined;
       const fileRecord = current ?? existing;
       if (fileRecord) {
+        targetStorageType = fileRecord.storage_type ?? "local";
         db.prepare(`
           UPDATE files SET
             path = ?,
             title = ?,
+            content = ?,
             content_hash = ?,
             gid = ?,
             updated_at = datetime('now')
           WHERE id = ?
-        `).run(targetPath, title, contentHash, op.gid, fileRecord.id);
+        `).run(targetPath, title, content, contentHash, op.gid, fileRecord.id);
         fileId = fileRecord.id;
       } else {
         const result = db.prepare(`
-          INSERT INTO files (path, title, project_id, storage_type, content_class, source_path, content_hash, gid)
-          VALUES (?, ?, NULL, 'local', NULL, NULL, ?, ?)
-        `).run(targetPath, title, contentHash, op.gid);
+          INSERT INTO files (path, title, project_id, storage_type, content_class, source_path, content, content_hash, gid)
+          VALUES (?, ?, NULL, 'local', NULL, NULL, ?, ?, ?)
+        `).run(targetPath, title, content, contentHash, op.gid);
         fileId = Number(result.lastInsertRowid);
+      }
+
+      if (targetStorageType === "local") {
+        createRevision(db, {
+          fileId,
+          content,
+          message: `Remote apply: update ${title}`,
+        });
       }
 
       db.prepare("DELETE FROM fts_index WHERE rowid = ?").run(fileId);
@@ -417,15 +440,15 @@ async function applyFileUpdate(op: Op, db: Database): Promise<void> {
       );
     }).immediate();
 
-    // Write to disk after DB update
+    // Write to disk after DB update (for reference project files or disk mirrors)
     mkdirSync(dirname(targetPath), { recursive: true });
     writeFileSync(targetPath, content, "utf8");
   });
 }
 
 async function applyFileDelete(op: Op, db: Database): Promise<void> {
-  const existing = db.prepare("SELECT id, path FROM files WHERE gid = ?").get(op.gid) as
-    | { id: number; path: string }
+  const existing = db.prepare("SELECT id, path, storage_type FROM files WHERE gid = ?").get(op.gid) as
+    | { id: number; path: string; storage_type: string }
     | undefined;
   if (!existing) return;
   await withLock(fileLockKey(existing.path), async () => {
@@ -456,8 +479,8 @@ async function applyFileMove(op: Op, db: Database): Promise<void> {
   const toPath = resolveSyncPath(payload.to, payload.rel_to);
 
   const existing = db
-    .prepare("SELECT id, path FROM files WHERE gid = ?")
-    .get(op.gid) as { id: number; path: string } | undefined;
+    .prepare("SELECT id, path, storage_type FROM files WHERE gid = ?")
+    .get(op.gid) as { id: number; path: string; storage_type: string } | undefined;
   if (!existing) return;
 
   await withLock(fileLockKey(fromPath), async () => {
@@ -474,8 +497,10 @@ async function applyFileMove(op: Op, db: Database): Promise<void> {
       }
 
       if (existsSync(existing.path)) {
-        mkdirSync(dirname(toPath), { recursive: true });
-        renameSync(existing.path, toPath);
+        try {
+          mkdirSync(dirname(toPath), { recursive: true });
+          renameSync(existing.path, toPath);
+        } catch {}
       }
     });
   });

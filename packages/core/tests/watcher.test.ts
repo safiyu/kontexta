@@ -21,11 +21,17 @@ afterEach(() => {
 
 describe("watcher", () => {
   it("emits change event when a tracked file is modified", async () => {
+    const projDir = path.join(TEST_DATA, "test-proj");
+    fs.mkdirSync(projDir, { recursive: true });
+    const db = getDatabase();
+    const result = db.prepare("INSERT INTO projects (name, slug, path) VALUES (?, ?, ?)").run("Test Proj", "test-proj", projDir);
+    const projectId = Number(result.lastInsertRowid);
+
     const file = await createFile({
       title: "Watched",
       content: "original",
-      destination: "knowledge",
-      folder: "knowledge",
+      destination: "project",
+      projectId,
       dataDir: TEST_DATA,
     });
 

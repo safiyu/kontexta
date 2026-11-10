@@ -127,9 +127,9 @@ describe("files write-routine outbox instrumentation (M54)", () => {
       expect(sawRemoteInScope, "inRemoteApply() must be true inside the scope").toBe(true);
       expect(inRemoteApply(), "the scope must not leak outside").toBe(false);
       // The file IS written (local-first apply still mutates the store)...
-      const rows = getDatabase().prepare("SELECT id, path FROM files").all() as { id: number; path: string }[];
+      const rows = getDatabase().prepare("SELECT id, path, content FROM files").all() as { id: number; path: string; content: string }[];
       expect(rows).toHaveLength(1);
-      expect(existsSync(rows[0].path)).toBe(true);
+      expect(rows[0].content).toBe("applied remotely");
       // ...but NO outbound op is enqueued (this is the echo we must suppress).
       expect(pendingCount(getDatabase()), "no echo op may be enqueued").toBe(0);
     });

@@ -73,13 +73,12 @@ describe("File Operations", () => {
     expect(file.storage_type).toBe("local");
     expect(file.content).toBe("This is my knowledge base content");
 
-    // Verify file exists on disk
+    // Verify virtual path
     const expectedPath = join(TEST_DATA_DIR, "knowledge", "knowledge", "my-knowledge.md");
     expect(file.path).toBe(expectedPath);
-    expect(existsSync(expectedPath)).toBe(true);
-
-    const diskContent = readFileSync(expectedPath, "utf8");
-    expect(diskContent).toBe("This is my knowledge base content");
+    // Knowledge base files are now contained in SQLite and not directly on disk
+    expect(existsSync(expectedPath)).toBe(false);
+    expect(readFile(file.id).content).toBe("This is my knowledge base content");
 
     // Verify FTS index
     const db = getDatabase();
@@ -120,10 +119,11 @@ describe("File Operations", () => {
     expect(file.storage_type).toBe("local");
     expect(file.project_id).toBe(project.id);
 
-    // Verify file path is under data/projects/test-project/
+    // Verify virtual file path is under data/projects/test-project/
     const expectedPath = join(TEST_DATA_DIR, "projects", "test-project", "project-doc.md");
     expect(file.path).toBe(expectedPath);
-    expect(existsSync(expectedPath)).toBe(true);
+    expect(file.content).toBe("Project documentation content");
+    expect(readFile(file.id).content).toBe("Project documentation content");
   });
 
   test("reads file content by id", async () => {
@@ -159,9 +159,8 @@ describe("File Operations", () => {
     expect(updated.content_hash).not.toBe(originalHash);
     expect(updated.content_hash).toBe(computeHash("Updated content"));
 
-    // Verify file on disk was updated
-    const diskContent = readFileSync(created.path, "utf8");
-    expect(diskContent).toBe("Updated content");
+    // Verify content in DB was updated
+    expect(readFile(created.id).content).toBe("Updated content");
 
     // Verify FTS index was updated by searching
     const db = getDatabase();
@@ -283,12 +282,12 @@ describe("File Operations", () => {
     const moved = moveFile(created.id, newPath, TEST_DATA_DIR);
 
     expect(moved.path).toBe(newPath);
-    expect(existsSync(newPath)).toBe(true);
+    // Knowledge base files are now stored inline in SQLite
+    expect(existsSync(newPath)).toBe(false);
     expect(existsSync(originalPath)).toBe(false);
 
     // Verify content is preserved
-    const content = readFileSync(newPath, "utf8");
-    expect(content).toBe("Move me");
+    expect(readFile(created.id).content).toBe("Move me");
   });
 
   test("creates a .mmd file when format is 'mmd'", async () => {

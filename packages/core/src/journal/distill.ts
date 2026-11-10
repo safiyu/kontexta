@@ -1,12 +1,14 @@
 // packages/core/src/journal/distill.ts
-import { readFileSync, readdirSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { readFileSync, readdirSync, existsSync, mkdirSync, writeFileSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
+import { createHash } from "node:crypto";
 import type { RawEvent, DistillResult, JournalFrontmatter } from "./types.js";
 import { groupEvents, lastBranchOf, classifyTaskCategory } from "./topic-detector.js";
 import { renderMechanicalEntry, touchedFilesOf } from "./renderer.js";
 import { readHighWater, writeHighWater } from "./high-water.js";
 import { upsertJournalMeta, openTasksForProject, gitRefsForFiles } from "./repository.js";
 import { getDatabase } from "../db/index.js";
+import { createRevision } from "../revisions/index.js";
 import type { ExtraPatternDef } from "./patterns/extra-loader.js";
 import { acquireCooldown, releaseCooldown } from "./cooldown.js";
 import { splitBucketsOnPivots } from "./pivot.js";
@@ -108,6 +110,7 @@ export async function distillJournal(opts: DistillJournalOpts): Promise<DistillR
     // 3. RENDER + 4. INDEX
     const tasksTouched: string[] = [];
     const tasksCreated: string[] = [];
+    const db = getDatabase();
 
     for (const bucket of buckets) {
       const lastEvent = bucket.events[bucket.events.length - 1];
@@ -125,19 +128,32 @@ export async function distillJournal(opts: DistillJournalOpts): Promise<DistillR
         collapseNoise: intel.eventTriage,
       });
 
-      if (existsSync(filePath)) {
-        // Accumulate with what earlier runs recorded so the DB row and next run's task matching keep the whole history, not just this batch.
-        const existing = readFileSync(filePath, "utf8");
-        fm = mergeFrontmatter(parseFrontmatter(existing), fm);
-        writeFileSync(filePath, replaceOrAppendEntry(existing, fm, entry));
+      const existingRecord = db.prepare("SELECT id, content FROM files WHERE path = ?").get(filePath) as
+        | { id: number; content: string | null }
+        | undefined;
+
+      let finalContent: string;
+      if (existingRecord?.content) {
+        fm = mergeFrontmatter(parseFrontmatter(existingRecord.content), fm);
+        finalContent = replaceOrAppendEntry(existingRecord.content, fm, entry);
+      } else if (existsSync(filePath)) {
+        // Fallback for disk file during transition
+        const diskExisting = readFileSync(filePath, "utf8");
+        fm = mergeFrontmatter(parseFrontmatter(diskExisting), fm);
+        finalContent = replaceOrAppendEntry(diskExisting, fm, entry);
       } else {
-        writeFileSync(filePath, serializeFrontmatter(fm) + "\n\n" + entry);
+        finalContent = serializeFrontmatter(fm) + "\n\n" + entry;
         tasksCreated.push(bucket.task_slug);
       }
       tasksTouched.push(bucket.task_slug);
 
-      // Index — register the file in `files` table if not yet, then upsert journal_meta
-      const fileId = ensureFileRecord(filePath, fm.task);
+      // Write to disk for compatibility if test or external reader expects disk path
+      try {
+        writeFileSync(filePath, finalContent, "utf8");
+      } catch {}
+
+      // Index — register/update the file in `files` table and save content inline
+      const fileId = ensureFileRecord(filePath, fm.task, finalContent);
       upsertJournalMeta({
         file_id: fileId,
         project_id: opts.projectId,
@@ -170,6 +186,13 @@ export async function distillJournal(opts: DistillJournalOpts): Promise<DistillR
         session_tasks: mergeSessionTasks(hw?.session_tasks, sessions),
         ...(promptSeeds ? { session_prompts: promptSeeds } : {}),
       });
+
+      // Clean up processed raw .jsonl files up to the high-water cutoff
+      try {
+        cleanProcessedRawFiles(opts, newHw);
+      } catch (e) {
+        console.warn("distillJournal: failed to clean processed raw files:", e);
+      }
     }
 
     return {
@@ -250,6 +273,26 @@ function readRawEvents(
   }
   all.sort((a, b) => a.ts.localeCompare(b.ts));
   return all.slice(0, max);
+}
+
+/**
+ * Remove raw .jsonl files whose events have all been distilled past newHw date
+ */
+function cleanProcessedRawFiles(opts: DistillJournalOpts, newHw: string): void {
+  const dir = rawDir(opts);
+  if (!existsSync(dir)) return;
+  const cutoffDate = newHw.slice(0, 10); // YYYY-MM-DD
+  const files = readdirSync(dir).filter((f) => f.endsWith(".jsonl"));
+
+  for (const f of files) {
+    const fileDate = f.slice(0, 10);
+    // Only delete files strictly older than the active distillation day
+    if (/^\d{4}-\d{2}-\d{2}\.jsonl$/.test(f) && fileDate < cutoffDate) {
+      try {
+        unlinkSync(join(dir, f));
+      } catch {}
+    }
+  }
 }
 
 // Most recently used sessions win the cap, so a long-running install doesn't grow this map forever.
@@ -454,15 +497,57 @@ function mergeFrontmatter(
 }
 
 // Journal files are KB files (no project on the files row); journal_meta.project_id records the owning project.
-function ensureFileRecord(filePath: string, title: string): number {
+function ensureFileRecord(filePath: string, title: string, content?: string): number {
   const db = getDatabase();
-  const existing = db.prepare(`SELECT id FROM files WHERE path = ?`).get(filePath) as { id: number } | undefined;
+  const existing = db.prepare(`SELECT id, content FROM files WHERE path = ?`).get(filePath) as { id: number; content: string | null } | undefined;
+  const contentHash = content !== undefined ? createHash("sha256").update(content, "utf8").digest("hex") : null;
+
   if (existing) {
-    db.prepare(`UPDATE files SET project_id = NULL WHERE id = ? AND project_id IS NOT NULL`).run(existing.id);
+    if (content !== undefined) {
+      db.prepare(`
+        UPDATE files
+        SET project_id = NULL, content = ?, content_hash = ?, updated_at = datetime('now')
+        WHERE id = ?
+      `).run(content, contentHash, existing.id);
+
+      db.prepare("DELETE FROM fts_index WHERE rowid = ?").run(existing.id);
+      db.prepare("INSERT INTO fts_index (rowid, title, content) VALUES (?, ?, ?)").run(
+        existing.id,
+        title,
+        content
+      );
+
+      createRevision(db, {
+        fileId: existing.id,
+        content,
+        message: `Distill journal task: ${title}`,
+      });
+    } else {
+      db.prepare(`UPDATE files SET project_id = NULL WHERE id = ? AND project_id IS NOT NULL`).run(existing.id);
+    }
     return existing.id;
   }
+
   const result = db.prepare(`
-    INSERT INTO files (path, title, project_id, storage_type) VALUES (?, ?, NULL, 'local')
-  `).run(filePath, title);
-  return Number(result.lastInsertRowid);
+    INSERT INTO files (path, title, project_id, storage_type, content, content_hash)
+    VALUES (?, ?, NULL, 'local', ?, ?)
+  `).run(filePath, title, content ?? null, contentHash);
+  const fileId = Number(result.lastInsertRowid);
+
+  if (content !== undefined) {
+    db.prepare("DELETE FROM fts_index WHERE rowid = ?").run(fileId);
+    db.prepare("INSERT INTO fts_index (rowid, title, content) VALUES (?, ?, ?)").run(
+      fileId,
+      title,
+      content
+    );
+
+    createRevision(db, {
+      fileId,
+      content,
+      message: `Distill journal task: ${title}`,
+    });
+  }
+
+  return fileId;
 }

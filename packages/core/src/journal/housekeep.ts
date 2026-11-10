@@ -84,17 +84,25 @@ export function housekeepJournal(cfg: HousekeepConfig): HousekeepResult {
     const archiveCutoff = new Date(now.getTime() - cfg.retention.archive_cold_after_days * 86400_000).toISOString();
     const db = getDatabase();
     const cold = db.prepare(`
-      SELECT jm.file_id, f.path FROM journal_meta jm
+      SELECT jm.file_id, f.path, f.storage_type FROM journal_meta jm
       JOIN files f ON f.id = jm.file_id
       JOIN projects p ON p.id = jm.project_id
       WHERE p.slug = ? AND jm.last_active_at < ?
-    `).all(cfg.projectSlug, archiveCutoff) as Array<{ file_id: number; path: string }>;
+    `).all(cfg.projectSlug, archiveCutoff) as Array<{ file_id: number; path: string; storage_type: string }>;
     const archiveDir = join(cfg.baseDir, cfg.projectSlug, "_archive");
     mkdirSync(archiveDir, { recursive: true });
     for (const row of cold) {
       const basename = row.path.split("/").pop()?.split("\\").pop() ?? `task-${row.file_id}.md`;
       const dest = join(archiveDir, basename);
-      if (!existsSync(dest) && existsSync(row.path)) {
+      if (row.storage_type === "local") {
+        if (existsSync(row.path)) {
+          try {
+            renameSync(row.path, dest);
+          } catch {}
+        }
+        db.prepare(`UPDATE files SET path = ? WHERE id = ?`).run(dest, row.file_id);
+        result.archived_tasks++;
+      } else if (!existsSync(dest) && existsSync(row.path)) {
         try {
           renameSync(row.path, dest);
         } catch (err: any) {
