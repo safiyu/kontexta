@@ -88,7 +88,7 @@ export function listProjectFolders(projectPath: string, opts?: { dataDir?: strin
  * List all folders in a project that contain at least one .md or .mmd file.
  * Returns only non-empty folders (useful for publish UI).
  */
-export function listProjectFoldersWithFiles(projectPath: string): string[] {
+export function listProjectFoldersWithFiles(projectPath: string, opts?: { dataDir?: string }): string[] {
   const folderFileCount = new Map<string, number>();
 
   function scan(dir: string, currentRel: string) {
@@ -125,6 +125,25 @@ export function listProjectFoldersWithFiles(projectPath: string): string[] {
   } catch (e) {
     console.error("Failed to scan project folders with files:", e);
   }
+
+  // Include non-empty folders from SQLite for inline/local files
+  try {
+    const db = getDatabase();
+    const fileRows = db.prepare("SELECT path FROM files WHERE storage_type = 'local'").all() as Array<{ path: string }>;
+    const root = opts?.dataDir ? resolve(opts.dataDir, "knowledge") : resolve(projectPath);
+    for (const fr of fileRows) {
+      if (isIndexedFile(fr.path)) {
+        const rel = relative(root, fr.path);
+        if (!rel.startsWith("..") && !isAbsolute(rel)) {
+          const parts = rel.split(/[/\\]/);
+          for (let i = 0; i < parts.length - 1; i++) {
+            const ancestor = parts.slice(0, i + 1).join("/");
+            folderFileCount.set(ancestor, (folderFileCount.get(ancestor) ?? 0) + 1);
+          }
+        }
+      }
+    }
+  } catch {}
 
   // Return only folders with at least one .md/.mmd file
   const result: string[] = [];
@@ -673,10 +692,28 @@ export function deleteFolder(projectPath: string, folderName: string, opts?: { d
       }
       try {
         db.prepare("DELETE FROM virtual_folders WHERE path = ? OR path LIKE ?").run(folderName, `${folderName}/%`);
-        // Also cascade delete files inside this virtual folder from SQLite
+        // Also cascade delete files inside this virtual folder from SQLite, fts_index, and enqueue outbox ops
         const pattern = `${knowledgeDir}/${folderName}/%`;
         const patternWin = `${knowledgeDir}\\${folderName}\\%`;
-        db.prepare("DELETE FROM files WHERE path LIKE ? OR path LIKE ?").run(pattern, patternWin);
+        const matchingFiles = db
+          .prepare("SELECT id, path, gid FROM files WHERE path LIKE ? OR path LIKE ?")
+          .all(pattern, patternWin) as Array<{ id: number; path: string; gid: string | null }>;
+
+        db.transaction(() => {
+          for (const mf of matchingFiles) {
+            const gid = mf.gid ?? formatGid(mf.id, getMachineId());
+            enqueueFileOp({
+              gid,
+              kind: "file.delete",
+              origin: getMachineId(),
+              base_version: 0,
+              payload: { path: mf.path, rel_path: toRelPath(mf.path) ?? undefined },
+              created_at: Date.now(),
+            });
+            db.prepare("DELETE FROM fts_index WHERE rowid = ?").run(mf.id);
+            db.prepare("DELETE FROM files WHERE id = ?").run(mf.id);
+          }
+        })();
       } catch {}
     }
   }

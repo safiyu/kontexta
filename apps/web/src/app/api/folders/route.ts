@@ -83,7 +83,7 @@ export async function GET(req: NextRequest) {
   }
 
   // Normalize to forward-slash keys: the UI treats folder keys as posix relative paths.
-  const folders = listProjectFoldersWithFiles(projectPath).map((f) => f.replace(/\\/g, "/"));
+  const folders = listProjectFoldersWithFiles(projectPath, { dataDir: DATA_DIR }).map((f) => f.replace(/\\/g, "/"));
   return NextResponse.json({ folders, basePath: projectPath });
 }
 

@@ -127,14 +127,42 @@ export function computeUnifiedDiff(
     return "";
   }
 
+  // Strip common prefix lines
+  let start = 0;
+  while (start < oldLines.length && start < newLines.length && oldLines[start] === newLines[start]) {
+    start++;
+  }
+
+  // Strip common suffix lines
+  let oldEnd = oldLines.length - 1;
+  let newEnd = newLines.length - 1;
+  while (oldEnd >= start && newEnd >= start && oldLines[oldEnd] === newLines[newEnd]) {
+    oldEnd--;
+    newEnd--;
+  }
+
+  const trimmedOld = oldLines.slice(start, oldEnd + 1);
+  const trimmedNew = newLines.slice(start, newEnd + 1);
+  const m = trimmedOld.length;
+  const n = trimmedNew.length;
+
+  // Fallback to simple replacement chunk if divergent matrix is excessively large (> 4 million elements)
+  if (m * n > 4_000_000) {
+    const diffChunks: string[] = [];
+    diffChunks.push(`--- a/${filePath}`);
+    diffChunks.push(`+++ b/${filePath}`);
+    diffChunks.push(`@@ -1,${oldLines.length} +1,${newLines.length} @@`);
+    for (const l of oldLines) diffChunks.push(`-${l}`);
+    for (const l of newLines) diffChunks.push(`+${l}`);
+    return diffChunks.join("\n") + "\n";
+  }
+
   // Simple Myers/LCS diff implementation for clean unified diff output
-  const m = oldLines.length;
-  const n = newLines.length;
   const dp: number[][] = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
 
   for (let i = 0; i < m; i++) {
     for (let j = 0; j < n; j++) {
-      if (oldLines[i] === newLines[j]) {
+      if (trimmedOld[i] === trimmedNew[j]) {
         dp[i + 1][j + 1] = dp[i][j] + 1;
       } else {
         dp[i + 1][j + 1] = Math.max(dp[i + 1][j], dp[i][j + 1]);
@@ -145,28 +173,38 @@ export function computeUnifiedDiff(
   const diffChunks: string[] = [];
   diffChunks.push(`--- a/${filePath}`);
   diffChunks.push(`+++ b/${filePath}`);
-  diffChunks.push(`@@ -1,${m} +1,${n} @@`);
+  diffChunks.push(`@@ -1,${oldLines.length} +1,${newLines.length} @@`);
+
+  // Leading common lines
+  for (let idx = 0; idx < start; idx++) {
+    diffChunks.push(` ${oldLines[idx]}`);
+  }
 
   let i = m;
   let j = n;
   const stack: string[] = [];
 
   while (i > 0 || j > 0) {
-    if (i > 0 && j > 0 && oldLines[i - 1] === newLines[j - 1]) {
-      stack.push(` ${oldLines[i - 1]}`);
+    if (i > 0 && j > 0 && trimmedOld[i - 1] === trimmedNew[j - 1]) {
+      stack.push(` ${trimmedOld[i - 1]}`);
       i--;
       j--;
     } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
-      stack.push(`+${newLines[j - 1]}`);
+      stack.push(`+${trimmedNew[j - 1]}`);
       j--;
     } else if (i > 0 && (j === 0 || dp[i][j - 1] < dp[i - 1][j])) {
-      stack.push(`-${oldLines[i - 1]}`);
+      stack.push(`-${trimmedOld[i - 1]}`);
       i--;
     }
   }
 
   while (stack.length > 0) {
     diffChunks.push(stack.pop()!);
+  }
+
+  // Trailing common lines
+  for (let idx = oldEnd + 1; idx < oldLines.length; idx++) {
+    diffChunks.push(` ${oldLines[idx]}`);
   }
 
   return diffChunks.join("\n") + "\n";

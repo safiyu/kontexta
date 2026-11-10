@@ -16,7 +16,11 @@ function defaultMaxBytes(): number {
   return 100 * 1024 * 1024;
 }
 
-interface Entry { absolute_path: string; archive_path: string }
+interface Entry {
+  absolute_path: string;
+  archive_path: string;
+  content?: string;
+}
 
 function getProjectPath(projectId: number): string | null {
   const db = getDatabase();
@@ -97,7 +101,11 @@ export async function GET(req: NextRequest) {
         } else {
           archive_path = relative(join(DATA_DIR, "knowledge"), file.path);
         }
-        entries.push({ absolute_path: file.path, archive_path });
+        entries.push({
+          absolute_path: file.path,
+          archive_path,
+          content: file.storage_type === "local" ? (file.content ?? "") : undefined,
+        });
       } catch {
         // skip missing
       }
@@ -112,7 +120,11 @@ export async function GET(req: NextRequest) {
     if (!projectPath) return NextResponse.json({ error: "Project not found" }, { status: 404 });
     const files = listFiles({ dataDir: DATA_DIR, filters: { project_id: pid } });
     for (const f of files) {
-      entries.push({ absolute_path: f.path, archive_path: relative(projectPath, f.path) });
+      entries.push({
+        absolute_path: f.path,
+        archive_path: relative(projectPath, f.path),
+        content: f.storage_type === "local" && f.content != null ? f.content : undefined,
+      });
     }
     rootName = getProjectSlug(pid);
   } else if (isFolderMode) {
@@ -131,7 +143,11 @@ export async function GET(req: NextRequest) {
     const files = listFiles({ dataDir: DATA_DIR, filters: { project_id: pid, folder: folder! } });
     const folderRoot = join(projectPath, folder!);
     for (const f of files) {
-      entries.push({ absolute_path: f.path, archive_path: relative(folderRoot, f.path) });
+      entries.push({
+        absolute_path: f.path,
+        archive_path: relative(folderRoot, f.path),
+        content: f.storage_type === "local" && f.content != null ? f.content : undefined,
+      });
     }
     rootName = basename(folder!) || "folder";
   }
@@ -145,10 +161,15 @@ export async function GET(req: NextRequest) {
   const cap = defaultMaxBytes();
   const live: Entry[] = [];
   for (const e of entries) {
-    try {
-      total += statSync(e.absolute_path).size;
+    if (e.content !== undefined) {
+      total += Buffer.byteLength(e.content, "utf8");
       live.push(e);
-    } catch {}
+    } else {
+      try {
+        total += statSync(e.absolute_path).size;
+        live.push(e);
+      } catch {}
+    }
   }
   if (total > cap) {
     return NextResponse.json({ error: "export too large" }, { status: 413 });
@@ -178,7 +199,11 @@ export async function GET(req: NextRequest) {
     req.signal.addEventListener("abort", () => archive.destroy(), { once: true });
   }
   for (const e of live) {
-    archive.file(e.absolute_path, { name: e.archive_path });
+    if (e.content !== undefined) {
+      archive.append(Buffer.from(e.content, "utf8"), { name: e.archive_path });
+    } else {
+      archive.file(e.absolute_path, { name: e.archive_path });
+    }
   }
   archive.finalize();
 

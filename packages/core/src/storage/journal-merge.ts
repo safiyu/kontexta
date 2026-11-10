@@ -15,6 +15,7 @@ import { enqueueOp } from "./outbox.js";
 import { toRelPath, resolveSyncPath } from "./paths.js";
 import { forkConflictFromOp } from "./conflicts.js";
 import type { Op } from "./op.js";
+import { createRevision } from "../revisions/index.js";
 
 const DAILY_JOURNAL_REL = /^knowledge\/journal\/journal-\d{4}-\d{2}-\d{2}\.md$/;
 const SEPARATOR = "\n---\n";
@@ -62,16 +63,37 @@ function machineId(db: Database): string {
  * update carrying it is pushed unless the remote already holds exactly that content.
  */
 export function mergeJournalInto(db: Database, localGid: string, path: string, remoteContent: string): void {
-  const local = existsSync(path) ? readFileSync(path, "utf-8") : "";
+  const row = db.prepare("SELECT id, title, content, storage_type FROM files WHERE gid = ?").get(localGid) as
+    | { id: number; title: string; content: string | null; storage_type: string }
+    | undefined;
+
+  let local = "";
+  if (row?.content !== null && row?.content !== undefined) {
+    local = row.content;
+  } else if (existsSync(path)) {
+    local = readFileSync(path, "utf-8");
+  }
+
   const merged = mergeJournalContent(local, remoteContent);
-  const row = db.prepare("SELECT id, title FROM files WHERE gid = ?").get(localGid) as { id: number; title: string } | undefined;
   if (merged !== local) {
-    mkdirSync(dirname(path), { recursive: true });
-    writeFileSync(path, merged, "utf8");
+    const isLocal = row?.storage_type === "local" || !row;
+    if (existsSync(path) || !isLocal) {
+      mkdirSync(dirname(path), { recursive: true });
+      writeFileSync(path, merged, "utf8");
+    }
     if (row) {
-      db.prepare("UPDATE files SET content_hash = ?, updated_at = datetime('now') WHERE id = ?").run(sha256(merged), row.id);
+      db.prepare("UPDATE files SET content = ?, content_hash = ?, updated_at = datetime('now') WHERE id = ?").run(
+        merged,
+        sha256(merged),
+        row.id
+      );
       db.prepare("DELETE FROM fts_index WHERE rowid = ?").run(row.id);
       db.prepare("INSERT INTO fts_index (rowid, title, content) VALUES (?, ?, ?)").run(row.id, row.title, merged);
+      createRevision(db, {
+        fileId: row.id,
+        content: merged,
+        message: `Merge journal entries: ${row.title}`,
+      });
     }
   }
   if (merged !== remoteContent) {

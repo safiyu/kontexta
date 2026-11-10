@@ -1,7 +1,7 @@
 import { checkAuth } from "@/lib/auth";
 import { NextRequest, NextResponse } from "next/server";
 import { statSync, openSync, readSync, closeSync } from "node:fs";
-import { listFiles, createFile, getTagsForFiles, getDatabase } from "kxta-core";
+import { listFiles, createFile, getTagsForFiles, getDatabase, estimateTokensFromString } from "kxta-core";
 import type { FileFilters } from "kxta-core";
 import { DATA_DIR, ensureDbInitialized } from "@/lib/db-init";
 
@@ -89,12 +89,18 @@ export async function GET(req: NextRequest) {
   const annotated = files.map((f) => {
     let size_bytes: number | null = null;
     let est_tokens: number | null = null;
-    try {
-      size_bytes = statSync(f.path).size;
-      est_tokens = estimateTokens(f.path, size_bytes);
-    } catch {}
+    if (f.content !== undefined && f.content !== null) {
+      size_bytes = Buffer.byteLength(f.content, "utf-8");
+      est_tokens = estimateTokensFromString(f.content);
+    } else {
+      try {
+        size_bytes = statSync(f.path).size;
+        est_tokens = estimateTokens(f.path, size_bytes);
+      } catch {}
+    }
+    const { content: _omittedContent, ...rest } = f;
     return {
-      ...f,
+      ...rest,
       size_bytes,
       est_tokens,
       tags: tagMap.get(f.id) ?? [],
