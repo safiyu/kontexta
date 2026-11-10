@@ -952,10 +952,15 @@ server.tool(
 
       let size_bytes: number | null = null;
       let est_tokens: number | null = null;
-      try {
-        size_bytes = statSync(file.path).size;
-        est_tokens = Math.max(1, Math.ceil(size_bytes / 4));
-      } catch {}
+      if (typeof file.content === "string") {
+        size_bytes = Buffer.byteLength(file.content, "utf8");
+        est_tokens = estimateTokensFromBuffer(Buffer.from(file.content, "utf8"));
+      } else {
+        try {
+          size_bytes = statSync(file.path).size;
+          est_tokens = estimateTokensFromFile(file.path, size_bytes);
+        } catch {}
+      }
 
       let history_count = 0;
       try {
