@@ -31,12 +31,6 @@ echo "==> Publishing ${QUALIFIED} v${VERSION} to Smithery"
 BUNDLE_NAME="kontexta-${VERSION}.mcpb"
 BUNDLE_PATH="${ROOT_DIR}/${BUNDLE_NAME}"
 
-# Smithery CLI
-if ! command -v smithery >/dev/null 2>&1; then
-  echo "==> Installing @smithery/cli"
-  npm install -g @smithery/cli
-fi
-
 # Build the full Smithery bundle using the builder script
 echo "==> Building full Smithery bundle"
 node "${ROOT_DIR}/scripts/build-smithery-bundle.mjs" "${VERSION}" "${BUNDLE_PATH}"
@@ -52,6 +46,12 @@ if [ -n "${CI:-}" ] && [ -z "${SMITHERY_API_KEY:-}" ]; then
   exit 1
 fi
 
+# Smithery CLI: use installed binary or fallback to npx without requiring root npm install -g
+SMITHERY_CMD="smithery"
+if ! command -v smithery >/dev/null 2>&1; then
+  SMITHERY_CMD="npx -y @smithery/cli"
+fi
+
 # Requires `smithery` CLI + prior login or SMITHERY_API_KEY
-smithery mcp publish "${BUNDLE_PATH}" -n "${QUALIFIED}"
+$SMITHERY_CMD mcp publish "${BUNDLE_PATH}" -n "${QUALIFIED}"
 echo "==> Done: https://smithery.ai/servers/${QUALIFIED}"
