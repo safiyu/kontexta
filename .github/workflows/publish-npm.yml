@@ -174,17 +174,6 @@ jobs:
               --notes-file "${{ steps.notes.outputs.path }}"
           fi
 
-      - name: Publish to Smithery
-        env:
-          SMITHERY_API_KEY: ${{ secrets.SMITHERY_API_KEY || secrets.SMITHERY_TOKEN }}
-        run: |
-          TAG="${GITHUB_REF_NAME#v}"
-          if [ "$TAG" = "main" ] || [ -z "$TAG" ]; then
-            TAG=$(node -p "require('./package.json').version")
-          fi
-          chmod +x ./scripts/publish-kontexta-smithery.sh
-          ./scripts/publish-kontexta-smithery.sh "$TAG"
- 
   publish-docker:
     name: Build and Push Docker Image
     runs-on: ubuntu-latest
