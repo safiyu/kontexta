@@ -17,6 +17,8 @@ export interface FileRecord {
   content_class: ContentClass | null;
   source_path: string | null;
   content_hash: string | null;
+  /** Inline content for local/internal storage (migration 020). */
+  content?: string | null;
   /** Global id `<localId>@<machineId>` (migration 013). */
   gid: string | null;
   created_at: string;

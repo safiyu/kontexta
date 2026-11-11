@@ -31,6 +31,7 @@ import { enqueueOp } from "./outbox.js";
 import { toRelPath, resolveSyncPath } from "./paths.js";
 import { clearLostPush } from "./versions.js";
 import type { Op } from "./op.js";
+import { createRevision } from "../revisions/index.js";
 
 // ---------------------------------------------------------------------------
 // Types & Interfaces (spec 1.7)
@@ -377,28 +378,24 @@ export function registerConflict(
   // 1. Resolve local content
   let localContent = input.localContent;
   if (localContent === undefined) {
-    if (existsSync(input.filePath)) {
-      try {
+    try {
+      const fileRow = db
+        .prepare("SELECT id, content, storage_type FROM files WHERE gid = ? OR path = ?")
+        .get(input.gid, input.filePath) as { id: number; content: string | null; storage_type: string } | undefined;
+      if (fileRow?.content !== null && fileRow?.content !== undefined) {
+        localContent = fileRow.content;
+      } else if (existsSync(input.filePath)) {
         localContent = readFileSync(input.filePath, "utf-8");
-      } catch {
+      } else if (fileRow) {
+        const ftsRow = db
+          .prepare("SELECT content FROM fts_index WHERE rowid = ?")
+          .get(fileRow.id) as { content: string } | undefined;
+        localContent = ftsRow?.content ?? "";
+      } else {
         localContent = "";
       }
-    } else {
-      try {
-        const fileRow = db
-          .prepare("SELECT id FROM files WHERE gid = ? OR path = ?")
-          .get(input.gid, input.filePath) as { id: number } | undefined;
-        if (fileRow) {
-          const ftsRow = db
-            .prepare("SELECT content FROM fts_index WHERE rowid = ?")
-            .get(fileRow.id) as { content: string } | undefined;
-          localContent = ftsRow?.content ?? "";
-        } else {
-          localContent = "";
-        }
-      } catch {
-        localContent = "";
-      }
+    } catch {
+      localContent = "";
     }
   }
 
@@ -741,25 +738,35 @@ export async function resolveConflict(
     let outboxOpId: number | undefined;
     let newFileGid: string | undefined;
 
+    const canonicalFile = db
+      .prepare("SELECT id, title, project_id, storage_type, content_class FROM files WHERE gid = ?")
+      .get(conflict.gid) as
+      | { id: number; title: string; project_id: number | null; storage_type: string; content_class: string | null }
+      | undefined;
+    const isLocal = (canonicalFile?.storage_type ?? "local") === "local";
+
     switch (strategy) {
       case "keep-server": {
         // Accept remote state: overwrite canonical file with remote content
-        mkdirSync(dirname(conflict.file_path), { recursive: true });
-        writeFileSync(conflict.file_path, conflict.remote_content, "utf8");
+        if (existsSync(conflict.file_path) || !isLocal) {
+          mkdirSync(dirname(conflict.file_path), { recursive: true });
+          writeFileSync(conflict.file_path, conflict.remote_content, "utf8");
+        }
 
         const hash = sha256(conflict.remote_content);
 
         db.transaction(() => {
           db.prepare(`
             UPDATE files SET
+              content = ?,
               content_hash = ?,
               updated_at = datetime('now')
             WHERE gid = ?
-          `).run(hash, conflict.gid);
+          `).run(conflict.remote_content, hash, conflict.gid);
 
-          const file = db
+          const file = canonicalFile ?? (db
             .prepare("SELECT id, title FROM files WHERE gid = ?")
-            .get(conflict.gid) as { id: number; title: string } | undefined;
+            .get(conflict.gid) as { id: number; title: string } | undefined);
 
           if (file) {
             db.prepare("DELETE FROM fts_index WHERE rowid = ?").run(file.id);
@@ -768,6 +775,13 @@ export async function resolveConflict(
               file.title,
               conflict.remote_content
             );
+            if (isLocal) {
+              createRevision(db, {
+                fileId: file.id,
+                content: conflict.remote_content,
+                message: `Resolve conflict (keep-server): ${file.title}`,
+              });
+            }
           }
 
           // Taking the server's content is still a sync event: other machines may hold a different winner.
@@ -807,11 +821,16 @@ export async function resolveConflict(
       case "keep-mine": {
         // Re-assert the CURRENT canonical file (the registration snapshot may be stale)
         let mineContent: string = conflict.local_content;
-        if (existsSync(conflict.file_path)) {
+        const currentDbFile = db.prepare("SELECT content FROM files WHERE gid = ?").get(conflict.gid) as { content: string | null } | undefined;
+        if (currentDbFile?.content !== null && currentDbFile?.content !== undefined) {
+          mineContent = currentDbFile.content;
+        } else if (existsSync(conflict.file_path)) {
           try {
             mineContent = readFileSync(conflict.file_path, "utf-8");
           } catch {}
-        } else {
+        }
+
+        if (existsSync(conflict.file_path) || !isLocal) {
           mkdirSync(dirname(conflict.file_path), { recursive: true });
           writeFileSync(conflict.file_path, mineContent, "utf8");
         }
@@ -821,14 +840,15 @@ export async function resolveConflict(
         db.transaction(() => {
           db.prepare(`
             UPDATE files SET
+              content = ?,
               content_hash = ?,
               updated_at = datetime('now')
             WHERE gid = ?
-          `).run(hash, conflict.gid);
+          `).run(mineContent, hash, conflict.gid);
 
-          const file = db
+          const file = canonicalFile ?? (db
             .prepare("SELECT id, title FROM files WHERE gid = ?")
-            .get(conflict.gid) as { id: number; title: string } | undefined;
+            .get(conflict.gid) as { id: number; title: string } | undefined);
 
           if (file) {
             db.prepare("DELETE FROM fts_index WHERE rowid = ?").run(file.id);
@@ -837,6 +857,13 @@ export async function resolveConflict(
               file.title,
               mineContent
             );
+            if (isLocal) {
+              createRevision(db, {
+                fileId: file.id,
+                content: mineContent,
+                message: `Resolve conflict (keep-mine): ${file.title}`,
+              });
+            }
           }
 
           // Enqueue update to push local state as canonical
@@ -875,36 +902,33 @@ export async function resolveConflict(
 
       case "keep-both": {
         // Retain canonical file AND permanently keep conflict copy as a new tracked file
-        if (!existsSync(conflict.conflict_path)) {
-          mkdirSync(dirname(conflict.conflict_path), { recursive: true });
-          writeFileSync(conflict.conflict_path, conflict.remote_content, "utf8");
+        if (existsSync(conflict.file_path) || !isLocal) {
+          if (!existsSync(conflict.conflict_path)) {
+            mkdirSync(dirname(conflict.conflict_path), { recursive: true });
+            writeFileSync(conflict.conflict_path, conflict.remote_content, "utf8");
+          }
         }
 
         const copyHash = sha256(conflict.remote_content);
         const copyTitle = basename(conflict.conflict_path);
 
         db.transaction(() => {
-          const canonicalFile = db
-            .prepare("SELECT project_id, storage_type, content_class FROM files WHERE gid = ?")
-            .get(conflict.gid) as
-            | { project_id: number | null; storage_type: string; content_class: string | null }
-            | undefined;
-
           const existingCopy = db
             .prepare("SELECT id, gid FROM files WHERE path = ?")
             .get(conflict.conflict_path) as { id: number; gid: string | null } | undefined;
 
           if (!existingCopy) {
             const insertRes = db.prepare(`
-              INSERT INTO files (path, title, project_id, storage_type, content_class, source_path, content_hash)
-              VALUES (?, ?, ?, ?, ?, NULL, ?)
+              INSERT INTO files (path, title, project_id, storage_type, content_class, source_path, content_hash, content)
+              VALUES (?, ?, ?, ?, ?, NULL, ?, ?)
             `).run(
               conflict.conflict_path,
               copyTitle,
               canonicalFile?.project_id ?? null,
               canonicalFile?.storage_type ?? "local",
               canonicalFile?.content_class ?? null,
-              copyHash
+              copyHash,
+              conflict.remote_content
             );
             const newId = Number(insertRes.lastInsertRowid);
             newFileGid = formatGid(newId, machineId);
@@ -915,6 +939,14 @@ export async function resolveConflict(
               copyTitle,
               conflict.remote_content
             );
+
+            if (isLocal) {
+              createRevision(db, {
+                fileId: newId,
+                content: conflict.remote_content,
+                message: `Create conflict copy (keep-both): ${copyTitle}`,
+              });
+            }
 
             // Enqueue creation of the new file so it syncs to server
             outboxOpId = enqueueOp(db, {
@@ -957,22 +989,25 @@ export async function resolveConflict(
       case "merged": {
         // Apply custom merged text to canonical file, push merged update, delete conflict copy
         const mergedText = options.mergedContent!;
-        mkdirSync(dirname(conflict.file_path), { recursive: true });
-        writeFileSync(conflict.file_path, mergedText, "utf8");
+        if (existsSync(conflict.file_path) || !isLocal) {
+          mkdirSync(dirname(conflict.file_path), { recursive: true });
+          writeFileSync(conflict.file_path, mergedText, "utf8");
+        }
 
         const hash = sha256(mergedText);
 
         db.transaction(() => {
           db.prepare(`
             UPDATE files SET
+              content = ?,
               content_hash = ?,
               updated_at = datetime('now')
             WHERE gid = ?
-          `).run(hash, conflict.gid);
+          `).run(mergedText, hash, conflict.gid);
 
-          const file = db
+          const file = canonicalFile ?? (db
             .prepare("SELECT id, title FROM files WHERE gid = ?")
-            .get(conflict.gid) as { id: number; title: string } | undefined;
+            .get(conflict.gid) as { id: number; title: string } | undefined);
 
           if (file) {
             db.prepare("DELETE FROM fts_index WHERE rowid = ?").run(file.id);
@@ -981,6 +1016,13 @@ export async function resolveConflict(
               file.title,
               mergedText
             );
+            if (isLocal) {
+              createRevision(db, {
+                fileId: file.id,
+                content: mergedText,
+                message: `Resolve conflict (merged): ${file.title}`,
+              });
+            }
           }
 
           // Enqueue merged update to server
@@ -1042,19 +1084,34 @@ function resolvePathConflict(
     .get(conflict.file_path) as
     | { id: number; gid: string | null; title: string; project_id: number | null; storage_type: string; content_class: string | null }
     | undefined;
+  const isLocal = (local?.storage_type ?? "local") === "local";
   let outboxOpId: number | undefined;
 
   if (strategy === "keep-server" || strategy === "merged") {
     const text = strategy === "merged" ? (options.mergedContent as string) : conflict.remote_content;
-    mkdirSync(dirname(conflict.file_path), { recursive: true });
-    writeFileSync(conflict.file_path, text, "utf8");
+    if (existsSync(conflict.file_path) || !isLocal) {
+      mkdirSync(dirname(conflict.file_path), { recursive: true });
+      writeFileSync(conflict.file_path, text, "utf8");
+    }
     const hash = sha256(text);
     db.transaction(() => {
       const title = local?.title ?? basename(conflict.file_path);
       if (local) {
-        db.prepare("UPDATE files SET gid = ?, content_hash = ?, updated_at = datetime('now') WHERE id = ?").run(conflict.gid, hash, local.id);
+        db.prepare("UPDATE files SET gid = ?, content = ?, content_hash = ?, updated_at = datetime('now') WHERE id = ?").run(
+          conflict.gid,
+          text,
+          hash,
+          local.id
+        );
         db.prepare("DELETE FROM fts_index WHERE rowid = ?").run(local.id);
         db.prepare("INSERT INTO fts_index (rowid, title, content) VALUES (?, ?, ?)").run(local.id, title, text);
+        if (isLocal) {
+          createRevision(db, {
+            fileId: local.id,
+            content: text,
+            message: `Resolve path conflict (${strategy}): ${title}`,
+          });
+        }
         if (local.gid && local.gid !== conflict.gid) {
           enqueueOp(db, {
             gid: local.gid,
@@ -1090,7 +1147,7 @@ function resolvePathConflict(
       } catch {}
     }
   } else {
-    if (!existsSync(conflict.conflict_path)) {
+    if (!isLocal && !existsSync(conflict.conflict_path)) {
       mkdirSync(dirname(conflict.conflict_path), { recursive: true });
       writeFileSync(conflict.conflict_path, conflict.remote_content, "utf8");
     }
@@ -1101,17 +1158,38 @@ function resolvePathConflict(
       let copyId: number;
       if (existingCopy) {
         copyId = existingCopy.id;
-        db.prepare("UPDATE files SET gid = ?, content_hash = ? WHERE id = ?").run(conflict.gid, copyHash, copyId);
+        db.prepare("UPDATE files SET gid = ?, content = ?, content_hash = ? WHERE id = ?").run(
+          conflict.gid,
+          conflict.remote_content,
+          copyHash,
+          copyId
+        );
       } else {
         const res = db
           .prepare(
-            "INSERT INTO files (path, title, project_id, storage_type, content_class, source_path, content_hash, gid) VALUES (?, ?, ?, ?, ?, NULL, ?, ?)"
+            "INSERT INTO files (path, title, project_id, storage_type, content_class, source_path, content_hash, content, gid) VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?)"
           )
-          .run(conflict.conflict_path, copyTitle, local?.project_id ?? null, local?.storage_type ?? "local", local?.content_class ?? null, copyHash, conflict.gid);
+          .run(
+            conflict.conflict_path,
+            copyTitle,
+            local?.project_id ?? null,
+            local?.storage_type ?? "local",
+            local?.content_class ?? null,
+            copyHash,
+            conflict.remote_content,
+            conflict.gid
+          );
         copyId = Number(res.lastInsertRowid);
       }
       db.prepare("DELETE FROM fts_index WHERE rowid = ?").run(copyId);
       db.prepare("INSERT INTO fts_index (rowid, title, content) VALUES (?, ?, ?)").run(copyId, copyTitle, conflict.remote_content);
+      if (isLocal) {
+        createRevision(db, {
+          fileId: copyId,
+          content: conflict.remote_content,
+          message: `Resolve path conflict (copy): ${copyTitle}`,
+        });
+      }
       // The remote record keeps its gid and moves to the copy path so both files live side by side everywhere.
       outboxOpId = enqueueOp(db, {
         gid: conflict.gid,

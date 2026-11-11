@@ -8,6 +8,7 @@ import { readFileSync, readdirSync, mkdirSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { getDbPath, ensureDataDir } from "../util/paths.js";
+import { migrateInlineContent } from "./inline-migration.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -70,6 +71,12 @@ export function createDatabase(dbPath: string): Database.Database {
   db.pragma("foreign_keys = ON");
 
   runMigrations();
+
+  try {
+    migrateInlineContent(db);
+  } catch (err) {
+    console.warn("[Database] inline content migration check error:", err);
+  }
 
   if (!globalThis.__kontextaDbCloseRegistered) {
     globalThis.__kontextaDbCloseRegistered = true;

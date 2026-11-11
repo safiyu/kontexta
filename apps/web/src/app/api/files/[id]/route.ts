@@ -25,11 +25,11 @@ export async function GET(
   // a real situation when chokidar misses an unlink event or the user
   // deletes a file while the app isn't running.
   const db = getDatabase();
-  const row = db.prepare("SELECT id, path FROM files WHERE id = ?").get(n) as { id: number; path: string } | undefined;
+  const row = db.prepare("SELECT id, path, content, storage_type FROM files WHERE id = ?").get(n) as { id: number; path: string; content: string | null; storage_type: string } | undefined;
   if (!row) {
     return NextResponse.json({ error: "File row not found", kind: "row_missing", id: n }, { status: 404 });
   }
-  if (!existsSync(row.path)) {
+  if (row.storage_type !== "local" && !existsSync(row.path)) {
     return NextResponse.json(
       {
         error: `File is indexed but missing on disk: ${row.path}`,

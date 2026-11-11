@@ -10,6 +10,7 @@ import { getDatabase } from "../db/index.js";
 import { formatGid } from "../identity/gid.js";
 import { getMachineId } from "../identity/machine.js";
 import { commitFile, commitDelete } from "../git/index.js";
+import { createRevision } from "../revisions/index.js";
 import { assertPathInside, escapeLike, withLock, fileLockKey } from "../util/safety.js";
 import { profileRelPath, repairProfile } from "../profile/index.js";
 import { sanitizeHtml } from "../reports/sanitize.js";
@@ -26,10 +27,11 @@ import type { FileRecord, Destination, FileFilters, StorageType } from "../types
 /**
  * List all folders in a project (recursively)
  */
-export function listProjectFolders(projectPath: string): string[] {
-  const folders: string[] = [];
+export function listProjectFolders(projectPath: string, opts?: { dataDir?: string }): string[] {
+  const folders = new Set<string>();
 
   function scan(dir: string, currentRel: string) {
+    if (!existsSync(dir)) return;
     const entries = readdirSync(dir);
     for (const entry of entries) {
       if (entry.startsWith(".") || entry === "node_modules") continue;
@@ -42,7 +44,7 @@ export function listProjectFolders(projectPath: string): string[] {
         const lst = lstatSync(fullPath);
         if (lst.isSymbolicLink()) continue;
         if (lst.isDirectory()) {
-          folders.push(relPath);
+          folders.add(relPath);
           scan(fullPath, relPath);
         }
       } catch (e) {
@@ -57,14 +59,36 @@ export function listProjectFolders(projectPath: string): string[] {
     console.error("Failed to scan project folders:", e);
   }
 
-  return folders;
+  // Include virtual folders and folder prefixes from SQLite
+  try {
+    const db = getDatabase();
+    const vRows = db.prepare("SELECT path FROM virtual_folders").all() as Array<{ path: string }>;
+    for (const r of vRows) {
+      folders.add(r.path);
+    }
+
+    // Also include folders derived from file paths
+    const fileRows = db.prepare("SELECT path FROM files WHERE storage_type = 'local'").all() as Array<{ path: string }>;
+    const root = opts?.dataDir ? resolve(opts.dataDir, "knowledge") : resolve(projectPath);
+    for (const fr of fileRows) {
+      const rel = relative(root, fr.path);
+      if (!rel.startsWith("..") && !isAbsolute(rel)) {
+        const parts = rel.split(/[/\\]/);
+        for (let i = 1; i < parts.length; i++) {
+          folders.add(parts.slice(0, i).join("/"));
+        }
+      }
+    }
+  } catch {}
+
+  return Array.from(folders).sort();
 }
 
 /**
  * List all folders in a project that contain at least one .md or .mmd file.
  * Returns only non-empty folders (useful for publish UI).
  */
-export function listProjectFoldersWithFiles(projectPath: string): string[] {
+export function listProjectFoldersWithFiles(projectPath: string, opts?: { dataDir?: string }): string[] {
   const folderFileCount = new Map<string, number>();
 
   function scan(dir: string, currentRel: string) {
@@ -101,6 +125,25 @@ export function listProjectFoldersWithFiles(projectPath: string): string[] {
   } catch (e) {
     console.error("Failed to scan project folders with files:", e);
   }
+
+  // Include non-empty folders from SQLite for inline/local files
+  try {
+    const db = getDatabase();
+    const fileRows = db.prepare("SELECT path FROM files WHERE storage_type = 'local'").all() as Array<{ path: string }>;
+    const root = opts?.dataDir ? resolve(opts.dataDir, "knowledge") : resolve(projectPath);
+    for (const fr of fileRows) {
+      if (isIndexedFile(fr.path)) {
+        const rel = relative(root, fr.path);
+        if (!rel.startsWith("..") && !isAbsolute(rel)) {
+          const parts = rel.split(/[/\\]/);
+          for (let i = 0; i < parts.length - 1; i++) {
+            const ancestor = parts.slice(0, i + 1).join("/");
+            folderFileCount.set(ancestor, (folderFileCount.get(ancestor) ?? 0) + 1);
+          }
+        }
+      }
+    }
+  } catch {}
 
   // Return only folders with at least one .md/.mmd file
   const result: string[] = [];
@@ -233,12 +276,11 @@ export async function createFile(opts: CreateFileOptions): Promise<FileRecordWit
   // UPSERT, and the FTS index can land with the watcher's interpretation
   // of the file (no tags, default title) instead of the caller's.
   return withLock(fileLockKey(filePath), async () => {
-  mkdirSync(dirname(filePath), { recursive: true });
   // Stash pre-existing content (if any) so we can fully restore on a
   // DB-txn failure — otherwise writeFileSync below would leave the
   // caller's content sitting under a row that points elsewhere.
   let preExistingContent: Buffer | null = null;
-  if (existsSync(filePath)) {
+  if (storageType === "reference" && existsSync(filePath)) {
     try {
       preExistingContent = readFileSync(filePath);
     } catch (e) {
@@ -254,15 +296,18 @@ export async function createFile(opts: CreateFileOptions): Promise<FileRecordWit
     content = repairedContent;
   }
   if (format === "html" && !skipHtmlSanitize) content = await sanitizeHtml(content);
-  writeFileSync(filePath, content, "utf8");
+  if (storageType === "reference") {
+    mkdirSync(dirname(filePath), { recursive: true });
+    writeFileSync(filePath, content, "utf8");
+  }
   const contentHash = computeHash(content);
 
   const contentClass = computeContentClass({ storageType, path: filePath, dataDir });
 
   // ON CONFLICT(path) absorbs the watcher's stub row if chokidar's `add` won the race.
   const upsertStmt = db.prepare(`
-    INSERT INTO files (path, title, project_id, storage_type, content_class, source_path, content_hash)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO files (path, title, project_id, storage_type, content_class, source_path, content_hash, content)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(path) DO UPDATE SET
       title = excluded.title,
       project_id = excluded.project_id,
@@ -270,6 +315,7 @@ export async function createFile(opts: CreateFileOptions): Promise<FileRecordWit
       content_class = excluded.content_class,
       source_path = excluded.source_path,
       content_hash = excluded.content_hash,
+      content = excluded.content,
       updated_at = datetime('now')
   `);
   const getIdByPathStmt = db.prepare("SELECT id FROM files WHERE path = ?");
@@ -284,15 +330,15 @@ export async function createFile(opts: CreateFileOptions): Promise<FileRecordWit
 
   // Snapshot for rollback — upsert may overwrite an existing row.
   const priorRow = db
-    .prepare("SELECT id, title, project_id, storage_type, content_class, source_path, content_hash, updated_at FROM files WHERE path = ?")
+    .prepare("SELECT id, title, project_id, storage_type, content_class, source_path, content_hash, content, updated_at FROM files WHERE path = ?")
     .get(filePath) as
-    | { id: number; title: string; project_id: number | null; storage_type: string; content_class: string | null; source_path: string | null; content_hash: string; updated_at: string }
+    | { id: number; title: string; project_id: number | null; storage_type: string; content_class: string | null; source_path: string | null; content_hash: string; content: string | null; updated_at: string }
     | undefined;
 
   let fileId: number;
   try {
     fileId = db.transaction(() => {
-      upsertStmt.run(filePath, title, projectId || null, storageType, contentClass, sourcePath || null, contentHash);
+      upsertStmt.run(filePath, title, projectId || null, storageType, contentClass, sourcePath || null, contentHash, content);
       const row = getIdByPathStmt.get(filePath) as { id: number } | undefined;
       if (!row) throw new Error(`createFile: row missing after upsert for ${filePath}`);
       const id = row.id;
@@ -302,6 +348,15 @@ export async function createFile(opts: CreateFileOptions): Promise<FileRecordWit
       // corrects a watcher stub row that this upsert just absorbed.
       const gid = formatGid(id, getMachineId());
       setGidStmt.run(gid, id);
+
+      // Snapshot revision for local files
+      if (storageType === "local") {
+        createRevision(db, {
+          fileId: id,
+          content,
+          message: `Create context file: ${title}`,
+        });
+      }
 
       if (tags.length > 0) {
         for (const tagName of tags) {
@@ -341,19 +396,21 @@ export async function createFile(opts: CreateFileOptions): Promise<FileRecordWit
       return id;
     })();
   } catch (dbError) {
-    if (preExistingContent !== null) {
-      try { writeFileSync(filePath, preExistingContent as any); } catch (e) {
-        console.error("createFile: failed to restore pre-existing content after DB error:", e);
+    if (storageType === "reference") {
+      if (preExistingContent !== null) {
+        try { writeFileSync(filePath, preExistingContent as any); } catch (e) {
+          console.error("createFile: failed to restore pre-existing content after DB error:", e);
+        }
+      } else {
+        try { unlinkSync(filePath); } catch {}
       }
-    } else {
-      try { unlinkSync(filePath); } catch {}
     }
     // Roll DB back to priorRow (if any) or delete the freshly-inserted row.
     try {
       if (priorRow) {
         db.prepare(
-          "UPDATE files SET title=?, project_id=?, storage_type=?, content_class=?, source_path=?, content_hash=?, updated_at=? WHERE id=?"
-        ).run(priorRow.title, priorRow.project_id, priorRow.storage_type, priorRow.content_class, priorRow.source_path, priorRow.content_hash, priorRow.updated_at, priorRow.id);
+          "UPDATE files SET title=?, project_id=?, storage_type=?, content_class=?, source_path=?, content_hash=?, content=?, updated_at=? WHERE id=?"
+        ).run(priorRow.title, priorRow.project_id, priorRow.storage_type, priorRow.content_class, priorRow.source_path, priorRow.content_hash, priorRow.content ?? null, priorRow.updated_at, priorRow.id);
       } else {
         db.prepare("DELETE FROM files WHERE path = ?").run(filePath);
       }
@@ -367,16 +424,18 @@ export async function createFile(opts: CreateFileOptions): Promise<FileRecordWit
 
   // Reference files version against their project's own git, not the data dir.
   let gitWarning: string | undefined;
-  try {
-    let repoDir = dataDir;
-    if (storageType === "reference" && projectId) {
-      const project = db.prepare("SELECT path FROM projects WHERE id = ?").get(projectId) as { path: string | null } | undefined;
-      if (project?.path) repoDir = project.path;
+  if (storageType === "reference") {
+    try {
+      let repoDir = dataDir;
+      if (projectId) {
+        const project = db.prepare("SELECT path FROM projects WHERE id = ?").get(projectId) as { path: string | null } | undefined;
+        if (project?.path) repoDir = project.path;
+      }
+      await commitFile(repoDir, filePath, `Create context file: ${title}`);
+    } catch (error) {
+      gitWarning = error instanceof Error ? error.message : String(error);
+      console.warn("Git auto-commit failed during creation:", error);
     }
-    await commitFile(repoDir, filePath, `Create context file: ${title}`);
-  } catch (error) {
-    gitWarning = error instanceof Error ? error.message : String(error);
-    console.warn("Git auto-commit failed during creation:", error);
   }
 
   return {
@@ -398,7 +457,12 @@ export function readFile(id: number): FileRecordWithContent {
     throw new Error(`File not found: ${id}`);
   }
 
-  const content = readFileSync(fileRecord.path, "utf8");
+  let content: string;
+  if (fileRecord.storage_type === "local" && fileRecord.content !== undefined && fileRecord.content !== null) {
+    content = fileRecord.content;
+  } else {
+    content = readFileSync(fileRecord.path, "utf8");
+  }
 
   return {
     ...fileRecord,
@@ -426,7 +490,7 @@ export async function updateFile(id: number, content: string, dataDir: string): 
   // under a row whose content_hash and FTS index still reflect the old
   // content, leaving permanent drift.
   let preExistingContent: Buffer | null = null;
-  if (existsSync(fileRecord.path)) {
+  if (fileRecord.storage_type === "reference" && existsSync(fileRecord.path)) {
     try {
       preExistingContent = readFileSync(fileRecord.path);
     } catch (e) {
@@ -434,13 +498,15 @@ export async function updateFile(id: number, content: string, dataDir: string): 
     }
   }
   if (fileRecord.path.endsWith(".html")) content = await sanitizeHtml(content);
-  writeFileSync(fileRecord.path, content, "utf8");
+  if (fileRecord.storage_type === "reference") {
+    writeFileSync(fileRecord.path, content, "utf8");
+  }
   const contentHash = computeHash(content);
 
   // Atomic so a partial failure can't leave the FTS index pointing at stale content.
   const updateStmt = db.prepare(`
     UPDATE files
-    SET content_hash = ?, updated_at = datetime('now')
+    SET content = ?, content_hash = ?, updated_at = datetime('now')
     WHERE id = ?
   `);
   const deleteFtsStmt = db.prepare("DELETE FROM fts_index WHERE rowid = ?");
@@ -452,9 +518,18 @@ export async function updateFile(id: number, content: string, dataDir: string): 
 
   try {
     db.transaction(() => {
-      updateStmt.run(contentHash, id);
+      updateStmt.run(content, contentHash, id);
       deleteFtsStmt.run(id);
       insertFtsStmt.run(id, fileRecord.title, content);
+
+      // Snapshot revision for local files
+      if (fileRecord.storage_type === "local") {
+        createRevision(db, {
+          fileId: id,
+          content,
+          message: `Update context file: ${fileRecord.title}`,
+        });
+      }
 
       // Enqueue the outbound op atomically with the write (spec 1.3); no-op
       // while applying a remote op (echo suppression, spec 1.4).
@@ -474,7 +549,7 @@ export async function updateFile(id: number, content: string, dataDir: string): 
       });
     })();
   } catch (dbError) {
-    if (preExistingContent !== null) {
+    if (fileRecord.storage_type === "reference" && preExistingContent !== null) {
       try { writeFileSync(fileRecord.path, preExistingContent as any); } catch (e) {
         console.error("updateFile: failed to restore pre-existing content after DB error:", e);
       }
@@ -483,16 +558,18 @@ export async function updateFile(id: number, content: string, dataDir: string): 
   }
 
   let gitWarning: string | undefined;
-  try {
-    let repoDir = dataDir;
-    if (fileRecord.storage_type === "reference" && fileRecord.project_id) {
-      const project = db.prepare("SELECT path FROM projects WHERE id = ?").get(fileRecord.project_id) as { path: string | null } | undefined;
-      if (project?.path) repoDir = project.path;
+  if (fileRecord.storage_type === "reference") {
+    try {
+      let repoDir = dataDir;
+      if (fileRecord.project_id) {
+        const project = db.prepare("SELECT path FROM projects WHERE id = ?").get(fileRecord.project_id) as { path: string | null } | undefined;
+        if (project?.path) repoDir = project.path;
+      }
+      await commitFile(repoDir, fileRecord.path, `Update context file: ${fileRecord.title}`);
+    } catch (error) {
+      gitWarning = error instanceof Error ? error.message : String(error);
+      console.warn("Git auto-commit failed during update:", error);
     }
-    await commitFile(repoDir, fileRecord.path, `Update context file: ${fileRecord.title}`);
-  } catch (error) {
-    gitWarning = error instanceof Error ? error.message : String(error);
-    console.warn("Git auto-commit failed during update:", error);
   }
 
   const updatedRecord = db.prepare("SELECT * FROM files WHERE id = ?").get(id) as FileRecord;
@@ -517,8 +594,8 @@ export async function updateFile(id: number, content: string, dataDir: string): 
 export async function deleteFile(id: number, dataDir?: string): Promise<void> {
   const db = getDatabase();
 
-  const file = db.prepare("SELECT path, project_id, gid FROM files WHERE id = ?").get(id) as
-    | { path: string; project_id: number | null; gid: string | null }
+  const file = db.prepare("SELECT path, project_id, storage_type, gid FROM files WHERE id = ?").get(id) as
+    | { path: string; project_id: number | null; storage_type: string; gid: string | null }
     | undefined;
 
   if (!file) {
@@ -526,13 +603,13 @@ export async function deleteFile(id: number, dataDir?: string): Promise<void> {
   }
 
   let unlinked = false;
-  let inKnowledge = false;
   let filePathResolved = file.path;
 
-  if (dataDir) {
+  // Only reference files on disk need explicit unlinking/commitDelete if applicable
+  if (dataDir && file.storage_type === "reference") {
     const knowledgeRoot = resolve(dataDir, "knowledge");
     filePathResolved = isAbsolute(file.path) ? file.path : resolve(dataDir, file.path);
-    inKnowledge =
+    const inKnowledge =
       filePathResolved === knowledgeRoot ||
       filePathResolved.startsWith(knowledgeRoot + sep);
 
@@ -548,7 +625,7 @@ export async function deleteFile(id: number, dataDir?: string): Promise<void> {
     }
   }
 
-  // CASCADE handles file_tags + favorites via the files row deletion.
+  // CASCADE handles file_tags + favorites + file_revisions via the files row deletion.
   const deleteFtsStmt = db.prepare("DELETE FROM fts_index WHERE rowid = ?");
   const deleteStmt = db.prepare("DELETE FROM files WHERE id = ?");
   // Read the record's gid (not recomputed) so a REMOTE file's deletion carries
@@ -569,11 +646,8 @@ export async function deleteFile(id: number, dataDir?: string): Promise<void> {
     deleteStmt.run(id);
   })();
 
-  // Commit the deletion to git so the file doesn't resurrect from HEAD on
-  // the next pull/restore/stash pop. Only relevant for KB files (we
-  // actually unlinked them) — for project files we leave the source tree
-  // untouched. Best-effort; failures don't block the delete.
-  if (unlinked && dataDir) {
+  // Commit the deletion to git if it was on disk
+  if (unlinked && dataDir && file.storage_type === "reference") {
     try {
       await commitDelete(dataDir, filePathResolved, `Delete context file: ${basename(filePathResolved)}`);
     } catch (e) {
@@ -587,10 +661,16 @@ export async function deleteFile(id: number, dataDir?: string): Promise<void> {
  */
 export function createFolder(projectPath: string, folderName: string, opts?: { dataDir?: string }): string {
   const fullPath = assertPathInside(projectPath, folderName);
+  const db = getDatabase();
   if (opts?.dataDir) {
     const knowledgeDir = resolve(opts.dataDir, "knowledge");
     if (resolve(projectPath) === knowledgeDir) {
       validateKnowledgeWrite(folderName, "folder");
+      // Record virtual folder in SQLite
+      try {
+        db.prepare("INSERT OR IGNORE INTO virtual_folders (path) VALUES (?)").run(folderName);
+      } catch {}
+      return fullPath;
     }
   }
   mkdirSync(fullPath, { recursive: true });
@@ -602,6 +682,7 @@ export function createFolder(projectPath: string, folderName: string, opts?: { d
  */
 export function deleteFolder(projectPath: string, folderName: string, opts?: { dataDir?: string }): void {
   const fullPath = assertPathInside(projectPath, folderName);
+  const db = getDatabase();
   if (opts?.dataDir) {
     const knowledgeDir = resolve(opts.dataDir, "knowledge");
     if (resolve(projectPath) === knowledgeDir) {
@@ -609,9 +690,36 @@ export function deleteFolder(projectPath: string, folderName: string, opts?: { d
       if (segments.length <= 1) {
         throw new Error(`Cannot delete root knowledge folder '${folderName}'.`);
       }
+      try {
+        db.prepare("DELETE FROM virtual_folders WHERE path = ? OR path LIKE ?").run(folderName, `${folderName}/%`);
+        // Also cascade delete files inside this virtual folder from SQLite, fts_index, and enqueue outbox ops
+        const pattern = `${knowledgeDir}/${folderName}/%`;
+        const patternWin = `${knowledgeDir}\\${folderName}\\%`;
+        const matchingFiles = db
+          .prepare("SELECT id, path, gid FROM files WHERE path LIKE ? OR path LIKE ?")
+          .all(pattern, patternWin) as Array<{ id: number; path: string; gid: string | null }>;
+
+        db.transaction(() => {
+          for (const mf of matchingFiles) {
+            const gid = mf.gid ?? formatGid(mf.id, getMachineId());
+            enqueueFileOp({
+              gid,
+              kind: "file.delete",
+              origin: getMachineId(),
+              base_version: 0,
+              payload: { path: mf.path, rel_path: toRelPath(mf.path) ?? undefined },
+              created_at: Date.now(),
+            });
+            db.prepare("DELETE FROM fts_index WHERE rowid = ?").run(mf.id);
+            db.prepare("DELETE FROM files WHERE id = ?").run(mf.id);
+          }
+        })();
+      } catch {}
     }
   }
-  rmSync(fullPath, { recursive: true, force: true });
+  if (existsSync(fullPath)) {
+    rmSync(fullPath, { recursive: true, force: true });
+  }
 }
 
 /**
@@ -770,40 +878,35 @@ export function moveFile(id: number, newPath: string, dataDir?: string): FileRec
   }
 
   const oldPath = fileRecord.path;
-  if (newPath !== oldPath && existsSync(newPath)) {
-    throw new Error(`moveFile: destination already exists: ${newPath}`);
-  }
-  mkdirSync(dirname(newPath), { recursive: true });
-  try {
-    renameSync(oldPath, newPath);
-  } catch (err: any) {
-    if (err?.code === "EXDEV") {
-      // Cross-device move (e.g. Docker bind mount → tmpfs). renameSync can't
-      // span devices on POSIX; fall back to copy + unlink, atomic on the
-      // destination via .tmp + rename trick.
-      const tmpDest = `${newPath}.${process.pid}.${Date.now()}.tmp`;
-      try {
-        const buf = readFileSync(oldPath);
-        writeFileSync(tmpDest, buf);
-        renameSync(tmpDest, newPath);
-        unlinkSync(oldPath);
-      } catch (copyErr) {
-        try { if (existsSync(tmpDest)) unlinkSync(tmpDest); } catch {}
-        try { if (existsSync(newPath) && !existsSync(oldPath)) renameSync(newPath, oldPath); } catch {}
-        throw copyErr;
+  if (fileRecord.storage_type === "reference") {
+    if (newPath !== oldPath && existsSync(newPath)) {
+      throw new Error(`moveFile: destination already exists: ${newPath}`);
+    }
+    mkdirSync(dirname(newPath), { recursive: true });
+    try {
+      renameSync(oldPath, newPath);
+    } catch (err: any) {
+      if (err?.code === "EXDEV") {
+        // Cross-device move (e.g. Docker bind mount → tmpfs). renameSync can't
+        // span devices on POSIX; fall back to copy + unlink, atomic on the
+        // destination via .tmp + rename trick.
+        const tmpDest = `${newPath}.${process.pid}.${Date.now()}.tmp`;
+        try {
+          const buf = readFileSync(oldPath);
+          writeFileSync(tmpDest, buf);
+          renameSync(tmpDest, newPath);
+          unlinkSync(oldPath);
+        } catch (copyErr) {
+          try { if (existsSync(tmpDest)) unlinkSync(tmpDest); } catch {}
+          try { if (existsSync(newPath) && !existsSync(oldPath)) renameSync(newPath, oldPath); } catch {}
+          throw copyErr;
+        }
+      } else {
+        throw err;
       }
-    } else {
-      throw err;
     }
   }
 
-  // If the DB UPDATE fails (UNIQUE conflict, etc.) we'd be left with the
-  // file at newPath but the row pointing at oldPath — in the web app the
-  // watcher would then unlink the row (losing tags/favorites). Roll the
-  // disk rename back so the system stays consistent. (Best-effort: if the
-  // original move went EXDEV the rollback path may also need a copy
-  // fallback, but in practice rollback is on the same device that just
-  // hosted the file.)
   // Only touch content_class when dataDir is known — otherwise preserve the existing value rather than silently wiping it to null.
   try {
     // Read the record's gid (not recomputed) so a REMOTE file's move carries
@@ -838,11 +941,13 @@ export function moveFile(id: number, newPath: string, dataDir?: string): FileRec
       });
     })();
   } catch (e) {
-    try { renameSync(newPath, oldPath); } catch (rollbackErr) {
-      throw new Error(
-        `moveFile failed and rollback also failed; disk and DB are out of sync. ` +
-        `update error: ${(e as any)?.message ?? e}; rollback error: ${(rollbackErr as any)?.message ?? rollbackErr}`
-      );
+    if (fileRecord.storage_type === "reference") {
+      try { renameSync(newPath, oldPath); } catch (rollbackErr) {
+        throw new Error(
+          `moveFile failed and rollback also failed; disk and DB are out of sync. ` +
+          `update error: ${(e as any)?.message ?? e}; rollback error: ${(rollbackErr as any)?.message ?? rollbackErr}`
+        );
+      }
     }
     throw e;
   }

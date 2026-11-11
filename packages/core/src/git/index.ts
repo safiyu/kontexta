@@ -11,6 +11,12 @@ import { spawnSync } from "node:child_process";
 import { platform } from "node:os";
 import { getDatabase } from "../db/index.js";
 import { withLock } from "../util/safety.js";
+import {
+  listRevisions,
+  getRevisionContent,
+  createRevision,
+  computeUnifiedDiff,
+} from "../revisions/index.js";
 
 /** Git tree paths always use forward slashes, regardless of host OS. */
 const toGitPath = (p: string): string => p.split(sep).join("/");
@@ -163,6 +169,15 @@ export async function getHistory(
   repoDir: string,
   filePath: string
 ): Promise<Array<{ hash: string; message: string; date: string; author: string }>> {
+  const db = getDatabase();
+  const file = db.prepare("SELECT id, storage_type FROM files WHERE path = ?").get(filePath) as
+    | { id: number; storage_type: string }
+    | undefined;
+
+  if (file && file.storage_type === "local") {
+    return listRevisions(db, file.id);
+  }
+
   const git: SimpleGit = gitFor(repoDir);
   const relativePath = toGitPath(relative(repoDir, filePath));
 
@@ -190,6 +205,17 @@ export async function getDiff(
   commitA: string,
   commitB: string
 ): Promise<string> {
+  const db = getDatabase();
+  const file = db.prepare("SELECT id, storage_type FROM files WHERE path = ?").get(filePath) as
+    | { id: number; storage_type: string }
+    | undefined;
+
+  if (file && file.storage_type === "local") {
+    const contentA = getRevisionContent(db, file.id, commitA) ?? "";
+    const contentB = getRevisionContent(db, file.id, commitB) ?? "";
+    return computeUnifiedDiff(contentA, contentB, filePath);
+  }
+
   const git: SimpleGit = gitFor(repoDir);
   const relativePath = toGitPath(relative(repoDir, filePath));
 
@@ -210,6 +236,38 @@ export async function restoreVersion(
   filePath: string,
   commitHash: string
 ): Promise<string> {
+  const db = getDatabase();
+  const file = db.prepare("SELECT id, title, storage_type FROM files WHERE path = ?").get(filePath) as
+    | { id: number; title: string; storage_type: string }
+    | undefined;
+
+  if (file && file.storage_type === "local") {
+    return await withLock(`file:${resolve(filePath)}`, async () => {
+      const restoredContent = getRevisionContent(db, file.id, commitHash);
+      if (restoredContent === null) {
+        throw new Error(`restoreVersion: revision ${commitHash} not found for file ${filePath}`);
+      }
+
+      const hash = createHash("sha256").update(restoredContent, "utf8").digest("hex");
+      const updateStmt = db.prepare("UPDATE files SET content = ?, content_hash = ?, updated_at = datetime('now') WHERE id = ?");
+      const deleteFtsStmt = db.prepare("DELETE FROM fts_index WHERE rowid = ?");
+      const insertFtsStmt = db.prepare("INSERT INTO fts_index (rowid, title, content) VALUES (?, ?, ?)");
+
+      db.transaction(() => {
+        updateStmt.run(restoredContent, hash, file.id);
+        deleteFtsStmt.run(file.id);
+        insertFtsStmt.run(file.id, file.title, restoredContent);
+        createRevision(db, {
+          fileId: file.id,
+          content: restoredContent,
+          message: `Restore version ${commitHash.slice(0, 7)}`,
+        });
+      })();
+
+      return restoredContent;
+    });
+  }
+
   return await withLock(`git:${resolve(repoDir)}`, async () => {
     const git: SimpleGit = gitFor(repoDir);
     const relativePath = toGitPath(relative(repoDir, filePath));

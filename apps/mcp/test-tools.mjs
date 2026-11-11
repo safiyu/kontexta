@@ -342,7 +342,8 @@ function assert(cond, msg) {
     const newPath = join(DATA_DIR, "knowledge", "knowledge", "auth-notes-renamed.md");
     const r = await call("files_move", { file_id: seedFile1.id, new_path: newPath });
     assert(r.path === newPath, `expected ${newPath}, got ${r.path}`);
-    assert(existsSync(newPath), "file not moved on disk");
+    const moved = await call("files_read", { id: seedFile1.id });
+    assert(moved.path === newPath, `files_read path expected ${newPath}, got ${moved.path}`);
     // Move it back so subsequent tests still find it.
     await call("files_move", { file_id: seedFile1.id, new_path: SEED_PATH_1 });
   });
@@ -485,13 +486,35 @@ function assert(cond, msg) {
     assert(after.content.includes("v2"), `expected v2 content, got: ${after.content}`);
   });
 
-  await test("projects_refresh_index (KB) prunes vanished files", async () => {
+  await test("projects_refresh_index (KB) does not prune local KB files when deleted from disk", async () => {
     const sneakyPath = join(DATA_DIR, "knowledge", "sneaked-in.md");
     rmSync(sneakyPath, { force: true });
     const r = await call("projects_refresh_index", { project_id: null });
-    assert(r.pruned >= 1, `expected ≥1 pruned, got ${r.pruned}`);
-    const after = await call("files_read", { path: sneakyPath }).catch((e) => e.message);
-    assert(typeof after === "string" && after.includes("No file indexed"), "row should be pruned");
+    assert(r.pruned === 0, `expected 0 pruned for local KB files, got ${r.pruned}`);
+    const after = await call("files_read", { path: sneakyPath });
+    assert(after.content.includes("v2"), "local KB file should remain intact in SQLite");
+    await call("files_delete", { ids: [after.id], confirm: true });
+  });
+
+  await test("projects_refresh_index (Project) prunes vanished files", async () => {
+    const projDir = mkdtempSync(join(tmpdir(), "kontexta-prune-test-"));
+    try {
+      const reg = await call("projects_register", { name: "prune-test-proj", path: projDir });
+      const pid = reg.project.id;
+
+      const filePath = join(projDir, "temp-doc.md");
+      writeFileSync(filePath, "# Temp doc\n\nTo be deleted.\n");
+      const r1 = await call("projects_refresh_index", { project_id: pid });
+      assert(r1.newly_indexed >= 1, `expected ≥1 newly indexed, got ${r1.newly_indexed}`);
+
+      rmSync(filePath, { force: true });
+      const r2 = await call("projects_refresh_index", { project_id: pid });
+      assert(r2.pruned >= 1, `expected ≥1 pruned, got ${r2.pruned}`);
+      const after = await call("files_read", { path: filePath }).catch((e) => e.message);
+      assert(typeof after === "string" && after.includes("No file indexed"), "row should be pruned");
+    } finally {
+      rmSync(projDir, { recursive: true, force: true });
+    }
   });
 
   await test("journal_write (kind: append) creates + appends", async () => {
@@ -740,9 +763,9 @@ function assert(cond, msg) {
 
       // Confirm KB files exist and content matches
       for (const t of r1.transferred) {
-        assert(existsSync(t.kb_path), `kb_path missing: ${t.kb_path}`);
+        const file = await call("files_read", { id: t.kb_id });
         const expected = t.source_path === "CLAUDE.md" ? claudeContent : cursorContent;
-        assert(readFileSync(t.kb_path, "utf8") === expected, `content mismatch in ${t.kb_path}`);
+        assert(file.content === expected, `content mismatch in ${t.kb_path}`);
       }
 
       // 3. Originals UNCHANGED — same mtime, size, content

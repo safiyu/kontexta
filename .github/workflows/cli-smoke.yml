@@ -59,7 +59,7 @@ jobs:
           cd apps/mcp
           pnpm run build:npm
           npm pack
-          mkdir -p /tmp/mcp-smoke && cd /tmp/mcp-smoke
+          rm -rf /tmp/mcp-smoke && mkdir -p /tmp/mcp-smoke && cd /tmp/mcp-smoke
           npm init -y >/dev/null
           npm install $GITHUB_WORKSPACE/packages/reranker-model/kontexta-reranker-model-*.tgz
           npm install $GITHUB_WORKSPACE/apps/mcp/kontexta-mcp-*.tgz
@@ -87,6 +87,10 @@ jobs:
         with:
           node-version: "22"
 
+      - name: Clean previous workspace
+        shell: bash
+        run: rm -rf smoke tarballs
+
       - name: Download tarballs
         uses: actions/download-artifact@v4
         with:
@@ -101,7 +105,10 @@ jobs:
           MODEL=$(find tarballs -name 'kontexta-reranker-model-*.tgz' | head -1)
           CLI=$(find tarballs -name 'kontexta-[0-9]*.tgz' | head -1)
           echo "model=$MODEL cli=$CLI"; test -n "$MODEL" && test -n "$CLI"
-          mkdir smoke && cd smoke && npm init -y >/dev/null
+          rm -rf smoke
+          mkdir -p smoke
+          cd smoke
+          npm init -y >/dev/null
           npm install "../$MODEL"
           npm install "../$CLI"
           echo "$(pwd -W 2>/dev/null || pwd)/node_modules/.bin" >> "$GITHUB_PATH"

@@ -1,5 +1,14 @@
 # Changelog
 
+## 7.2.0 - Inline Knowledge Base storage & containment (2026-11-10)
+
+### Added
+
+- **Inline SQLite storage for Knowledge Base (Level 1 containment).** All Knowledge Base context files (`storage_type = 'local'`) are stored directly inline in the SQLite database (`files.content`), preventing AI coding assistants or external host tools from bypassing the MCP interface (`kxta`) using raw filesystem reads (`cat`, `rg`, `read_file`). External project repository files (`storage_type = 'reference'`) continue to live on disk in their respective repositories.
+- **Brotli-compressed file revision tracking.** Full revision history and unified diffing for local Knowledge Base files stored in SQLite via a new `file_revisions` table (`diff_hunk` compressed with Brotli).
+- **Startup inline migration.** Existing loose `.md`, `.mmd`, and `.html` files in `<dataDir>/knowledge` are safely migrated into SQLite on database startup and cleaned from disk.
+- **Automated raw spool unlinking.** Hook spool files in `<dataDir>/journal/raw/*.jsonl` are automatically cleaned up after distillation (`journal_distill`).
+
 ## 7.1.0 - Import / export of contexts (2026-10-31)
 
 ### Added

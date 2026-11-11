@@ -12,6 +12,7 @@ const targets = [
   'apps/web/package.json',
   'packages/cli/package.json',
   'packages/core/package.json',
+  'packages/relay/package.json',
   'glama.json'
 ];
 

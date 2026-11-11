@@ -52,10 +52,10 @@ describe("transfer", () => {
     const r = await importContexts(readArchive(out), { dataDir: dst });
     expect(r.errors).toEqual([]);
     expect(r.created).toBe(2);
-    expect(readFileSync(join(dst, "knowledge", "knowledge", "notes", "api-notes.md"), "utf8")).toBe("# API\nhello");
 
     const again = exportContexts({ dataDir: dst });
     const n = again.files.find((f) => f.path.endsWith("api-notes.md"))!;
+    expect(n.content).toBe("# API\nhello");
     expect(n.tags.sort()).toEqual(["api", "backend"]);
     expect(n.favorite).toBe(true);
   });
@@ -68,7 +68,8 @@ describe("transfer", () => {
     archive.files[0].content = "changed";
     const r = await importContexts(archive, { dataDir: src });
     expect(r.overwritten).toBe(2);
-    expect(readFileSync(join(src, archive.files[0].path), "utf8")).toBe("changed");
+    const updated = exportContexts({ dataDir: src });
+    expect(updated.files[0].content).toBe("changed");
   });
 
   test("filters by tag and rejects path traversal / bad archives", async () => {

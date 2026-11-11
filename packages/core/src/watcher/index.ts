@@ -10,6 +10,7 @@ import { isUnresolvedConflictCopy } from "../storage/conflicts.js";
 import { isSyncablePath, toRelPath } from "../storage/paths.js";
 import { gidOfRow } from "../storage/gids.js";
 import type { Op } from "../storage/op.js";
+import { createRevision } from "../revisions/index.js";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
@@ -196,12 +197,13 @@ export function handleWatcherAdd(filePath: string, knowledgeDirs: string[]): voi
 
     // OR IGNORE + skip-FTS-on-no-change covers the discoverFiles race.
     const insertStmt = db.prepare(
-      "INSERT OR IGNORE INTO files (path, title, project_id, storage_type, content_hash) VALUES (?, ?, ?, ?, ?)"
+      "INSERT OR IGNORE INTO files (path, title, project_id, storage_type, content_hash, content) VALUES (?, ?, ?, ?, ?, ?)"
     );
     const ftsDel = db.prepare("DELETE FROM fts_index WHERE rowid = ?");
     const ftsStmt = db.prepare("INSERT INTO fts_index (rowid, title, content) VALUES (?, ?, ?)");
     db.transaction(() => {
-      const result = insertStmt.run(filePath, title, projectId, storageType, hash);
+      const storedContent = storageType === "local" ? content : null;
+      const result = insertStmt.run(filePath, title, projectId, storageType, hash, storedContent);
       if (result.changes > 0) {
         // Defensive pre-delete: a stale fts_index row at this rowid (from
         // a crash mid-transaction) would otherwise UNIQUE-fail the insert.
@@ -215,6 +217,14 @@ export function handleWatcherAdd(filePath: string, knowledgeDirs: string[]): voi
           formatGid(newId, getMachineId()),
           newId,
         );
+
+        if (storageType === "local") {
+          createRevision(db, {
+            fileId: newId,
+            content,
+            message: `External add: ${title}`,
+          });
+        }
         // An externally-dropped file is a create from this machine's point of
         // view. Enqueue the op atomically with the insert (spec 1.3); no-op
         // while applying a remote op (echo suppression, spec 1.4). Read the
@@ -312,11 +322,24 @@ export function updateFileHash(filePath: string, knowledgeDirs: string[] = []): 
       // edit carries the correct identity. Fall back to the local gid if the
       // row pre-dates the migration-013 backfill.
       const gid = file.gid ?? formatGid(file.id, getMachineId());
-      const updateStmt = db.prepare("UPDATE files SET content_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?");
+      const row = db.prepare("SELECT storage_type FROM files WHERE id = ?").get(file.id) as { storage_type: string } | undefined;
+      const isLocal = row?.storage_type === "local";
+      const updateStmt = isLocal
+        ? db.prepare("UPDATE files SET content = ?, content_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+        : db.prepare("UPDATE files SET content_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?");
       const deleteFtsStmt = db.prepare("DELETE FROM fts_index WHERE rowid = ?");
       const insertFtsStmt = db.prepare("INSERT INTO fts_index (rowid, title, content) VALUES (?, ?, ?)");
       db.transaction(() => {
-        updateStmt.run(hash, file.id);
+        if (isLocal) {
+          updateStmt.run(content, hash, file.id);
+          createRevision(db, {
+            fileId: file.id,
+            content,
+            message: `External update: ${file.title}`,
+          });
+        } else {
+          updateStmt.run(hash, file.id);
+        }
         deleteFtsStmt.run(file.id);
         insertFtsStmt.run(file.id, file.title, content);
         // A genuine external edit (the stored hash changed) is an update from

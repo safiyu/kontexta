@@ -18,6 +18,7 @@ import { formatGid } from "../identity/gid.js";
 import { getMachineId } from "../identity/machine.js";
 import { enqueueOp } from "../storage/outbox.js";
 import { inRemoteApply } from "../storage/apply.js";
+import { createRevision } from "../revisions/index.js";
 import type { Op } from "../storage/op.js";
 
 export interface FileRecordWithRank extends FileRecord {
@@ -566,7 +567,7 @@ function reconcileIndex(opts: ReconcileOptions): ReconcileResult {
     }
     root = project.path;
     scope = `project:${projectId}`;
-    dbFilter = "project_id = ?";
+    dbFilter = "project_id = ? AND storage_type = 'reference'";
     dbParams = [projectId];
     storageType = "reference";
   } else {
@@ -575,16 +576,6 @@ function reconcileIndex(opts: ReconcileOptions): ReconcileResult {
     dbFilter = "project_id IS NULL";
     dbParams = [];
     storageType = "local";
-    if (!existsSync(root)) {
-      return {
-        scope,
-        newly_indexed: 0,
-        refreshed: 0,
-        pruned: 0,
-        newRecords: [],
-        note: "knowledge/ does not exist",
-      };
-    }
   }
 
   // Bulk-fetch existing rows once. Includes content_hash so we don't need a
@@ -646,10 +637,10 @@ function reconcileIndex(opts: ReconcileOptions): ReconcileResult {
   walk(root, true);
 
   const insertStmt = db.prepare(
-    "INSERT OR IGNORE INTO files (path, title, project_id, storage_type, content_hash) VALUES (?, ?, ?, ?, ?)"
+    "INSERT OR IGNORE INTO files (path, title, project_id, storage_type, content_hash, content) VALUES (?, ?, ?, ?, ?, ?)"
   );
   const updateStmt = db.prepare(
-    "UPDATE files SET content_hash = ?, updated_at = datetime('now') WHERE id = ?"
+    "UPDATE files SET content_hash = ?, content = ?, updated_at = datetime('now') WHERE id = ?"
   );
   const ftsDelete = db.prepare("DELETE FROM fts_index WHERE rowid = ?");
   const ftsInsert = db.prepare("INSERT INTO fts_index (rowid, title, content) VALUES (?, ?, ?)");
@@ -690,31 +681,48 @@ function reconcileIndex(opts: ReconcileOptions): ReconcileResult {
       for (const r of reads) {
         const existing = existingByPath.get(r.path);
         if (!existing) {
-          const result = insertStmt.run(r.path, r.title, projectId, storageType, r.hash);
+          const storedContent = storageType === "local" ? r.content : null;
+          const result = insertStmt.run(r.path, r.title, projectId, storageType, r.hash, storedContent);
           if (result.changes > 0) {
             const fileId = Number(result.lastInsertRowid);
             // Defensive ftsDelete: guards against orphan FTS rows from a reused
             // rowid if any historical delete path skipped FTS cleanup.
             ftsDelete.run(fileId);
             ftsInsert.run(fileId, r.title, r.content);
+            if (storageType === "local") {
+              createRevision(db, {
+                fileId,
+                content: r.content,
+                message: `Discovered: ${r.title}`,
+              });
+            }
             newly_indexed++;
             const rec = selectFileById.get(fileId) as FileRecord | undefined;
             if (rec) newRecords.push(rec);
           }
         } else if (existing.content_hash !== r.hash) {
-          updateStmt.run(r.hash, existing.id);
+          const storedContent = storageType === "local" ? r.content : null;
+          updateStmt.run(r.hash, storedContent, existing.id);
           ftsDelete.run(existing.id);
           ftsInsert.run(existing.id, r.title, r.content);
+          if (storageType === "local") {
+            createRevision(db, {
+              fileId: existing.id,
+              content: r.content,
+              message: `Updated on disk: ${r.title}`,
+            });
+          }
           refreshed++;
         }
       }
     })();
   }
 
-  // Prune rows for files no longer on disk. Critical: only run if the
-  // top-level walk succeeded — otherwise a transient EACCES wipes the index.
+  // Prune rows for files no longer on disk.
+  // Critical 1: only run if the top-level walk succeeded — otherwise a transient EACCES wipes the index.
+  // Critical 2: NEVER prune local knowledge base files (they live inline in SQLite, not on disk).
   let pruned = 0;
-  if (topLevelWalkOk) {
+  if (topLevelWalkOk && typeof projectId === "number") {
     db.transaction(() => {
       for (const r of existingRows) {
         if (!onDisk.has(r.path)) {
