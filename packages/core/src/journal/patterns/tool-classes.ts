@@ -1,6 +1,5 @@
 // Single source of truth for classifying MCP tool calls in journal pattern
-// detectors. Kept in sync with apps/mcp/src/index.ts + calendar-tools.ts +
-// scripts/build-smithery-bundle.mjs. Current underscore (6.0.0+), dotted
+// detectors. Kept in sync with apps/mcp/src/index.ts + calendar-tools.ts. Current underscore (6.0.0+), dotted
 // (5.0.0-5.x), pre-5.0.0 dotted, and legacy snake_case names are all listed
 // so historical journal entries recorded under any prior naming scheme
 // still classify.

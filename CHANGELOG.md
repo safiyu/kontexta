@@ -1,5 +1,11 @@
 # Changelog
 
+## 7.2.2 (2026-11-11)
+
+### Removed
+
+- **Smithery publishing.** Removed Smithery package builds, registry workflows, and installation commands following changes in the upstream service.
+
 ## 7.2.1 (2026-11-11)
 
 ### Fixed
