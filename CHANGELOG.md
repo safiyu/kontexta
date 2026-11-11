@@ -1,5 +1,12 @@
 # Changelog
 
+## 7.2.1 (2026-11-11)
+
+### Fixed
+
+- **Smithery registry compatibility.** Ensured all vault tools (including sync conflict resolution and machine management) are recognized and packaged properly for Smithery installs.
+- **File management reliability.** Fixed issues when moving or renaming files inside the knowledge vault across different system configurations.
+
 ## 7.2.0 - Inline Knowledge Base storage & containment (2026-11-10)
 
 ### Added

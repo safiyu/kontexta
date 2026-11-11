@@ -11,8 +11,9 @@ import { READ_ONLY_TOOL_NAMES, isWriteToolName } from "../../../src/journal/patt
 
 describe("tool-classes: underscore (6.0.0+) names", () => {
   const readOnly = [
-    "admin_get_profile", "admin_overview", "admin_refresh_session_context",
+    "admin_get_profile", "admin_list_clients", "admin_overview", "admin_refresh_session_context",
     "calendar_entities_list", "calendar_events_conflicts", "calendar_events_list", "calendar_export_ics",
+    "conflicts_get", "conflicts_list",
     "files_describe", "files_diff_against_disk", "files_find_related",
     "files_get_diff", "files_get_history", "files_list",
     "files_read", "files_read_outline", "files_regex_search", "files_search",
@@ -24,9 +25,10 @@ describe("tool-classes: underscore (6.0.0+) names", () => {
     "tags_list", "tags_suggest",
   ];
   const writes = [
-    "admin_onboard_agent", "admin_transfer_agent_context",
+    "admin_onboard_agent", "admin_set_machine_label", "admin_transfer_agent_context",
     "calendar_entities_add", "calendar_entities_delete", "calendar_entities_link", "calendar_entities_update",
     "calendar_events_add", "calendar_events_delete", "calendar_events_update",
+    "conflicts_resolve",
     "files_create", "files_delete", "files_move",
     "files_restore", "files_update",
     "folders_create", "folders_delete",

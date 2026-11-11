@@ -37,8 +37,9 @@ const rawTools = JSON.parse(readFileSync(mcpToolsPath, "utf8")).tools;
 // the source of truth; a tool that lands here without a classification
 // throws in enrichedTools below so the mismatch can't ship.
 const READ_ONLY_TOOLS = new Set([
-  "admin_get_profile", "admin_overview", "admin_refresh_session_context",
+  "admin_get_profile", "admin_list_clients", "admin_overview", "admin_refresh_session_context",
   "calendar_entities_list", "calendar_events_conflicts", "calendar_events_list", "calendar_export_ics",
+  "conflicts_get", "conflicts_list",
   "files_describe", "files_diff_against_disk", "files_find_related",
   "files_get_diff", "files_get_history", "files_list",
   "files_read", "files_read_outline", "files_regex_search", "files_search",
@@ -63,6 +64,7 @@ const NEUTRAL_TOOLS = new Set([
   "admin_onboard_agent", "admin_set_machine_label", "admin_transfer_agent_context",
   "calendar_entities_add", "calendar_entities_link", "calendar_entities_update",
   "calendar_events_add", "calendar_events_update",
+  "conflicts_resolve",
   "files_create", "files_move", "files_update",
   "folders_create",
   "hands_confirm", "hands_reload",
