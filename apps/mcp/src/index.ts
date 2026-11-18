@@ -2206,30 +2206,39 @@ server.tool(
       } else {
         base = join(dataDir, "knowledge");
       }
-      // Use realpath to follow symlinks before the containment check,
-      // path.resolve() only normalises `.`/`..`, so a symlink inside the
-      // vault pointing outside (e.g. knowledge/escape -> /etc) would let
-      // moveFile write through it. realpath the dest's PARENT since the
-      // destination itself doesn't exist yet.
-      const baseNormal = resolve(base);
-      let baseResolved: string;
-      try {
-        baseResolved = realpathSync(baseNormal);
-      } catch {
-        baseResolved = baseNormal;
-      }
-      const destAbs = resolve(new_path);
-      const destParent = dirname(destAbs);
-      let destParentReal: string;
-      try {
-        destParentReal = realpathSync(destParent);
-      } catch {
-        destParentReal = destParent;
-      }
-      const destResolved = join(destParentReal, destAbs.slice(destParent.length + (destParent.endsWith(sep) ? 0 : 1)));
-      const destInsideReal = destResolved === baseResolved || destResolved.startsWith(baseResolved + sep);
-      const destInsideNormal = destAbs === baseNormal || destAbs.startsWith(baseNormal + sep);
-      if (!destInsideReal && !destInsideNormal) {
+      // Use realpath on the nearest existing ancestor to follow symlinks before
+      // checking containment, while still supporting virtual inline-SQLite KB
+      // paths whose leaf directories do not exist on disk.
+      const resolveRealOrAncestor = (target: string): string => {
+        const abs = resolve(target);
+        const tail: string[] = [];
+        let cur = abs;
+        while (true) {
+          try {
+            const real = realpathSync(cur);
+            return tail.length > 0 ? join(real, ...tail.reverse()) : real;
+          } catch (err: any) {
+            if (err?.code && err.code !== "ENOENT") throw err;
+            try {
+              if (lstatSync(cur).isSymbolicLink()) {
+                throw new Error(`Dangling symlink in path: ${cur}`);
+              }
+            } catch (lstatErr: any) {
+              if (lstatErr?.message?.startsWith("Dangling symlink")) throw lstatErr;
+            }
+            const parent = dirname(cur);
+            if (parent === cur) return abs;
+            tail.push(cur.slice(parent.length + (parent.endsWith(sep) ? 0 : 1)));
+            cur = parent;
+          }
+        }
+      };
+
+      const baseResolved = resolveRealOrAncestor(base);
+      const basePrefix = baseResolved.endsWith(sep) ? baseResolved : baseResolved + sep;
+
+      const destResolved = resolveRealOrAncestor(new_path);
+      if (destResolved !== baseResolved && !destResolved.startsWith(basePrefix)) {
         throw new Error(`new_path must be inside ${base}`);
       }
       // Defense-in-depth: also confirm the SOURCE lives under the same base.
@@ -2237,22 +2246,8 @@ server.tool(
       // ingested, fileRecord.path can point outside the current base: and
       // without this check moveFile would relocate that orphan into the
       // project root.
-      const srcAbs = resolve(file.path);
-      let srcResolved: string;
-      try {
-        srcResolved = realpathSync(srcAbs);
-      } catch {
-        const srcParent = dirname(srcAbs);
-        try {
-          const srcParentReal = realpathSync(srcParent);
-          srcResolved = join(srcParentReal, srcAbs.slice(srcParent.length + (srcParent.endsWith(sep) ? 0 : 1)));
-        } catch {
-          srcResolved = srcAbs;
-        }
-      }
-      const srcInsideReal = srcResolved === baseResolved || srcResolved.startsWith(baseResolved + sep);
-      const srcInsideNormal = srcAbs === baseNormal || srcAbs.startsWith(baseNormal + sep);
-      if (!srcInsideReal && !srcInsideNormal) {
+      const srcResolved = resolveRealOrAncestor(file.path);
+      if (srcResolved !== baseResolved && !srcResolved.startsWith(basePrefix)) {
         throw new Error(`source path ${file.path} is no longer inside ${base}; refusing to move`);
       }
 

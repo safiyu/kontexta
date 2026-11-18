@@ -1,5 +1,11 @@
 # Changelog
 
+## 7.2.3 (2026-11-14)
+
+### Fixed
+
+- **Safer file moves.** Strengthened path validation when moving or renaming vault files to keep operations strictly within your workspace.
+
 ## 7.2.2 (2026-11-11)
 
 ### Removed
